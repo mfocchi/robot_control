@@ -31,7 +31,7 @@ import math
 from jet_leg.math_tools import Math
 from mathutils import *
 
-from controlRoutines import wholeBodyController
+from controlRoutines import quasiStaticController
 from scipy.linalg import block_diag
 
 stderr = sys.stderr
@@ -58,6 +58,9 @@ from geometry_msgs.msg import Pose
 #important
 np.set_printoptions(precision = 5, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
+sys.dont_write_bytecode = True
+
+class Conf(object): pass
 
 class ControlThread(threading.Thread):
     def __init__(self):  
@@ -77,12 +80,15 @@ class ControlThread(threading.Thread):
         self.q_des =np.zeros(12)
         self.qd_des = np.zeros(12)
         self.tau_ffwd =np.zeros(12)
+        
+        self.b_R_w = np.eye(3)       
                 
         self.sim_time  = 0.0
         self.numberOfReceivedMessages = 0
         self.numberOfPublishedMessages = 0
         self.joint_names = ""
         self.u = Utils()
+        
      
         
     def run(self):
@@ -94,10 +100,12 @@ class ControlThread(threading.Thread):
         self.pub_des_jstate = ros.Publisher("/"+self.robot_name+"/ros_impedance_controller/command", JointState, queue_size=1)
         self.set_pd_service = ros.ServiceProxy("/" + self.robot_name + "/ros_impedance_controller/set_pids", set_pids)
 
+#deprecated
 #        ros.wait_for_service("/"+self.robot_name+"/freeze_base")    
 #        self.freeze_base = ros.ServiceProxy("/"+self.robot_name+"/freeze_base",Empty)
-   
+# usage         resp = p.freeze_base()
 
+        #new freeze base
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.reset_gravity = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
 #        self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
@@ -130,20 +138,20 @@ class ControlThread(threading.Thread):
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w)
         euler = euler_from_quaternion(quaternion)
-        self.basePoseW[self.u.sp_crd["AX"]] = euler[0]
-        self.basePoseW[self.u.sp_crd["AY"]] = euler[1]
-        self.basePoseW[self.u.sp_crd["AZ"]] = euler[2]
+
         self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
         self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
         self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
-        
-        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
-        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
-        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
+        self.basePoseW[self.u.sp_crd["AX"]] = euler[0]
+        self.basePoseW[self.u.sp_crd["AY"]] = euler[1]
+        self.basePoseW[self.u.sp_crd["AZ"]] = euler[2]
+
         self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
         self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
         self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.twist.linear.z
-
+        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
+        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
+        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
         
         mathJet = Math()
 
@@ -226,6 +234,26 @@ class ControlThread(threading.Thread):
         self.set_pd_service(req_msg)
         
     def freezeBase(self, flag):
+
+        #TODO make this code independent from framework because it countinuosly sets the gravity mode to false at the beginning till you call fb! so it will override this
+        #toggle gravity
+        req_reset_gravity = SetPhysicsPropertiesRequest()
+        #ode config
+        req_reset_gravity.time_step = 0.001
+        req_reset_gravity.max_update_rate = 1000                
+        req_reset_gravity.ode_config.sor_pgs_iters = 50
+        req_reset_gravity.ode_config.sor_pgs_w = 1.3        
+        req_reset_gravity.ode_config.contact_surface_layer = 0.001
+        req_reset_gravity.ode_config.contact_max_correcting_vel = 100
+        req_reset_gravity.ode_config.erp = 0.2
+        req_reset_gravity.ode_config.max_contacts = 20        
+        
+        if (flag):
+            req_reset_gravity.gravity.z =  0.0
+        else:
+            req_reset_gravity.gravity.z = -9.81                
+        self.reset_gravity(req_reset_gravity)
+
         # create the message
         req_reset_world = SetModelStateRequest()
         #create model state
@@ -233,7 +261,7 @@ class ControlThread(threading.Thread):
         model_state.model_name = "hyq"
         model_state.pose.position.x = 0.0
         model_state.pose.position.y = 0.0        
-        model_state.pose.position.z = 1.0
+        model_state.pose.position.z = 0.7
         model_state.pose.orientation.w = 1.0
         model_state.pose.orientation.x = 0.0       
         model_state.pose.orientation.y = 0.0
@@ -241,15 +269,6 @@ class ControlThread(threading.Thread):
         req_reset_world.model_state = model_state
         # send request and get response (in this case none)
         self.reset_world(req_reset_world) 
-       
-        #toggle gravity
-        req_reset_gravity = SetPhysicsPropertiesRequest()
-        if (flag):
-            req_reset_gravity.gravity.z = 0.0
-        else:
-            req_reset_gravity.gravity.z = 9.81
-        self.reset_gravity(req_reset_gravity)
-
         
     def initKinematics(self,kin):
         kin.init_homogeneous()
@@ -267,23 +286,46 @@ def talker(p):
     p.register_node()
     name = "Python Controller"
     kin = HyQKinematics()
+    #init the kinematics (homogeneous and jacobians for feet position I guess)
+    p.initKinematics(kin)
     
-    start_t = tm.time()
     p.setPDs(0.0, 0.0, 0.0)
     
     time = 0.0
     dt = 0.001
     
-    exp_duration = 2.0
+    exp_duration = 4.0
     num_samples = (int)(exp_duration/dt)
 
     
     # Parameters of Joint Reference Trajectories (X,Y, Z, Roll, Pitch, Yaw)
-    amplitude = np.array([ 0.0, 0.0, 0.1, 0.0, 0.2, 0.0])
-    frequencies = np.array([ 0.0, 0.0, 1.0, 0.0, 1.5, 0.0])
-    w_rad=2*math.pi*frequencies   
-    x0 = copy.deepcopy(p.basePoseW)
+    amplitude = np.array([ 0.0, 0.05, 0.0*0.05, 0.0, 0*0.1, 0.0])
+    frequencies = np.array([ 0.0, 0.5, 0.0, 0.0, 1.0, 0.0])
+    # Gains for the virtual model
+    conf = Conf()
+    conf.gravity = -9.81
+    conf.Kpcomx = 2500
+    conf.Kpcomy = 2500
+    conf.Kpcomz = 2500
+
+    conf.Kdcomx = 600
+    conf.Kdcomy = 900
+    conf.Kdcomz = 600
+
+    conf.KpbRoll = 2000
+    conf.KpbPitch = 2000
+    conf.KpbYaw = 2000
+
+    conf.Kdbasex = 200
+    conf.Kdbasey = 200
+    conf.Kdbasez = 200
     
+    conf.robotMass = 86.57
+    conf.Bcom_x = 0 
+    conf.Bcom_y = 0 
+    conf.Bcom_z = -0.0433869
+        
+   
     
     p.tau_ffwd_log = np.zeros((num_samples, 12 ))
     p.basePoseW_log = np.zeros((num_samples, 6 ))
@@ -291,50 +333,50 @@ def talker(p):
 
     p.des_basePoseW_log = np.zeros((num_samples, 6 ))
     p.des_baseTwistW_log = np.zeros((num_samples, 6 ))    
+    p.des_baseAccW_log = np.zeros((num_samples, 6 ))       
     
     p.q_des_log = np.zeros((num_samples,6))
     p.q_log = np.zeros((num_samples, 6))
     p.grForcesW_log = np.zeros((num_samples, 12))
 
-    #####starting procedure
+    #####STARTUP procedure
     #set joint pdi gains
     p.setPDs(400.0, 26.0, 0.0)
-
     # GOZERO Keep the fixed configuration for the joints at the start of simulation
     p.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
     p.qd_des = np.zeros(12)
     p.tau_ffwd = np.zeros(12)
     gravity_comp = np.array([24.2571, 1.92,50.5,    24.2, 1.92, 50.5739, 21.3801,-2.08377,-44.9598,  21.3858,-2.08365, -44.9615 ])
-
-    resp = p.freezeBase(1)
-
-    print("reset posture...")
-
-    while tm.time()-start_t < 1.5:
+    print("freezing base and resetting posture...")
+    p.freezeBase(1)
+    start_t = tm.time()
+    while tm.time()-start_t < 1.0:
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
         tm.sleep(0.01)
-#    print "q err prima freeze base", (p.q-p.q_des)
-    resp = p.freezeBase(1)
-    tm.sleep(2.0)
-
-#    print "q err pre grav comp", (p.q - p.q_des)
-    print("compensating gravity...")
-
-    while tm.time() - start_t < 2.5:
+#    print "q err", (p.q-p.q_des)
+  
+    print("put on ground and start compensating gravity...")
+    p.freezeBase(0)
+    tm.sleep(1.0)
+    start_t = tm.time()
+#    print "q err before grav comp", (p.q - p.q_des)
+    while tm.time() - start_t < 1.0:
         p.send_des_jstate(p.q_des, p.qd_des,  gravity_comp)
         tm.sleep(0.01)
-#    print "q err post grav comp", (p.q - p.q_des)
-    tm.sleep(2.0)
+#    print "q err after grav comp", (p.q - p.q_des)
+    tm.sleep(0.5)
 
-    #init the kinematics (homogeneous and jacobians for feet position I guess)
-    p.initKinematics(kin)
-    #update the kinematics
-    p.updateKinematics(kin)
-        
+   
+   
 
     print("starting com controller (no joint PD)...")
+    #switch off PD
     p.setPDs(0.0, 0.0, 0.0)
-    
+    #init reference with actual value    
+    x0 = copy.deepcopy(p.basePoseW)
+    des_com_pose  = x0
+    des_com_twist = np.zeros(6)
+    des_com_acc = np.zeros(6)
     count = 0
     while count<num_samples:
  
@@ -346,20 +388,26 @@ def talker(p):
         p.updateKinematics(kin)
 
 #        to DEBUG implement a PD controller
-        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q) - (10.0*p.qd);
+#        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q) - (10.0*p.qd);
 
         
-        # CoM controlr
-        des_com_pose  = x0 + np.array([ 0.0, 0.0, amplitude[2]*np.sin(w_rad[2]*time), 0.0, amplitude[4]*np.sin(w_rad[4]*time), 0.0]).T
-        des_com_twist = np.array([ 0.0, 0.0,  amplitude[2]*w_rad[2]*np.cos(w_rad[1]*time), 0.0, amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), 0.0]).T
-        des_com_acc = np.array([ 0.0, 0.0, -amplitude[2]*w_rad[2]*w_rad[2]*np.sin(w_rad[2]*time), 0.0, -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), 0.0]).T  
- 
+#        # EXERCISE 1: Sinusoidal Reference Generation         
+#        w_rad=2*math.pi*frequencies   
+#        des_com_pose  = x0 + np.array([ amplitude[0]*np.sin(w_rad[0]*time), amplitude[1]*np.sin(w_rad[1]*time), amplitude[2]*np.sin(w_rad[2]*time), 
+#                                       amplitude[3]*np.sin(w_rad[3]*time), amplitude[4]*np.sin(w_rad[4]*time), amplitude[5]*np.sin(w_rad[5]*time)]).T
+#        des_com_twist = np.array([ amplitude[0]*w_rad[0]*np.cos(w_rad[0]*time), amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time),  amplitude[2]*w_rad[2]*np.cos(w_rad[1]*time), 
+#                                  amplitude[3]*w_rad[3]*np.cos(w_rad[3]*time), amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), amplitude[5]*w_rad[5]*np.cos(w_rad[5]*time)]).T
+#        des_com_acc = np.array([ -amplitude[0]*w_rad[0]*w_rad[0]*np.sin(w_rad[0]*time), -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), -amplitude[2]*w_rad[2]*w_rad[2]*np.sin(w_rad[2]*time), 
+#                                -amplitude[3]*w_rad[3]*w_rad[3]*np.sin(w_rad[3]*time), -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), -amplitude[5]*w_rad[5]*w_rad[5]*np.sin(w_rad[5]*time)]).T  
          #use this for custom trajectory
 #        des_com_acc = np.subtract(des_com_twist, p.des_com_twist_old)/p.Ts
 #        p.des_com_twist_old = des_com_twist
+ 
+        # EXERCISE 3: CoM out of the polygon   
+        des_com_pose[p.u.sp_crd["LY"]] +=0.0002
+        
         #comopute des_grf from whole-body controller
         B_contacts = kin.forward_kin(p.q) 
-
         #map contactct to wf
         w_R_b = p.b_R_w.transpose()
         W_contacts = np.zeros((3,4))
@@ -367,22 +415,18 @@ def talker(p):
         W_contacts[:,p.u.leg_map["RF"]] = w_R_b.dot(B_contacts[p.u.leg_map["RF"], :].transpose()) + p.u.linPart(des_com_pose).transpose()
         W_contacts[:,p.u.leg_map["LH"]] = w_R_b.dot(B_contacts[p.u.leg_map["LH"], :].transpose()) + p.u.linPart(des_com_pose).transpose()
         W_contacts[:,p.u.leg_map["RH"]] = w_R_b.dot(B_contacts[p.u.leg_map["RH"], :].transpose()) + p.u.linPart(des_com_pose).transpose()
-
-
-        #TODO
-        des_forces = wholeBodyController(p.basePoseW, p.baseTwistW, W_contacts,  des_com_pose, des_com_twist, des_com_acc, p.stance_legs)
+        
+        # EXERCISE 2        
+        des_forces = quasiStaticController(conf, p.basePoseW, p.baseTwistW, W_contacts,  des_com_pose, des_com_twist, des_com_acc, p.stance_legs, True)
         J_LF, J_RF, J_LH, J_RH, flag = kin.get_jacobians()
         p.jacsT = block_diag(np.transpose(w_R_b.dot(J_LF)), np.transpose(w_R_b.dot(J_RF)), np.transpose(w_R_b.dot(J_LH)), np.transpose(w_R_b.dot(J_RH)))
-#        p.tau_ffwd =   -p.jacsT.dot(des_forces )
-    
-        #p.tau_ffwd  = np.zeros(12);       
         
-        
-        
+        #necessary to have no offset on the Z direction 
+        self_weight = np.array([-2.1342, 3.91633, -0.787648, -2.13605,  3.9162,  -0.78766,  -2.10752, -3.77803,  0.781712,  -2.10583,  -3.77811,  0.781689])
+
+        p.tau_ffwd = self_weight  -p.jacsT.dot(des_forces )         
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        
-        
- 
+
 
         #log 
         p.tau_ffwd_log[count ,:] = p.tau_ffwd
@@ -390,15 +434,17 @@ def talker(p):
         p.baseTwistW_log[count ,:] = p.baseTwistW
         p.des_basePoseW_log[count ,:] = des_com_pose
         p.des_baseTwistW_log[count ,:] = des_com_twist
+        p.des_baseAccW_log[count ,:] = des_com_acc
     
         tm.sleep(dt)
         time = time + dt 
         count = count +1
 
-        
+    # restore PD when finished        
     p.setPDs(400.0, 26.0, 0.0)
     
     #plot
+    plt.figure()
     plt.subplot(3, 1, 1)
     plt.plot(p.des_basePoseW_log[:, p.u.sp_crd["LX"]], label="des", color="red")
     plt.plot(p.basePoseW_log[:, p.u.sp_crd["LX"]], label="act",    linestyle='--', color="blue")              
@@ -413,6 +459,56 @@ def talker(p):
     plt.plot(  p.des_basePoseW_log[:, p.u.sp_crd["LZ"]], label="des", color="red")
     plt.plot( p.basePoseW_log[:, p.u.sp_crd["LZ"]], label="act",    linestyle='--', color="blue")              
     plt.ylabel("$COM_z$", fontsize=10)
+    
+    #plot
+    plt.figure()
+    plt.subplot(3, 1, 1)
+    plt.plot(p.des_baseTwistW_log[:, p.u.sp_crd["LX"]], label="des", color="red")
+    plt.plot(p.baseTwistW_log[:, p.u.sp_crd["LX"]], label="act",    linestyle='--', color="blue")              
+    plt.ylabel("$COMd_x$", fontsize=10)
+    
+    plt.subplot(3, 1, 2)
+    plt.plot(  p.des_baseTwistW_log[:, p.u.sp_crd["LY"]], label="des", color="red")
+    plt.plot( p.baseTwistW_log[:, p.u.sp_crd["LY"]], label="act",    linestyle='--', color="blue")              
+    plt.ylabel("$COMd_y$", fontsize=10)
+#    
+    plt.subplot(3, 1, 3)
+    plt.plot(  p.des_baseTwistW_log[:, p.u.sp_crd["LZ"]], label="des", color="red")
+    plt.plot( p.baseTwistW_log[:, p.u.sp_crd["LZ"]], label="act",    linestyle='--', color="blue")              
+    plt.ylabel("$COMd_z$", fontsize=10)    
+    
+    #plot
+    
+    plt.figure()
+    plt.subplot(3, 1, 1)
+    plt.plot(p.des_basePoseW_log[:, p.u.sp_crd["AX"]], label="des", color="red")
+    plt.plot(p.basePoseW_log[:, p.u.sp_crd["AX"]], label="act",    linestyle='--', color="blue")              
+    plt.ylabel("$\phi$", fontsize=10)
+    
+    plt.subplot(3, 1, 2)
+    plt.plot(  p.des_basePoseW_log[:, p.u.sp_crd["AY"]], label="des", color="red")
+    plt.plot( p.basePoseW_log[:, p.u.sp_crd["AY"]], label="act",    linestyle='--', color="blue")              
+    plt.ylabel("$\theta$", fontsize=10)
+#    
+    plt.subplot(3, 1, 3)
+    plt.plot(  p.des_basePoseW_log[:, p.u.sp_crd["AZ"]], label="des", color="red")
+    plt.plot( p.basePoseW_log[:, p.u.sp_crd["AZ"]], label="act",    linestyle='--', color="blue")              
+    plt.ylabel("$\psi$", fontsize=10)    
+    
+    
+    
+    plt.figure()
+    plt.subplot(3, 1, 1)
+    plt.plot(p.des_baseAccW_log[:, p.u.sp_crd["AX"]], label="des", color="red")
+    plt.ylabel("$\ddot{\phi}$", fontsize=10)
+    
+    plt.subplot(3, 1, 2)
+    plt.plot(  p.des_baseAccW_log[:, p.u.sp_crd["AY"]], label="des", color="red")
+    plt.ylabel("$\ddot{\theta}$", fontsize=10)
+#   
+    plt.subplot(3, 1, 3)
+    plt.plot(  p.des_baseAccW_log[:, p.u.sp_crd["AZ"]], label="des", color="red")
+    plt.ylabel("$\ddot{\psi}$", fontsize=10)   
     
     p.deregister_node()
     
