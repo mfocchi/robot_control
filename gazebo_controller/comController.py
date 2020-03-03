@@ -96,7 +96,7 @@ class ControlThread(threading.Thread):
         self.robot_name = ros.get_param('/robot_name')
         self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=1)
         self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
-        self.sub_pose = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
+        self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
         self.pub_des_jstate = ros.Publisher("/"+self.robot_name+"/ros_impedance_controller/command", JointState, queue_size=1)
         self.set_pd_service = ros.ServiceProxy("/" + self.robot_name + "/ros_impedance_controller/set_pids", set_pids)
 
@@ -391,20 +391,20 @@ def talker(p):
 #        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q) - (10.0*p.qd);
 
         
-#        # EXERCISE 1: Sinusoidal Reference Generation         
-#        w_rad=2*math.pi*frequencies   
-#        des_com_pose  = x0 + np.array([ amplitude[0]*np.sin(w_rad[0]*time), amplitude[1]*np.sin(w_rad[1]*time), amplitude[2]*np.sin(w_rad[2]*time), 
-#                                       amplitude[3]*np.sin(w_rad[3]*time), amplitude[4]*np.sin(w_rad[4]*time), amplitude[5]*np.sin(w_rad[5]*time)]).T
-#        des_com_twist = np.array([ amplitude[0]*w_rad[0]*np.cos(w_rad[0]*time), amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time),  amplitude[2]*w_rad[2]*np.cos(w_rad[1]*time), 
-#                                  amplitude[3]*w_rad[3]*np.cos(w_rad[3]*time), amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), amplitude[5]*w_rad[5]*np.cos(w_rad[5]*time)]).T
-#        des_com_acc = np.array([ -amplitude[0]*w_rad[0]*w_rad[0]*np.sin(w_rad[0]*time), -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), -amplitude[2]*w_rad[2]*w_rad[2]*np.sin(w_rad[2]*time), 
-#                                -amplitude[3]*w_rad[3]*w_rad[3]*np.sin(w_rad[3]*time), -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), -amplitude[5]*w_rad[5]*w_rad[5]*np.sin(w_rad[5]*time)]).T  
+        # EXERCISE 1: Sinusoidal Reference Generation         
+        w_rad=2*math.pi*frequencies   
+        des_com_pose  = x0 + np.array([ amplitude[0]*np.sin(w_rad[0]*time), amplitude[1]*np.sin(w_rad[1]*time), amplitude[2]*np.sin(w_rad[2]*time), 
+                                       amplitude[3]*np.sin(w_rad[3]*time), amplitude[4]*np.sin(w_rad[4]*time), amplitude[5]*np.sin(w_rad[5]*time)]).T
+        des_com_twist = np.array([ amplitude[0]*w_rad[0]*np.cos(w_rad[0]*time), amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time),  amplitude[2]*w_rad[2]*np.cos(w_rad[1]*time), 
+                                  amplitude[3]*w_rad[3]*np.cos(w_rad[3]*time), amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), amplitude[5]*w_rad[5]*np.cos(w_rad[5]*time)]).T
+        des_com_acc = np.array([ -amplitude[0]*w_rad[0]*w_rad[0]*np.sin(w_rad[0]*time), -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), -amplitude[2]*w_rad[2]*w_rad[2]*np.sin(w_rad[2]*time), 
+                                -amplitude[3]*w_rad[3]*w_rad[3]*np.sin(w_rad[3]*time), -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), -amplitude[5]*w_rad[5]*w_rad[5]*np.sin(w_rad[5]*time)]).T  
          #use this for custom trajectory
 #        des_com_acc = np.subtract(des_com_twist, p.des_com_twist_old)/p.Ts
 #        p.des_com_twist_old = des_com_twist
  
         # EXERCISE 3: CoM out of the polygon   
-        des_com_pose[p.u.sp_crd["LY"]] +=0.0002
+        #des_com_pose[p.u.sp_crd["LY"]] +=0.0002
         
         #comopute des_grf from whole-body controller
         B_contacts = kin.forward_kin(p.q) 
@@ -496,7 +496,7 @@ def talker(p):
     plt.ylabel("$\psi$", fontsize=10)    
     
     
-    
+    #acceleration
     plt.figure()
     plt.subplot(3, 1, 1)
     plt.plot(p.des_baseAccW_log[:, p.u.sp_crd["AX"]], label="des", color="red")
