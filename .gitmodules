@@ -1,0 +1,3 @@
+[submodule "gazebo_controller/jet-leg"]
+	path = gazebo_controller/jet-leg
+	url = git@gitlab.advr.iit.it:rorsolino/jet-leg.git
