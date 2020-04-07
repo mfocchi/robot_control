@@ -20,7 +20,7 @@ sudo apt-get update
 sudo apt install robotpkg-py27-pinocchio
 
 #install robot urdfs
-sudo apt install robotpkg-example-robot-data
+sudo apt install robotpkg-py27-example-robot-data=3.1.0
 
 
 #gepetto viewer
@@ -42,3 +42,5 @@ export LD_LIBRARY_PATH=/opt/openrobots/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/opt/openrobots/lib/python2.7/site-packages:$PYTHONPATH
 
 #3) step: source ~/.bashrc
+
+4) copy ur5_gripper.urdf
