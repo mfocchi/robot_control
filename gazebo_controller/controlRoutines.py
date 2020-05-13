@@ -10,7 +10,7 @@ import numpy as np
 import yaml
 from mathutils import *
 # User defined packages
-from jet_leg.math_tools import Math
+from math_tools import Math
 from utils import Utils
 
 # Whole body controller for HyQ that includes ffd wrench + fb Wrench (Virtual PD) + gravity compensation

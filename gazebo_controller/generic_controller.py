@@ -25,10 +25,10 @@ from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
 from termcolor import colored
 
-from jet_leg.hyq_kinematics import HyQKinematics
+from hyq_kinematics.hyq_kinematics import HyQKinematics
 from utils import Utils
 import math
-from jet_leg.math_tools import Math
+from math_tools import Math
 from mathutils import *
 
 from controlRoutines import quasiStaticController
@@ -46,8 +46,7 @@ from ros_impedance_controller.msg import pid
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.msg import ModelState
-
-
+#gazebo services
 from gazebo_msgs.srv import SetPhysicsProperties
 from gazebo_msgs.srv import SetPhysicsPropertiesRequest
 from geometry_msgs.msg import Vector3
@@ -97,8 +96,8 @@ class ControlThread(threading.Thread):
         self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=1)
         self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
         self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
-        self.pub_des_jstate = ros.Publisher("/"+self.robot_name+"/ros_impedance_controller/command", JointState, queue_size=1)
-        self.set_pd_service = ros.ServiceProxy("/" + self.robot_name + "/ros_impedance_controller/set_pids", set_pids)
+        self.pub_des_jstate = ros.Publisher("/"+self.robot_name+"/command", JointState, queue_size=1)
+        self.set_pd_service = ros.ServiceProxy("/" + self.robot_name + "/set_pids", set_pids)
 
         #new freeze base
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
