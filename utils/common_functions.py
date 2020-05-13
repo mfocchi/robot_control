@@ -7,12 +7,16 @@ Created on Thu Apr  2 18:07:44 2020
 import os
 import psutil
 #from pinocchio.visualize import GepettoVisualizer
-from pinocchio.robot_wrapper import RobotWrapper
+from custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
 np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
- 
+
+
+
+from urdf_parser_py.urdf import URDF
+
 
 REF_SPHERE_RADIUS = 0.03
 EE_SPHERE_COLOR  = (1, 0.5, 0, 0.5)
@@ -24,10 +28,11 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
     # Import the model
     ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
     path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
-    urdf      = path + "/ur_description/urdf/ur5_gripper.urdf";
-    srdf      = path + '/ur5_description/srdf/ur5_gripper.srdf'
+    urdf      = path + "/ur_description/urdf/ur5_modified.urdf";
+    srdf      = path + '/ur5_description/srdf/ur5_modified.srdf'
     robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
-    
+				
+  
     if DISPLAY:
         import commands
         import gepetto
@@ -57,8 +62,10 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
             gui.setLightingMode('world/floor', 'ON')
         robot.displayCollisions(False)
         robot.displayVisuals(True)
-                    
-                    
+																			
+    #get urdf from ros just in case you need
+    #robot_urdf_ros = URDF.from_parameter_server()            
+    
     return robot                    
 
 def plot(name, time_log, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, num_samples):
