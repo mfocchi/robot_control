@@ -318,8 +318,8 @@ def talker(p):
     #control loop
     while True:  
 
-        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd;
-#        p.tau_ffwd  = np.zeros(12);       
+        #p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd;
+        p.tau_ffwd  = np.zeros(12);       
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
         tm.sleep(dt)      
 			
