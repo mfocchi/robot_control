@@ -25,10 +25,10 @@ from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
 from termcolor import colored
 
-from jet_leg.hyq_kinematics import HyQKinematics
+from hyq_kinematics.hyq_kinematics import HyQKinematics
 from utils import Utils
 import math
-from jet_leg.math_tools import Math
+from math_tools import Math
 from mathutils import *
 
 from controlRoutines import quasiStaticController
@@ -418,7 +418,7 @@ def talker(p):
         
         # EXERCISE 2        
         des_forces = quasiStaticController(conf, p.basePoseW, p.baseTwistW, W_contacts,  des_com_pose, des_com_twist, des_com_acc, p.stance_legs, True)
-        J_LF, J_RF, J_LH, J_RH, flag = kin.get_jacobians()
+        J_LF, J_RF, J_LH, J_RH, flag = kin.getLegJacobians()
         p.jacsT = block_diag(np.transpose(w_R_b.dot(J_LF)), np.transpose(w_R_b.dot(J_RF)), np.transpose(w_R_b.dot(J_LH)), np.transpose(w_R_b.dot(J_RH)))
         
         #necessary to have no offset on the Z direction 
