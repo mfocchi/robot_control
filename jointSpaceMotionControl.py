@@ -1,9 +1,11 @@
 from __future__ import print_function 
-import pinocchio as pin
+import pinocchio
 from pinocchio.utils import *
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+
+
 
 import time as tm
 #from pinocchio.visualize import GepettoVisualizer
@@ -204,13 +206,13 @@ while True:
         break
 
     # compute matrix M of the model
-    M= pin.crba(robot.model, robot.data, q)
+    M= pinocchio.crba(robot.model, robot.data, q)
 
     # compute bias terms h
-    h = pin.rnea(robot.model, robot.data, q, qd, zero)
+    h = pinocchio.rnea(robot.model, robot.data, q, qd, zero)
     
     # compute gravity terms
-    g = pin.rnea(robot.model, robot.data, q, zero, zero)
+    g = pinocchio.rnea(robot.model, robot.data, q, zero, zero)
     
         
     # EXERCISE  5: PD control critical damping
@@ -243,7 +245,8 @@ while True:
     # Add external force if any (EXERCISE 11)
     if EXTERNAL_FORCE  and time>2.0:
      #compute Jacobian and its derivative in the world frame  
-     pin.computeJointJacobians(robot.model, robot.data, q)
+			
+     pinocchio.computeJointJacobians(robot.model, robot.data, q)
      robot.computeJointJacobians(q)
      J_i = robot.getJointJacobian(jid)[:3,:]
      R = robot.placement(q, jid).rotation

@@ -13,6 +13,12 @@ sudo sh -c "echo 'deb [arch=amd64] http://robotpkg.openrobots.org/wip/packages/d
 sudo apt install curl
 curl http://robotpkg.openrobots.org/packages/debian/robotpkg.key | sudo apt-key add -
 
+#https://github.com/humanoid-path-planner/hpp-rbprm-corba/issues/46
+#omniORBpy should be on version 3 on 16.04.
+sudo apt-get remove robotpkg-omniorb
+sudo apt-get install python-omniorb
+
+
 #update
 sudo apt-get update
 
@@ -20,7 +26,7 @@ sudo apt-get update
 sudo apt install robotpkg-py27-pinocchio
 
 #install robot urdfs
-sudo apt install robotpkg-py27-example-robot-data=3.1.0
+sudo apt install robotpkg-py27-example-robot-data
 
 
 #gepetto viewer
@@ -44,3 +50,9 @@ export PYTHONPATH=/opt/openrobots/lib/python2.7/site-packages:$PYTHONPATH
 #3) step: source ~/.bashrc
 
 4) copy ur5_gripper.urdf
+
+
+
+
+#rvi
+joint_state_publisher
