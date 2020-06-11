@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
-
+from utils.ros_publish import RosPub()
 
 import time as tm
 #from pinocchio.visualize import GepettoVisualizer

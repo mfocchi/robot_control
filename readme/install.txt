@@ -23,11 +23,15 @@ sudo apt-get install python-omniorb
 sudo apt-get update
 
 #install pinocchio
+sudo apt install robotpkg-pinocchio
 sudo apt install robotpkg-py27-pinocchio
 
 #install robot urdfs
 sudo apt install robotpkg-py27-example-robot-data
 
+
+#quadprog
+sudo apt-get install robotpkg-py27-quadprog 
 
 #gepetto viewer
 sudo apt-get install robotpkg-urdfdom
@@ -46,6 +50,7 @@ export PATH=/opt/openrobots/bin:$PATH
 export PKG_CONFIG_PATH=/opt/openrobots/lib/pkgconfig:$PKG_CONFIG_PATH
 export LD_LIBRARY_PATH=/opt/openrobots/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/opt/openrobots/lib/python2.7/site-packages:$PYTHONPATH
+export LOCOSIM_DIR="/home/mfocchi/ros_ws/src/locosim/robot_control"
 
 #3) step: source ~/.bashrc
 
