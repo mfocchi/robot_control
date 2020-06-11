@@ -1,9 +1,11 @@
+<?xml version="1.0" ?>
 <launch>
      
-     <arg name="rviz_conf" default="$(env PWD)/rviz/config.rviz"/>
+     <arg name="rviz_conf" default="$(env LOCOSIM_DIR)/rviz/config.rviz"/>
      <arg name="test_joints" default="false"/>
      <arg name="robot_name" default="ur"/>
 
+     <param name="/rosout/omit_topics" value="true"/>
      <!-- send the robot XML to param server -->
      <param name="robot_description" command="$(find xacro)/xacro.py '$(env UR5_MODEL_DIR)/$(arg robot_name)_description/urdf/$(arg robot_name).urdf'" />   
      
@@ -17,10 +19,10 @@
 	     <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
 	     <param name="publish_default_efforts" value="True"/>
 	     </node>
-     </group>
+    </group>
 
-        <!-- run rviz -->
-        <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_conf) -f world"  />
+    <!-- run rviz -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_conf) -f world"  />
 
 	
     <!-- start robot state publisher sends joint state data to gazebo-->
