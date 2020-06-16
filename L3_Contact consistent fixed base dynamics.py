@@ -2,6 +2,7 @@
 import pinocchio as pin
 from pinocchio.utils import *
 import numpy as np
+from numpy import nan
 import math
 import time as tm
 import eigenpy
@@ -16,97 +17,56 @@ import ex_3_conf as conf
 #instantiate graphic utils
 ros_pub = RosPub()
 
-# Parameters of Joint Reference Trajectories
-amplitude =   np.array([ 0.0, 0.6, 0.0, 0.0, 0.0, 0.0])
-frequencies = np.array([ 0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
-phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-
-
-
-two_pi_f             = 2*np.pi*frequencies   # frequency (time 2 PI)
-two_pi_f_amp         = np.multiply(two_pi_f,amplitude)
-two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
-
 # Init variables
 zero = np.matrix([0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
 time = 0.0
 count = 0
-
 robot = importDisplayModel(False, False)
 
-J_old = np.matrix(np.zeros((3,6)))
-
-#TODO 
-#N = int(conf.T_SIMULATION/conf.dt)      # number of time steps
-#tau     = np.empty((robot.na, N))*nan    # joint torques
-#tau_c   = np.empty((robot.na, N))*nan    # joint Coulomb torques
-#q       = np.empty((robot.nq, N+1))*nan  # joint angles
-#v       = np.empty((robot.nv, N+1))*nan  # joint velocities
-#dv      = np.empty((robot.nv, N+1))*nan  # joint accelerations
-#x       = np.empty((nx,  N))*nan        # end-effector position
-#dx      = np.empty((ndx, N))*nan        # end-effector velocity
-#ddx     = np.empty((ndx, N))*nan        # end effector acceleration
-#x_ref   = np.empty((nx,  N))*nan        # end-effector reference position
-#dx_ref  = np.empty((ndx, N))*nan        # end-effector reference velocity
-#ddx_ref = np.empty((ndx, N))*nan        # end-effector reference acceleration
-#ddx_des = np.empty((ndx, N))*nan        # end-effector desired acceleration
+two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
+two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
+two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-q_log = np.zeros((6,num_samples))
-q_des_log = np.zeros((6,num_samples))
-qd_log = np.zeros((6,num_samples))
-qd_des_log = np.zeros((6,num_samples))
-qdd_log = np.zeros((6,num_samples))
-qdd_des_log = np.zeros((6,num_samples))
-tau_log = np.zeros((6,num_samples))
-f_log = np.zeros((3,num_samples))
-x_log = np.zeros((3,num_samples))
-time_log = np.zeros(num_samples)
+q_log = np.empty((6,0))*nan
+q_des_log = np.empty((6,0))*nan
+qd_log = np.empty((6,0))*nan
+qd_des_log = np.empty((6,0))*nan
+qdd_log = np.empty((6,0))*nan
+qdd_des_log = np.empty((6,0))*nan
+tau_log = np.empty((6,0))*nan
+f_log = np.empty((3,0))*nan
+x_log = np.empty((3,0))*nan
+time_log =  np.array([])
 
-# Initial configuration / velocity / Acceleration
-q0  = np.matrix([ 0.0, -0.6, 0.6, -1.67, -1.57, 0.0]).T
-qd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
-# EXERCISE 9: 
-#qd0 = np.matrix([ 0, w_rad[1]*amplitude[1], 0.0, 0.0, w_rad[4]*amplitude[4], 0.0]).T
-qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
+q = conf.q0
+qd = conf.qd0
+qdd = conf.qdd0
 
-q = q0
-qd = qd0
-qdd = qdd0
-
-q_des  = q0        # joint reference velocity
+q_des  = conf.q0        # joint reference velocity
 qd_des = zero        # joint reference acceleration
 qdd_des = zero        # joint desired acceleration
-
-
 
 # get the ID corresponding to the frame we want to control
 assert(robot.model.existFrame(conf.frame_name))
 frame_ee = robot.model.getFrameId(conf.frame_name)
 
-# EXERCISE 5: contact at the origin of wrist_3_link  (NB Pinocchio functions are slightly different for joint frames)
-#frame_ee = robot.model.getFrameId('wrist_3_link')
-
 z_gnd = 0.0
 ground_contact = False
 counter_lo = 0
 counter_td=0
+plt.close() 
 
+#init nullspace projector
 N = np.zeros((6,6))
 
 # CONTROL LOOP
 while True:   
 
     # Reference Generation
-#    Sinusoidal reference TODO fix this
-#    q_des  = q0 + amplitude*np.sin(two_pi_f*time  + phi )
-#    qd_des = two_pi_f_amp * np.cos(two_pi_f*time + phi)
-#    qdd_des = - two_pi_f_squared_amp* np.sin(two_pi_f*time + phi)            
-    w_rad=2*math.pi*frequencies
-				
-    q_des  = q0 + np.matrix([ 0.0, amplitude[1]*np.sin(w_rad[1]*time), 0.0    , 0.0,  amplitude[4]*np.sin(w_rad[4]*time), 0.0]).T
-    qd_des =  np.matrix([ 0.0,  amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time), 0.0, 0.0 , amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), 0.0]).T
-    qdd_des = np.matrix([ 0.0, -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), 0.0, 0.0, -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), 0.0]).T  
+    q_des  = conf.q0 +   np.multiply( conf.amp,np.sin(two_pi_f*time + conf.phi))
+    qd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
+    qdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
 
     # EXERCISE 3: Constraint consistent joint reference
 #    amplitude =   np.array([ 0.0, 1.2, 0.0, 0.0, 0.0, 0.0])
@@ -119,9 +79,9 @@ while True:
 				
     # Set constant reference after a while
     if time>conf.exp_duration_sin:
-        q_des  = q0
-        qd_des=zero
-        qdd_des=zero         
+        q_des  = conf.q0
+        qd_des = zero
+        qdd_des = zero         
  
     # Decimate print of time
     #if (divmod(count ,1000)[1]  == 0):
@@ -285,16 +245,17 @@ while True:
 
 #------------------------------------------------------------------------------------------------------------
     # Log Data into a vector
-    q_log[:,count] = q.flatten()
-    q_des_log[:,count] = q_des.flatten()
-    qd_log[:,count] = qd.flatten()
-    qd_des_log[:,count] = qd_des.flatten()
-    qdd_log[:,count] = qdd.flatten()
-    qdd_des_log[:,count] = qdd_des.flatten()
-    tau_log[:,count] = tau.flatten()				
-    time_log[count] = time 
-    f_log[:,count] = f.flatten()
-    x_log[:,count] = x.flatten()
+    q_log = np.hstack((q_log, q ))
+    time_log = np.hstack((time_log, time))
+    q_des_log= np.hstack((q_des_log, q_des))
+    qd_log= np.hstack((qd_log, qd))
+    qd_des_log= np.hstack((qd_des_log, qd))
+    qdd_log= np.hstack((qdd_log, qd))
+    qdd_des_log= np.hstack((qdd_des_log, qd))
+    tau_log = np.hstack((tau_log, tau))				
+    f_log = np.hstack((f_log, f))				
+    x_log = np.hstack((x_log, x))				
+
     time = time + conf.dt 
     count +=1
 
@@ -316,14 +277,14 @@ while True:
             
 ros_pub.deregister_node()
                     
-# plot joint variables                                                                                
-#plotJoint('position', 0,  time_log,  q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log)
-#plotJoint('velocity', 1, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log)
-#plotJoint('acceleration', 2, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log)
-#plotJoint('torque', 3,  time_log,  q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log)
+# plot joint variables                                                                              
+plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+#plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+#plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+#plotJoint('torque', 3, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 
 # plot end-effector variables    
-#plotEndeff('position', 4,time_log, x_log, f_log)
+plotEndeff('position', 4,time_log, x_log)
 #plotEndeff('force', 5, time_log, x_log, f_log)
 
 
