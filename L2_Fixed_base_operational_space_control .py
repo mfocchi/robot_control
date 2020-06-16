@@ -16,6 +16,7 @@ import os
 import time as tm
 #from pinocchio.visualize import GepettoVisualizer
 from pinocchio.robot_wrapper import RobotWrapper
+from utils.common_functions import *
 
 import eigenpy
 eigenpy.switchToNumpyMatrix()
@@ -31,8 +32,8 @@ sys.dont_write_bytecode = True
 
 ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
 path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
-urdf      = path + "/ur_description/urdf/ur5_gripper.urdf";
-srdf      = path + '/ur_description/srdf/ur5_gripper.srdf'
+urdf      = path + "/ur_description/urdf/ur5_modified.urdf";
+srdf      = path + '/ur_description/srdf/ur5_modified.srdf'
 robot = RobotWrapper.BuildFromURDF(urdf, [path, ])
 
 # Control loop interval
@@ -266,9 +267,7 @@ while True:
     #SIMULATION
     
     #compute fwd dynamics    
-   
     qdd = M_inv*(tau-h)
-
     
     #forward euler integration 
     q = q+qd*dt
@@ -290,50 +289,12 @@ while True:
 
 
 #plot position
-lw_des=2
-lw_act=4
 plt.close()
-plt.figure()
-plt.subplot(3,1,1)
-plt.title("x")
-plt.plot(time_log, x_des_log[0,:],linestyle='-', lw=lw_des,color = 'red')
-plt.plot(time_log, x_log[0,:],linestyle='-', lw=lw_act,color = 'blue')
-plt.grid()
+plotEndeff('position', 1,time_log, x_log, x_des_log)
+plotEndeff('velocity', 2,time_log, None, None, xd_log, xd_des_log)
 
-plt.subplot(3,1,2)
-plt.title("y")     
-plt.plot(time_log, x_des_log[1,:],linestyle='-', lw=lw_des,color = 'red', label="q_des")
-plt.plot(time_log, x_log[1,:],linestyle='-',lw=lw_act, color = 'blue', label="q")
-plt.grid()
 
-plt.subplot(3,1,3)
-plt.title("z")
-plt.plot(time_log, x_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
-plt.plot(time_log, x_log[2,:],linestyle='-',lw=lw_act,color = 'blue')
-plt.grid()
-
-# Plot velocity   
 #plt.figure()
-#plt.subplot(3,1,1)
 #plt.title("x")
-#plt.plot(time_log, xd_des_log[0,:],linestyle='-', lw=lw_des,color = 'red')
-#plt.plot(time_log, xd_log[0,:],linestyle='-', lw=lw_act,color = 'blue')
+#plt.plot(time_log,qd_log_norm.transpose(),linestyle='-', color = 'red')
 #plt.grid()
- 
-#plt.subplot(3,1,2)
-#plt.title("y")     
-#plt.plot(time_log, xd_des_log[1,:],linestyle='-', lw=lw_des,color = 'red', label="q_des")
-#plt.plot(time_log, xd_log[1,:],linestyle='-',lw=lw_act, color = 'blue', label="q")
-#plt.grid()
-##
-##
-#plt.subplot(3,1,3)
-#plt.title("z")
-#plt.plot(time_log, xd_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
-#plt.plot(time_log, xd_log[2,:],linestyle='-',lw=lw_act,color = 'blue')
-# plt.grid()
-
-plt.figure()
-plt.title("x")
-plt.plot(time_log,qd_log_norm.transpose(),linestyle='-', lw=lw_des,color = 'red')
-plt.grid()

@@ -10,10 +10,12 @@ import psutil
 from custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
+
+# Print options 
 np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
-
-
+sys.dont_write_bytecode = True
 
 from urdf_parser_py.urdf import URDF
 
@@ -69,7 +71,7 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log):
+def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log):
 
 
     if name == 'position':
@@ -88,73 +90,88 @@ def plotJoint(name, figure_id, time_log, q_des_log, q_log, qd_des_log, qd_log, q
        print("wrong choice")                                    
 
     lw_des=7
-    lw_act=4  
-
+    lw_act=4  		
+				
+			#neet to transpose the matrix other wise it cannot be plot with numpy array	
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)             
     plt.subplot(3,2,1)
     plt.ylabel("1 - Shoulder Pan")    
-    plt.plot(time_log, plot_var_des_log[0,:],linestyle='-', lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[0,:],linestyle='-', lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_des_log[0,:].T, linestyle='-', lw=lw_des,color = 'red')
+    plt.plot(time_log, plot_var_log[0,:].T,linestyle='-', lw=lw_act,color = 'blue')
     plt.grid()
-    
+				
     plt.subplot(3,2,2)
     plt.ylabel("2 - Shoulder Lift")
-    plt.plot(time_log, plot_var_des_log[1,:],linestyle='-', lw=lw_des,color = 'red', label="q_des")
-    plt.plot(time_log, plot_var_log[1,:],linestyle='-',lw=lw_act, color = 'blue', label="q")
+    plt.plot(time_log, plot_var_des_log[1,:].T, linestyle='-', lw=lw_des,color = 'red', label="q_des")
+    plt.plot(time_log, plot_var_log[1,:].T,linestyle='-',lw=lw_act, color = 'blue', label="q")
     plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
     plt.grid()
     
     plt.subplot(3,2,3)
     plt.ylabel("3 - Elbow")    
-    plt.plot(time_log, plot_var_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[2,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_des_log[2,:].T,linestyle='-',lw=lw_des,color = 'red')
+    plt.plot(time_log, plot_var_log[2,:].T,linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()    
     
     plt.subplot(3,2,4)
     plt.ylabel("4 - Wrist 1")    
-    plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[3,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_des_log[3,:].T,linestyle='-',lw=lw_des,color = 'red')
+    plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     
     plt.subplot(3,2,5)
     plt.ylabel("5 - Wrist 2")    
-    plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[4,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_des_log[4,:].T,linestyle='-',lw=lw_des,color = 'red')
+    plt.plot(time_log, plot_var_log[4,:].T,linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     
     plt.subplot(3,2,6)
     plt.ylabel("6 - Wrist 3") 
-    plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[5,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_des_log[5,:].T,linestyle='-',lw=lw_des,color = 'red')
+    plt.plot(time_log, plot_var_log[5,:].T,linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     figure_id += 1  
                 
-def plotEndeff(name, figure_id, time_log, x_log, f_log):
+def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, f_log=None):
+    plot_var_des_log = None
     if name == 'position':
         plot_var_log = x_log
+        if   (x_des_log is not None):								
+	       plot_var_des_log = x_des_log							
     elif name == 'force':
         plot_var_log = f_log
+    elif  name == 'velocity':	
+        plot_var_log = xd_log
+        if   (xd_des_log is not None):								
+             plot_var_des_log = xd_des_log									
     else:
        print("wrong choice")                    
        
     lw_act=4  
+    lw_des=7
     				
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)                   
     plt.subplot(3,1,1)
-    plt.ylabel("end-effector x")    
-    plt.plot(time_log, plot_var_log[0,:], lw=lw_act, color = 'red')
+    plt.ylabel("end-effector x")
+    if   (plot_var_des_log is not None):
+         plt.plot(time_log, plot_var_des_log[0,:].T, lw=lw_des, color = 'red')					
+    plt.plot(time_log, plot_var_log[0,:].T, lw=lw_act, color = 'blue')
     plt.grid()
     
     plt.subplot(3,1,2)
     plt.ylabel("end-effector y")    
-    plt.plot(time_log, plot_var_log[1,:], lw=lw_act, color = 'red')
+    if   (plot_var_des_log is not None):
+         plt.plot(time_log, plot_var_des_log[1,:].T, lw=lw_des, color = 'red')					
+    plt.plot(time_log, plot_var_log[1,:].T, lw=lw_act, color = 'blue')
     plt.grid()
     
     plt.subplot(3,1,3)
     plt.ylabel("end-effector z")    
-    plt.plot(time_log, plot_var_log[2,:], lw=lw_act, color = 'red')
+    if   (plot_var_des_log is not None):
+        plt.plot(time_log, plot_var_des_log[2,:].T, lw=lw_des, color = 'red')					    				
+    plt.plot(time_log, plot_var_log[2,:].T, lw=lw_act, color = 'blue')
     plt.grid()
     figure_id += 1      
     

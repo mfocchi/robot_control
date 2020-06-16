@@ -4,85 +4,22 @@ from pinocchio.utils import *
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-
-from utils.ros_publish import RosPub()
+from ros_publish import RosPub #TODO 
+from utils.common_functions import *
 
 import time as tm
-#from pinocchio.visualize import GepettoVisualizer
 from pinocchio.robot_wrapper import RobotWrapper
 import eigenpy
 eigenpy.switchToNumpyMatrix()
 import sys
 import os
 
-def plot(name, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log):
-    plot_var_log = np.zeros((6,num_samples))
-    plot_var_des_log = np.zeros((6,num_samples))
-
-    if name == 'pos':
-        plot_var_log[:,:] = q_log[:,:]
-        plot_var_des_log[:,:] = q_des_log
-    elif name == 'vel':
-        plot_var_log[:,:] = qd_log[:,:]
-        plot_var_des_log[:,:] = qd_des_log[:,:]
-    else:
-        plot_var_log[:,:] = qdd_log[:,:]
-        plot_var_des_log[:,:] = qdd_des_log
-
-    lw_des=7
-    lw_act=4  
-
-    plt.figure(1)
-    plt.subplot(3,3,1)
-    plt.title("1_joint")	
-    plt.plot(time_log, plot_var_des_log[0,:],linestyle='-', lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[0,:],linestyle='-', lw=lw_act,color = 'blue')
-    plt.grid()
-    
-    plt.subplot(3,3,2)
-    plt.title("2_joint")
-    plt.plot(time_log, plot_var_des_log[1,:],linestyle='-', lw=lw_des,color = 'red', label="q_des")
-    plt.plot(time_log, plot_var_log[1,:],linestyle='-',lw=lw_act, color = 'blue', label="q")
-    plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
-    plt.grid()
-	
-    plt.subplot(3,3,3)
-    plt.title("3_joint")    
-    plt.plot(time_log, plot_var_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[2,:],linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()    
-    
-    plt.subplot(3,3,4)
-    plt.title("4_joint")    
-    plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[3,:],linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()
-    
-    plt.subplot(3,3,5)
-    plt.title("5_joint")    
-    plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[4,:],linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()
-    
-    plt.subplot(3,3,6)
-    plt.title("6_joint") 
-    plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[5,:],linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()
-	
- 
-# Print options 
-np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
-np.set_printoptions(threshold=np.inf)
-sys.dont_write_bytecode = True
-
-
 
 # Import the model
 ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
 path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
-urdf      = path + "/ur_description/urdf/ur5_gripper.urdf";
-srdf      = path + '/ur5_description/srdf/ur5_gripper.srdf'
+urdf      = path + "/ur_description/urdf/ur5_modified.urdf";
+srdf      = path + '/ur5_description/srdf/ur5_modified.srdf'
 robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
 
 # Control loop interval
@@ -144,6 +81,7 @@ qd_log = np.zeros((6,num_samples))
 qd_des_log = np.zeros((6,num_samples))
 qdd_log = np.zeros((6,num_samples))
 qdd_des_log = np.zeros((6,num_samples))
+tau_log = np.zeros((6,num_samples))
 time_log = np.zeros(num_samples)
 
 # Initial configuration / velocity / Acceleration
@@ -177,8 +115,7 @@ while True:
 #        robot.viewer.gui.addSphere('world/ee_fixed_joint', 0.1, EE_SPHERE_COLOR)
     
     # Reference Generation
-    
-#    # EXERCISE 1: Sinusoidal reference
+    # EXERCISE 1: Sinusoidal reference
     q_des  = q0 + np.matrix([ 0.0, amplitude[1]*np.sin(w_rad[1]*time), 0.0, 0.0,  amplitude[4]*np.sin(w_rad[4]*time), 0.0]).T
     qd_des = np.matrix([ 0.0,  amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time), 0.0, 0.0, amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), 0.0]).T
     qdd_des = np.matrix([ 0.0, -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), 0.0, 0.0, -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), 0.0]).T  
@@ -265,6 +202,8 @@ while True:
     qd_des_log[:,count] = qd_des.flatten()
     qdd_log[:,count] = qdd.flatten()
     qdd_des_log[:,count] = qdd_des.flatten()
+    tau_log[:,count] = tau.flatten()
+				
     time_log[count] = time  
     time = time + dt 
     count +=1
@@ -273,9 +212,11 @@ while True:
     
 
         
-plot('pos', q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log)
-#plot('vel', q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log)
-#plot('acc', q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log)
+                    
+# plot joint variables                                                                              
+plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+#plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+#plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 
 
 
