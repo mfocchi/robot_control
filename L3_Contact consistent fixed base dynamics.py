@@ -6,36 +6,15 @@ import math
 import time as tm
 import eigenpy
 eigenpy.switchToNumpyMatrix()
-import sys
+
 import os
 from utils.common_functions import *
 from utils.optimTools import quadprog_solve_qp  
 from ros_publish import RosPub
-
-
-from quadprog import solve_qp    
+import ex_3_conf as conf
     
-# Print options 
-np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
-np.set_printoptions(threshold=np.inf)
-sys.dont_write_bytecode = True
-
 #instantiate graphic utils
 ros_pub = RosPub()
-
-# Control loop interval
-dt = 0.001
-exp_duration_sin = 3.0 
-exp_duration = 5.0
-num_samples = (int)(exp_duration/dt)
-
-#to slow down simulation
-SLOW_FACTOR = 5
-
-## Matrix of KP gains
-kp=eye(6)*200
-# Matrix of KD gains
-kd=eye(6)*20
 
 # Parameters of Joint Reference Trajectories
 amplitude =   np.array([ 0.0, 0.6, 0.0, 0.0, 0.0, 0.0])
@@ -100,9 +79,10 @@ qd_des = zero        # joint reference acceleration
 qdd_des = zero        # joint desired acceleration
 
 
-#get end effector ID
-assert(robot.model.existFrame('ee_link'))
-frame_ee = robot.model.getFrameId('ee_link')
+
+# get the ID corresponding to the frame we want to control
+assert(robot.model.existFrame(conf.frame_name))
+frame_ee = robot.model.getFrameId(conf.frame_name)
 
 # EXERCISE 5: contact at the origin of wrist_3_link  (NB Pinocchio functions are slightly different for joint frames)
 #frame_ee = robot.model.getFrameId('wrist_3_link')
@@ -135,10 +115,10 @@ while True:
 #    if (ground_contact):    
 #        qd_des = N*qd_des
 #        qdd_des =  N*qdd_des
-#    q_des += qd_des*dt	
+#    q_des += qd_des*conf.dt	
 				
     # Set constant reference after a while
-    if time>exp_duration_sin:
+    if time>conf.exp_duration_sin:
         q_des  = q0
         qd_des=zero
         qdd_des=zero         
@@ -146,7 +126,7 @@ while True:
     # Decimate print of time
     #if (divmod(count ,1000)[1]  == 0):
        #print('Time %.3f s'%(time))
-    if time >= exp_duration:
+    if time >= conf.exp_duration:
         break
                             
     robot.computeAllTerms(q, qd)    
@@ -154,7 +134,7 @@ while True:
     h = robot.nle(q, qd, False)
     g = robot.gravity(q)   
     #PD controller + gravity compensation
-    tau = kp*(q_des-q)+kd*(qd_des-qd) + g              
+    tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd) + g              
 
 
 
@@ -184,7 +164,7 @@ while True:
     #dynamicaaly consistent psdinv
     JTpinv = lambda_*J*M_inv
     #null-space projector of J^T    
-    Nt = (eye(6)- J.T * JTpinv) 
+    Nt = (np.eye(6)- J.T * JTpinv) 
                 
     # touch-down
     if (counter_lo==0) and not (ground_contact) and (x[2]<=z_gnd):                         
@@ -193,7 +173,7 @@ while True:
                                 
         #EXERCISE 1 :compute null-space for velocities to update the joint velocity accounting  for the impact                                
         Jpinv = M_inv * J.T * lambda_                
-        N = eye(6) - Jpinv*J                                        
+        N = np.eye(6) - Jpinv*J                                        
         qd = N*qd                            
         #recompute the velocity dependent terms...                                
         robot.computeAllTerms(q, qd)    
@@ -233,8 +213,8 @@ while True:
         #print  torques_row_space    
                              
     # EXERCISE 1: Forward Euler Integration        
-    q = q + qd*dt + 0.5*dt*dt*qdd
-    qd = qd + qdd*dt
+    q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
+    qd = qd + qdd*conf.dt
 
     ##  EXERCISE 4: Gauss principle of least constraint holds when in contact
     # Minimize     1/2 x^T M x - q_ucT M x
@@ -315,7 +295,7 @@ while True:
     time_log[count] = time 
     f_log[:,count] = f.flatten()
     x_log[:,count] = x.flatten()
-    time = time + dt 
+    time = time + conf.dt 
     count +=1
 
     # plot contact force
@@ -327,7 +307,7 @@ while True:
     ros_pub.add_marker(x.A1.tolist())                 
     ros_pub.publish(robot, q, qd, tau)
                    
-    tm.sleep(dt*SLOW_FACTOR)
+    tm.sleep(conf.dt*conf.SLOW_FACTOR)
                 
     # stops the while loop if  you prematurely hit CTRL+C                    
     if ros_pub.isShuttingDown():
