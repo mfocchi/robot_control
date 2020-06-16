@@ -54,6 +54,10 @@ from gazebo_msgs.msg import ODEPhysics
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Pose
 
+import roslaunch
+import rosnode
+import rosgraph
+
 #important
 np.set_printoptions(precision = 5, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
@@ -63,7 +67,17 @@ class Conf(object): pass
 
 class ControlThread(threading.Thread):
     def __init__(self):  
-        
+        #start ros impedance controller
+        if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
+            print 'ROS MASTER is Online'
+        else:
+            print 'ROS MASTER is Offline, starting ros impedance controller...'
+            uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+            roslaunch.configure_logging(uuid)
+            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller.launch"])
+            self.launch.start() 
+            time.sleep(4.0)         
+                                
         threading.Thread.__init__(self)
         
         self.contactsW = np.zeros(12)
@@ -88,7 +102,6 @@ class ControlThread(threading.Thread):
         self.joint_names = ""
         self.u = Utils()
         self.verbose = False 
-     
         
     def run(self):
         
@@ -106,9 +119,6 @@ class ControlThread(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
         
 
-        
-        #missing pid callback
-       
     def _receive_contact(self, msg):
         
         self.contactsW[0] = msg.states[0].total_wrench.force.x
@@ -197,8 +207,13 @@ class ControlThread(threading.Thread):
         ros.init_node('sub_pub_node_python', anonymous=False)
 
     def deregister_node(self):
+        os.system("killall -9 rosmaster")    
+        os.system("killall -9 gzserver")    
+        os.system("killall -9 gzclient")    
+        os.system("pkill rviz")
+        os.system("pkill roslaunch")                                
         ros.signal_shutdown("manual kill")
-        
+                                
     def get_sim_time(self):
         return self.sim_time
         
@@ -283,9 +298,9 @@ class ControlThread(threading.Thread):
         p.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
         p.qd_des = np.zeros(12)
         p.tau_ffwd = np.zeros(12)
-        gravity_comp = np.array(
+        p.gravity_comp = np.array(
             [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
-												
+                                                
         print("reset posture...")
         p.freezeBase(1)
         start_t = time.time()
@@ -296,50 +311,55 @@ class ControlThread(threading.Thread):
             print("q err prima freeze base", (p.q - p.q_des))
   
         print("put on ground and start compensating gravity...")
-        p.freezeBase(0)												
+        p.freezeBase(0)                                                
         time.sleep(1.0)
         if p.verbose:
             print("q err pre grav comp", (p.q - p.q_des))
-												
+                                                
         start_t = time.time()
         while time.time() - start_t < 1.0:
-            p.send_des_jstate(p.q_des, p.qd_des, gravity_comp)
+            p.send_des_jstate(p.q_des, p.qd_des, p.gravity_comp)
             time.sleep(0.01)
         if p.verbose:
             print("q err post grav comp", (p.q - p.q_des))
-												
-        print("starting com controller (no joint PD)...")				
+                                                
+        print("starting com controller (no joint PD)...")                
         p.setPDs(0.0, 0.0, 0.0)
 
         
 def talker(p):
     
-    nodes = rosnode.get_node_names()
-    assert ("/mpc/reference_gen" in nodes), "you need to launch the node!"
-			
+
+        
     p.start()
     p.register_node()
     name = "Python Controller"
     kin = HyQKinematics()
-    p.initKinematics(kin)		
+    p.initKinematics(kin)        
     p.startupProcedure() 
 
     #looop frequency
-    dt = 0.001				
+    dt = 0.001                
     #control loop
     while True:  
         start_loop = time.time()
-	   # controller	 						
-        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd;
+       # controller                             
+        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd + p.gravity_comp;
         #p.tau_ffwd  = np.zeros(12);       
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-								
+                                
         #wait for synconization
         elapsed_time = time.time() - start_loop
         if elapsed_time < dt:
-            time.sleep(dt-elapsed_time)		
-												
+            time.sleep(dt-elapsed_time)        
+                                                
+        # stops the while loop if  you prematurely hit CTRL+C                    
+        if ros.is_shutdown():
+            print ("Shutting Down")                    
+            break;                                                
+                                                
     p.deregister_node()
+    p.join()            
     
     
 if __name__ == '__main__':

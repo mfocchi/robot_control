@@ -50,7 +50,7 @@ export PATH=/opt/openrobots/bin:$PATH
 export PKG_CONFIG_PATH=/opt/openrobots/lib/pkgconfig:$PKG_CONFIG_PATH
 export LD_LIBRARY_PATH=/opt/openrobots/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/opt/openrobots/lib/python2.7/site-packages:$PYTHONPATH
-export LOCOSIM_DIR="/home/mfocchi/ros_ws/src/locosim/robot_control"
+export LOCOSIM_DIR="/home/mfocchi/ros_ws/src/locosim"
 
 #3) step: source ~/.bashrc
 
