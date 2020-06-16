@@ -4,7 +4,12 @@ Created on Tue Jun  5 09:43:27 2018
 
 @author: romeo orsolino
 """
+#to be compatible with python3
+from __future__ import print_function
 import numpy as np
+import scipy as sp
+import math as math
+from utils import *
 
 class Math:
     def normalize(self, n):
@@ -169,15 +174,283 @@ class Math:
         return final_point, intersection_points
         
 
-#p1 = [1,1.5]
-#s1 = [0,0]
-#s2 = [0,2]
-#s3 = [2,2]
-#s4 = [2,0]
-#poly = np.vstack([s1,s2,s3,s4])
-#math = Math()
-##d =  math.find_point_to_line_signed_distance(s4, s1, p1)
-##print d
-##math = Math()
-#d = math.find_residual_radius(poly, p1)
-#print d
+def cross_mx(v):
+    mx =np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return mx
+def cross_mx_casadi(v):
+    # mx =[[MX(0.0), -v[2], v[1]], [v[2], MX(0.0), -v[0]], [-v[1], v[0], MX(0.0)]]
+    mx =MX.zeros(3,3)
+    mx[0, 1] =  -v[2]
+    mx[0, 2] =   v[1]
+    mx[1, 0] =   v[2]
+    mx[1, 2] =  -v[0]
+    mx[2, 0] =  -v[1]
+    mx[2, 1] =   v[0]
+    return mx
+def skew_simToVec(Ra):
+    # This is similar to one implemented in the framework
+    v = np.zeros(3)
+    v[0] = 0.5*(Ra[2,1] - Ra[1,2])
+    v[1] = 0.5*(Ra[0,2] - Ra[2,0])
+    v[2] = 0.5*(Ra[1,0] - Ra[0,1])
+
+    return v
+
+def rpyToRot(roll, pitch, yaw):
+    # Rx = [[MX(1.0),   MX(0.0) ,	  MX(0.0) ],
+    #       [MX(0.0),  cos(roll),  sin(roll)],
+    #       [MX(0.0), -sin(roll),  cos(roll)]]
+    Rx = MX.eye(3)
+    Rx[1,1] = cos(roll)
+    Rx[1,2] =sin(roll)
+    Rx[2,1] = -sin(roll)
+    Rx[2,2] = cos(roll)
+
+    # Ry =[[cos(pitch),	 MX(0.0),   sin(pitch)],
+    #      [MX(0.0)   ,    MX(1.0),   MX(0.0)],
+    #      [sin(pitch),	 MX(0.0),  cos(pitch)]]
+
+    Ry = MX.eye(3)
+    Ry[0, 0] = cos(pitch)
+    Ry[0, 2] = sin(pitch)
+    Ry[2, 0] = sin(pitch)
+    Ry[2, 2] = cos(pitch)
+
+    # Rz = [[cos( yaw) ,  sin(yaw),	MX(0.0)],
+    #       [-sin( yaw),  cos(yaw),   MX(0.0)],
+    #       [MX(0.0)   ,  MX(0.0) ,   MX(1.0)]]
+
+    Rz = MX.eye(3)
+    Rz[0, 0] = cos(yaw)
+    Rz[0, 1] = sin(yaw)
+    Rz[1, 0] = -sin(yaw)
+    Rz[1, 1] = cos(yaw)
+
+    R =  mtimes(Rx,mtimes(Ry,Rz))
+    return R
+
+def rotMatToRotVec(Ra):
+    c = 0.5 * (Ra[0, 0] + Ra[1, 1] + Ra[2, 2] - 1)
+    w = -skew_simToVec(Ra)
+    s = np.linalg.norm(w) # w = sin(theta) * axis
+
+    if abs(s) <= 1e-10:
+        err = np.zeros(3)
+    else:
+        angle = math.atan2(s, c)
+        axis = w / s
+        err = angle * axis
+    return err
+
+def rpyToEarInv(r,p,y):
+
+    #convention yaw pitch roll
+
+    phi = r
+    theta = p
+    psi = y
+
+    #Inverse of Euler angle rates matrix to get rate of change of Euler angles in the base coords
+    EarInv = np.array([[math.cos(psi)/math.cos(theta),        math.sin(psi)/math.cos(theta),         0],
+                       [-math.sin(psi),                  math.cos(psi),                  0],
+                       [math.cos(psi)*math.tan(theta),        math.sin(psi)*math.tan(theta) ,        1]])
+    return EarInv
+
+
+# epsilon for testing whether a number is close to zero
+_EPS = np.finfo(float).eps * 4.0
+
+# axis sequences for Euler angles
+_NEXT_AXIS = [1, 2, 0, 1]
+
+# map axes strings to/from tuples of inner axis, parity, repetition, frame
+_AXES2TUPLE = {
+    'sxyz': (0, 0, 0, 0), 'sxyx': (0, 0, 1, 0), 'sxzy': (0, 1, 0, 0),
+    'sxzx': (0, 1, 1, 0), 'syzx': (1, 0, 0, 0), 'syzy': (1, 0, 1, 0),
+    'syxz': (1, 1, 0, 0), 'syxy': (1, 1, 1, 0), 'szxy': (2, 0, 0, 0),
+    'szxz': (2, 0, 1, 0), 'szyx': (2, 1, 0, 0), 'szyz': (2, 1, 1, 0),
+    'rzyx': (0, 0, 0, 1), 'rxyx': (0, 0, 1, 1), 'ryzx': (0, 1, 0, 1),
+    'rxzx': (0, 1, 1, 1), 'rxzy': (1, 0, 0, 1), 'ryzy': (1, 0, 1, 1),
+    'rzxy': (1, 1, 0, 1), 'ryxy': (1, 1, 1, 1), 'ryxz': (2, 0, 0, 1),
+    'rzxz': (2, 0, 1, 1), 'rxyz': (2, 1, 0, 1), 'rzyz': (2, 1, 1, 1)}
+
+def euler_from_matrix(matrix, axes='sxyz'):
+    """Return Euler angles from rotation matrix for specified axis sequence.
+
+    axes : One of 24 axis sequences as string or encoded tuple
+
+    Note that many Euler angle triplets can describe one matrix.
+
+    >>> R0 = euler_matrix(1, 2, 3, 'syxz')
+    >>> al, be, ga = euler_from_matrix(R0, 'syxz')
+    >>> R1 = euler_matrix(al, be, ga, 'syxz')
+    >>> np.allclose(R0, R1)
+    True
+    >>> angles = (4.0*math.pi) * (np.random.random(3) - 0.5)
+    >>> for axes in _AXES2TUPLE.keys():
+    ...    R0 = euler_matrix(axes=axes, *angles)
+    ...    R1 = euler_matrix(axes=axes, *euler_from_matrix(R0, axes))
+    ...    if not np.allclose(R0, R1): print axes, "failed"
+
+    """
+    try:
+        firstaxis, parity, repetition, frame = _AXES2TUPLE[axes.lower()]
+    except (AttributeError, KeyError):
+        _ = _TUPLE2AXES[axes]
+        firstaxis, parity, repetition, frame = axes
+
+    i = firstaxis
+    j = _NEXT_AXIS[i+parity]
+    k = _NEXT_AXIS[i-parity+1]
+
+    M = np.array(matrix, dtype=np.float64, copy=False)[:3, :3]
+    if repetition:
+        sy = math.sqrt(M[i, j]*M[i, j] + M[i, k]*M[i, k])
+        if sy > _EPS:
+            ax = math.atan2( M[i, j],  M[i, k])
+            ay = math.atan2( sy,       M[i, i])
+            az = math.atan2( M[j, i], -M[k, i])
+        else:
+            ax = math.atan2(-M[j, k],  M[j, j])
+            ay = math.atan2( sy,       M[i, i])
+            az = 0.0
+    else:
+        cy = math.sqrt(M[i, i]*M[i, i] + M[j, i]*M[j, i])
+        if cy > _EPS:
+            ax = math.atan2( M[k, j],  M[k, k])
+            ay = math.atan2(-M[k, i],  cy)
+            az = math.atan2( M[j, i],  M[i, i])
+        else:
+            ax = math.atan2(-M[j, k],  M[j, j])
+            ay = math.atan2(-M[k, i],  cy)
+            az = 0.0
+
+    if parity:
+        ax, ay, az = -ax, -ay, -az
+    if frame:
+        ax, az = az, ax
+    return ax, ay, az
+
+def euler_from_quaternion(quaternion, axes='sxyz'):
+    """Return Euler angles from quaternion for specified axis sequence.
+
+    >>> angles = euler_from_quaternion([0.06146124, 0, 0, 0.99810947])
+    >>> np.allclose(angles, [0.123, 0, 0])
+    True
+
+    """
+    return euler_from_matrix(quaternion_matrix(quaternion), axes)
+
+def quaternion_matrix(quaternion):
+    """Return homogeneous rotation matrix from quaternion.
+
+    >>> R = quaternion_matrix([0.06146124, 0, 0, 0.99810947])
+    >>> np.allclose(R, rotation_matrix(0.123, (1, 0, 0)))
+    True
+
+    """
+    q = np.array(quaternion[:4], dtype=np.float64, copy=True)
+    nq = np.dot(q, q)
+    if nq < _EPS:
+        return np.identity(4)
+    q *= math.sqrt(2.0 / nq)
+    q = np.outer(q, q)
+    return np.array((
+        (1.0-q[1, 1]-q[2, 2],     q[0, 1]-q[2, 3],     q[0, 2]+q[1, 3], 0.0),
+        (    q[0, 1]+q[2, 3], 1.0-q[0, 0]-q[2, 2],     q[1, 2]-q[0, 3], 0.0),
+        (    q[0, 2]-q[1, 3],     q[1, 2]+q[0, 3], 1.0-q[0, 0]-q[1, 1], 0.0),
+        (                0.0,                 0.0,                 0.0, 1.0)
+        ), dtype=np.float64)
+
+
+def MxInv(A):
+    # Determinant of matrix A
+    sb1 = A[0, 0] * ((A[1, 1] * A[2, 2]) - (A[1, 2] * A[2, 1]))
+    sb2 = A[0, 1] * ((A[1, 0] * A[2, 2]) - (A[1, 2] * A[2, 0]))
+    sb3 = A[0, 2] * ((A[1, 0] * A[2, 1]) - (A[1, 1] * A[2, 0]))
+
+    Adetr = sb1 - sb2 + sb3
+    #    print(Adetr)
+    # Transpose matrix A
+    TransA = A.T
+
+    # Find determinant of the minors
+    a01 = (TransA[1, 1] * TransA[2, 2]) - (TransA[2, 1] * TransA[1, 2])
+    a02 = (TransA[1, 0] * TransA[2, 2]) - (TransA[1, 2] * TransA[2, 0])
+    a03 = (TransA[1, 0] * TransA[2, 1]) - (TransA[2, 0] * TransA[1, 1])
+
+    a11 = (TransA[0, 1] * TransA[2, 2]) - (TransA[0, 2] * TransA[2, 1])
+    a12 = (TransA[0, 0] * TransA[2, 2]) - (TransA[0, 2] * TransA[2, 0])
+    a13 = (TransA[0, 0] * TransA[2, 1]) - (TransA[0, 1] * TransA[2, 0])
+
+    a21 = (TransA[0, 1] * TransA[1, 2]) - (TransA[1, 1] * TransA[0, 2])
+    a22 = (TransA[0, 0] * TransA[1, 2]) - (TransA[0, 2] * TransA[1, 0])
+    a23 = (TransA[0, 0] * TransA[1, 1]) - (TransA[0, 1] * TransA[1, 0])
+
+    # Inverse of determinant
+    invAdetr = (float(1) / Adetr)
+    #    print(invAdetr)
+    # Inverse of the matrix A
+    invA = MX.zeros(3,3)
+    invA[0, 0] = invAdetr * a01
+    invA[0, 1] = -invAdetr * a02
+    invA[0, 2] = invAdetr * a03
+
+    invA[0, 0] = -invAdetr * a11
+    invA[0, 1] = invAdetr * a12
+    invA[0, 2] = -invAdetr * a13
+
+    invA[0, 0] = invAdetr * a21
+    invA[0, 1] = -invAdetr * a22
+    invA[0, 2] = invAdetr * a23
+
+    # Return the matrix
+    return invA
+
+
+#/**
+#brief motionVectorTransform Tranforms twists from A to B (b_X_a)   \in R^6 \times 6
+#here A is the origin frame and B the destination frame.
+#param position coordinate vector expressing OaOb in A coordinates
+#param rotationMx rotation matrix that transforms 3D vectors from A to B coordinates
+#return
+#
+def motionVectorTransform(position, rotationMx):
+    utils = Utils()
+    b_X_a = np.zeros((6,6))
+    b_X_a[utils.sp_crd("AX"):utils.sp_crd("AX") + 3 ,   utils.sp_crd("AX"): utils.sp_crd("AX") + 3] = rotationMx
+    b_X_a[utils.sp_crd("LX"):utils.sp_crd("LX") + 3 ,   utils.sp_crd("AX"): utils.sp_crd("AX") + 3] = -rotationMx*cross_mx(position)
+    b_X_a[utils.sp_crd("LX"):utils.sp_crd("LX") + 3 ,   utils.sp_crd("LX"): utils.sp_crd("LX") + 3] = rotationMx
+    return b_X_a
+
+
+#
+#brief forceVectorTransform Tranforms wrenches from A to B (b_X_a)   \in R^6 \times 6
+#here A is the origin frame and B the destination frame.
+#param position coordinate vector expressing OaOb in A coordinates
+#param rotationMx rotation matrix that transforms 3D vectors from A to B coordinates
+#return
+#
+
+
+def forceVectorTransform(position, rotationMx):
+    utils = Utils()
+    b_X_a = np.zeros((6,6))
+    b_X_a[utils.sp_crd("AX"):utils.sp_crd("AX") + 3 ,   utils.sp_crd("AX"): utils.sp_crd("AX") + 3] = rotationMx
+    b_X_a[utils.sp_crd("AX"):utils.sp_crd("AX") + 3 ,   utils.sp_crd("LX"): utils.sp_crd("LX") + 3] = -rotationMx*cross_mx(position)
+    b_X_a[utils.sp_crd("LX"):utils.sp_crd("LX") + 3 ,   utils.sp_crd("LX"): utils.sp_crd("LX") + 3] = rotationMx
+    return b_X_a
+
+
+def tic():
+    #Homemade version of matlab tic and toc functions
+    import time
+    global startTime_for_tictoc
+    startTime_for_tictoc = time.time()
+
+def toc():
+    import time
+    if 'startTime_for_tictoc' in globals():
+        print("Elapsed time is " + str(time.time() - startTime_for_tictoc) + " seconds.")
+    else:
+        print("Toc: start time not set")

@@ -8,12 +8,12 @@ import eigenpy
 eigenpy.switchToNumpyMatrix()
 import sys
 import os
-
 from utils.common_functions import *
-from quadprog import solve_qp    
-
+from utils.optimTools import quadprog_solve_qp  
 from ros_publish import RosPub
 
+
+from quadprog import solve_qp    
     
 # Print options 
 np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
@@ -23,13 +23,14 @@ sys.dont_write_bytecode = True
 #instantiate graphic utils
 ros_pub = RosPub()
 
-
-
 # Control loop interval
 dt = 0.001
 exp_duration_sin = 3.0 
 exp_duration = 5.0
 num_samples = (int)(exp_duration/dt)
+
+#to slow down simulation
+SLOW_FACTOR = 5
 
 ## Matrix of KP gains
 kp=eye(6)*200
@@ -37,9 +38,11 @@ kp=eye(6)*200
 kd=eye(6)*20
 
 # Parameters of Joint Reference Trajectories
-amplitude = np.array([ 0.0, 0.6, 0.0, 0.0, 0.0, 0.0])
+amplitude =   np.array([ 0.0, 0.6, 0.0, 0.0, 0.0, 0.0])
 frequencies = np.array([ 0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
 phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+
 
 two_pi_f             = 2*np.pi*frequencies   # frequency (time 2 PI)
 two_pi_f_amp         = np.multiply(two_pi_f,amplitude)
@@ -76,13 +79,13 @@ qd_log = np.zeros((6,num_samples))
 qd_des_log = np.zeros((6,num_samples))
 qdd_log = np.zeros((6,num_samples))
 qdd_des_log = np.zeros((6,num_samples))
+tau_log = np.zeros((6,num_samples))
 f_log = np.zeros((3,num_samples))
 x_log = np.zeros((3,num_samples))
 time_log = np.zeros(num_samples)
 
 # Initial configuration / velocity / Acceleration
-q0  = np.matrix([ 0.0, -0.6, 0.6, -1.57-0.1, -1.57, 0.0]).T
-#q0 = np.matrix([ 0. , -0.3,  0.7,  -1.57 ,  -1.57 ,  0. ]).T
+q0  = np.matrix([ 0.0, -0.6, 0.6, -1.67, -1.57, 0.0]).T
 qd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 # EXERCISE 9: 
 #qd0 = np.matrix([ 0, w_rad[1]*amplitude[1], 0.0, 0.0, w_rad[4]*amplitude[4], 0.0]).T
@@ -97,33 +100,43 @@ qd_des = zero        # joint reference acceleration
 qdd_des = zero        # joint desired acceleration
 
 
-f = np.matrix([0.0, 0.0,0.0]).T
-#end effector ID
+#get end effector ID
 assert(robot.model.existFrame('ee_link'))
 frame_ee = robot.model.getFrameId('ee_link')
 
-#TODO
-#robot.viewer.gui.addArrow('world/contact_arrow', 0.01, 1.0, EE_SPHERE_COLOR)
+# EXERCISE 5: contact at the origin of wrist_3_link  (NB Pinocchio functions are slightly different for joint frames)
+#frame_ee = robot.model.getFrameId('wrist_3_link')
 
 z_gnd = 0.0
 ground_contact = False
 counter_lo = 0
 counter_td=0
+
+N = np.zeros((6,6))
+
 # CONTROL LOOP
 while True:   
 
     # Reference Generation
-    
 #    Sinusoidal reference TODO fix this
 #    q_des  = q0 + amplitude*np.sin(two_pi_f*time  + phi )
 #    qd_des = two_pi_f_amp * np.cos(two_pi_f*time + phi)
 #    qdd_des = - two_pi_f_squared_amp* np.sin(two_pi_f*time + phi)            
     w_rad=2*math.pi*frequencies
-    q_des  = q0 + np.matrix([ 0.0, amplitude[1]*np.sin(w_rad[1]*time), 0.0, 0.0,  amplitude[4]*np.sin(w_rad[4]*time), 0.0]).T
-    qd_des = np.matrix([ 0.0,  amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time), 0.0, 0.0, amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), 0.0]).T
+				
+    q_des  = q0 + np.matrix([ 0.0, amplitude[1]*np.sin(w_rad[1]*time), 0.0    , 0.0,  amplitude[4]*np.sin(w_rad[4]*time), 0.0]).T
+    qd_des =  np.matrix([ 0.0,  amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time), 0.0, 0.0 , amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), 0.0]).T
     qdd_des = np.matrix([ 0.0, -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), 0.0, 0.0, -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), 0.0]).T  
-#          
-#        
+
+    # EXERCISE 3: Constraint consistent joint reference
+#    amplitude =   np.array([ 0.0, 1.2, 0.0, 0.0, 0.0, 0.0])
+#    qd_des =  np.matrix([ 0.0,  amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time), 0.0, 0.0 , amplitude[4]*w_rad[4]*np.cos(w_rad[4]*time), 0.0]).T
+#    qdd_des = np.matrix([ 0.0, -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), 0.0, 0.0, -amplitude[4]*w_rad[4]*w_rad[4]*np.sin(w_rad[4]*time), 0.0]).T  
+#    if (ground_contact):    
+#        qd_des = N*qd_des
+#        qdd_des =  N*qdd_des
+#    q_des += qd_des*dt	
+				
     # Set constant reference after a while
     if time>exp_duration_sin:
         q_des  = q0
@@ -137,110 +150,61 @@ while True:
         break
                             
     robot.computeAllTerms(q, qd)    
-
     M = robot.mass(q, False)
     h = robot.nle(q, qd, False)
-    g = robot.gravity(q)                
+    g = robot.gravity(q)   
+    #PD controller + gravity compensation
+    tau = kp*(q_des-q)+kd*(qd_des-qd) + g              
 
-    #contact at end-effector 
-    #compute jacobian of the end effector and its derivative in the WF
+
+
+    # EXERCISE 1: contact at the end-effector 
+    # compute jacobian of the end effector (in the WF)
     J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
-    J = J6[:3,:] # take first 3 rows of J6        
-    dJdq = robot.frameClassicAcceleration(q, qd, None, frame_ee, False).linear    
-    # compute frame end effector position and velocity in the WF   
+    # take first 3 rows of J6 cause we have a point contact            
+    J = J6[:3,:] 
+    # compute the derivativeof the jacobian (in the WF)			
+    dJdq = robot.frameClassicAcceleration(q, qd, None, frame_ee).linear    
+    # (for plotting purposes) compute frame end effector position and velocity in the WF   
     x = robot.framePlacement(q, frame_ee).translation                
     xd = J*qd    
-
-    # ES 3 (precision depends on dt)    
-#    Jdot = (J-J_old)/dt
-#    J_old = J            
-#    print (Jdot.dot(qd) - dJdq).T
-               
-    #ES 2 check 
-#    v_frame = robot.frameVelocity(q, qd, frame_id, False)
-#    xd = v_frame.linear                
-#    print (J*qd     - v_frame.linear).T                
-                       
-                    
-    #ES 4 contact at JOINT origin 
-    #compute Jacobian and its derivative in the world frame 
-#    frame_joint_id = robot.model.getJointId('wrist_3_joint')                    
-#    J = robot.getJointJacobian(frame_joint_id, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]                   
-#    Jdot = pin.getJointJacobianTimeVariation(robot.model, robot.data, frame_joint_id, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:] 
-#    dJdq = Jdot*qd # I need to do so cause frameClassicAcceleration it does not compute accel for joint frames        
-#    # compute end effector position and velocity  in the world frame 
-#    x = robot.placement(q, frame_joint_id).translation                           
-#    xd = J*qd
-
-
-
-#    #ES 5 check shifting law     TODO
-#    
-##   parent link="wrist_3_link" child link="ee_link"  RPY ="0.0 0.0 1.570796325" xyz="0.0 0.0823 0.0"
-#    frame_wrist = robot.model.getFrameId('wrist_3_link')                    
-#    frame_ee = robot.model.getFrameId('ee_link')        
-#                
-#    Je = robot.frameJacobian(q, frame_ee, True, pin.ReferenceFrame.LOCAL)                
-#    Jwr = robot.frameJacobian(q, frame_wrist, True, pin.ReferenceFrame.LOCAL)                        
-#    
-#    x_ee = robot.framePlacement(q, frame_ee).translation   
-#    x_wr = robot.framePlacement(q, frame_wrist).translation                            
-#    w_R_ee = robot.data.oMf[frame_ee].rotation
-#    w_R_wr = robot.data.oMf[frame_wrist].rotation    
-#    #express t in the wrist frame
-#    wr_t = (w_R_wr).T * (x_ee - x_wr)
-#    # find the rotation matrix that maps vectors from wrist frame to ee frame
-#    ee_R_wr = w_R_ee.T*w_R_wr     
-#            
-#    ee_X_wr = pin.SE3(ee_R_wr, wr_t)       
-#    Je_test =  ee_X_wr.toActionMatrix()*Jwr                        
-#    print "TEST:\n", Je_test -Je
+    # check twist at the end-effector			
+    v_frame = robot.frameVelocity(q, qd, frame_ee, False)   
+#    print (J*qd     - v_frame.linear)
             
-
-              
-
-
-    ####################################
-    #simulation           
+                    
+    # EXERCISE 1: Simulation of a constraint consistent dynamics 
     M_inv = np.linalg.inv(M)
                 
-    #normal pseudoinverse of J^T = (A^TA)^-1 * A^T
+    #Moore-penrose pseudoinverse of A = J^T => (A^TA)^-1 * A^T
     #JTpinv = np.linalg.inv(J*J.T)*J             
- 
+   
     #lambda_ contact inertia
     lambda_= np.linalg.inv(J*M_inv* J.T + np.eye(3)*1e-09) 
-    
     #dynamicaaly consistent psdinv
     JTpinv = lambda_*J*M_inv
-
-    N_dyn = (eye(6)- J.T * JTpinv) 
-    
-    #tau = M*(qdd_des+kp*(q_des-q)+kd*(qd_des-qd)) + h    
-    tau = kp*(q_des-q)+kd*(qd_des-qd) + g 
-    
-    #print N_dyn     
+    #null-space projector of J^T    
+    Nt = (eye(6)- J.T * JTpinv) 
                 
-    #####simulator
-    ################################            
-    #detect contact
-
-    #touchdown
+    # touch-down
     if (counter_lo==0) and not (ground_contact) and (x[2]<=z_gnd):                         
         counter_td = 30     
         ground_contact = True
-        #compute nullsace for velcities to update the joint velcity accounting  for the impact
-        Jpinv = M_inv*J.T*lambda_                
-        N_vel = eye(6) - Jpinv*J                                        
-        qd = N_vel*qd                            
-        
+                                
+        #EXERCISE 1 :compute null-space for velocities to update the joint velocity accounting  for the impact                                
+        Jpinv = M_inv * J.T * lambda_                
+        N = eye(6) - Jpinv*J                                        
+        qd = N*qd                            
+        #recompute the velocity dependent terms...                                
         robot.computeAllTerms(q, qd)    
         h = robot.nle(q, qd, False)  
         dJdq = robot.frameClassicAcceleration(q, qd, None, frame_ee, False).linear 
+                                
         print("contact ON")  
-    #liftoff  
-    if ((counter_td==0) and(ground_contact) and (f[2]<=0.0)):#(x[2]>z_gnd)):
-   
-        #histeresis
+
+    # lift-off  
+    if ((counter_td==0) and(ground_contact) and (f[2]<=0.0)):#(x[2]>z_gnd)):  
+        #hysteresis
         counter_lo = 200                
         ground_contact = False;    
         print ("contact OFF")
@@ -248,63 +212,98 @@ while True:
     if counter_td > 0:
         counter_td =counter_td-1
     if counter_lo > 0:
-        counter_lo =counter_lo-1                                
-        #print counter                                   
+        counter_lo =counter_lo-1                                                                
                             
-    # compute forward dynamics     
+    # compute forward (unconstraint) dynamics     
     qdd_uc = M_inv*(tau - h)              
-    if (not ground_contact):
-        qdd = qdd_uc
-                                
+
+    if (not ground_contact):                    
+        qdd = qdd_uc                                
         f = np.matrix([0.0, 0.0,0.0]).T                                
-    else:
-  
-        qd = N_vel*qd #TODO I should not do this but this is what thaty stops the motion                 
-        qdd = M_inv*( N_dyn*(tau -    h) - J.T*    lambda_*dJdq)    
+    else:  
+        qdd = M_inv*( Nt*(tau -    h) - J.T*    lambda_*dJdq)    
         # compute contact force    
         f = lambda_*( -dJdq + J*M_inv*(h - tau) )
-        torques_row_space =  N_dyn*(tau -    h)    
-        #print  torques_row_space    #they are almost zero cause the robot is not redundant
-                                
-        # EXERCISE 1: check contact force disappeared when projected
+                               
+        ## EXERCISE 2: Check that contact force disappears in projected dynamics
         #print (N_dyn* J.T*f).T                    
-                                
-       
-                            
-       #EX 6 gauss principle of leas constraint verification
-       #Minimize     1/2 x^T G x - a^T x
-       #Subject to   C.T x >= b
-    #                                    G : array, shape=(n, n)
-    #        matrix appearing in the quadratic function to be minimized
-    #    a : array, shape=(n,)
-    #        vector appearing in the quadratic function to be minimized
-    #    C : array, shape=(n, m)
-    #        matrix defining the constraints under which we want to minimize the
-    #        quadratic function
-    #    b : array, shape=(m), default=None
-    #        vector defining the constraints
-    #    meq : int, default=0
-    #        the first meq constraints are treated as equality constraints,
-    #        all further as inequality constraints (defaults to 0).
-
-        qp_C = J.T
-        qp_b = -dJdq
-        meq = J.shape[0]                       
-        p = M*qdd_uc                        
-
-        qdd_check = solve_qp(M,p.A1,qp_C, qp_b.A1, meq)  [0]  
-                        
-#        print("proj - gauss")                     
-#        print( qdd.A1 - qdd_check)
-#      
-                    
-                                
-                        
-                        
-    # Forward Euler Integration        
+        #torques in row space are almost zero if there are not internal motions                                                                                                                            
+        
+        #torques_row_space =  Nt*(tau   -    h)    
+        #print  torques_row_space    
+                             
+    # EXERCISE 1: Forward Euler Integration        
     q = q + qd*dt + 0.5*dt*dt*qdd
     qd = qd + qdd*dt
+
+    ##  EXERCISE 4: Gauss principle of least constraint holds when in contact
+    # Minimize     1/2 x^T M x - q_ucT M x
+    # Subject to   J x = -Jdqd 
+#    A = J
+#    b = -dJdq	
+#    G = M
+#    g = -M*qdd_uc			
+#    qdd_check = quadprog_solve_qp(G, g, None, None, A, b)                                
+#        
+#    print("proj - gauss")                     
+#    print( qdd.A1 - qdd_check)
     
+				
+
+#    #EXERCISE 6: check the shifting law 
+#    frame_ee = robot.model.getFrameId('ee_link')     
+#    #get the frame of the supporting parent joint (wrist_3_joint)
+#    frame_o = robot.model.frames[frame_ee].parent
+#    #print(robot.model.names[frame_o]	)															
+#                      
+#    # find transform from frame_ee to frame_o				
+#    iMf = robot.model.frames[frame_ee].placement
+#    #rotation matrix from frame_ee to  frame_o (columns are the axis of frame_ee expressed in frame_o )
+#    o_R_ee = iMf.rotation
+#    #vector from frame_o to frame_ee expressed in frame_o
+#    o_t = iMf.translation		
+#    #vector from frame_ee to frame_o epxressed in frame_ee
+#    ee_t = -o_R_ee.T * o_t				
+#				
+#    #--------------------------------------------------------------------------------------------------------
+#    # compute the motion tranform from frame_o to frame_ee (we  will use this matrix if I work with 6D vectors)
+#    #--------------------------------------------------------------------------------------------------------
+#    o_X_ee = np.zeros((6, 6))				
+#    o_X_ee[:3,:3] = o_R_ee
+#    o_X_ee[3:,3:] = o_R_ee
+#    o_X_ee[:3,3:] = -o_R_ee*pin.skew(ee_t)	
+#			
+#    # let's do the same with Pinocchio native functions
+#    # compute the motion tranform from frame_ee to frame_o
+#    o_X_ee_pin = pin.SE3(iMf.rotation,  iMf.translation) 			
+#    #check they are the same 
+#    print "TEST1:\n",  o_X_ee - o_X_ee_pin.toActionMatrix()
+#    print "TEST2:\n",  o_X_ee - iMf.toActionMatrix()
+#			
+#    #--------------------------------------------------------------------------------------------------------					
+#    #let's compare the twists (for joints you should use robot.velocity or robot.data.v not frameVelocity)				
+#    #--------------------------------------------------------------------------------------------------------
+#    v_o = robot.velocity(q, qd, frame_o, True, pin.ReferenceFrame.LOCAL)	#analog to     v_o = robot.data.v[robot.model.frames[frame_ee].parent]				
+#    v_ee = robot.frameVelocity(q, qd, frame_ee, True, pin.ReferenceFrame.LOCAL)
+#					
+#    #compute the twist at the end-effector trough the shifting law (note you need to use the inverse of o_X_ee_pin)
+#    #using pinocchio native function
+#    v_ee_test3 = o_X_ee_pin.actInv(v_o)  
+#    print "TEST3:\n",v_ee_test3 - v_ee
+#				
+#    #doing with 6D vectors				
+#    v_ee_test4 =  np.linalg.inv(o_X_ee)*v_o.vector
+#    print "TEST4:\n", v_ee_test4 - v_ee				
+#			
+#    #-------------------------------------------------------------------------------------------------------- 
+#    #let's compare the jacobians	
+#    #--------------------------------------------------------------------------------------------------------
+#    Je = robot.frameJacobian(q, frame_ee, True, pin.ReferenceFrame.LOCAL)       
+#    robot.computeJointJacobians(q)         
+#    Jo = robot.getJointJacobian(frame_o,  pin.ReferenceFrame.LOCAL)  
+#    print "TEST5:\n", Je  - o_X_ee_pin.toActionMatrixInverse()*Jo				
+
+#------------------------------------------------------------------------------------------------------------
     # Log Data into a vector
     q_log[:,count] = q.flatten()
     q_des_log[:,count] = q_des.flatten()
@@ -312,64 +311,39 @@ while True:
     qd_des_log[:,count] = qd_des.flatten()
     qdd_log[:,count] = qdd.flatten()
     qdd_des_log[:,count] = qdd_des.flatten()
+    tau_log[:,count] = tau.flatten()				
     time_log[count] = time 
     f_log[:,count] = f.flatten()
     x_log[:,count] = x.flatten()
     time = time + dt 
     count +=1
-				
-    ros_pub.add_marker(x.A1.tolist()) 
-    #reduce f for plotting purposes				
-    red_f = f/100 				
-    ros_pub.add_arrow(x.A1.tolist(), red_f.A1.tolist()) 
+
+    # plot contact force
+    # scale f for plotting purposes                
+    scaled_f = f/100                 
+    ros_pub.add_arrow(x.A1.tolist(), scaled_f.A1.tolist()) 
+
+    # plot ball at the end-effector
+    ros_pub.add_marker(x.A1.tolist())                 
     ros_pub.publish(robot, q, qd, tau)
-    #stops the while when you hit CTRL+C					
+                   
+    tm.sleep(dt*SLOW_FACTOR)
+                
+    # stops the while loop if  you prematurely hit CTRL+C                    
     if ros_pub.isShuttingDown():
-        print ("Shutting Down")					
+        print ("Shutting Down")                    
         break;
             
-                    
-    tm.sleep(dt*1)
-                      
-
 ros_pub.deregister_node()
                     
-                            
-plot('pos', time_log,  q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, num_samples)
-#plot('vel', q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log)
-#plot('acc', q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log)
+# plot joint variables                                                                                
+#plotJoint('position', 0,  time_log,  q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log)
+#plotJoint('velocity', 1, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log)
+#plotJoint('acceleration', 2, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log)
+#plotJoint('torque', 3,  time_log,  q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log)
 
-plt.figure(2)
-plt.subplot(3,1,1)
-plt.title("fx")    
-plt.plot(time_log, f_log[0,:],color = 'red')
-plt.grid()
-
-plt.subplot(3,1,2)
-plt.title("fy")    
-plt.plot(time_log, f_log[1,:],color = 'red')
-plt.grid()
-
-plt.subplot(3,1,3)
-plt.title("fz")    
-plt.plot(time_log, f_log[2,:],color = 'red')
-plt.grid()
-
-plt.figure(3)
-plt.subplot(3,1,1)
-plt.title("x")    
-plt.plot(time_log, x_log[0,:],color = 'red')
-plt.grid()
-
-plt.subplot(3,1,2)
-plt.title("y")    
-plt.plot(time_log, x_log[1,:],color = 'red')
-plt.grid()
-
-plt.subplot(3,1,3)
-plt.title("z")    
-plt.plot(time_log, x_log[2,:],color = 'red')
-plt.grid()
-
+# plot end-effector variables    
+#plotEndeff('position', 4,time_log, x_log, f_log)
+#plotEndeff('force', 5, time_log, x_log, f_log)
 
 

@@ -31,7 +31,7 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
     urdf      = path + "/ur_description/urdf/ur5_modified.urdf";
     srdf      = path + '/ur5_description/srdf/ur5_modified.srdf'
     robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
-				
+                
   
     if DISPLAY:
         import commands
@@ -62,63 +62,100 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
             gui.setLightingMode('world/floor', 'ON')
         robot.displayCollisions(False)
         robot.displayVisuals(True)
-																			
+                                                                            
     #get urdf from ros just in case you need
-    #robot_urdf_ros = URDF.from_parameter_server()            
+    #robot_urdf_ros = URDF.from_parameter_server() 
+																																																																												
     
     return robot                    
 
-def plot(name, time_log, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, num_samples):
-    plot_var_log = np.zeros((6,num_samples))
-    plot_var_des_log = np.zeros((6,num_samples))
+def plotJoint(name, figure_id, time_log, q_des_log, q_log, qd_des_log, qd_log, qdd_des_log, qdd_log, tau_log):
 
-    if name == 'pos':
-        plot_var_log[:,:] = q_log[:,:]
-        plot_var_des_log[:,:] = q_des_log
-    elif name == 'vel':
-        plot_var_log[:,:] = qd_log[:,:]
-        plot_var_des_log[:,:] = qd_des_log[:,:]
+
+    if name == 'position':
+        plot_var_log = q_log
+        plot_var_des_log = q_des_log
+    elif name == 'velocity':
+        plot_var_log = qd_log
+        plot_var_des_log  = qd_des_log
+    elif name == 'acceleration':
+        plot_var_log = qdd_log
+        plot_var_des_log  = qdd_des_log
+    elif name == 'torque':
+        plot_var_log = tau_log
+        plot_var_des_log  = tau_log								
     else:
-        plot_var_log[:,:] = qdd_log[:,:]
-        plot_var_des_log[:,:] = qdd_des_log
+       print("wrong choice")                                    
 
     lw_des=7
     lw_act=4  
 
-    plt.figure(1)
+    fig = plt.figure(figure_id)
+    fig.suptitle(name, fontsize=20)             
     plt.subplot(3,2,1)
-    plt.title("1_joint")    
+    plt.ylabel("1 - Shoulder Pan")    
     plt.plot(time_log, plot_var_des_log[0,:],linestyle='-', lw=lw_des,color = 'red')
     plt.plot(time_log, plot_var_log[0,:],linestyle='-', lw=lw_act,color = 'blue')
     plt.grid()
     
     plt.subplot(3,2,2)
-    plt.title("2_joint")
+    plt.ylabel("2 - Shoulder Lift")
     plt.plot(time_log, plot_var_des_log[1,:],linestyle='-', lw=lw_des,color = 'red', label="q_des")
     plt.plot(time_log, plot_var_log[1,:],linestyle='-',lw=lw_act, color = 'blue', label="q")
     plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
     plt.grid()
     
     plt.subplot(3,2,3)
-    plt.title("3_joint")    
+    plt.ylabel("3 - Elbow")    
     plt.plot(time_log, plot_var_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, plot_var_log[2,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()    
     
     plt.subplot(3,2,4)
-    plt.title("4_joint")    
+    plt.ylabel("4 - Wrist 1")    
     plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, plot_var_log[3,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     
     plt.subplot(3,2,5)
-    plt.title("5_joint")    
+    plt.ylabel("5 - Wrist 2")    
     plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, plot_var_log[4,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     
     plt.subplot(3,2,6)
-    plt.title("6_joint") 
+    plt.ylabel("6 - Wrist 3") 
     plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, plot_var_log[5,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
+    figure_id += 1  
+                
+def plotEndeff(name, figure_id, time_log, x_log, f_log):
+    if name == 'position':
+        plot_var_log = x_log
+    elif name == 'force':
+        plot_var_log = f_log
+    else:
+       print("wrong choice")                    
+       
+    lw_act=4  
+    				
+    fig = plt.figure(figure_id)
+    fig.suptitle(name, fontsize=20)                   
+    plt.subplot(3,1,1)
+    plt.ylabel("end-effector x")    
+    plt.plot(time_log, plot_var_log[0,:], lw=lw_act, color = 'red')
+    plt.grid()
+    
+    plt.subplot(3,1,2)
+    plt.ylabel("end-effector y")    
+    plt.plot(time_log, plot_var_log[1,:], lw=lw_act, color = 'red')
+    plt.grid()
+    
+    plt.subplot(3,1,3)
+    plt.ylabel("end-effector z")    
+    plt.plot(time_log, plot_var_log[2,:], lw=lw_act, color = 'red')
+    plt.grid()
+    figure_id += 1      
+    
+                

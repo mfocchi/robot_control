@@ -13,7 +13,7 @@ import os
 
 import rospy as ros
 import sys
-import time as tm
+import time
 import threading
 
 from sensor_msgs.msg import JointState
@@ -22,7 +22,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 
 from tf.transformations import euler_from_quaternion
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, EmptyRequest
 from termcolor import colored
 
 from hyq_kinematics.hyq_kinematics import HyQKinematics
@@ -87,7 +87,7 @@ class ControlThread(threading.Thread):
         self.numberOfPublishedMessages = 0
         self.joint_names = ""
         self.u = Utils()
-        
+        self.verbose = False 
      
         
     def run(self):
@@ -273,56 +273,72 @@ class ControlThread(threading.Thread):
         kin.update_jacobians(self.q)
         self.actual_feetB = kin.forward_kin(self.q)
 
+    def startupProcedure(self):
+        p.unpause_physics_client(EmptyRequest()) #pulls robot up
+        time.sleep(0.2)  # wait for callback to fill in jointmnames
+
+        # set joint pdi gains
+        p.setPDs(400.0, 10.0, 0.0)
+        # GOZERO Keep the fixed configuration for the joints at the start of simulation
+        p.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
+        p.qd_des = np.zeros(12)
+        p.tau_ffwd = np.zeros(12)
+        gravity_comp = np.array(
+            [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
+												
+        print("reset posture...")
+        p.freezeBase(1)
+        start_t = time.time()
+        while time.time() - start_t < 1.0:
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            time.sleep(0.01)
+        if p.verbose:
+            print("q err prima freeze base", (p.q - p.q_des))
+  
+        print("put on ground and start compensating gravity...")
+        p.freezeBase(0)												
+        time.sleep(1.0)
+        if p.verbose:
+            print("q err pre grav comp", (p.q - p.q_des))
+												
+        start_t = time.time()
+        while time.time() - start_t < 1.0:
+            p.send_des_jstate(p.q_des, p.qd_des, gravity_comp)
+            time.sleep(0.01)
+        if p.verbose:
+            print("q err post grav comp", (p.q - p.q_des))
+												
+        print("starting com controller (no joint PD)...")				
+        p.setPDs(0.0, 0.0, 0.0)
+
         
 def talker(p):
     
+    nodes = rosnode.get_node_names()
+    assert ("/mpc/reference_gen" in nodes), "you need to launch the node!"
+			
     p.start()
     p.register_node()
     name = "Python Controller"
     kin = HyQKinematics()
-    p.initKinematics(kin)
-				
-				
-    #####STARTUP procedure
-    #set joint pdi gains
-    p.setPDs(400.0, 26.0, 0.0)
-    # GOZERO Keep the fixed configuration for the joints at the start of simulation
-    p.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
-    p.qd_des = np.zeros(12)
-    p.tau_ffwd = np.zeros(12)
-    gravity_comp = np.array([24.2571, 1.92,50.5,    24.2, 1.92, 50.5739, 21.3801,-2.08377,-44.9598,  21.3858,-2.08365, -44.9615 ])
-    
-    print("freezing base and resetting posture...")
-    p.freezeBase(1)
-    start_t = tm.time()
-    while tm.time()-start_t < 1.0:
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        tm.sleep(0.01)
-#    print "q err", (p.q-p.q_des)
-  
-    print("put on ground and start compensating gravity...")
-    p.freezeBase(0)
-    tm.sleep(1.0)
-    start_t = tm.time()
-#    print "q err before grav comp", (p.q - p.q_des)
-    while tm.time() - start_t < 1.0:
-        p.send_des_jstate(p.q_des, p.qd_des,  gravity_comp)
-        tm.sleep(0.01)
-#    print "q err after grav comp", (p.q - p.q_des)
-    tm.sleep(0.5)
-    
-    print("starting com controller (no joint PD)...")				
-    p.setPDs(0.0, 0.0, 0.0)
+    p.initKinematics(kin)		
+    p.startupProcedure() 
 
+    #looop frequency
     dt = 0.001				
     #control loop
     while True:  
-
-        #p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd;
-        p.tau_ffwd  = np.zeros(12);       
+        start_loop = time.time()
+	   # controller	 						
+        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd;
+        #p.tau_ffwd  = np.zeros(12);       
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        tm.sleep(dt)      
-			
+								
+        #wait for synconization
+        elapsed_time = time.time() - start_loop
+        if elapsed_time < dt:
+            time.sleep(dt-elapsed_time)		
+												
     p.deregister_node()
     
     
