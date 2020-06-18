@@ -25,15 +25,6 @@ from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty, EmptyRequest
 from termcolor import colored
 
-from hyq_kinematics.hyq_kinematics import HyQKinematics
-from utils import Utils
-import math
-from math_tools import Math
-from mathutils import *
-
-from controlRoutines import quasiStaticController
-from scipy.linalg import block_diag
-
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 #import utils
@@ -58,12 +49,16 @@ import roslaunch
 import rosnode
 import rosgraph
 
+from hyq_kinematics.hyq_kinematics import HyQKinematics
+from utils import Utils
+import math
+from math_tools import *
+
+
 #important
 np.set_printoptions(precision = 5, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
 sys.dont_write_bytecode = True
-
-class Conf(object): pass
 
 class ControlThread(threading.Thread):
     def __init__(self):  
@@ -90,6 +85,7 @@ class ControlThread(threading.Thread):
         
         self.q = np.zeros(12)
         self.qd = np.zeros(12)
+        self.tau = np.zeros(12)
         self.q_des =np.zeros(12)
         self.qd_des = np.zeros(12)
         self.tau_ffwd =np.zeros(12)
@@ -120,19 +116,24 @@ class ControlThread(threading.Thread):
         
 
     def _receive_contact(self, msg):
-        
-        self.contactsW[0] = msg.states[0].total_wrench.force.x
-        self.contactsW[1] =  msg.states[0].total_wrench.force.y
-        self.contactsW[2] =  msg.states[0].total_wrench.force.z
-        self.contactsW[3] = msg.states[1].total_wrench.force.x
-        self.contactsW[4] =  msg.states[1].total_wrench.force.y
-        self.contactsW[5] =  msg.states[1].total_wrench.force.z
-        self.contactsW[6] = msg.states[2].total_wrench.force.x
-        self.contactsW[7] =  msg.states[2].total_wrench.force.y
-        self.contactsW[8] =  msg.states[2].total_wrench.force.z
-        self.contactsW[9] = msg.states[3].total_wrench.force.x
-        self.contactsW[10] =  msg.states[3].total_wrench.force.y
-        self.contactsW[11] =  msg.states[3].total_wrench.force.z
+        #ground truth (only works with framwork, dls_hw_sim has already out convention)
+#        self.grForcesW[0] = msg.states[0].wrenches[0].force.x
+#        self.grForcesW[1] =  msg.states[0].wrenches[0].force.y
+#        self.grForcesW[2] =  msg.states[0].wrenches[0].force.z
+#        self.grForcesW[3] = msg.states[1].wrenches[0].force.x
+#        self.grForcesW[4] =  msg.states[1].wrenches[0].force.y
+#        self.grForcesW[5] =  msg.states[1].wrenches[0].force.z
+#        self.grForcesW[6] = msg.states[2].wrenches[0].force.x
+#        self.grForcesW[7] =  msg.states[2].wrenches[0].force.y
+#        self.grForcesW[8] =  msg.states[2].wrenches[0].force.z
+#        self.grForcesW[9] = msg.states[3].wrenches[0].force.x
+#        self.grForcesW[10] =  msg.states[3].wrenches[0].force.y
+#        self.grForcesW[11] =  msg.states[3].wrenches[0].force.z
+       
+        # estimate ground reaxtion forces from tau
+        for leg in range(4):
+            grf = -np.linalg.inv(self.J[leg].T).dot(self.u.getLegJointState(leg, p.tau))                             
+            self.u.setLegJointState(leg, grf, self.grForcesW)   
         
     def _receive_pose(self, msg):
         
@@ -162,38 +163,23 @@ class ControlThread(threading.Thread):
         self.b_R_w = mathJet.rpyToRot(euler[0], euler[1] , euler[2])
    
     def _receive_jstate(self, msg):
-        #need to map to robcogen only the arrays coming from gazebo
-         self.q[0] = msg.position[0]
-         self.q[1] = msg.position[1]                
-         self.q[2] = msg.position[2]
-         self.q[6] = msg.position[3]
-         self.q[7] = msg.position[4]
-         self.q[8] = msg.position[5]
-         self.q[3] = msg.position[6]
-         self.q[4] = msg.position[7]
-         self.q[5] = msg.position[8]
-         self.q[9] = msg.position[9]
-         self.q[10] = msg.position[10]         
-         self.q[11] = msg.position[11]
-         
-         self.qd[0] = msg.velocity[0]
-         self.qd[1] = msg.velocity[1]                
-         self.qd[2] = msg.velocity[2]
-         self.qd[6] = msg.velocity[3]
-         self.qd[7] = msg.velocity[4]
-         self.qd[8] = msg.velocity[5]
-         self.qd[3] = msg.velocity[6]
-         self.qd[4] = msg.velocity[7]
-         self.qd[5] = msg.velocity[8]
-         self.qd[9] = msg.velocity[9]
-         self.qd[10] = msg.velocity[10]         
-         self.qd[11] = msg.velocity[11]
-
-         self.joint_names = msg.name
-
-         self.numberOfReceivedMessages+=1
+          #need to map to robcogen only the arrays coming from gazebo because of ROS convention is different 
+         self.joint_names = msg.name   
+         q_ros = np.zeros(12)
+         qd_ros = np.zeros(12)
+         tau_ros = np.zeros(12)             
+         for i in range(len(self.joint_names)):           
+             q_ros[i] = msg.position[i]
+             qd_ros[i] = msg.velocity[i]
+             tau_ros[i] = msg.effort[i]
+         #map to our convention
+         self.q = self.u.mapFromRos(q_ros)
+         self.qd = self.u.mapFromRos(qd_ros)                    
+         self.tau = self.u.mapFromRos(tau_ros)  							
+                        
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
-         
+         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
+
          msg = JointState()
          msg.position = q_des
          msg.velocity = qd_des

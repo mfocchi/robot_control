@@ -8,7 +8,7 @@ import scipy.io
 import scipy.sparse as sparse
 import numpy as np
 import yaml
-from mathutils import *
+from math_tools import *
 # User defined packages
 from math_tools import Math
 from utils import Utils
@@ -19,10 +19,10 @@ def quasiStaticController(conf, act_com_pose, act_com_twist,  W_contacts,  des_c
     util = Utils()
 
     # The inertia matrix
-    Inertia = np.array([[4.0745, 0.1458, -0.2245],
-                             [0.1458, 11.3576, -0.0133],
-                             [-0.2245, -0.0133, 12.5675]])
-
+    Inertia = np.array([     [conf.robotInertia.Ixx, conf.robotInertia.Ixy, conf.robotInertia.Ixz],
+                             [conf.robotInertia.Ixy, conf.robotInertia.Iyy,  conf.robotInertia.Iyz],
+                             [conf.robotInertia.Ixz,  conf.robotInertia.Iyz, conf.robotInertia.Izz]])
+ 
     # Load math functions from jet-leg
     mathJet = Math()
 
@@ -44,19 +44,19 @@ def quasiStaticController(conf, act_com_pose, act_com_twist,  W_contacts,  des_c
     d4 = cross_mx(W_contacts[:,util.leg_map["RH"]] - util.linPart(act_com_pose))
 
 
-    Kpcom = np.diag([conf.Kpcomx, conf.Kpcomy, conf.Kpcomz])
-    Kdcom = np.diag([conf.Kdcomx, conf.Kdcomy, conf.Kdcomz])
+    Kp_com = np.diag([conf.Kpcomx, conf.Kpcomy, conf.Kpcomz])
+    Kd_com = np.diag([conf.Kdcomx, conf.Kdcomy, conf.Kdcomz])
     
-    Kpbase = np.diag([conf.KpbRoll, conf.KpbPitch, conf.KpbYaw])
-    Kdbase = np.diag([conf.Kdbasex, conf.Kdbasey, conf.Kdbasez])
+    Kp_trunk = np.diag([conf.KpRoll, conf.KpPitch, conf.KpYaw])
+    Kd_trunk = np.diag([conf.KdRoll, conf.KdPitch, conf.KdYaw])
 
     # Virtual model based control (Feedback Wrench)
     Wfbk = np.zeros(6)
-    Wfbk[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = Kpcom.dot(util.linPart(des_com_pose) - util.linPart(act_com_pose)) + Kdcom.dot(util.linPart(des_com_twist) - util.linPart(act_com_twist))
+    Wfbk[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = Kp_com.dot(util.linPart(des_com_pose) - util.linPart(act_com_pose)) + Kd_com.dot(util.linPart(des_com_twist) - util.linPart(act_com_twist))
     #the orient error is expressed in the base_frame so it should be rotated wo have the wrench in the world frame
 
     #TODO Jomega*util.angPart(des_com_twist)
-    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kpbase.dot(b_R_w.transpose().dot(err)) + Kdbase.dot(util.angPart(des_com_twist) - util.angPart(act_com_twist))
+    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_trunk.dot(b_R_w.transpose().dot(err)) + Kd_trunk.dot(util.angPart(des_com_twist) - util.angPart(act_com_twist))
 
     # FFd linear
     if (ffwdOn):    
@@ -69,16 +69,16 @@ def quasiStaticController(conf, act_com_pose, act_com_twist,  W_contacts,  des_c
         Wffwd = np.zeros(6)
 
     # Gravity Wrench
-    Wg = np.zeros(6)
+    Wg = np.zeros(6)			
     mg = conf.robotMass * np.array([0, 0, conf.gravity])
-    Wcom = (b_R_w.T).dot(np.array([conf.Bcom_x, conf.Bcom_y, conf.Bcom_z]))    
     Wg[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = - mg
-    Wg[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = - np.cross(Wcom, mg)
     
-    
+    #Wcom = (b_R_w.T).dot(np.array([conf.Bcom_x, conf.Bcom_y, conf.Bcom_z]))       
+    #Wg[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = - np.cross(Wcom, mg)
+      
     # Total Wrench
-    TotWrench =   Wg + Wffwd +  Wfbk 
- 
+    TotWrench =   Wg +  Wfbk  + Wffwd 
+   
     # Stance matrix
     S_mat = np.diag(np.hstack([stance_legs[util.leg_map["LF"]] * np.ones(3), stance_legs[util.leg_map["RF"]] * np.ones(3),
                               stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
@@ -89,9 +89,14 @@ def quasiStaticController(conf, act_com_pose, act_com_twist,  W_contacts,  des_c
     Atm = AtmPre.dot(S_mat)
 
     # Map the total Wrench to grf
-    u_vpd = np.linalg.pinv(Atm).dot(TotWrench)
+    u_vpd = np.linalg.pinv(Atm, 1e-04).dot(TotWrench)
 
     # Mutliply with stance matrix
     u = u_vpd
 
-    return u
+    return u, TotWrench
+				
+				
+def QPController(conf, act_com_pose, act_com_twist,  W_contacts,  des_com_pose, des_com_twist, des_com_acc, stance_legs, ffwdOn):
+    util = Utils()
+    return u, TotWrench

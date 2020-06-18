@@ -18,7 +18,8 @@ np.set_printoptions(threshold=np.inf)
 sys.dont_write_bytecode = True
 
 from urdf_parser_py.urdf import URDF
-
+#make plot interactive
+plt.ion()
 
 REF_SPHERE_RADIUS = 0.03
 EE_SPHERE_COLOR  = (1, 0.5, 0, 0.5)
@@ -131,6 +132,7 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
     plt.plot(time_log, plot_var_des_log[5,:].T,linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, plot_var_log[5,:].T,linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
+				
     figure_id += 1  
                 
 def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, f_log=None):

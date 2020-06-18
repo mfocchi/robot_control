@@ -6,6 +6,7 @@ import socket
 import matplotlib.pyplot as plt
 import sys
 import os
+import numpy as np
 
 class Utils:
 
@@ -126,3 +127,11 @@ class Utils:
             return True
         else:
             return False
+
+    def mapFromRos(self, ros_in):
+        ros_out = np.zeros_like(ros_in)
+        ros_out[0:3] = ros_in[0:3] 
+        ros_out[3:6] = ros_in[6:9] 
+        ros_out[6:9] = ros_in[3:6] 
+        ros_out[9:12] = ros_in[9:12] 
+        return ros_out

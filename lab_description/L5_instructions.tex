@@ -1,0 +1,40 @@
+
+\documentclass{report}   
+
+\usepackage{graphicx}
+\usepackage[labelformat=empty]{caption}
+\usepackage{subcaption}
+
+\usepackage{multirow}
+\usepackage{graphics,graphicx} % for pdf, bitmapped graphics files
+\usepackage{epsfig} % for postscript graphics files
+%\usepackage{mathptmx} % assume new font selection scheme installed
+\usepackage{times} % assumes new font selection scheme installed
+%\usepackage{amssymb}  % assumes amsmath package installed
+
+\usepackage{amsmath} % assumes amsmath package installed
+\usepackage{amsfonts}
+%\usepackage{amssymb}  % assumes amsmath package installed
+\usepackage{url}
+
+\newcommand{\Rnum}{\mathbb{R}} % Symbol fo the real numbers set
+\newcommand{\mat}[1]{\ensuremath{\begin{bmatrix}#1\end{bmatrix}}}	% matrix
+\newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
+
+\begin{document}
+
+
+\section*{LAB 5: High level control of stability}
+
+1) \textit{Sinusoidal reference:} 
+Set a sinusoidal reference for $Z$ direction ($f_z$ = 0.5 $Hz$, $A_z$ = 0.05 $rad$ )
+together with another for the pith direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}$ = 0.1 $rad$ )
+
+2) design a controller for com and trunk orientation with quasi-static approach, and a virtual model without feed forward
+
+3) design controller for com and trunk orientation with quasi-static approach, and a virtual model without feed forward, is the tracking improved?
+
+4) Design an horizontal trajectory for the com (e.g. Y direction) from the default configuration q0.
+What happens when the CoM goes out of the polygon?
+
+\end{document}
