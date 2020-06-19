@@ -67,6 +67,33 @@ class Math:
 
         R =  Rx.dot(Ry.dot(Rz));
         return R
+								
+    def rpyToRot(self, rpy):
+        c_roll =  np.cos(rpy[0])
+        s_roll = np.sin(rpy[0])
+        c_pitch = 	 np.cos(rpy[1])		
+        s_pitch = np.sin(rpy[1])
+        c_yaw = np.cos(rpy[2])
+        s_yaw = np.sin(rpy[2])
+								
+        Rx =  np.array([ [   1   ,    0     	  ,  	  0], 
+                         [   0   ,        c_roll  ,  s_roll],
+                         [   0   ,    -s_roll,      c_roll ]]);
+
+
+        Ry = np.array([[c_pitch 	,	 0  ,   -s_pitch],
+              [      0       ,    1  ,   0],
+              [ s_pitch 	,	0   ,  c_pitch]]);
+          
+        
+        Rz = np.array([[ c_yaw  ,  s_yaw ,		0],
+                      [  -s_yaw ,  c_yaw ,  		0],
+                      [0      ,     0     ,       1]]);
+        
+        
+
+        R =  Rx.dot(Ry.dot(Rz));
+        return R								
 
     def line(self, p1, p2):
         A = (p1[1] - p2[1])
