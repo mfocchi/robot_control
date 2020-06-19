@@ -2,7 +2,7 @@ import time
 
 from pinocchio.robot_wrapper import RobotWrapper as PinocchioRobotWrapper
 from pinocchio.deprecation import deprecated
-import pinocchio.libpinocchio_pywrap as pin
+import pinocchio as pin
 import pinocchio.utils as utils
 from pinocchio.explog import exp
 import numpy as np

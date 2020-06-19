@@ -20,21 +20,107 @@
 \newcommand{\Rnum}{\mathbb{R}} % Symbol fo the real numbers set
 \newcommand{\mat}[1]{\ensuremath{\begin{bmatrix}#1\end{bmatrix}}}	% matrix
 \newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
+\DeclareMathOperator*{\argmin}{\arg\!\min}				% argmin
+
 
 \begin{document}
 
 
-\section*{LAB 5: High level control of stability}
+\section*{LAB 5: Floating base robot: quasi-static control of stability}
+
 
 1) \textit{Sinusoidal reference:} 
 Set a sinusoidal reference for $Z$ direction ($f_z$ = 0.5 $Hz$, $A_z$ = 0.05 $rad$ )
 together with another for the pith direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}$ = 0.1 $rad$ )
 
-2) design a controller for com and trunk orientation with quasi-static approach, and a virtual model without feed forward
+\quad
 
-3) design controller for com and trunk orientation with quasi-static approach, and a virtual model without feed forward, is the tracking improved?
+\noindent  2) \textit{Projection-based controller:} 
+Design a controller for base frame position and orientation with a quasi-static approach.
 
-4) Design an horizontal trajectory for the com (e.g. Y direction) from the default configuration q0.
+ \textit{2.1)Virtual Impedance:}
+Design a virtual impedance to track  references for the base frame position and orientation. Compute the desired wrench $W^d \in\Rnum^6$ to realize the virtual impedance:
+
+\begin{align}
+W^d_{lin} &= K_{lin} (x^d_b - x_b ) + D_{lin} (\dot{x_b}^d - \dot{x})   \\
+W^d_{ang} &=  - K_{ang} e_o + D_{ang} (\dot{\omega_b}^d - \omega)
+\end{align}
+
+where $e_o \in \Rnum^3$ is the orientation error. 
+
+\textit{2.2) Mapping to torques:}
+Map the desired wrench into torques  with a projection-based approach:
+
+\begin{equation}
+\tau^d = J_{cj}^T(J_b^T)^{\dagger} W^d
+\end{equation}
+
+where:
+\begin{equation}
+J_b^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
+			[x_{f_1} - x_b]_{\times} & \dots & [x_{f_c} - x_b]_{\times}}
+\end{equation}
+
+Check the robot is tracking the sinusoidal reference trajectory of point 1). How can this be improved? 
+
+\quad
+
+\noindent 3) \textit{Control of CoM:}
+Modify the controller to control the position of the CoM in place of the base frame.
+Which changes are necessary?
+
+\noindent 4) \textit{Gravity compensation:}
+Using the controller for the CoM position, add a gravity term $W_g$ to the desired wrench.
+
+\begin{align}
+W^d_{lin} &= W_{fb} +  W_g
+\end{align}
+
+How does $W_g$ look like? (hint: remember that gravity is applied to CoM)
+How is the tracking error in steady state? and in motion?
+
+\quad
+
+\noindent 5) \textit{Feed-forward term:}
+Add a feed-forward term the desired wrench. 
+
+\begin{align}
+W^d_{lin} &= W_{fb} +  W_g + W_{ffwd}
+\end{align}
+How would you implement that at the impedance level? (hint: exploit the mass matrix and the tensor of inertia).
+How is the tracking improved during motion?
+
+\quad
+
+\noindent6) \textit{Check static stability:}
+
+Design an horizontal trajectory for the CoM (e.g. moving along Y direction) starting from the default configuration q0. 
 What happens when the CoM goes out of the polygon?
+
+\noindent8) \textit{quasi-static QP controller:}
+Re-implement the previous mapping from wrench to torques by casting as an optimization problem (QP) that optimizes for ground reaction forces $f^d \in \Rnum^k$. 
+Enforce unilateral constraints for the leg that are in stance $f_{z,min} = 0$. 
+
+\begin{equation} 
+\begin{aligned} 
+f^d = & \argmin_{f \in \Rnum^k} (Af-b)^T S (Af-b) + \alpha f^T W f\\
+& s.t. \quad \underline{d} < C f < \bar{d},\\
+\end{aligned} 
+\label{eq:min_prob}
+\end{equation}
+%
+where:
+\begin{equation}
+C = \mat{C_0 & \dots & 0 \\ \vdots & \ddots & \vdots \\ 0 & \dots & C_c} \quad
+\underline{d} = \mat{ \underline{d}_0 \\ \vdots \\ \underline{d}_c} \quad
+\bar{d} = \mat{\bar{d}_0 \\ \vdots \\ \bar{d}_c},
+\end{equation}
+%
+with: $A = J_b^T$ and $b = W^d$, $C_i = 	n_i^T$, $\underline{d}_i = 	f_{{min}_i}$, $\bar{d}_i =f_{{max}_i}$. 
+Why a regularization (the second term in the cost function with wight $\alpha$) is useful?
+Compare with the previous projection-based controller of point 6). 
+Does it tolerates higher frequencies on the reference trajectories?
+Check the $Z$ component of the ground reaction forces is always positive.
+
 
 \end{document}

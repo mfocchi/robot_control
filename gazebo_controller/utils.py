@@ -76,10 +76,10 @@ class Utils:
     def putIntoParamServer(self, data):
 
         try:
-            self.succeed(get_param_server().setParam(self.get_caller_id(), 'mpc/', data))
+            self.succeed(get_param_server().setParam(self.get_caller_id(), 'hyq/', data))
         except socket.error:
             raise ROSParamIOException("Unable to communicate with master!")
-        print "set parameter [%s] to [%s]" % ('mpc', data)
+        print "set parameter [%s] to [%s]" % ('hyq', data)
         pass
 
 #########################################################################

@@ -73,8 +73,6 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
     return robot                    
 
 def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log):
-
-
     if name == 'position':
         plot_var_log = q_log
         plot_var_des_log = q_des_log
@@ -177,4 +175,72 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
     plt.grid()
     figure_id += 1      
     
-                
+def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW, baseTwistW, des_baseAccW, wrenchW):
+    plot_var_log = None
+    if name == 'position':
+        plot_var_log = basePoseW
+        plot_var_des_log = des_basePoseW
+    elif name == 'velocity':
+        plot_var_log = baseTwistW
+        plot_var_des_log  = des_baseTwistW
+    elif name == 'acceleration':
+        plot_var_des_log  = des_baseAccW	
+    elif name == 'wrench':
+        plot_var_des_log  = wrenchW									
+    else:
+       print("wrong choice")                                    
+
+    lw_des=7
+    lw_act=4  		
+				
+	#neet to transpose the matrix other wise it cannot be plot with numpy array	
+    fig = plt.figure(figure_id)
+    fig.suptitle(name, fontsize=20)             
+    plt.subplot(3,2,1)
+    plt.ylabel("CoM X")    
+    plt.plot(time_log, plot_var_des_log[0,:], linestyle='-', lw=lw_des,color = 'red')
+    if   (plot_var_log is not None):				
+        plt.plot(time_log, plot_var_log[0,:],linestyle='-', lw=lw_act,color = 'blue')
+    plt.grid()
+				
+    plt.subplot(3,2,3)
+    plt.ylabel("CoM Y")
+    plt.plot(time_log, plot_var_des_log[1,:], linestyle='-', lw=lw_des,color = 'red', label="q_des")
+    if   (plot_var_log is not None):	
+        plt.plot(time_log, plot_var_log[1,:],linestyle='-',lw=lw_act, color = 'blue', label="q")
+    plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
+    plt.grid()
+    
+    plt.subplot(3,2,5)
+    plt.ylabel("CoM Z")    
+    plt.plot(time_log, plot_var_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
+    if   (plot_var_log is not None):	
+	   plt.plot(time_log, plot_var_log[2,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.grid()    
+    
+    plt.subplot(3,2,2)
+    plt.ylabel("$\phi$", fontsize=10)   
+    plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
+    if   (plot_var_log is not None):	
+        plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',lw=lw_act,color = 'blue')
+    plt.grid()
+    
+    plt.subplot(3,2,4)
+    plt.ylabel("$\theta$", fontsize=10)   
+    plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
+    if   (plot_var_log is not None):	    
+        plt.plot(time_log, plot_var_log[4,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.grid()
+    
+    plt.subplot(3,2,6)
+    plt.ylabel("$\psi$", fontsize=10)
+    plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
+    if   (plot_var_log is not None):	    
+        plt.plot(time_log, plot_var_log[5,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.grid()
+				
+    figure_id += 1                  
+	
+    	
+def plotGRFs(name, figure_id, time_log, des_forces, act_forces):
+    Pass				

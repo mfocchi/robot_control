@@ -141,7 +141,7 @@ Visualization Manager:
       Marker Topic: /vis
       Name: MarkerArray
       Namespaces:
-        "": true
+        {}
       Queue Size: 100
       Value: true
   Enabled: true
