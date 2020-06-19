@@ -52,7 +52,7 @@ class RosPub():
         msg.effort = tau              
         
         self.joint_pub.publish(msg)
-        publishVisual()                                   
+        self.publishVisual()                                   
  
     def publishVisual(self):                                
         #publish also the markers if any
