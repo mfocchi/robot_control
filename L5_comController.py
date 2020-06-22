@@ -61,7 +61,7 @@ from gazebo_controller.utils import Utils
 from gazebo_controller.math_tools import *
 import ex_5_conf as conf
 from numpy import nan
-from utils.common_functions import plotCoM
+from utils.common_functions import plotCoM, plotGRFs
 import example_robot_data
 
 
@@ -101,7 +101,7 @@ class ControlThread(threading.Thread):
         self.tau_ffwd =np.zeros(12)
         
         self.b_R_w = np.eye(3)       
-        self.verbose = False                                 
+        self.verbose = conf.verbose                                 
         self.grForcesW = np.zeros(12)
         self.basePoseW = np.zeros(6) 
                                 
@@ -111,8 +111,9 @@ class ControlThread(threading.Thread):
         self.J = [np.eye(3)]* 4   
                              
         #send data to param server
-        data = {"verbose" : False}
-        self.u.putIntoParamServer(data)								
+        data = {"verbose" : conf.verbose  }
+        self.u.putIntoParamServer(data)	
+								
     def run(self):
         
         self.robot_name = ros.get_param('/robot_name')
@@ -147,7 +148,8 @@ class ControlThread(threading.Thread):
         # estimate ground reaxtion forces from tau
         for leg in range(4):
             grf = -np.linalg.inv(self.J[leg].T).dot(self.u.getLegJointState(leg, p.tau))                             
-            self.u.setLegJointState(leg, grf, self.grForcesW)      
+            self.u.setLegJointState(leg, grf, self.grForcesW)  
+												
     def _receive_pose(self, msg):
         
         quaternion = (
@@ -464,7 +466,8 @@ def talker(p):
     totWrenchW = p.Wffwd_log  + p.Wfbk_log + p.Wg_log				
     plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, totWrenchW)
     plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, totWrenchW)
-    
+    plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
+				
 if __name__ == '__main__':
 
     p = ControlThread()

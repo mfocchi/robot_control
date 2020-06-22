@@ -10,10 +10,12 @@ import os
 
 LINE_WIDTH = 60
 
-dt = 0.004                   # controller time step
+dt = 0.004  # controller time step
 exp_duration = 4.0 #simulation duration
 num_samples = (int)(exp_duration/dt)
 CONTINUOUS = False
+verbose = False
+
 
 # Initial configuration / velocity / Acceleration
 q0  = np.matrix([ 0.0, -0.6, 0.6, -1.67, -1.57, 0.0]).T

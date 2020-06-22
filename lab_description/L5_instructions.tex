@@ -28,13 +28,18 @@
 
 \section*{LAB 5: Floating base robot: quasi-static control of stability}
 
+Notes:
+\begin{itemize}
+	\item You can check the frequency of the controller inspecting the topic \textbf{/hyq/command} with \textbf{rostopic hz /hyq/command}.
+	\item It is possible to set the verbosity of the output, by setting the parameter  \textit{verbose} in  ex\_5\_conf.py.
+\end{itemize}
 
 1) \textit{Sinusoidal reference:} 
 Set a sinusoidal reference for $Z$ direction ($f_z$ = 0.5 $Hz$, $A_z$ = 0.05 $rad$ )
 together with another for the pith direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}$ = 0.1 $rad$ )
 
 \quad
-
+ 
 \noindent  2) \textit{Projection-based controller:} 
 Design a controller for base frame position and orientation with a quasi-static approach.
 
