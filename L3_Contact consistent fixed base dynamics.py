@@ -182,12 +182,12 @@ while True:
 #    A = J
 #    b = -dJdq	
 #    G = M
-#    g = -M*qdd_uc			
+#    g = -qdd_uc.T*M	
 #    qdd_check = quadprog_solve_qp(G, g, None, None, A, b)                                
-#        
+##        
 #    print("proj - gauss")                     
 #    print( qdd.A1 - qdd_check)
-    
+#    
 				
 
 #    #EXERCISE 6: check the shifting law 

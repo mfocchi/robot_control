@@ -8,7 +8,7 @@ Created on Mon Apr  6 14:12:33 2020
 import numpy as np
 from quadprog import solve_qp  
 #
-#minimize (1/2)x.T*G*x+g.Tx
+#minimize (1/2)x.T*G*x+g*x
 #s.t. Cx≤d
 #     Ax=b
 
@@ -16,12 +16,12 @@ from quadprog import solve_qp
 def quadprog_solve_qp(G, g, C=None, d=None, A=None, b=None):
     
     
- #solve_qp requires
+ # python solve_qp requires
  # Minimize     1/2 x^T G x - a^T x
  # Subject to   C.T x >= b        
     
     qp_G = .5 * (G + G.T)   # make sure P is symmetric
-    qp_a = -g
+    qp_a = -g.T
     if A is not None and C is not None:
         qp_C = -np.vstack([A, C]).T
         qp_b = -np.hstack([b, d])
