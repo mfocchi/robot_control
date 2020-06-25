@@ -55,7 +55,8 @@ sys.dont_write_bytecode = True
 
 #controller specific
 from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
-from gazebo_controller.controlRoutines import quasiStaticControllerBase, quasiStaticControllerCoM
+from gazebo_controller.controlRoutines import quasiStaticController, QPController
+
 from scipy.linalg import block_diag
 from gazebo_controller.utils import Utils
 from gazebo_controller.math_tools import *
@@ -145,11 +146,11 @@ class ControlThread(threading.Thread):
 #        self.grForcesW[10] =  msg.states[3].wrenches[0].force.y
 #        self.grForcesW[11] =  msg.states[3].wrenches[0].force.z
        
-        # estimate ground reaxtion forces from tau
+        # estimate ground reaxtion forces from tau (TODO missing the model of the leg)
         for leg in range(4):
             grf = -np.linalg.inv(self.J[leg].T).dot(self.u.getLegJointState(leg, p.tau))                             
             self.u.setLegJointState(leg, grf, self.grForcesW)  
-												
+                                                
     def _receive_pose(self, msg):
         
         quaternion = (
@@ -334,7 +335,7 @@ class ControlThread(threading.Thread):
         p.des_basePoseW_log = np.empty((6,0 ))*nan
         p.des_baseTwistW_log = np.empty((6,0 ))*nan
         p.des_baseAccW_log = np.empty((6,0 )) *nan
-
+        p.constr_viol = np.empty((4,0 )) *nan
         
         p.q_des_log = np.empty((12,0 ))*nan    
         p.q_log = np.empty((12,0 )) *nan   
@@ -343,9 +344,10 @@ class ControlThread(threading.Thread):
         p.des_forcesW_log = np.empty((12,0 ))  *nan       
         p.Wffwd_log = np.empty((6,0 ))  *nan                    
         p.Wfbk_log = np.empty((6,0))  *nan  
-        p.Wg_log = np.empty((6,0 ))  *nan						
+        p.Wg_log = np.empty((6,0 ))  *nan                        
         p.time_log = np.array([])*nan
-				
+        p.constr_viol_log = np.empty((4,0 ))*nan
+        
         p.time = 0.0
                                 
         p.two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
@@ -357,9 +359,9 @@ class ControlThread(threading.Thread):
         
         p.basePoseW_log = np.hstack((p.basePoseW_log , p.basePoseW.reshape(6,-1)))
         p.baseTwistW_log = np.hstack((p.baseTwistW_log , p.baseTwistW.reshape(6,-1)))
-        p.des_basePoseW_log = np.hstack((p.des_basePoseW_log , p.des_com_pose.reshape(6,-1)))
-        p.des_baseTwistW_log = np.hstack((p.des_baseTwistW_log , p.des_com_twist.reshape(6,-1)))
-        p.des_baseAccW_log = np.hstack((p.des_baseAccW_log , p.des_com_acc.reshape(6,-1)))                    
+        p.des_basePoseW_log = np.hstack((p.des_basePoseW_log , p.des_base_pose.reshape(6,-1)))
+        p.des_baseTwistW_log = np.hstack((p.des_baseTwistW_log , p.des_base_twist.reshape(6,-1)))
+        p.des_baseAccW_log = np.hstack((p.des_baseAccW_log , p.des_base_acc.reshape(6,-1)))                    
         p.q_des_log = np.hstack((p.q_des_log , p.q_des.reshape(12,-1)))   
         p.q_log = np.hstack((p.q_log , p.q.reshape(12,-1)))       
         p.tau_ffwd_log = np.hstack((p.tau_ffwd_log , p.tau_ffwd.reshape(12,-1)))                                
@@ -369,7 +371,7 @@ class ControlThread(threading.Thread):
         p.Wfbk_log =  np.hstack((p.Wfbk_log , p.Wfbk.reshape(6,-1)))          
         p.Wg_log =  np.hstack((p.Wg_log , p.Wg.reshape(6,-1)))          
         p.time_log = np.hstack((p.time_log, p.time))
-								
+        p.constr_viol_log = np.hstack((p.constr_viol_log, p.constr_viol.reshape(4,-1)))                        
 def talker(p):
     
     p.start()
@@ -383,30 +385,35 @@ def talker(p):
                                 
     #reset reference to actual value  
     p.x0 = copy.deepcopy(p.basePoseW)
-    p.des_com_pose  = p.x0
-    p.des_com_twist = np.zeros(6)
-    p.des_com_acc = np.zeros(6)       
+    p.des_base_pose  = p.x0
+    p.des_base_twist = np.zeros(6)
+    p.des_base_acc = np.zeros(6)       
 
-    count = 0
-            
-    while (count < conf.num_samples) or conf.CONTINUOUS:
+           
+    while (p.time  < conf.exp_duration) or conf.CONTINUOUS:
         start_loop = time.time()
         #update the kinematics
         p.updateKinematics(kin)
-								
+                                
         # EXERCISE 1: Sinusoidal Reference Generation
         # Reference Generation
-        p.des_com_pose  = p.x0 +  conf.amp*np.sin(p.two_pi_f*p.time + conf.phi)
-        p.des_com_twist  = p.two_pi_f_amp * np.cos(p.two_pi_f*p.time + conf.phi)
-        p.des_com_acc = - p.two_pi_f_squared_amp * np.sin(p.two_pi_f*p.time + conf.phi)
-                                   
+        p.des_base_pose  = p.x0 +  conf.amp*np.sin(p.two_pi_f*p.time + conf.phi)
+        p.des_base_twist  = p.two_pi_f_amp * np.cos(p.two_pi_f*p.time + conf.phi)
+        p.des_base_acc = - p.two_pi_f_squared_amp * np.sin(p.two_pi_f*p.time + conf.phi)
         #use this for custom trajectory
-        #des_com_acc = np.subtract(des_com_twist, p.des_com_twist_old)/p.Ts
-        #p.des_com_twist_old = des_com_twist
+        #des_base_acc = np.subtract(des_base_twist, p.des_base_twist_old)/p.Ts
+        #p.des_base_twist_old = des_base_twist
  
-        # EXERCISE 4: CoM out of the polygon   
-        #des_com_pose[p.u.sp_crd["LY"]] +=0.0002
-        
+        # EXERCISE 6: Check static stability, move CoM out of the polygon   
+        #p.des_base_pose[p.u.sp_crd["LY"]] +=0.0004
+	
+        # EXERCISE 9.a: Swift the Com on triangle of LF, RF, LH
+#        p.des_base_pose[p.u.sp_crd["LX"]] = 0.1
+#        p.des_base_pose[p.u.sp_crd["LY"]] = 0.1 
+        # EXERCISE 9.b: Unload RH leg 
+#        if p.time > 2.0:							
+#	        p.stance_legs[p.u.leg_map["RH"]] = False       
+								
         #comopute des_grf from whole-body controller
         B_contacts = kin.forward_kin(p.q) 
         #map contactct to wf
@@ -416,38 +423,51 @@ def talker(p):
         W_contacts[:,p.u.leg_map["RF"]] = w_R_b.dot(B_contacts[p.u.leg_map["RF"], :].transpose()) + p.u.linPart(p.basePoseW).transpose()
         W_contacts[:,p.u.leg_map["LH"]] = w_R_b.dot(B_contacts[p.u.leg_map["LH"], :].transpose()) + p.u.linPart(p.basePoseW).transpose()
         W_contacts[:,p.u.leg_map["RH"]] = w_R_b.dot(B_contacts[p.u.leg_map["RH"], :].transpose()) + p.u.linPart(p.basePoseW).transpose()
-        
+                                
+        B_base_to_com = np.array([conf.Bcom_x, conf.Bcom_y, conf.Bcom_z])
+                                
         # EXERCISE 2: Projection-based controller         
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = quasiStaticControllerBase(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_com_pose, p.des_com_twist, p.des_com_acc, p.stance_legs, True)
-              
-        # EXERSISE 3: TODO Projection-based controller (CoM)															
-	   #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = quasiStaticControllerCoM(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_com_pose, p.des_com_twist, p.des_com_acc, p.stance_legs, True)
-        							
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = quasiStaticController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_base_pose, p.des_base_twist, p.des_base_acc, p.stance_legs, B_base_to_com, True, True)
+        
+                                        
+        # EXERSISE 3: TODO Projection-based controller (CoM)    
+        #map from base to com    (TODO)                                                        
+        # p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = quasiStaticController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_com_pose, p.des_com_twist, p.des_com_acc, p.stance_legs, com, True, False)
+        
+	   # EXERCISE 8: quasi-static QP controller						
+        normals = [None]*4                 
+        normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
+        normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
+        normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
+        normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])    
+        f_min = np.array([10.0,10.0,10.0, 10.0])    
+        friction_coeff = np.array([0.1,0.1,0.1, 0.1])    
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_base_pose, p.des_base_twist, p.des_base_acc, p.stance_legs, B_base_to_com, True, True, normals, f_min, friction_coeff)                                           
+                                               
         p.jacsT = block_diag(np.transpose(w_R_b.dot( p.J[p.u.leg_map["LF"]] )), 
-					    np.transpose(w_R_b.dot( p.J[p.u.leg_map["RF"]] )), 
-					    np.transpose(w_R_b.dot( p.J[p.u.leg_map["LH"]] )), 
-                             np.transpose(w_R_b.dot( p.J[p.u.leg_map["RH"]]  )))
+                        np.transpose(w_R_b.dot( p.J[p.u.leg_map["RF"]] )), 
+                        np.transpose(w_R_b.dot( p.J[p.u.leg_map["LH"]] )), 
+                        np.transpose(w_R_b.dot( p.J[p.u.leg_map["RH"]]  )))
         
         #necessary to have no offset on the Z direction 
-        self_weight = np.array([-2.1342, 3.91633, -0.787648, -2.13605,  3.9162,  -0.78766,  -2.10752, -3.77803,  0.781712,  -2.10583,  -3.77811,  0.781689])
-        p.tau_ffwd = self_weight  - p.jacsT.dot(p.des_forcesW)         
+        p.tau_ffwd =   -p.jacsT.dot(p.des_forcesW)         
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-								
+                                
         p.logData()    
         p.time = p.time + conf.dt 
-        count = count +1
-	   # plot actual grfs 
+
+       # plot actual grfs 
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["LF"]], p.u.getLegJointState(p.u.leg_map["LF"], p.grForcesW/400),"green")        
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["RF"]], p.u.getLegJointState(p.u.leg_map["RF"], p.grForcesW/400),"green")    
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["LH"]], p.u.getLegJointState(p.u.leg_map["LH"], p.grForcesW/400),"green")    
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["RH"]], p.u.getLegJointState(p.u.leg_map["RH"], p.grForcesW/400),"green") 
-	   # plot desired grfs
+       # plot desired grfs
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["LF"]], p.u.getLegJointState(p.u.leg_map["LF"], p.des_forcesW/400),"blue")        
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["RF"]], p.u.getLegJointState(p.u.leg_map["RF"], p.des_forcesW/400),"blue")    
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["LH"]], p.u.getLegJointState(p.u.leg_map["LH"], p.des_forcesW/400),"blue")    
         ros_pub.add_arrow(W_contacts[:,p.u.leg_map["RH"]], p.u.getLegJointState(p.u.leg_map["RH"], p.des_forcesW/400),"blue")                          
         ros_pub.publishVisual()                        
-								
+                                
         #wait for synconization
         elapsed_time = time.time() - start_loop
         if elapsed_time < conf.dt:
@@ -463,11 +483,21 @@ def talker(p):
     # restore PD when finished        
     p.setPDs(400.0, 26.0, 0.0)
     p.join()            
-    totWrenchW = p.Wffwd_log  + p.Wfbk_log + p.Wg_log				
+    totWrenchW = p.Wffwd_log  + p.Wfbk_log + p.Wg_log                
     plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, totWrenchW)
-    plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, totWrenchW)
+    #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, totWrenchW)
     plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
-				
+    
+    plt.figure(3)				
+    plt.plot(p.constr_viol_log[p.u.leg_map["LF"],:],label="LF")
+    plt.plot(p.constr_viol_log[p.u.leg_map["RF"],:],label="RF")
+    plt.plot(p.constr_viol_log[p.u.leg_map["LH"],:],label="LH")
+    plt.plot(p.constr_viol_log[p.u.leg_map["RH"],:],label="RH")
+    plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
+               ncol=2, mode="expand", borderaxespad=0.)
+    plt.ylabel("Constr violation", fontsize=10)
+    plt.grid()				
+                
 if __name__ == '__main__':
 
     p = ControlThread()
