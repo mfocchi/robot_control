@@ -69,7 +69,7 @@ class ControlThread(threading.Thread):
             print 'ROS MASTER is Offline, starting ros impedance controller...'
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
             roslaunch.configure_logging(uuid)
-            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller.launch"])
+            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"])
             self.launch.start() 
             time.sleep(4.0)         
                                 
@@ -89,16 +89,19 @@ class ControlThread(threading.Thread):
         self.q_des =np.zeros(12)
         self.qd_des = np.zeros(12)
         self.tau_ffwd =np.zeros(12)
-        
+        self.grForcesW = np.zeros(12)
+        self.basePoseW = np.zeros(6)
         self.b_R_w = np.eye(3)       
                 
-        self.sim_time  = 0.0
-        self.numberOfReceivedMessages = 0
-        self.numberOfPublishedMessages = 0
         self.joint_names = ""
         self.u = Utils()
         self.verbose = False 
-        
+								
+        self.J = [np.eye(3)]* 4                                
+        #send data to param server
+        data = {"verbose" : self.verbose  }
+        self.u.putIntoParamServer(data)	
+								
     def run(self):
         
         self.robot_name = ros.get_param('/robot_name')
@@ -159,8 +162,7 @@ class ControlThread(threading.Thread):
         self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
         
         mathJet = Math()
-
-        self.b_R_w = mathJet.rpyToRot(euler[0], euler[1] , euler[2])
+        self.b_R_w = mathJet.rpyToRot(euler)
    
     def _receive_jstate(self, msg):
           #need to map to robcogen only the arrays coming from gazebo because of ROS convention is different 
@@ -185,9 +187,7 @@ class ControlThread(threading.Thread):
          msg.velocity = qd_des
          msg.effort = tau_ffwd                
          self.pub_des_jstate.publish(msg)     
-         self.numberOfPublishedMessages+=1        
-        
-        
+
 
     def register_node(self):
         ros.init_node('sub_pub_node_python', anonymous=False)
@@ -273,6 +273,9 @@ class ControlThread(threading.Thread):
         kin.update_homogeneous(self.q)
         kin.update_jacobians(self.q)
         self.actual_feetB = kin.forward_kin(self.q)
+	   #update leg jacobians
+        self.J[p.u.leg_map["LF"]], self.J[p.u.leg_map["RF"]], self.J[p.u.leg_map["LH"]], self.J[p.u.leg_map["RH"]], flag = kin.getLegJacobians()
+     
 
     def startupProcedure(self):
         p.unpause_physics_client(EmptyRequest()) #pulls robot up

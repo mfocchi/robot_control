@@ -55,7 +55,7 @@ sys.dont_write_bytecode = True
 
 #controller specific
 from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
-from gazebo_controller.controlRoutines import quasiStaticController, QPController
+from gazebo_controller.controlRoutines import projectionBasedController, QPController
 
 from scipy.linalg import block_diag
 from gazebo_controller.utils import Utils
@@ -427,12 +427,12 @@ def talker(p):
         B_base_to_com = np.array([conf.Bcom_x, conf.Bcom_y, conf.Bcom_z])
                                 
         # EXERCISE 2: Projection-based controller         
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = quasiStaticController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_base_pose, p.des_base_twist, p.des_base_acc, p.stance_legs, B_base_to_com, True, True)
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_base_pose, p.des_base_twist, p.des_base_acc, p.stance_legs, B_base_to_com, True, True)
         
                                         
         # EXERSISE 3: TODO Projection-based controller (CoM)    
         #map from base to com    (TODO)                                                        
-        # p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = quasiStaticController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_com_pose, p.des_com_twist, p.des_com_acc, p.stance_legs, com, True, False)
+        # p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_com_pose, p.des_com_twist, p.des_com_acc, p.stance_legs, com, True, False)
         
 	   # EXERCISE 8: quasi-static QP controller						
         normals = [None]*4                 
@@ -483,10 +483,10 @@ def talker(p):
     # restore PD when finished        
     p.setPDs(400.0, 26.0, 0.0)
     p.join()            
-    totWrenchW = p.Wffwd_log  + p.Wfbk_log + p.Wg_log                
-    plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, totWrenchW)
-    #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, totWrenchW)
-    plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
+  
+    #plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
+    #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
+    #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
     
     plt.figure(3)				
     plt.plot(p.constr_viol_log[p.u.leg_map["LF"],:],label="LF")
