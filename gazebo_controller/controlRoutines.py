@@ -74,7 +74,7 @@ def computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_p
 
 # Whole body controller for HyQ that includes ffd wrench + fb Wrench (Virtual PD) + gravity compensation
 #every vector is in the wf
-def quasiStaticController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, com, ffwdOn, isBaseControlled):
+def projectionBasedController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, com, ffwdOn, isBaseControlled):
     util = Utils()
                        
     # compute virtual impedances  
@@ -107,14 +107,15 @@ def quasiStaticController(conf, act_pose, act_twist,  W_contacts,  des_pose, des
                                                                 
     return des_grf, Wffwd, Wfbk, Wg
 
-                
+# Whole body controller for HyQ that includes ffd wrench + fb Wrench (Virtual PD) + gravity compensation
+#every vector is in the wf                
 def QPController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, com, ffwdOn, isBaseControlled,  normals, f_min, mu):
     util = Utils()
                 
     # compute virtual impedances                
     Wffwd, Wfbk, Wg = computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, com, ffwdOn, isBaseControlled)                
     # Total Wrench
-    TotWrench =    Wfbk+ Wg     
+    TotWrench =    Wfbk+ Wg  +Wffwd   
           
     
     #(Ax-b)T*(Ax-b)

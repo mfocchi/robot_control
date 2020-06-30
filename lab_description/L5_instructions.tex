@@ -40,14 +40,15 @@ together with another for the pith direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}
 
 \quad
  
-\noindent  2) \textit{Projection-based controller:} 
+\noindent  
+2) \textit{Projection-based controller:} 
 Design a controller for base frame position and orientation with a quasi-static approach.
 
  \textit{2.1)Virtual Impedance:}
-Design a virtual impedance to track  references for the base frame position and orientation. Compute the desired wrench $W^d \in\Rnum^6$ to realize the virtual impedance:
+Design a virtual impedance to track  references for the base frame position and orientation. Compute the desired wrench $W^d = W_{fbk} \in\Rnum^6$ to realize the virtual impedance:
 
 \begin{align}
-W^d_{lin} &= K_{lin} (x^d_b - x_b ) + D_{lin} (\dot{x_b}^d - \dot{x})   \\
+W^d_{lin} & = K_{lin} (x^d_b - x_b ) + D_{lin} (\dot{x_b}^d - \dot{x})   \\
 W^d_{ang} &=  - K_{ang} e_o + D_{ang} (\dot{\omega_b}^d - \omega)
 \end{align}
 
@@ -87,7 +88,7 @@ J_{com}^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
 Using the controller for the CoM position, add a gravity term $W_g$ to the desired wrench.
 
 \begin{align}
-W^d_{lin} &= W_{fb} +  W_g
+W^d &= W_{fbk} +  W_g
 \end{align}
 
 How does $W_g$ look like? (hint: remember that gravity is applied to CoM)
@@ -99,7 +100,7 @@ How is the tracking error in steady state? and in motion?
 Add a feed-forward term the desired wrench. 
 
 \begin{align}
-W^d_{lin} &= W_{fb} +  W_g + W_{ffwd}
+W^d &= W_{fbk} +  W_g + W_{ffwd}
 \end{align}
 How would you implement that at the impedance level? (hint: exploit the mass matrix and the tensor of inertia).
 How is the tracking of the CoM and of the trunk orientation improved during motion? 

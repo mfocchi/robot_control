@@ -26,9 +26,10 @@
 
 \section*{LAB 3: Contact consistent fixed base dynamics}
 
-Note: to slow down the simulation increase the SLOW\_FACTOR parameter.
 
+\quad
 
+\noindent
 1) \textit{Simulation of contact consistent dynamics:}
 Generate a sinusoidal reference for Shoulder Lift joint with amplitude 0.6 rad and frequency 1 Hz.
 Implement a constraint consistent dynamics where a point (3D) contact is possible only at the end-effector (ee\_link). 
@@ -38,9 +39,10 @@ to deal with the contact. What is the best way to compute the term $\dot{J}\dot{
 Hint: consider the instantaneous correction of the joint velocity at the occurrence of impact.
 Verify that the linear part of the twist at the end-effector equals $J\dot{q}$.
 
+\quad
 
+\noindent
 2) \textit{Contact forces disappear when projecting the dynamics:}
-
 Check contact force disappeared when projected after the projection in the null-space of $J^T$  (i.e. $ N_c^TJ^Tf = 0$) 
 What happens if you use the Moore-penrose pseudo-inverse to compute the projector?
 Plot also the torques in the row-space of $J^T$, check they are barely zero 
@@ -49,17 +51,29 @@ Compare them with a plot of the joint torques.
 The motion during the contact depends mainly only on the null-space projector $N_c^T$
 that "cuts-out" the torques that generate contact forces, leaving only the ones that generate internal motions (in this case very small).
 
+\quad
+
+\noindent
 3) \textit{Constraint consistent joint reference:}
 Try to double the amplitude of the reference of Shoulder List joint to 1.2 rad.
 Design a reference trajectory that is consistent with the contact (hint: compute $\dot{q}^{d}$ project with $N_c$ and integrate to get $q^d$.
 Are there some internal motions now? are the torque in the row space different than zero?  
 
+\quad
+
+\noindent
 4) \textit{Gauss principle of least effort}:
 Verify that the Gauss principle of least constraint is satisfied (e.g. solve the QP where you minimize the distance w.r.t the unconstraint accelerations under the contact constraint).
 
+\quad
+
+\noindent
 5)  \textit{Change in the contact location}:
 Modify the code in order to allow the contact at a different location (e.g. origin of wrist\_3\_link frame).  Verify that the end-effector penetrates the ground. 
 
+\quad
+
+\noindent
 6) \textit{Check the shifting law (Optional):}
 The twist at ee\_link is $v_{e}$, twist at origin of wrist\_3\_joint is: $v_o$. Since they belong to the same rigid body (wrist\_3\_link) they are linked the shifting law, through by time-invariant \textit{motion} transform ${}_{e}X_o \in \Rnum^{6 \times 6}$:
 
@@ -88,5 +102,4 @@ in frame ${e}$.
 By activating the TF function in \textit{rviz} check the relative location of the frames. 
 
  
-
 \end{document}

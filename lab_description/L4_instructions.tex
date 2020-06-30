@@ -30,12 +30,21 @@ This lab is to acquire confidence to some invariant properties of floating base 
 The base frame B of a floating base robot is usually placed at the robot waist/trunk because this choice induces a  branch sparsity of the Jacobians. 
 However, by defining a different parametrization for the floating base, it is possible to obtain a \textit{block diagonal} joint space inertia matrix.  This is achieved by defining a variable changes for the state of the system using the Center of Mass velocity and the \textit{average} angular velocity.  It can be shown that the mechanical power is invariant with respect to the change of coordinate frames used to represent the floating base. 
 
+\quad
+
+\noindent
 1) \textit{Center of mass computation:}
 Compute the Center of Mass of the system performing a weighted average of the Center of Masses of all the links. 
 
+\quad
+
+\noindent
 2) \textit{Kinetic energy:}
 Compute the kinetic energy of the system in two different ways: one by the generalized velocities and system mass matrix, another summing up the contributions from each joint, showing the result is the same. 
 
+\quad
+
+\noindent
 3) \textit{Centroidal coordinates transform:} 
 Build the transformation matrix ${}_gT_b$ to change coordinates from base to com frame.
 
@@ -51,8 +60,9 @@ where:
  	\label{fig:}
 \end{align}
 
-check 
+\quad
 
+\noindent
 4) \textit{Block-diagonal joint space inertia matrix:}
 Show the mass matrix is decoupled if you apply coordinate transform to com variables:
 
@@ -61,6 +71,9 @@ M_G = ({}_GT_B)^{-T} M_B ({}_GT_B)^{-1}
 \label{fig:}
 \end{align}
 
+\quad
+
+\noindent
 5) \textit{Joint gravity vector nullifies in com coordinates:}
 \begin{align}
 G_G = -M_g \mat{g_w \\ 0_{n+3}} = \mat{0 \\0\\ -mg  \\ 0_{3x1} \\0_{nx1} }

@@ -25,7 +25,7 @@
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_conf) -f world"  />
 
 	
-    <!-- start robot state publisher sends joint state data to gazebo-->
+    <!-- start robot state publisher sends joint state data to gazebo, 	convert joint states to TF transforms for rviz, etc -->
     <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher" output="screen" >
         
     </node> 
