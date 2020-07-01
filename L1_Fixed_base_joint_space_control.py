@@ -33,7 +33,7 @@ kp=eye(6)*50
 # Matrix of KD gains (critical damping)
 kd=eye(6)*20
 
-#EXERCISE 6: high gains ...
+#EXERCISE 4: high gains ...
 #kp=eye(6)*500
 #kd=eye(6)*30
 
@@ -168,11 +168,11 @@ while True:
 #    tau=kp*(q_des-q)+kd*(qd_des-qd) + g
     
     # Exercise 7: PD + gravity + Feed-Forward term
-#    tau= np.diag(M)*qdd_des + kp*(q_des-q)+kd*(qd_des-qd) + g
+    tau= np.diag(M)*qdd_des + kp*(q_des-q)+kd*(qd_des-qd) + g
 
     
     # EXERCISE 8_ Innverse Dynamics
-    tau=M*(qdd_des+kp*(q_des-q)+kd*(qd_des-qd)) + h    
+    #tau=M*(qdd_des+kp*(q_des-q)+kd*(qd_des-qd)) + h    
     
     
     #SIMULATION

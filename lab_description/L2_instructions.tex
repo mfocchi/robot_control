@@ -1,0 +1,90 @@
+
+\documentclass{report}   
+
+\usepackage{graphicx}
+\usepackage[labelformat=empty]{caption}
+\usepackage{subcaption}
+
+\usepackage{multirow}
+\usepackage{graphics,graphicx} % for pdf, bitmapped graphics files
+\usepackage{epsfig} % for postscript graphics files
+%\usepackage{mathptmx} % assume new font selection scheme installed
+\usepackage{times} % assumes new font selection scheme installed
+%\usepackage{amssymb}  % assumes amsmath package installed
+
+\usepackage{amsmath} % assumes amsmath package installed
+\usepackage{amsfonts}
+%\usepackage{amssymb}  % assumes amsmath package installed
+\usepackage{url}
+\usepackage{hyperref} 
+
+\newcommand{\Rnum}{\mathbb{R}} % Symbol fo the real numbers set
+\newcommand{\mat}[1]{\ensuremath{\begin{bmatrix}#1\end{bmatrix}}}	% matrix
+\newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
+
+\begin{document}
+
+
+\section*{LAB 2: Operational Space Control	}
+
+\quad
+
+\noindent
+1) \textit{Generate Sinusoidal Reference:}
+Generate sinuoidal reference for Z direction of the end effector with 0.1 ma mplitude and 0.8 Hz frequency.
+
+\quad
+
+\noindent
+2) \textit{Step Reference generation:}
+Generate a 0.1 step reference step(t = 2.0) for Z direction.
+
+\quad
+
+\noindent
+3) \textit{Inverse kinematics:} (OPTIONAL) Implement the end-effector tracking with inverse kinematics using PD control (advice: $q^d$ = IK($x^d$), $\dot{q}^d  J^{-1}$). Algorithm for IK: \href{https://gepettoweb.laas.fr/doc/stack-of-tasks/pinocchio/master/doxygen-html/md_doc_b-examples_i-inverse-kinematics.html}{pinocchio example}). Evaluate the tracking of the end-effector.
+
+\quad
+
+\noindent
+4)\textit{ End-effector position  PD control:}
+Implement End-effector PD control (simplified impedance control) with Kx = 1000 N/m and Dx = 300 Ns/m (advice consider only linear Jacobian 6x3). Use the sinusoidal reference generated in 1) as input to the system. Plot the tracking error, see the couplings also in X, Y directions. Try to change the stiffness in the X,Y directions and see that the tracking improves. See the joints are moving randomly because there is no control in the nullspace and we have 6 DoFs with a 3D task. sTry to add a damping term in the joint space.
+
+\quad
+
+\noindent
+5)  End-effector position  PD control + Gravity Compensation:
+Add gravity compensation. Give the step reference generated in 2) as input to the system. Check there is no longer a  tracking error at steady state is  but it still remains during the transient. 
+
+\quad
+
+\noindent
+6) PD + gravity + Feed-Forward term:
+Add also feed-forward term to the PD control (advice: use the reflected inertia at the end-efffector). Give the sinusoidal reference generated in 1). See that the tracking error is improved. 
+
+\quad
+
+\noindent
+7) Operational space inverse dynamics:
+Implement operational space inverse dynamics with a postural task in the null space to attract the robot configuration q0 (advice tau0 = Kpostural*(q0 -q)).  Observe that the tracking is improved, there are no coupling between different directions anymore.  Observe that if you reduce the gains the tracking remains good apart in the discontinuity of the trajectory.  
+
+\quad
+
+\noindent
+8) \textit{Operational space inverse dynamics + h :}
+rather than compensate for u (bias term at the end effector  compensate for h (bias terms at joint level) and observe the result is the same.
+
+\quad
+
+\noindent
+9) \textit{External Force:}
+With constant reference x0,  give Fext on Z direction and check is affecting only the endeffector direction Z and not X and Y. If you reduce bu ½ the Kx gains you should see the deflection due to Fext doubles.
+
+\quad
+
+\noindent
+10) \textit{Implement impedance control for end-effector orientation (TODO):}
+Add orientation  control of the end-effector (advice: the jacobian is 6x6 now and there is no longer need of postural task). Implement the computation of the orientation error both with angle-axis and quaternions representations and compare they give the same result.
+
+ 
+\end{document}

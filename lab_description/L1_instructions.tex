@@ -1,0 +1,98 @@
+
+\documentclass{report}   
+
+\usepackage{graphicx}
+\usepackage[labelformat=empty]{caption}
+\usepackage{subcaption}
+
+\usepackage{multirow}
+\usepackage{graphics,graphicx} % for pdf, bitmapped graphics files
+\usepackage{epsfig} % for postscript graphics files
+%\usepackage{mathptmx} % assume new font selection scheme installed
+\usepackage{times} % assumes new font selection scheme installed
+%\usepackage{amssymb}  % assumes amsmath package installed
+
+\usepackage{amsmath} % assumes amsmath package installed
+\usepackage{amsfonts}
+%\usepackage{amssymb}  % assumes amsmath package installed
+\usepackage{url}
+
+\newcommand{\Rnum}{\mathbb{R}} % Symbol fo the real numbers set
+\newcommand{\mat}[1]{\ensuremath{\begin{bmatrix}#1\end{bmatrix}}}	% matrix
+\newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
+
+\begin{document}
+
+
+\section*{LAB 1: Joint Space Motion Control }
+
+To test the rviz visualization, try to move the joints with the sliders running:\\
+\textit{roslaunch visualize.launch \textbf{test\_joints:=true} }
+
+\quad
+
+\noindent
+1) \textit{Sinusoidal Reference generation:}
+ Generate sinusoidal references for 2nd and 5th joint at  1.0 and 1.5 $Hz$ and amplitudes 0.2, 0.4 rad, respectively. After 3.0 seconds stop the sine and give constant reference for 2.0 s.
+
+\quad
+
+\noindent
+2) \textit{Step Reference generation:} generate a -0.4, 0.5 rad step reference change step(t = 2.0) for 2nd and 5th joint, respectively from the initial configuration $q_0$.  
+
+\quad
+
+\noindent
+3)\textit{ Joint PD control:}
+Implement Joint PD control with $K_p$ = 300 $Nm/rad$ and $K_d$ = 20 $Nms/rad$. Use the step reference generated in 2). Plot the tracking error, see that the tracking error is present both at steady state and at transient. Is there any overshoot in all the joints? Explain why there is no overshoot in the 5th joint.
+
+\quad
+
+\noindent 
+4)\textit{ Joint PD control – high gains:}
+Implement Joint PD control with $K_p$ = 600 $Nm/rad$ and $K_d$ = 30 $Nms/rad$.  Use the step reference generated in 2). See that the tracking error is reduced of almost half. See that the system becomes unstable if you increase Kd. Try to reduce dt to 0.0001 s and see the maximum Kd you can set before getting unstable.
+
+\quad
+
+\noindent
+5)\textit{ Joint PD control critical damping:}
+Set $K_p$ = 300 $Nm/rad$, set Kd (online) in order to achieve a critical damping for both  2nd and 5th joint (advice: use the inertia seen by each joint). Use the step generated in 2) as reference, is the overshoot still there?
+
+\quad
+
+\noindent
+6) \textit{ Joint PD control + Gravity Compensation:}
+Add gravity compensation. Give the step reference generated in 2) as input to the system. Check there is no longer a  tracking error at steady state is  but it still remains during the transient.
+Check also the tracking with  the sinusoidal reference generated in 1).
+
+\quad
+
+\noindent
+7) \textit{Joint  PD + gravity + Feed-Forward term:}
+Add also feed-forward term to the PD control (advice: use the inertia seen by each joint). Give the sinusoidal reference generated in 1). See that the tracking error is improved. Check the tracking of 1st joint (constant reference) seeing that there are disturbances coming from the motion of the other joints, due to the inertial coupling.
+
+\quad
+
+\noindent
+8)\textit{ Inverse Dynamics:}
+Implement a joint space inverse dynamics algorithm. Keep the same Kp, Kd gains as in 4) with a Feed-forward term. See how the tracking errors are zero also during the transient (no inertia coupling). How is the tracking of velocity at the beginning? 
+
+\quad
+
+\noindent
+9)\textit{ Inverse Dynamics – initial velocity:}
+Change the initial value of the joint velocity, to be consistent with the initial reference velocity, and see the tracking error is zero also at the beginning, for all the joints. 
+
+\quad
+
+\noindent
+10) \textit{ Inverse Dynamics – low gains:}
+Reduce the Kp, Kd gains to 1/10 and observe the tracking changes for the joints in motion, but there is still no coupling with the joints not in motion.
+
+\quad
+
+\noindent
+11) External force:
+Restore Kp = 300 and Kd = 20. Give constant reference q0  and after 2 seconds apply an external force of 100N in the Z direction. See that a tracking error affects all the joints. Play with the Kp, Kd gains showing that with high gains the error is reduced.
+ 
+\end{document}

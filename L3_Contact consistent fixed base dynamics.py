@@ -172,9 +172,10 @@ while True:
         #torques_row_space =  Nt*(tau   -    h)    
         #print  torques_row_space    
                              
-    # EXERCISE 1: Forward Euler Integration        
-    q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
+    # EXERCISE 1: Forward Euler Integration     
     qd = qd + qdd*conf.dt
+    q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
+
 
     ##  EXERCISE 4: Gauss principle of least constraint holds when in contact
     # Minimize     1/2 x^T M x - q_ucT M x
