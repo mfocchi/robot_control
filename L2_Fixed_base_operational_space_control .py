@@ -1,116 +1,64 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Dec 12 13:47:33 2019
-
-@author: mfocchi
-"""
-
-from __future__ import print_function 
+#common stuff 
 import pinocchio as pin
 from pinocchio.utils import *
 import numpy as np
-#from tsid_manipulator import TsidManipulator
-import matplotlib.pyplot as plt
+from numpy import nan
 import math
-import os
 import time as tm
-#from pinocchio.visualize import GepettoVisualizer
-from pinocchio.robot_wrapper import RobotWrapper
-from utils.common_functions import *
-
 import eigenpy
 eigenpy.switchToNumpyMatrix()
-import sys
 import os
+from utils.common_functions import *
+from utils.optimTools import quadprog_solve_qp
+from ros_publish import RosPub
 
-# Print options 
-np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
-np.set_printoptions(threshold=np.inf)
-import sys
-sys.dont_write_bytecode = True
+import ex_2_conf as conf
+
+#instantiate graphic utils
+ros_pub = RosPub()
+robot = importDisplayModel(False, False)
 
 
-ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
-path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
-urdf      = path + "/ur_description/urdf/ur5_modified.urdf";
-srdf      = path + '/ur_description/srdf/ur5_modified.srdf'
-robot = RobotWrapper.BuildFromURDF(urdf, [path, ])
-
-# Control loop interval
-dt=0.001
-exp_duration_sin = 3.0 
-exp_duration = 5.0
-num_samples = (int)(exp_duration/dt)
-
-## Matrix of KP gains
-Kx=eye(3)
-Kx[0,0] = 1000
-Kx[1,1] = 1000
-Kx[2,2] = 1000
-
-Dx=eye(3)
-Dx[0,0] = 300
-Dx[1,1] = 300
-Dx[2,2] = 300
-
-extForce = np.matrix([0.0, 0.0, 100.0]).T
-
-# Parameters of Joint Reference Trajectories
-amplitude=np.array([ 0.1, 0.0, 0.0])
-frequencies=np.array([ 0.8, 0.0, 0.0])
-w_rad=2*math.pi*frequencies
-
-# FLAGS
-DISPLAY = True
-DISPLAY_FLOOR = False
-EXTERNAL_FORCE = False
-
-#init variables
-zero  = np.matrix([ 0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
+# Init variables
+zero = np.matrix([0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
 zero_cart = np.matrix([ 0.0, 0.0,0.0]).T
-count = 0
 time = 0.0
+
+two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
+two_pi_f_amp         = np.multiply(two_pi_f, conf.amp) 
+two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
+
+# Init loggers
+x_log = np.empty((3,0))*nan
+x_des_log = np.empty((3,0))*nan
+xd_log = np.empty((3,0))*nan
+xd_des_log = np.empty((3,0))*nan
+xdd_log = np.empty((3,0))*nan
+xdd_des_log = np.empty((3,0))*nan
+tau_log = np.empty((6,0))*nan
+time_log =  np.array([])
+
+q = conf.q0
+qd = conf.qd0
+qdd = conf.qdd0
+
+q_des  = conf.q0        # joint reference velocity
+qd_des = zero        # joint reference acceleration
+qdd_des = zero        # joint desired acceleration
+
+# get the ID corresponding to the frame we want to control
+assert(robot.model.existFrame(conf.frame_name))
+frame_ee = robot.model.getFrameId(conf.frame_name)
 
 #end effector ID
 jid = robot.model.getJointId('wrist_3_joint')
 
-if DISPLAY:
-    import commands
-    import gepetto
-    from time import sleep
-    robot.initViewer(loadModel=True)
-    l = commands.getstatusoutput("ps aux |grep 'gepetto-gui'|grep -v 'grep'|wc -l")
-    if int(l[1]) == 0:
-        os.system('gepetto-gui &')
-    sleep(1)
-    gepetto.corbaserver.Client()
-    robot.initViewer(loadModel=True)
-    gui = robot.viewer.gui
-    if(DISPLAY_FLOOR):
-        robot.viewer.gui.createSceneWithFloor('world')
-        gui.setLightingMode('world/floor', 'ON')
-    robot.displayCollisions(False)
-    robot.displayVisuals(True)
-
-# Init loggers
-x_log = np.zeros((3,num_samples))
-x_des_log = np.zeros((3,num_samples))
-xd_log = np.zeros((3,num_samples))
-qd_log_norm = np.zeros((1,num_samples))
-xd_des_log = np.zeros((3,num_samples))
-xdd_log = np.zeros((3,num_samples))
-xdd_des_log = np.zeros((3,num_samples))
-time_log = np.zeros(num_samples)
-
-# Initial configuration 
-q0  = np.matrix([ 0.0, 1, -1, 0.5, 0, 0.5]).T
-q = q0
-qd = zero #+ np.random.rand(robot.model.nv,1)
-qdd = zero
-
 # compute initial end effector position and velocity
+x0 = robot.placement(q, jid, True).translation + np.matrix([0.0, 0.0, 0.0]).T
+print q
 pin.computeAllTerms(robot.model, robot.data, q, qd)
 x0 = robot.data.oMi[jid].translation + np.matrix([0.0, 0.0, 0.0]).T
+print x0
 xd0 = np.matrix([ 0.0, 0.0, 0.0]).T
 xdd0 = np.matrix([ 0.0, 0.0, 0.0]).T
 x = x0
@@ -120,18 +68,15 @@ x_des = x0
 xd_des = zero_cart
 xdd_des = zero_cart
 
-# CONTROL LOOP    
+# CONTROL LOOP
 while True:
-        
-    if DISPLAY and count%100==0:    
-        robot.display(q) 
     
-    # EXERCISE 1: Sinusoidal referencefor end effector   
-    x_des  = x0 + np.matrix([ amplitude[0]*np.sin(w_rad[0]*time), amplitude[1]*np.sin(w_rad[1]*time), amplitude[2]*np.sin(w_rad[2]*time)]).T
-    xd_des = np.matrix([ amplitude[0]*w_rad[0]*np.cos(w_rad[0]*time),  amplitude[1]*w_rad[1]*np.cos(w_rad[1]*time), amplitude[2]*w_rad[2]*np.cos(w_rad[2]*time)]).T
-    xdd_des = np.matrix([ -amplitude[0]*w_rad[0]*w_rad[0]*np.sin(w_rad[0]*time), -amplitude[1]*w_rad[1]*w_rad[1]*np.sin(w_rad[1]*time), -amplitude[2]*w_rad[2]*w_rad[2]*np.sin(w_rad[2]*time)]).T
+    # EXERCISE 1: Sinusoidal reference for end effector   
+    x_des  = x0  + np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
+    xd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
+    xdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
     # Set constant reference after a while
-    if time>exp_duration_sin:
+    if time >= conf.exp_duration_sin:
         x_des  = x0
         xd_des = xd0
         xdd_des = xdd0
@@ -145,11 +90,20 @@ while True:
 #        x_des = x0
 #        xd_des =  zero_cart
 #        xdd_des = zero_cart 
-        
-    if count%1000 == 0:
-        print('Time %.3f s'%(time))
-    if time >= exp_duration:
+
+    # Decimate print of time
+    #if (divmod(time ,1.0)[1]  == 0):
+       #print('Time %.3f s'%(time))
+    if time >= conf.exp_duration:
         break
+                            
+    robot.computeAllTerms(q, qd) 
+    # joint space inertia matrix                
+    M = robot.mass(q, False)
+    # bias terms                
+    h = robot.nle(q, qd, False)
+    #gravity terms                
+    g = robot.gravity(q)
     
        
     #compute Jacobian and its derivative in the world frame  
@@ -169,14 +123,7 @@ while True:
     xd = J*qd
  
 
-    #compute matrix M of the model
-    M = robot.mass(q)
 
-    #compute bias terms
-    h = robot.nle(q, qd)
-    
-    #compute gravity terms
-    g = robot.gravity(q)
         
     M_inv = np.linalg.inv(M)
     
@@ -193,23 +140,23 @@ while True:
     u_dyn =   -lambda_*(Jdot*qd)   + JTpinv_dyn*h
 #    # EXERCISE 4: 
 #    # compute virtual force
-#    F_des = Kx*(x_des-x)+Dx*(xd_des-xd)
+#    F_des = conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
 #    tau = J.T*F_des  
     
 #    # EXERCISE 5:     
-#    F_des = Kx*(x_des-x)+Dx*(xd_des-xd) 
+#    F_des = conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd) 
 #    tau = J.T*F_des + -g  5*qd
         
 #    # EXERCISE 6:
-#    F_des = lambda_* xdd_des + Kx*(x_des-x)+Dx*(xd_des-xd) 
+#    F_des = lambda_* xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd) 
 #    tau = J.T*F_des + g - 5*qd
        
     #Null space projector
     N = (eye(6)-J.T*JTpinv)  
     # null space torques
-    tau0 = 100*(q0-q) - 10*qd
+    tau0 = 100*(conf.q0-q) - 10*qd
     tau_null = N*tau0
-    F_des = xdd_des+Kx*(x_des-x)+Dx*(xd_des-xd)
+    F_des = xdd_des+conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
     u = -lambda_*(Jdot*qd)   + JTpinv*h 
 
 
@@ -260,41 +207,47 @@ while True:
     #SIMULATION
     
 #    EXERCISE 9
-    if EXTERNAL_FORCE  and time>2.0:
-     tau += J.transpose()*extForce
-    qdd = M_inv*(tau-h)
+    if conf.EXTERNAL_FORCE  and time>2.0:
+     tau += J.transpose()*conf.extForce
+     # (for plotting purposes) compute frame end effector position and velocity in the WF   
+     x = robot.framePlacement(q, frame_ee).translation    
+     ros_pub.add_arrow(x.A1.tolist(),conf.extForce/100) 					
+    
+    
+    #SIMULATION of the forward dynamics    
 
-    #SIMULATION
+    qdd = M_inv*(tau-h)    
     
-    #compute fwd dynamics    
-    qdd = M_inv*(tau-h)
+    # Forward Euler Integration    
+    qd = qd + qdd*conf.dt
+    q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
     
-    #forward euler integration 
-    q = q+qd*dt
-    qd = qd+qdd*dt    
     
-    #forward kinematics   
+    # Log Data into a vector
+    time_log = np.hstack((time_log, time))				
+    x_log = np.hstack((x_log, x ))
+    x_des_log= np.hstack((x_des_log, x_des))
+    xd_log= np.hstack((xd_log, xd))
+    xd_des_log= np.hstack((xd_des_log, xd_des))
+    xdd_log= np.hstack((xdd_log, xdd))
+    xdd_des_log= np.hstack((xdd_des_log, xdd_des))
+    tau_log = np.hstack((tau_log, tau))                
+ 
+    # update time
+    time = time + conf.dt                  
+                
+    #publish joint variables
+    ros_pub.publish(robot, q, qd, tau)                   
+    tm.sleep(conf.dt*conf.SLOW_FACTOR)
     
-    x_log[:,count] = x.flatten()
-    x_des_log[:,count] = x_des.flatten()
-    xd_log[:,count] = xd.flatten()
-    qd_log_norm[:,count] = np.linalg.norm(qd.flatten())
-    xd_des_log[:,count] = xd_des.flatten()
-    #xdd_log[:,count] = xdd.flatten()
-    #xdd_des_log[:,count] = xdd_des.flatten()
-    time_log[count] = time
-    time = time + dt 
-    count +=1
-     
-
+    # stops the while loop if  you prematurely hit CTRL+C                    
+    if ros_pub.isShuttingDown():
+        print ("Shutting Down")                    
+        break;
+            
+ros_pub.deregister_node()
+        
 
 #plot position
-plt.close()
 plotEndeff('position', 1,time_log, x_log, x_des_log)
 plotEndeff('velocity', 2,time_log, None, None, xd_log, xd_des_log)
-
-
-#plt.figure()
-#plt.title("x")
-#plt.plot(time_log,qd_log_norm.transpose(),linestyle='-', color = 'red')
-#plt.grid()
