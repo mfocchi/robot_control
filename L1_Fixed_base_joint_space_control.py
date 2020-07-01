@@ -1,26 +1,23 @@
-from __future__ import print_function 
-import pinocchio
+#common stuff 
+import pinocchio as pin
 from pinocchio.utils import *
 import numpy as np
-import matplotlib.pyplot as plt
+from numpy import nan
 import math
-from ros_publish import RosPub #TODO 
-from utils.common_functions import *
-
 import time as tm
-from pinocchio.robot_wrapper import RobotWrapper
 import eigenpy
 eigenpy.switchToNumpyMatrix()
-import sys
 import os
+from utils.common_functions import *
+from utils.optimTools import quadprog_solve_qp
+from ros_publish import RosPub
 
+import ex_1_conf as conf
 
-# Import the model
-ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
-path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
-urdf      = path + "/ur_description/urdf/ur5_modified.urdf";
-srdf      = path + '/ur5_description/srdf/ur5_modified.srdf'
-robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
+#instantiate graphic utils
+ros_pub = RosPub()
+robot = importDisplayModel(False, False)
+
 
 # Control loop interval
 dt = 0.001
@@ -143,13 +140,13 @@ while True:
         break
 
     # compute matrix M of the model
-    M= pinocchio.crba(robot.model, robot.data, q)
+    M= pin.crba(robot.model, robot.data, q)
 
     # compute bias terms h
-    h = pinocchio.rnea(robot.model, robot.data, q, qd, zero)
+    h = pin.rnea(robot.model, robot.data, q, qd, zero)
     
     # compute gravity terms
-    g = pinocchio.rnea(robot.model, robot.data, q, zero, zero)
+    g = pin.rnea(robot.model, robot.data, q, zero, zero)
     
         
     # EXERCISE  5: PD control critical damping
@@ -183,7 +180,7 @@ while True:
     if EXTERNAL_FORCE  and time>2.0:
      #compute Jacobian and its derivative in the world frame  
 			
-     pinocchio.computeJointJacobians(robot.model, robot.data, q)
+     pin.computeJointJacobians(robot.model, robot.data, q)
      robot.computeJointJacobians(q)
      J_i = robot.getJointJacobian(jid)[:3,:]
      R = robot.placement(q, jid).rotation
@@ -192,9 +189,12 @@ while True:
     qdd = M_inv*(tau-h)    
     
     # Forward Euler Integration    
-    q = q + qd*dt + 0.5*dt*dt*qdd
     qd = qd + qdd*dt
+    q = q + qd*dt + 0.5*dt*dt*qdd
     
+
+				
+				
     # Log Data into a vector
     q_log[:,count] = q.flatten()
     q_des_log[:,count] = q_des.flatten()
@@ -203,21 +203,37 @@ while True:
     qdd_log[:,count] = qdd.flatten()
     qdd_des_log[:,count] = qdd_des.flatten()
     tau_log[:,count] = tau.flatten()
+
+    
+			
+
+    # update time
+    time = time + conf.dt 
+    count +=1					
+				
+    #publish joint variables
+    ros_pub.publish(robot, q, qd, tau)				
 				
     time_log[count] = time  
     time = time + dt 
     count +=1
     
-    tm.sleep(dt)
+    tm.sleep(conf.dt*conf.SLOW_FACTOR)
     
-
+    # stops the while loop if  you prematurely hit CTRL+C                    
+    if ros_pub.isShuttingDown():
+        print ("Shutting Down")                    
+        break;
+            
+ros_pub.deregister_node()
         
                     
+                
 # plot joint variables                                                                              
 plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-
+#plotJoint('torque', 3, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 
 
 
