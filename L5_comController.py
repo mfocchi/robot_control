@@ -55,7 +55,7 @@ sys.dont_write_bytecode = True
 
 #controller specific
 from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
-from gazebo_controller.controlRoutines import projectionBasedController, QPController
+from utils.controlRoutines import projectionBasedController, QPController
 
 from scipy.linalg import block_diag
 from gazebo_controller.utils import Utils
