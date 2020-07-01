@@ -1,4 +1,4 @@
- 
+#common stuff 
 import pinocchio as pin
 from pinocchio.utils import *
 import numpy as np
@@ -7,21 +7,21 @@ import math
 import time as tm
 import eigenpy
 eigenpy.switchToNumpyMatrix()
-
 import os
 from utils.common_functions import *
-from utils.optimTools import quadprog_solve_qp  
+from utils.optimTools import quadprog_solve_qp
 from ros_publish import RosPub
+
+
 import ex_3_conf as conf
     
 #instantiate graphic utils
 ros_pub = RosPub()
+robot = importDisplayModel(False, False)
 
 # Init variables
 zero = np.matrix([0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
 time = 0.0
-count = 0
-robot = importDisplayModel(False, False)
 
 two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
 two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
@@ -39,6 +39,14 @@ f_log = np.empty((3,0))*nan
 x_log = np.empty((3,0))*nan
 time_log =  np.array([])
 
+z_gnd = 0.0
+ground_contact = False
+counter_lo = 0
+counter_td=0
+
+#init nullspace projector
+N = np.zeros((6,6))
+
 q = conf.q0
 qd = conf.qd0
 qdd = conf.qdd0
@@ -51,14 +59,6 @@ qdd_des = zero        # joint desired acceleration
 assert(robot.model.existFrame(conf.frame_name))
 frame_ee = robot.model.getFrameId(conf.frame_name)
 
-z_gnd = 0.0
-ground_contact = False
-counter_lo = 0
-counter_td=0
-plt.close() 
-
-#init nullspace projector
-N = np.zeros((6,6))
 
 # CONTROL LOOP
 while True:   
@@ -78,21 +78,28 @@ while True:
 #    q_des += qd_des*conf.dt	
 				
     # Set constant reference after a while
-    if time>conf.exp_duration_sin:
+    if time >= conf.exp_duration_sin:
         q_des  = conf.q0
         qd_des = zero
         qdd_des = zero         
  
     # Decimate print of time
-    #if (divmod(count ,1000)[1]  == 0):
+    #if (divmod(time ,1.0)[1]  == 0):
        #print('Time %.3f s'%(time))
     if time >= conf.exp_duration:
         break
                             
-    robot.computeAllTerms(q, qd)    
+    robot.computeAllTerms(q, qd) 
+    # joint space inertia matrix				
     M = robot.mass(q, False)
+    # bias terms				
     h = robot.nle(q, qd, False)
-    g = robot.gravity(q)   
+    #gravity terms				
+    g = robot.gravity(q)
+				
+				
+				
+    #CONTROLLER				
     #PD controller + gravity compensation
     tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd) + g              
 
@@ -246,19 +253,19 @@ while True:
 
 #------------------------------------------------------------------------------------------------------------
     # Log Data into a vector
+    time_log = np.hstack((time_log, time))				
     q_log = np.hstack((q_log, q ))
-    time_log = np.hstack((time_log, time))
     q_des_log= np.hstack((q_des_log, q_des))
     qd_log= np.hstack((qd_log, qd))
-    qd_des_log= np.hstack((qd_des_log, qd))
+    qd_des_log= np.hstack((qd_des_log, qd_des))
     qdd_log= np.hstack((qdd_log, qd))
-    qdd_des_log= np.hstack((qdd_des_log, qd))
-    tau_log = np.hstack((tau_log, tau))				
+    qdd_des_log= np.hstack((qdd_des_log, qdd_des))
+    tau_log = np.hstack((tau_log, tau))            		
     f_log = np.hstack((f_log, f))				
     x_log = np.hstack((x_log, x))				
 
+    # update time
     time = time + conf.dt 
-    count +=1
 
     # plot contact force
     # scale f for plotting purposes                
@@ -267,10 +274,8 @@ while True:
 
     # plot ball at the end-effector
     ros_pub.add_marker(x.A1.tolist())                 
-    ros_pub.publish(robot, q, qd, tau)
-                   
-    tm.sleep(conf.dt*conf.SLOW_FACTOR)
-                
+    ros_pub.publish(robot, q, qd, tau)                   
+    tm.sleep(conf.dt*conf.SLOW_FACTOR)                
     # stops the while loop if  you prematurely hit CTRL+C                    
     if ros_pub.isShuttingDown():
         print ("Shutting Down")                    

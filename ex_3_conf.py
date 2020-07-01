@@ -16,7 +16,7 @@ LINE_WIDTH = 60
 dt = 0.001                   # controller time step
 exp_duration_sin = 3.0 #sine reference duration
 exp_duration = 5.0 #simulation duration
-num_samples = (int)(exp_duration/dt)
+
 
 SLOW_FACTOR = 1 #to slow down simulation
 

@@ -20,6 +20,7 @@ sys.dont_write_bytecode = True
 from urdf_parser_py.urdf import URDF
 #make plot interactive
 plt.ion()
+plt.close() 
 
 REF_SPHERE_RADIUS = 0.03
 EE_SPHERE_COLOR  = (1, 0.5, 0, 0.5)

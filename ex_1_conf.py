@@ -8,36 +8,38 @@ Created on Thu Apr 18 09:47:07 2019
 import numpy as np
 import os
 
-
-
-LINE_WIDTH = 60
-
-
 dt = 0.001                   # controller time step
 exp_duration_sin = 3.0 #sine reference duration
 exp_duration = 5.0 #simulation duration
-num_samples = (int)(exp_duration/dt)
 
 SLOW_FACTOR = 1 #to slow down simulation
 
 frame_name = 'ee_link'    # name of the frame to control (end-effector)
-# EXERCISE 5: contact at the origin of wrist_3_link 
-#frame_ee = robot.model.getFrameId('wrist_3_link')
 
 #PD controller
 ## Matrix of gains
-kp = np.eye(6)*200 # proportional gain 
-kd = np.eye(6)*20 # derivative gai
+kp = np.eye(6)*50  # proportional gains 
+kd = np.eye(6)*20 # derivative gains (critical damping)
 
 ## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY
-amp = np.matrix([ 0.0, 0.6, 0.0, 0.0, 0.0, 0.0]).T          # amplitude
+amp = np.matrix([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0]).T    # amplitude
 phi = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T    # phase
-freq = np.matrix([ 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]).T  # frequency
+freq = np.matrix([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0]).T  # frequency
+
 
 # Initial configuration / velocity / Acceleration
-q0  = np.matrix([ 0.0, -0.6, 0.6, -1.67, -1.57, 0.0]).T
+q0  = np.matrix([ 0.0, 0.0, -0.5, 0.5, -1.57, 0.5]).T
 qd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 
-# EXERCISE 9: 
-#qd0 = np.matrix([ 0, w_rad[1]*amplitude[1], 0.0, 0.0, w_rad[4]*amplitude[4], 0.0]).T
+
+#EXERCISE 4: high gains
+#kp=eye(6)*500
+#kd=eye(6)*30
+
+
+# Value of linear external force
+extForce = np.matrix([0.0, 0.0, 50.0]).T
+# FLAGS
+EXTERNAL_FORCE = False
+
