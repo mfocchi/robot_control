@@ -12,10 +12,10 @@ sudo sh -c "echo 'deb [arch=amd64] http://robotpkg.openrobots.org/wip/packages/d
 sudo apt install curl
 curl http://robotpkg.openrobots.org/packages/debian/robotpkg.key | sudo apt-key add -
 
-#update
+# update
 sudo apt-get update
 
-#Pinocchio stuff
+# Pinocchio stuff
 #https://github.com/humanoid-path-planner/hpp-rbprm-corba/issues/46
 #omniORBpy should be on version 3 on 16.04.
 sudo apt-get remove robotpkg-omniorb
@@ -66,5 +66,4 @@ export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:/opt/openrobots/share/
 3) step: source ~/.bashrc
 
 4) sudo cp $LOCOSIM_DIR/robot_control/ur5_modified.urdf /opt/openrobots/share/example-robot-data/robots/ur_description/urdf/ur.urdf
-
 
