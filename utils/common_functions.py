@@ -134,7 +134,7 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
                 
 
                 
-def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, f_log=None):
+def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, euler = None, euler_des = None, f_log=None):
     plot_var_des_log = None
     if name == 'position':
         plot_var_log = x_log
@@ -145,7 +145,10 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
     elif  name == 'velocity':    
         plot_var_log = xd_log
         if   (xd_des_log is not None):                                
-             plot_var_des_log = xd_des_log                                    
+             plot_var_des_log = xd_des_log         
+    elif  name == 'orientation':    
+        plot_var_log = euler                             
+        plot_var_des_log = euler_des                               
     else:
        print("wrong choice")                    
        

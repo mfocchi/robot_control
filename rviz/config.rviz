@@ -123,25 +123,60 @@ Visualization Manager:
       Value: true
       Visual Enabled: true
     - Class: rviz/TF
-      Enabled: false
+      Enabled: true
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        base:
+          Value: false
+        base_link:
+          Value: true
+        ee_link:
+          Value: true
+        forearm_link:
+          Value: false
+        shoulder_link:
+          Value: false
+        tool0:
+          Value: false
+        upper_arm_link:
+          Value: false
+        world:
+          Value: false
+        wrist_1_link:
+          Value: false
+        wrist_2_link:
+          Value: false
+        wrist_3_link:
+          Value: false
       Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        world:
+          base_link:
+            base:
+              {}
+            shoulder_link:
+              upper_arm_link:
+                forearm_link:
+                  wrist_1_link:
+                    wrist_2_link:
+                      wrist_3_link:
+                        ee_link:
+                          {}
+                        tool0:
+                          {}
       Update Interval: 0
-      Value: false
+      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /vis
       Name: MarkerArray
       Namespaces:
-        {}
+        "": true
       Queue Size: 100
       Value: true
   Enabled: true
@@ -176,18 +211,18 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.698589683
-        Y: 0.316062093
-        Z: -0.198856041
+        X: 0.373568207
+        Y: 0.147027969
+        Z: -0.0452627391
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.679797411
+      Pitch: 0.654797435
       Target Frame: base_link
       Value: Orbit (rviz)
-      Yaw: 0.827947557
+      Yaw: 1.63794208
     Saved:
       - Class: rviz/ThirdPersonFollower
         Distance: 2.60631585

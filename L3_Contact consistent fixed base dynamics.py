@@ -97,12 +97,9 @@ while True:
     #gravity terms				
     g = robot.gravity(q)
 				
-				
-				
     #CONTROLLER				
     #PD controller + gravity compensation
     tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd) + g              
-
 
 
     # EXERCISE 1: contact at the end-effector 
@@ -291,6 +288,6 @@ plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log
 
 # plot end-effector variables    
 plotEndeff('position', 4,time_log, x_log)
-#plotEndeff('force', 5, time_log, x_log, f_log)
+plotEndeff('force', 5, time_log, x_log, None, None, None, None,None, f_log)
 
 

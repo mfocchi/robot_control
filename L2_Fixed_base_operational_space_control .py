@@ -12,13 +12,14 @@ from utils.common_functions import *
 from utils.optimTools import quadprog_solve_qp
 from ros_publish import RosPub
 
+from gazebo_controller.math_tools import Math
 import ex_2_conf as conf
 
 #instantiate graphic utils
 ros_pub = RosPub()
 robot = importDisplayModel(False, False)
 
-
+math = Math()
 # Init variables
 zero = np.matrix([0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
 zero_cart = np.matrix([ 0.0, 0.0,0.0]).T
@@ -35,6 +36,8 @@ xd_log = np.empty((3,0))*nan
 xd_des_log = np.empty((3,0))*nan
 xdd_log = np.empty((3,0))*nan
 xdd_des_log = np.empty((3,0))*nan
+euler_log = np.empty((3,0))*nan
+euler_des_log = np.empty((3,0))*nan
 tau_log = np.empty((6,0))*nan
 time_log =  np.array([])
 
@@ -50,15 +53,8 @@ qdd_des = zero        # joint desired acceleration
 assert(robot.model.existFrame(conf.frame_name))
 frame_ee = robot.model.getFrameId(conf.frame_name)
 
-#end effector ID
-jid = robot.model.getJointId('wrist_3_joint')
-
 # compute initial end effector position and velocity
-x0 = robot.placement(q, jid, True).translation + np.matrix([0.0, 0.0, 0.0]).T
-print q
-pin.computeAllTerms(robot.model, robot.data, q, qd)
-x0 = robot.data.oMi[jid].translation + np.matrix([0.0, 0.0, 0.0]).T
-print x0
+x0 = robot.framePlacement(q, frame_ee, True).translation + np.matrix([0.0, 0.0, 0.0]).T
 xd0 = np.matrix([ 0.0, 0.0, 0.0]).T
 xdd0 = np.matrix([ 0.0, 0.0, 0.0]).T
 x = x0
@@ -67,11 +63,13 @@ xdd = xdd0
 x_des = x0
 xd_des = zero_cart
 xdd_des = zero_cart
+euler = zero_cart
+euler_des = zero_cart
 
 # CONTROL LOOP
 while True:
     
-    # EXERCISE 1: Sinusoidal reference for end effector   
+    # EXERCISE 1: Sinusoidal reference generation for end effector   
     x_des  = x0  + np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
     xd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
     xdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
@@ -81,7 +79,7 @@ while True:
         xd_des = xd0
         xdd_des = xdd0
         
-#     # EXERCISE 2: Step reference
+#     # EXERCISE 2: Step reference generation  for end effector 
 #    if time > 2.0:
 #        x_des = x0 + np.matrix([ 0.0, 0.0, 0.1]).T 
 #        xd_des =  zero_cart
@@ -105,137 +103,116 @@ while True:
     #gravity terms                
     g = robot.gravity(q)
     
-       
-    #compute Jacobian and its derivative in the world frame  
-    pin.computeJointJacobians(robot.model, robot.data, q)
-    robot.computeJointJacobians(q)
-    #get local jacobian
-    J_i = robot.getJointJacobian(jid)[:3,:]
-    R = robot.placement(q, jid).rotation
-    #map jacobian to world frame
-    J = R * J_i    
-    pin.computeJointJacobiansTimeVariation(robot.model, robot.data, q, qd)
-    J_i_dot=pin.getJointJacobianTimeVariation(robot.model, robot.data, jid, pin.ReferenceFrame.LOCAL)[:3,:]
-    Jdot = R * J_i_dot
-    
-    # compute end effector position and velocity    
-    x = robot.placement(q, jid).translation
-    xd = J*qd
- 
+    # compute jacobian of the end effector (in the WF)        
+    J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
+    # take first 3 rows of J6 cause we have a point contact            
+    J = J6[:3,:] 
+    # compute  the end-effector acceleration due to joint velocity            
+    dJdq = robot.frameClassicAcceleration(q, qd, None, frame_ee).linear    
+    # compute frame end effector position and velocity in the WF   
+    x = robot.framePlacement(q, frame_ee).translation                      
+    xd = J*qd  
 
-
-        
     M_inv = np.linalg.inv(M)
-    
-    #    #pseudoinverse of J^T = (A^TA)^-1 * A^T
+    # Moore-penrose pseudoinverse  A^# = (A^TA)^-1 * A^T with A = J^T
     JTpinv = np.linalg.inv(J*J.T)*J
- 
-    #lambda_xdd+u=F
     lambda_= np.linalg.inv(J*M_inv* J.T)
-    
-    #dynamicaaly consistent psdinv
-    JTpinv_dyn = lambda_*J*M_inv
-    N_dyn = (eye(6)-J.T*JTpinv_dyn) 
-    
-    u_dyn =   -lambda_*(Jdot*qd)   + JTpinv_dyn*h
-#    # EXERCISE 4: 
-#    # compute virtual force
-#    F_des = conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
-#    tau = J.T*F_des  
-    
-#    # EXERCISE 5:     
-#    F_des = conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd) 
-#    tau = J.T*F_des + -g  5*qd
-        
-#    # EXERCISE 6:
-#    F_des = lambda_* xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd) 
-#    tau = J.T*F_des + g - 5*qd
-       
+
     #Null space projector
     N = (eye(6)-J.T*JTpinv)  
-    # null space torques
-    tau0 = 100*(conf.q0-q) - 10*qd
+    # null space torques (postural task)
+    tau0 = 50*(conf.q0-q) - 10*qd
     tau_null = N*tau0
-    F_des = xdd_des+conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
-    u = -lambda_*(Jdot*qd)   + JTpinv*h 
+				         
+    # EXERCISE 4: PD control (cartesian task)
+    F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)
+    tau = J.T*F_des 
+    #tau = J.T*F_des + tau_null 
+    
+    # EXERCISE 5: PD control + Gravity Compensation:
+    #F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)				
+    #tau = J.T*F_des + g + tau_null 
+        
+    # EXERCISE 6: PD control  + Gravity Compensation + Feed-Forward term
+    #F_des = lambda_* xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd) 
+    #tau = J.T*F_des + g  + tau_null 
+     
+    # EXERCISE 7: Operational space inverse dynamics
+#    F_des = xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
+#    u = -lambda_*(dJdq)   + JTpinv*h 
+#    tau = J.T*(lambda_*F_des + u) + tau_null    
+    
+     # EXERCISE 8: OSID with bias compensation in joint space (simpler to compute)
+#    tau =  J.T*(lambda_*F_des) + h + tau_null
 
-
-    # EXERCISE 7:
-    tau = J.T*(lambda_*F_des + u) + tau_null    
-#    
-      # EXERCISE 8:
-##     OSID with bias compensation in joint space (simpler to compute)
-#    tau = h + J.T*(lambda_*F_des) + tau_null
-
-    #EXERCISE 12: dyn consisten pseudoninverse
+     #EXERCISE 11: dyn consistent pseudon-inverse
+#    JTpinv_dyn = lambda_*J*M_inv
+#    N_dyn = (eye(6)-J.T*JTpinv_dyn)    
+#    u =   - lambda_*(dJdq)   + JTpinv_dyn*h    
 #    tau_null = N_dyn*tau0
 #    tau = J.T*(lambda_*F_des + u_dyn) + tau_null   
     
     # EXERCISE 10:
-    #compute total jacibian
-#    J_lin = robot.getJointJacobian(jid)[:3,:]
-#    J_ang = robot.getJointJacobian(jid)[3:6,:]
-#    #map jacobian to world frame
-#    Jt = np.matrix(np.zeros((6, 6)))
-#    Jt[:3,:]= R * J_lin  
-#    Jt[3:6,:]= R * J_ang  
-#    twist = Jt*qd
-#    Ktheta=eye(3)
-#    Ktheta[0,0] = 1000
-#    Ktheta[1,1] = 1000
-#    Ktheta[2,2] = 1000
-#    
-#    Dtheta=eye(3)
-#    Dtheta[0,0] = 100
-#    Dtheta[1,1] = 100
-#    Dtheta[2,2] = 100
-#    
-#    omega_des = np.matrix([0,0,0]).T
+#    # actual end-effector orientation (columns are the axis of frame_ee expressed in WF (check rviz TF) )				
+#    w_R_e = robot.framePlacement(q, frame_ee).rotation 
+#    e_R_w = w_R_e.T				
+#    #compute actual end-effector twist
+#    twist = J6*qd
+#    # extract omega				
 #    omega = twist[3:6]
-#    #pinocchio default rotation matric: va = R * Vb, so I have to change the sign in r     
-#    cos_theta = (R[0,0]+ R[1,1]+ R[2,2]-1)/2
-#    theta = np.arccos( cos_theta) 
-#    r_hat = 1/(2*sin(theta))*np.matrix([R[2,1]-R[1,2], R[0,2]-R[2,0], R[1,0]-R[0,1]]).T 
-#    
-#    e_o = theta* r_hat
-#    M_des = - Ktheta* e_o + Dtheta*(omega_des - omega)
-#    W_des = np.vstack([F_des, M_des])
-#    #FFWD?
-#    tau = Jt.T*W_des      
-    
-
-    #SIMULATION
-    
-#    EXERCISE 9
+#    #des orientation  (horizontal with X pointing left ) NB the axis are the rows of the matrix 
+#    des_x_axis = np.matrix([0, 1, 0])
+#    des_y_axis = np.matrix([0, 0, -1])
+#    des_z_axis = np.matrix([-1, 0, 0])			
+#    des_R_w = np.vstack((des_x_axis, des_y_axis, des_z_axis))
+#    # desired angular velocity				            
+#    omega_des = np.matrix([0,0,0]).T
+#    # compute  the orientation error Rotation matrix
+#    des_R_e = des_R_w * e_R_w.T
+#    # compute the angle-axis representation of the orientation error				
+#    cos_theta = (des_R_e[0,0]+ des_R_e[1,1]+ des_R_e[2,2]-1)/2
+#    delta_theta = np.arccos( cos_theta) 
+#    r_hat = 1/(2*np.sin(delta_theta))*np.matrix([des_R_e[2,1]-des_R_e[1,2], des_R_e[0,2]-des_R_e[2,0], des_R_e[1,0]-des_R_e[0,1]]).T    
+#    e_error_o = delta_theta * r_hat #the error is in the endeffector frame
+#    # we need to map it in the world frame to compute the wrench because the jacobian is in the WF
+#    w_error_o = w_R_e*e_error_o			  				
+#    # compute the angular part of the wrench				
+#    Tau_des = - conf.Ktheta* w_error_o + conf.Dtheta*(omega_des - omega)
+#    W_des = np.vstack([F_des, Tau_des])			
+#    tau = J6.T*W_des      
+#    #to log 
+#    euler = math.rotTorpy(e_R_w)				
+#    euler_des = math.rotTorpy(des_R_w)
+				
+#    EXERCISE 9: Add external force
     if conf.EXTERNAL_FORCE  and time>2.0:
-     tau += J.transpose()*conf.extForce
-     # (for plotting purposes) compute frame end effector position and velocity in the WF   
-     x = robot.framePlacement(q, frame_ee).translation    
-     ros_pub.add_arrow(x.A1.tolist(),conf.extForce/100) 					
-    
+        tau += J.transpose()*conf.extForce
+        ros_pub.add_arrow(x.A1.tolist(),conf.extForce/100)                     
     
     #SIMULATION of the forward dynamics    
-
     qdd = M_inv*(tau-h)    
     
     # Forward Euler Integration    
     qd = qd + qdd*conf.dt
     q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
     
-    
     # Log Data into a vector
-    time_log = np.hstack((time_log, time))				
+    time_log = np.hstack((time_log, time))                
     x_log = np.hstack((x_log, x ))
     x_des_log= np.hstack((x_des_log, x_des))
     xd_log= np.hstack((xd_log, xd))
     xd_des_log= np.hstack((xd_des_log, xd_des))
     xdd_log= np.hstack((xdd_log, xdd))
     xdd_des_log= np.hstack((xdd_des_log, xdd_des))
+    euler_log= np.hstack((euler_log, euler.reshape(3,-1)))
+    euler_des_log= np.hstack((euler_des_log, euler_des.reshape(3,-1)))
     tau_log = np.hstack((tau_log, tau))                
  
     # update time
     time = time + conf.dt                  
-                
+    
+    # plot ball at the end-effector
+    ros_pub.add_marker(x.A1.tolist())                   
     #publish joint variables
     ros_pub.publish(robot, q, qd, tau)                   
     tm.sleep(conf.dt*conf.SLOW_FACTOR)
@@ -250,4 +227,5 @@ ros_pub.deregister_node()
 
 #plot position
 plotEndeff('position', 1,time_log, x_log, x_des_log)
-plotEndeff('velocity', 2,time_log, None, None, xd_log, xd_des_log)
+#plotEndeff('velocity', 2, x_log, x_des_log, xd_log, xd_des_log, euler_log, euler_des_log)
+#plotEndeff('orientation', 2,time_log, x_log, x_des_log, xd_log, xd_des_log, euler_log, euler_des_log)
