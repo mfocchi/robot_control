@@ -68,12 +68,6 @@ print "Com Position (pinocchio): ", com_test
 #print "TEST2: ", EkinRobot - data.kinetic_energy
 
 
-# EXERCISE 1: Test M * [0 0 -g  zeros()] = g
-#Grav_W = np.hstack( ( np.array((0.0, 0.0, -9.81)), np.zeros( model.nv - 3)  )).T
-#Gtest = -M.dot(Grav_W)
-#print (Gtest - G   )
-#print (G)
-
 ##EXERCIZE 3: Build the transformation matrix to use com coordinates
 ## get the location of the base frame
 #w_base = data.oMi[1].translation
@@ -104,7 +98,9 @@ print "Com Position (pinocchio): ", com_test
 #
 ##check G_Tf_B = inv(G_T_B.T)
 ##print np.linalg.inv(G_T_B.T) - G_Tf_B
-#
+
+
+# EXERCISE 4: Check the mass matrix becomes block diagonal
 #M_g = G_Tf_B * M * np.linalg.inv(G_T_B)
 #print "\n The mass matrix expressed at the com becomes diagonal: \n", M_g
 
@@ -118,5 +114,5 @@ print "Com Position (pinocchio): ", com_test
 # but moves with joints, this means that its jacobians has a part from the base and from the joints. 
 # so if we try to turn the floating base robot to a fixed base applying the wrench of "God" 
 # we will have also an influence on the joint torques that will be cancelled
-print "\n The gravity force vector at the com should be  [0 0 mg   03x1    0nx1 ]: \n", G_g
+#print "\n The gravity force vector at the com should be  [0 0 mg   03x1    0nx1 ]: \n", G_g
  
