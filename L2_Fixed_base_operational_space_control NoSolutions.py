@@ -56,8 +56,6 @@ frame_ee = robot.model.getFrameId(conf.frame_name)
 # compute initial end effector position and velocity
 x0 = robot.framePlacement(q, frame_ee, True).translation + np.matrix([0.0, 0.0, 0.0]).T
 xd0 = np.matrix([ 0.0, 0.0, 0.0]).T
-# to avoid having tracking errors at the start
-#xd0 = two_pi_f_amp
 xdd0 = np.matrix([ 0.0, 0.0, 0.0]).T
 x = x0
 xd = xd0
@@ -72,25 +70,11 @@ euler_des = zero_cart
 while True:
     
     # EXERCISE 1: Sinusoidal reference generation for end effector   
-    x_des  = x0  + np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
-    xd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
-    xdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
-    # Set constant reference after a while
-    if time >= conf.exp_duration_sin:
-        x_des  = x0
-        xd_des = xd0
-        xdd_des = xdd0
+    #...
         
-     # EXERCISE 2: Step reference generation  for end effector 
-#    if time > 2.0:
-#        x_des = x0 + np.matrix([ 0.0, 0.0, 0.1]).T 
-#        xd_des =  zero_cart
-#        xdd_des = zero_cart 
-#    else:
-#        x_des = x0
-#        xd_des =  zero_cart
-#        xdd_des = zero_cart 
-
+    # EXERCISE 2: Step reference generation  for end effector 
+    #...
+        
     # Decimate print of time
     #if (divmod(time ,1.0)[1]  == 0):
        #print('Time %.3f s'%(time))
@@ -118,92 +102,50 @@ while True:
     M_inv = np.linalg.inv(M)
     # Moore-penrose pseudoinverse  A^# = (A^TA)^-1 * A^T with A = J^T
     JTpinv = np.linalg.inv(J*J.T)*J
-    lambda_= np.linalg.inv(J*M_inv* J.T)  #better this if J is not square  
-    #lambda_ = np.linalg.pinv(J.T)*M*np.linalg.pinv(J)
+    lambda_= np.linalg.inv(J*M_inv* J.T)
 
-    
-    #Null space projector I - (JTpinv )^-1 * JTpinv => I  - JT *JTpiv
+    #Null space projector
     N = (eye(6)-J.T*JTpinv)  
     # null space torques (postural task)
     tau0 = 50*(conf.q0-q) - 10*qd
     tau_null = N*tau0
 				         
     # EXERCISE 4: PD control (cartesian task)
-    F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)
-    tau = J.T*F_des 
-    tau += tau_null 
-    
+    #Fdes = ...
+    #tau = ...         
+             
     # EXERCISE 5: PD control + Gravity Compensation:
-#    F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)	+ JTpinv*g		
-#    tau = J.T*F_des + tau_null 
+    #Fdes = ...
+    #tau = ... 
         
     # EXERCISE 6: PD control  + Gravity Compensation + Feed-Forward term
-#    F_des = lambda_* xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd) + JTpinv*g
-#    tau = J.T*F_des + tau_null 
+    #Fdes = ...
+    #tau = ... 
      
     # EXERCISE 7: Operational space inverse dynamics
-#    F_des = xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
-#    u = -lambda_*(dJdq)  + JTpinv*h 
-#    tau = J.T*(lambda_*F_des + u) + tau_null    
+    #Fdes = ...
+    #tau = ...  
     
      # EXERCISE 8: OSID with bias compensation in joint space (simpler to compute)
-#    F_des = xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)    
-#    tau =  J.T*(lambda_*F_des) + h + tau_null
-
-     # dyn consistent pseudo-inverse
-#    JTpinv_dyn = lambda_*J*M_inv
-#    N_dyn = (eye(6)-J.T*JTpinv_dyn)    
-#    u =   - lambda_*(dJdq)   + JTpinv_dyn*h    
-#    tau_null = N_dyn*tau0
-#    tau = J.T*(lambda_*F_des + u_dyn) + tau_null   
+    #Fdes = ...
+    #tau = ... 
     
-#    # EXERCISE 10: Control of orientation
-#    # actual end-effector orientation (columns are the axis of frame_ee expressed in WF (check rviz TF) )				
-#    w_R_e = robot.framePlacement(q, frame_ee).rotation 
-#    e_R_w = w_R_e.T				
-#    #compute actual end-effector twist
-#    twist = J6*qd
-#    # extract omega				
-#    omega = twist[3:6]
-#    #des orientation  (horizontal with X pointing left ) NB the axis are the rows of the matrix 
-#    des_x_axis = np.matrix([0, 1, 0])
-#    des_y_axis = np.matrix([0, 0, -1])
-#    des_z_axis = np.matrix([-1, 0, 0])			
-#    des_R_w = np.vstack((des_x_axis, des_y_axis, des_z_axis))
-#    # desired angular velocity	(constant)			            
-#    omega_des = np.matrix([0,0,0]).T
-#    # compute  the orientation error Rotation matrix
-#    des_R_e = des_R_w * e_R_w.T
-#    # compute the angle-axis representation of the orientation error				
-#    cos_theta = (des_R_e[0,0]+ des_R_e[1,1]+ des_R_e[2,2]-1)/2
-#    delta_theta = np.arccos( cos_theta) 
-#    r_hat = 1/(2*np.sin(delta_theta))*np.matrix([des_R_e[2,1]-des_R_e[1,2], des_R_e[0,2]-des_R_e[2,0], des_R_e[1,0]-des_R_e[0,1]]).T    
-#    e_error_o = delta_theta * r_hat #the error is in the endeffector frame
-#    # we need to map it in the world frame to compute the wrench because the jacobian is in the WF
-#    w_error_o = w_R_e*e_error_o			  				
-#    # compute the linear part of the wrench	
-#    F_des = xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)  
-#    # compute the angular part of the wrench				
-#    Tau_des = - conf.Ktheta* w_error_o + conf.Dtheta*(omega_des - omega)
-#    W_des = np.vstack([F_des, Tau_des])			
-#    tau = J6.T*W_des      
-#    #to log 
-#    euler = math.rotTorpy(e_R_w)				
-#    euler_des = math.rotTorpy(des_R_w)
+     #EXERCISE 11: dyn consistent pseudon-inverse
+    #Fdes = ...
+    #tau = ...   
     
-#    #EXERSISE 11 : full inv. dynamics
-#    #compute lambda for both orientation and position
-#    #lambda6_= np.linalg.inv(J6*M_inv* J6.T)  
-#    lambda6_ = np.linalg.pinv(J6.T,0.0001)*M*np.linalg.pinv(J6,0.001)  
-#    dJdq6 = robot.frameClassicAcceleration(q, qd, None, frame_ee).vector   
-#    u6 = -lambda6_*(dJdq6)  + np.linalg.pinv(J6.T,0.0001)*h     
-#    tau = J6.T*(lambda6_*W_des + u6) 
-    
-
+    # EXERCISE 10: Control of orientation
+    # F_des				
+    # Tau_des = ...
+    #  W_des = np.vstack([F_des, Tau_des])			
+    # tau = ...   
+    #to log 
+    #euler = math.rotTorpy(e_R_w)				
+    #euler_des = math.rotTorpy(des_R_w)
 				
 #    EXERCISE 9: Add external force
     if conf.EXTERNAL_FORCE  and time>2.0:
-        tau += J.transpose()*conf.extForce
+        # tau += ...
         ros_pub.add_arrow(x.A1.tolist(),conf.extForce/100)                     
     
     #SIMULATION of the forward dynamics    
