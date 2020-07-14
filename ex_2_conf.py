@@ -50,7 +50,7 @@ qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 
 # EXERCISE 9: Add external force
 # Value of linear external force
-extForce = np.matrix([0.0, 0.0, 100.0]).T
+extForce = np.matrix([0.0, 0.0, 200.0]).T
 # FLAGS
 EXTERNAL_FORCE = False
 

@@ -18,7 +18,7 @@ frame_name = 'ee_link'    # name of the frame to control (end-effector)
 
 #PD controller
 ## Matrix of gains
-kp = np.eye(6)*50  # proportional gains 
+kp = np.eye(6)*600  # proportional gains 
 kd = np.eye(6)*20 # derivative gains (critical damping)
 
 ## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY
@@ -34,12 +34,12 @@ qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 
 
 #EXERCISE 4: high gains
-#kp=eye(6)*500
-#kd=eye(6)*30
+#kp=np.eye(6)*500
+#kd=np.eye(6)*30
 
 
 # Value of linear external force
 extForce = np.matrix([0.0, 0.0, 50.0]).T
 # FLAGS
-EXTERNAL_FORCE = False
+EXTERNAL_FORCE = True
 

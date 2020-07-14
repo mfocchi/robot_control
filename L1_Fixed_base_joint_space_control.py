@@ -41,7 +41,7 @@ time_log =  np.array([])
 
 
 # EXERCISE 9: 
-#comf.qd0 = two_pi_f_amp
+conf.qd0 = two_pi_f_amp
 
 q = conf.q0
 qd = conf.qd0
@@ -104,7 +104,7 @@ while True:
                                 
     #CONTROLLERS                                    
     #Exercise 3:  PD control
-    tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd) + g
+    #tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)
     
     # Exercise 6: PD control + Gravity Compensation
     #tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)  + g
@@ -113,7 +113,7 @@ while True:
     #tau= np.diag(M)*qdd_des + conf.kp*(q_des-q) + conf.kd*(qd_des-qd) + g
 
     # EXERCISE 8_ Inverse Dynamics
-    #tau=M*(qdd_des+ conf.kp*(q_des-q)+ conf.kd*(qd_des-qd)) + h    
+    tau=M*(qdd_des+ conf.kp*(q_des-q)+ conf.kd*(qd_des-qd)) + h    
        
     # Add external force if any (EXERCISE 11)
     if conf.EXTERNAL_FORCE  and time>2.0:

@@ -53,7 +53,7 @@ See what happens if you do not add any null-space torques. Then add them as a po
 
 
 \begin{align}
-  \tau_0& = 50(q_0-q) - 10*\dot{q}\\
+  \tau_0& = 50(q_0-q) - 10\dot{q}\\
 \tau_N& = N \tau_0 
 \label{fig:}
 \end{align}
@@ -63,7 +63,7 @@ Use the sinusoidal reference generated in 1) as input to the system. Plot the tr
 
 \noindent
 5) \textit{ End-effector position  PD control + Gravity Compensation:}
-Add gravity compensation. Give the step reference generated in 2) as input to the system. Check there is no longer a  tracking error at steady state is  but it still remains during the transient. 
+Add gravity compensation (in the operational space $G= J^{-T}g$). Give the step reference generated in 2) as input to the system. Check there is no longer a  tracking error at steady state is  but it still remains during the transient. 
 
 \quad
 
@@ -92,8 +92,17 @@ With constant reference $x_0$,  give $F_{ext}$ on $Z$ direction and check that i
 \quad
 
 \noindent
-10) \textit{Implement impedance control for end-effector orientation (TODO):}
+10) \textit{Implement impedance control for poition and end-effector orientation :}
 Add orientation  control of the end-effector (advice: the Jacobian is 6x6 now and there is no longer need of postural task). Implement the computation of the orientation error both with angle-axis and quaternions representations and compare they give the same result.
+Note that you still have tracking errors because of gravity and inertial couplings.
 Why the motion of the joint seems weird? This is what you get with a 6DoFs robot! There is no null-space left. Is necessary a 7 DoFs robot, if you want a more "natural" motion! Try to set a sinusoidal reference and plot the tracking.
+ 
+ \quad
+ 
+ \noindent
+11) \textit{Implement full 6D inverse-dynamics  for position and end-effector orientation:}
+Implement full inverse dynamics to remove inertial effects and gravity.
+Observe that the $\Lambda$ computed with the 6x6 Jacobian can become singular. How do you solve this?
+(hint: set a threshold for the singular values in the SVD decomposition in the np.linalg.pinv functions). 
  
 \end{document}
