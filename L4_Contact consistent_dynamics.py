@@ -13,7 +13,7 @@ from utils.optimTools import quadprog_solve_qp
 from ros_publish import RosPub
 
 
-import ex_3_conf as conf
+import ex_4_conf as conf
     
 #instantiate graphic utils
 ros_pub = RosPub()

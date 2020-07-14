@@ -24,65 +24,82 @@
 \begin{document}
 
 
-\section*{LAB 4: Centroidal floating base  dynamics}
+\section*{LAB 3: Contact consistent (fixed) base dynamics}
 
-This lab is to acquire confidence to some invariant properties of floating base dynamics. 
-The base frame B of a floating base robot is usually placed at the robot waist/trunk because this choice induces a  branch sparsity of the Jacobians. 
-However, by defining a different parametrization for the floating base, it is possible to obtain a \textit{block diagonal} joint space inertia matrix.  This is achieved by defining a variable changes for the state of the system using the Center of Mass velocity and the \textit{average} angular velocity.  It can be shown that the mechanical power is invariant with respect to the change of coordinate frames used to represent the floating base. 
 
 \quad
 
 \noindent
-1) \textit{Center of mass computation:}
-Compute the Center of Mass of the system performing a weighted average of the Center of Masses of all the links. 
+1) \textit{Simulation of contact consistent dynamics:}
+Generate a sinusoidal reference for Shoulder Lift joint with amplitude 0.6 rad and frequency 1 Hz.
+Implement a constraint consistent dynamics where a point (3D) contact is possible only at the end-effector (ee\_link). 
+Consider the appropriate projection of the dynamics before integrating the accelerations. 
+Use the pre-implemented PD controller with gravity compensation and the logic 
+to deal with the contact. What is the best way to compute the term $\dot{J}\dot{q}$? (hint: since $\ddot{x} = J\ddot{q} + \dot{J}\dot{q}$ compute the acceleration at the end-effector while setting $\ddot{q}= 0$).
+Hint: consider the instantaneous correction of the joint velocity at the occurrence of impact.
+Verify that the linear part of the twist at the end-effector equals $J\dot{q}$.
 
 \quad
 
 \noindent
-2) \textit{Kinetic energy:}
-Compute the kinetic energy of the system in two different ways: one by the generalized velocities and system mass matrix, another summing up the contributions from each joint, showing the result is the same. 
+2) \textit{Contact forces disappear when projecting the dynamics:}
+Check contact force disappeared when projected after the projection in the null-space of $J^T$  (i.e. $ N_c^TJ^Tf = 0$) 
+What happens if you use the Moore-penrose pseudo-inverse to compute the projector?
+Plot also the torques in the row-space of $J^T$, check they are barely zero 
+during the contact because there is almost no internal joint motion. 
+Compare them with a plot of the joint torques.
+The motion during the contact depends mainly only on the null-space projector $N_c^T$
+that "cuts-out" the torques that generate contact forces, leaving only the ones that generate internal motions (in this case very small).
 
 \quad
 
 \noindent
-3) \textit{Centroidal coordinates transform:} 
-Build the transformation matrix ${}_gT_b$ to change coordinates from base to com frame.
+3) \textit{Constraint consistent joint reference:}
+Try to double the amplitude of the reference of Shoulder List joint to 1.2 rad.
+Design a reference trajectory that is consistent with the contact (hint: compute $\dot{q}^{d}$ project with $N_c$ and integrate to get $q^d$.
+Are there some internal motions now? are the torque in the row space different than zero?  
 
+\quad
+
+\noindent
+4) \textit{Gauss principle of least effort}:
+Verify that the Gauss principle of least constraint is satisfied (e.g. solve the QP where you minimize the distance w.r.t the unconstraint accelerations under the contact constraint).
+
+\quad
+
+\noindent
+5)  \textit{Change in the contact location}:
+Modify the code in order to allow the contact at a different location (e.g. origin of wrist\_3\_link frame).  Verify that the end-effector penetrates the ground. 
+
+\quad
+
+\noindent
+6) \textit{Check the shifting law (Optional):}
+The twist at ee\_link is $v_{e}$, twist at origin of wrist\_3\_joint is: $v_o$. Since they belong to the same rigid body (wrist\_3\_link) they are linked the shifting law, through by time-invariant \textit{motion} transform ${}_{e}X_o \in \Rnum^{6 \times 6}$:
 
 \begin{align}
-{}_GT_B  = \mat{    {}_GX_B  & I_G^{-1} {}_GX_B^{*} F_B  \\ 0_{n \times 6} &   I_{n \times n} }
+  v_{e} = {}_{ee}X_o v_o\\
+  J_{e} \dot{q} = {}_{ee}X_o J_o \dot{q}
+	\label{fig:}
+\end{align}
+
+therefore, also for the jacobians holds:
+
+\begin{align}
+J_{e}  = {}_{e}X_o J_o
+\label{fig:}
 \end{align}
 
 where: 
-
 \begin{align}
- {}_GX_B = \mat{ I_{n \times n}  & -[x_{b, com}]_{\times} \\ 0_{3 \times 3} & 	 I_{3 \times 3}}
- 	\label{fig:}
-\end{align}
-
-\quad
-
-\noindent
-4) \textit{Block-diagonal joint space inertia matrix:}
-Show the mass matrix is decoupled if you apply coordinate transform to com variables:
-
-\begin{align}
-M_G = ({}_GT_B)^{-T} M_B ({}_GT_B)^{-1}
+{}_{e}X_o  = \mat{ {}_{o}R_e   &  -{}_o R_e [{}_{e}t]_{\times} \\
+					0             &     {}_oR_{e}} ^{-1}
 \label{fig:}
 \end{align}
 
-\quad
+Where ${}_{e}t$ is the relative position of the origin of frame ${o}$ w.r.t. frame $e$ expressed 
+in frame ${e}$.
+By activating the TF function in \textit{rviz} check the relative location of the frames. 
 
-\noindent
-5) \textit{Joint gravity vector nullifies in com coordinates:}
-\begin{align}
-G_G = -M_g \mat{g_w \\ 0_{n+3}} = \mat{0 \\0\\ -mg  \\ 0_{3x1} \\0_{nx1} }
-\label{fig:}
-\end{align}
-
-\begin{align}
-G_G =  ({}_GT_B)^{-T} G_B
-\label{fig:}
-\end{align}
-
+ 
 \end{document}

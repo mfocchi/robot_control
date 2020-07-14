@@ -46,7 +46,7 @@ print "Com Position w_com_robot: ", w_com_robot
 com_test = pin.centerOfMass(model, data, q, v)
 print "Com Position (pinocchio): ", com_test
 
-# EXERCIZE 2 : Compute robot kinetic energy
+# EXERCIZE 2: Compute robot kinetic energy
 #get a random generalized velocity 
 #v = rand(model.nv)
 ## Update the joint and frame placements
@@ -68,46 +68,47 @@ print "Com Position (pinocchio): ", com_test
 #print "TEST2: ", EkinRobot - data.kinetic_energy
 
 
-##EXERCIZE 3: Build the transformation matrix to use com coordinates
-## get the location of the base frame
-#w_base = data.oMi[1].translation
-##compute centroidal quantitities (hg, Ag and Ig)
-#pin.ccrba(model, data, q, v)
-##print "Base Position w_base  ", w_base
+##EXERCISE 3: Build the transformation matrix to use com coordinates
+# get the location of the base frame
+w_base = data.oMi[1].translation
+#compute centroidal quantitities (hg, Ag and Ig)
+pin.ccrba(model, data, q, v)
+
+#print "Base Position w_base  ", w_base
 #G_T_B = np.zeros((model.nv, model.nv))
 #G_Tf_B = np.zeros((model.nv, model.nv))
 #G_X_B = np.zeros((6, 6))
 #
-##G_X_B =
+## compute the motion transform from frame B to framge G (G_X_B)
 #G_X_B[:3,:3] = np.eye(3)
 #G_X_B[3:,3:] = np.eye(3)
 #G_X_B[:3,3:] = pin.skew(com_test - w_base)
+#
+## compute force transform from frame B to framge G (G_Tf_B) 
 #G_Xf_B = np.linalg.inv(G_X_B.T)
 #
 #F_B = M[:6, 6:]
+## G_M_b^-1 * G_Xf_B * M_bj
 #S_G_B = np.linalg.inv(data.Ig).dot(G_Xf_B.dot(F_B))
 ##G_T_B
 #G_T_B[:6 , :6] = G_X_B
 #G_T_B[6: , 6:] = np.eye(12)
 #G_T_B[:6 , 6:] = S_G_B
-#
-##G_Tf_B
+
+## double check the transform T has the same propery of the spatial tranforms (G_Tf_B = inv(G_T_B.T))
 #G_Tf_B[:6 , :6] = G_Xf_B
 #G_Tf_B[6: , 6:] = np.eye(12)
 #G_Tf_B[6: , :6] = -(S_G_B.T).dot(G_Xf_B)
-#
-##check G_Tf_B = inv(G_T_B.T)
-##print np.linalg.inv(G_T_B.T) - G_Tf_B
+#print np.linalg.inv(G_T_B.T) - G_Tf_B
 
-
-# EXERCISE 4: Check the mass matrix becomes block diagonal
+# EXERCISE 4: Check the mass matrix becomes block diagonal if you appy the tranform
 #M_g = G_Tf_B * M * np.linalg.inv(G_T_B)
 #print "\n The mass matrix expressed at the com becomes diagonal: \n", M_g
 
 
 # EXERSISE 5: Check that joint gravity vector nullifies
 #Grav_W = np.hstack( ( np.array((0.0, 0.0, -9.81)), np.zeros( model.nv - 3)  )).T
-##G_g = G_Tf_B.dot(G) (TODO does not work)
+#G_g = G_Tf_B.dot(G) #(TODO does not work)
 #G_g = -M_g.dot(Grav_W) 
 
 #the fact that all become zero it makes sense if you think the com is not a point solidal with the base link
