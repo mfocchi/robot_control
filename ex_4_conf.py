@@ -21,8 +21,8 @@ exp_duration = 5.0 #simulation duration
 SLOW_FACTOR = 1 #to slow down simulation
 
 frame_name = 'ee_link'    # name of the frame to control (end-effector)
-# EXERCISE 5: contact at the origin of wrist_3_link 
-#frame_ee = robot.model.getFrameId('wrist_3_link')
+# EXERCISE 8: contact at the origin of wrist_3_link 
+#frame_name = 'wrist_3_link'
 
 #PD controller
 ## Matrix of gains
@@ -31,6 +31,8 @@ kd = np.eye(6)*20 # derivative gai
 
 ## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY
 amp = np.matrix([ 0.0, 0.6, 0.0, 0.0, 0.0, 0.0]).T          # amplitude
+# EXERCISE 6: 
+#amp = np.matrix([ 0.0, 1.2, 0.0, 0.0, 0.0, 0.0]).T          # amplitude
 phi = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T    # phase
 freq = np.matrix([ 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]).T  # frequency
 

@@ -24,6 +24,7 @@ q = example_robot_data.loadHyQ().q0
 pin.forwardKinematics(model,data,q,v)
 pin.updateFramePlacements(model,data)
 
+
 M =  pin.crba(model, data, q)
 H = pin.nonLinearEffects(model, data, q, v)
 G = pin.computeGeneralizedGravity(model,data, q)
@@ -87,9 +88,13 @@ pin.ccrba(model, data, q, v)
 ## compute force transform from frame B to framge G (G_Tf_B) 
 #G_Xf_B = np.linalg.inv(G_X_B.T)
 #
-#F_B = M[:6, 6:]
+# Couplings from joints on the floating base 
+#Mbj = M[:6, 6:]
+# Composite rigid body inertia matrix expressed at the CoM: gMb
+#gMb = data.Ig
+#
 ## G_M_b^-1 * G_Xf_B * M_bj
-#S_G_B = np.linalg.inv(data.Ig).dot(G_Xf_B.dot(F_B))
+#S_G_B = np.linalg.inv(gMb).dot(G_Xf_B.dot(Mbj))
 ##G_T_B
 #G_T_B[:6 , :6] = G_X_B
 #G_T_B[6: , 6:] = np.eye(12)

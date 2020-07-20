@@ -64,17 +64,10 @@ frame_ee = robot.model.getFrameId(conf.frame_name)
 while True:   
 
     # EXERCISE 1: Generate sinusoidal reference for Shoulder lift joint 
-    q_des  = conf.q0 +   np.multiply( conf.amp,np.sin(two_pi_f*time + conf.phi))
-    qd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
-    qdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
+    # ...
 
     # EXERCISE 6: Constraint consistent joint reference
-#    qd_des =  np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
-#    qdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
-#    if (ground_contact):    
-#        qd_des = N*qd_des
-#        qdd_des =  N*qdd_des
-#    q_des += qd_des*conf.dt	
+    # ...
 				
     # Set constant reference after a while
     if time >= conf.exp_duration_sin:
@@ -113,18 +106,8 @@ while True:
     xd = v_frame.linear
 #    print (J*qd     - v_frame.linear)
             
-    # EXERCISE 2: Compute Constraint Consistent Dynamics with  contact at the end-effector 														
-    M_inv = np.linalg.inv(M)
-                
-    #Moore-penrose pseudoinverse of A = J^T => (A^TA)^-1 * A^T
-    JTpinv = np.linalg.inv(J*J.T)*J             
-   
-    #lambda_ contact inertia 
-    lambda_= np.linalg.inv(J*M_inv* J.T) 
-    #dynamicaaly consistent pseudo-inverse
-    JTpinv = lambda_*J*M_inv
-    #null-space projector of J^T#   
-    N_m = (np.eye(6)- J.T * JTpinv) 
+    # EXERCISE 2: Compute Constraint Consistent Dynamics with  contact at the end-effector 												
+    # ...
                 
     # touch-down
     if (counter_lo==0) and not (ground_contact) and (x[2]<=z_gnd):                         
@@ -132,10 +115,7 @@ while True:
         ground_contact = True
                                 
         # EXERCISE 3: update the joint velocity after inlastic  impact with null-space projector for velocities                               
-        Jpinv =  J.T * np.linalg.inv(J*J.T)                
-        # compute joint velocities null-space projector for J
-        N = np.eye(6) - Jpinv*J                                        
-        qd = N*qd 
+        #...
                            
         #recompute the velocity dependent terms...                                
         robot.computeAllTerms(q, qd)    
@@ -159,18 +139,15 @@ while True:
     qdd_uc = M_inv*(tau - h)              
 
     if (not ground_contact):                    
-        qdd = qdd_uc                                
-        f = np.matrix([0.0, 0.0,0.0]).T                                
+        # qdd = ...                                
+        # f = ...
     else:  
-        qdd = M_inv*( N_m*(tau -    h) - J.T*    lambda_*dJdq)    
+        #qdd = ...
         # compute contact force    
-        f = lambda_*( -dJdq + J*M_inv*(h - tau) )
-                               
+        #...
+                       
         # EXERCISE 5: Check that contact force disappears in projected dynamics
-#        print (N_m*J.T*f).T                    
-#        # torques in null-space (should be almost zero if there are not internal motions)                                                                                                                                   
-#        torques_null_space =  N_m * (tau   -    h)    
-#        print  torques_null_space    
+        # ...
                              
     # EXERCISE 4: Simulation of the constraint consistent dynamics      
     qd = qd + qdd*conf.dt
@@ -179,67 +156,11 @@ while True:
     # EXERCISE 7: Gauss principle of least constraint holds when in contact
     # Minimize     1/2 x^T M x - q_ucT M x
     # Subject to   J x = -Jdqd 
-#    A = J
-#    b = -dJdq	
-#    G = M
-#    g = -qdd_uc.T*M	
-#    qdd_check = quadprog_solve_qp(G, g, None, None, A, b)                                
-#    print("qdd_proj - qdd_gauss", qdd.A1 - qdd_check)
+    # ...
 
-#    #EXERCISE 8: check the shifting law 
-#    frame_ee = robot.model.getFrameId('ee_link')     
-#    #get the frame of the supporting parent joint (wrist_3_joint)
-#    frame_o = robot.model.frames[frame_ee].parent
-#    #print(robot.model.names[frame_o]	)															
-#                      
-#    # find transform from frame_ee to frame_o				
-#    iMf = robot.model.frames[frame_ee].placement
-#    #rotation matrix from frame_ee to  frame_o (columns are the axis of frame_ee expressed in frame_o )
-#    o_R_ee = iMf.rotation
-#    #vector from frame_o to frame_ee expressed in frame_o
-#    o_t = iMf.translation		
-#    #vector from frame_ee to frame_o epxressed in frame_ee
-#    ee_t = -o_R_ee.T * o_t				
-#				
-#    #--------------------------------------------------------------------------------------------------------
-#    # compute the motion tranform from frame_o to frame_ee (we  will use this matrix if I work with 6D vectors)
-#    #--------------------------------------------------------------------------------------------------------
-#    o_X_ee = np.zeros((6, 6))				
-#    o_X_ee[:3,:3] = o_R_ee
-#    o_X_ee[3:,3:] = o_R_ee
-#    o_X_ee[:3,3:] = -o_R_ee*pin.skew(ee_t)	
-#			
-#    # let's do the same with Pinocchio native functions
-#    # compute the motion tranform from frame_ee to frame_o
-#    o_X_ee_pin = pin.SE3(iMf.rotation,  iMf.translation) 			
-#    #check they are the same 
-#    print "TEST1:\n",  o_X_ee - o_X_ee_pin.toActionMatrix()
-#    print "TEST2:\n",  o_X_ee - iMf.toActionMatrix()
-#			
-#    #--------------------------------------------------------------------------------------------------------					
-#    #let's compare the twists (for joints you should use robot.velocity or robot.data.v not frameVelocity)				
-#    #--------------------------------------------------------------------------------------------------------
-#    v_o = robot.velocity(q, qd, frame_o, True, pin.ReferenceFrame.LOCAL)	#analog to     v_o = robot.data.v[robot.model.frames[frame_ee].parent]				
-#    v_ee = robot.frameVelocity(q, qd, frame_ee, True, pin.ReferenceFrame.LOCAL)
-#					
-#    #compute the twist at the end-effector trough the shifting law (note you need to use the inverse of o_X_ee_pin)
-#    #using pinocchio native function
-#    v_ee_test3 = o_X_ee_pin.actInv(v_o)  
-#    print "TEST3:\n",v_ee_test3 - v_ee
-#				
-#    #doing with 6D vectors				
-#    v_ee_test4 =  np.linalg.inv(o_X_ee)*v_o.vector
-#    print "TEST4:\n", v_ee_test4 - v_ee				
-			
-#    #-------------------------------------------------------------------------------------------------------- 
-#    #let's compare the jacobians	
-#    #--------------------------------------------------------------------------------------------------------
-#    Je = robot.frameJacobian(q, frame_ee, True, pin.ReferenceFrame.LOCAL)       
-#    robot.computeJointJacobians(q)         
-#    Jo = robot.getJointJacobian(frame_o,  pin.ReferenceFrame.LOCAL)  
-#    print "TEST5:\n", Je  - o_X_ee_pin.toActionMatrixInverse()*Jo				
+    # EXERCISE 8: check the shifting law 
+    #...
 
-#------------------------------------------------------------------------------------------------------------
     # Log Data into a vector
     time_log = np.hstack((time_log, time))				
     q_log = np.hstack((q_log, q ))
