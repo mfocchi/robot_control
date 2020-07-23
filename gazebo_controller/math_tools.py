@@ -104,6 +104,38 @@ class Math:
         rpy[2] = np.arctan2(b_R_w[0,1], b_R_w[0,0])
     
         return rpy;
+                
+     # used to compute 
+    # omega_dot = J_omega * euler_rates_dot + J_omega_dot*euler_rates                
+    def Jomega_dot(self, rpy, rpyd):
+    
+        roll = rpy[0]
+        pitch = rpy[1]
+        yaw = rpy[2]
+        rolld = rpyd[0]
+        pitchd = rpyd[1]
+        yawd = rpyd[2]
+    
+        Jomega_dot = np.array([[ -np.cos(yaw)*np.sin(pitch)*pitchd - np.cos(pitch)*np.sin(yaw)*yawd, - np.cos(yaw)*yawd, 0],
+                           [ np.cos(yaw)*np.cos(pitch)*yawd - np.sin(yaw)*np.sin(pitch)*pitchd, -np.sin(yaw)*yawd, 0  ],
+                          [ -np.cos(pitch)*pitchd,  0, 0 ]])
+    
+        return Jomega_dot
+    
+    # returns w_omega = Jomega * euler_rates
+    def Jomega(self, rpy):
+    
+        #convention yaw pitch roll
+    
+        roll = rpy[0]
+        pitch = rpy[1]
+        yaw = rpy[2]
+
+        Jomega = np.array([[np.cos(pitch)*np.cos(yaw),       -np.sin(yaw),                 0],
+                           [ np.cos(pitch)*np.sin(yaw),                  np.cos(yaw),                  0],
+                           [ -np.sin(pitch),      0 ,        1]])
+        return Jomega
+                                
 
     def line(self, p1, p2):
         A = (p1[1] - p2[1])
@@ -233,38 +265,7 @@ def skew_simToVec(Ra):
 
     return v
 
-def rpyToRot(roll, pitch, yaw):
-    # Rx = [[MX(1.0),   MX(0.0) ,      MX(0.0) ],
-    #       [MX(0.0),  cos(roll),  sin(roll)],
-    #       [MX(0.0), -sin(roll),  cos(roll)]]
-    Rx = MX.eye(3)
-    Rx[1,1] = cos(roll)
-    Rx[1,2] =sin(roll)
-    Rx[2,1] = -sin(roll)
-    Rx[2,2] = cos(roll)
 
-    # Ry =[[cos(pitch),     MX(0.0),   sin(pitch)],
-    #      [MX(0.0)   ,    MX(1.0),   MX(0.0)],
-    #      [sin(pitch),     MX(0.0),  cos(pitch)]]
-
-    Ry = MX.eye(3)
-    Ry[0, 0] = cos(pitch)
-    Ry[0, 2] = sin(pitch)
-    Ry[2, 0] = sin(pitch)
-    Ry[2, 2] = cos(pitch)
-
-    # Rz = [[cos( yaw) ,  sin(yaw),    MX(0.0)],
-    #       [-sin( yaw),  cos(yaw),   MX(0.0)],
-    #       [MX(0.0)   ,  MX(0.0) ,   MX(1.0)]]
-
-    Rz = MX.eye(3)
-    Rz[0, 0] = cos(yaw)
-    Rz[0, 1] = sin(yaw)
-    Rz[1, 0] = -sin(yaw)
-    Rz[1, 1] = cos(yaw)
-
-    R =  mtimes(Rx,mtimes(Ry,Rz))
-    return R
 
 def rotMatToRotVec(Ra):
     c = 0.5 * (Ra[0, 0] + Ra[1, 1] + Ra[2, 2] - 1)
@@ -278,20 +279,6 @@ def rotMatToRotVec(Ra):
         axis = w / s
         err = angle * axis
     return err
-
-def rpyToEarInv(r,p,y):
-
-    #convention yaw pitch roll
-
-    phi = r
-    theta = p
-    psi = y
-
-    #Inverse of Euler angle rates matrix to get rate of change of Euler angles in the base coords
-    EarInv = np.array([[math.cos(psi)/math.cos(theta),        math.sin(psi)/math.cos(theta),         0],
-                       [-math.sin(psi),                  math.cos(psi),                  0],
-                       [math.cos(psi)*math.tan(theta),        math.sin(psi)*math.tan(theta) ,        1]])
-    return EarInv
 
 
 # epsilon for testing whether a number is close to zero
@@ -455,9 +442,9 @@ def MxInv(A):
 def motionVectorTransform(position, rotationMx):
     utils = Utils()
     b_X_a = np.zeros((6,6))
-    b_X_a[utils.sp_crd("AX"):utils.sp_crd("AX") + 3 ,   utils.sp_crd("AX"): utils.sp_crd("AX") + 3] = rotationMx
-    b_X_a[utils.sp_crd("LX"):utils.sp_crd("LX") + 3 ,   utils.sp_crd("AX"): utils.sp_crd("AX") + 3] = -rotationMx*cross_mx(position)
-    b_X_a[utils.sp_crd("LX"):utils.sp_crd("LX") + 3 ,   utils.sp_crd("LX"): utils.sp_crd("LX") + 3] = rotationMx
+    b_X_a[utils.sp_crd["AX"]:utils.sp_crd["AX"]+ 3 ,   utils.sp_crd["AX"]: utils.sp_crd["AX"] + 3] = rotationMx
+    b_X_a[utils.sp_crd["LX"]:utils.sp_crd["LX"] + 3 ,   utils.sp_crd["AX"]: utils.sp_crd["AX"] + 3] = -rotationMx*cross_mx(position)
+    b_X_a[utils.sp_crd["LX"]:utils.sp_crd["LX"] + 3 ,   utils.sp_crd["LX"]: utils.sp_crd["LX"] + 3] = rotationMx
     return b_X_a
 
 

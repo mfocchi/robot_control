@@ -26,26 +26,31 @@
 \begin{document}
 
 
-\section*{LAB 5: Floating base robot: quasi-static control of stability}
+\section*{LAB 5: Floating base robot: quasi-static control of locomotion stability}
 
 Notes:
 \begin{itemize}
-	\item You can check the frequency of the controller inspecting the topic \textbf{/hyq/command} with \textbf{rostopic hz /hyq/command}.
-	\item It is possible to set the verbosity of the output, by setting the parameter  \textit{verbose} in  ex\_5\_conf.py.
+	\item You can check the frequency at which the controller is publishing by inspecting the topic \textbf{/hyq/command} with \textbf{rostopic hz /hyq/command}.
+	\item It is possible to set the verbosity level of the output, by setting the parameter  \textit{verbose} in  ex\_5\_conf.py.
+	\item To have the experiment not ending after 5 $s$ set the parameter \textit{CONTINUOUS}=True in  ex\_5\_conf.py (can stop by hitting CTRL+C).
 \end{itemize}
 
-1) \textit{Sinusoidal reference:} 
-Set a sinusoidal reference for $Z$ direction ($f_z$ = 0.5 $Hz$, $A_z$ = 0.05 $rad$ )
-together with another for the pith direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}$ = 0.1 $rad$ )
+1) \textit{Generate a Sinusoidal Reference for the Robot Trunk:} 
+Generate a sinusoidal reference for $Z$ direction ($f_z$ = 0.5 $Hz$, $A_z$ = 0.03 $rad$ )
+together with another for the pitch direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}$ = 0.1 $rad$ )
 
 \quad
  
 \noindent  
-2) \textit{Projection-based controller:} 
-Design a controller for base frame position and orientation with a quasi-static approach.
+2) \textit{Projection-based Quasi-Static Controller:} 
+Design a controller for the \textit{base frame} position and orientation with a projection-based approach (see utils/controlRoutines.py)).
 
+\quad
+
+\noindent  
  \textit{2.1)Virtual Impedance:}
-Design a virtual impedance to track  references for the base frame position and orientation. Compute the desired wrench $W^d = W_{fbk} \in\Rnum^6$ to realize the virtual impedance:
+First design a virtual impedance to track the references generated in 1) for the base frame position and orientation. 
+Compute the desired wrench $W^d = W_{fbk} \in\Rnum^6$ to realize the virtual impedance:
 
 \begin{align}
 W^d_{lin} & = K_{lin} (x^d_b - x_b ) + D_{lin} (\dot{x_b}^d - \dot{x})   \\
@@ -54,11 +59,14 @@ W^d_{ang} &=  - K_{ang} e_o + D_{ang} (\dot{\omega_b}^d - \omega)
 
 where $e_o \in \Rnum^3$ is the orientation error. 
 
+\quad
+
+\noindent  
 \textit{2.2) Mapping to torques:}
-Map the desired wrench into torques  with a projection-based approach:
+Map the desired wrench into torques (with quasi-static assumption):
 
 \begin{equation}
-\tau^d = J_{cj}^T(J_b^T)^{\dagger} W^d
+\tau^d = -J_{cj}^T(J_b^T)^{\dagger} W^d
 \end{equation}
 
 where:
@@ -70,53 +78,72 @@ J_b^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
 
 
 Note that $W = J_b^Tf$ represents the contact wrench that is given as input to the Newton-Euler equations, but we are doing an approximation here: we are controlling the orientation of the base link rather than an equivalent rigid body whose angular velocity $\bar{\omega}$ is the \textit{average} angular velocity of all the links of the robot (as Newton-Euler equations state). In essence we are approximating  $\bar{\omega}$ with ${\omega}_b$.
-Check the robot is tracking the sinusoidal reference trajectory of point 1). How can this be improved? Play with the frequency of the controller (e.g. check parameter $dt$) and see how the system can tolerate (without being unstable)  higher damping values for lower frequencies.
+Check the robot is tracking the sinusoidal reference trajectory of point 1). 
+See that without compensating gravity the robot is barely able to stand-up accumulating huge errors on the $Z$ direction.
 
-\quad
-
-\noindent 3) \textit{Control of CoM:}
-Modify the controller to control the position of the CoM in place of the base frame.
-Which changes are necessary?
-
-
-\begin{equation}
-J_{com}^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
-	[x_{f_1} - x_{com}]_{\times} & \dots & [x_{f_c} - x_{com}]_{\times}}
-\end{equation}
-
-\noindent 4) \textit{Gravity compensation:}
-Using the controller for the CoM position, add a gravity term $W_g$ to the desired wrench.
+\noindent 3) \textit{Gravity compensation:}
+Add a gravity term $W_g$ to the desired wrench $W^d$.
 
 \begin{align}
 W^d &= W_{fbk} +  W_g
 \end{align}
 
-How does $W_g$ look like? (hint: remember that gravity is applied to CoM)
-How is the tracking error in steady state? and in motion?
+How does $W_g$ look like? (hint: remember that gravity is applied to CoM). Which changes are necessary if we close the loop at the base frame?
 
-\quad
+\begin{equation}
+W_g = \mat{mg \\ x_{b,com} \times mg}
+\end{equation}
 
-\noindent 5) \textit{Feed-forward term:}
-Add a feed-forward term the desired wrench. 
+How is the tracking error in steady state? and in motion? 
+Play with the frequency of the controller (e.g. check parameter $dt$) and see how the system can tolerate (without being unstable)  higher damping values for higher loop frequencies.
+
+
+\noindent 
+4) \textit{Feed-forward term:}
+Add a feed-forward term the desired wrench $W^d$. 
 
 \begin{align}
 W^d &= W_{fbk} +  W_g + W_{ffwd}
 \end{align}
-How would you implement that at the impedance level? (hint: exploit the mass matrix and the tensor of inertia).
+
+How would you implement that at the impedance level? (hint: exploit the mass matrix and the tensor of inertia). Be sure that at the angular level you use $\dot{\omega}^d$ , and not $\ddot{\Phi}^d$.
 How is the tracking of the CoM and of the trunk orientation improved during motion? 
 Compare also the tracking of ground reaction  forces with and without feed-forward term.
 
+
+
 \quad
 
-\noindent6) \textit{Check static stability:}
+\noindent 
+5) \textit{Control of CoM:}
+Now we want to close the loop at the CoM, because it is the relevant point for locomotion stability. Modify the controller to control the position of the CoM in place of the base frame origin.
+Which changes are necessary?
 
-Design an horizontal trajectory for the CoM (e.g. moving along Y direction) starting from the default configuration $q_0$. 
+
+\begin{equation}
+J_{com}^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
+	[x_{f_1} - x_{b,com}]_{\times} & \dots & [x_{f_c} - x_{com}]_{\times}}
+\end{equation}
+
+Note that now  the gravity compensation simplifies to $W_g = \mat{ mg \\ 0_{3 \times 1} }$
+Add 5 $cm$ uncertainty (this is the shift due to the presence of an arm attached to the front of the robot) to the CoM offset $x_{b,com}$ in the X direction and see how the tracking deteriorates. 
+
+\quad
+
+\quad
+
+\noindent
+6) \textit{Check static stability:}
+Now comment the sinusoidal reference generation and design an horizontal trajectory for the 
+CoM (e.g. moving left along Y direction) starting from the default configuration $q_0$. 
 What happens when the CoM goes out of the polygon?
 Plot the ground reaction forces and check they are going to zero in the $RF$ and $RH$ leg and the whole weight is only on two legs.
 
-\noindent8) \textit{quasi-static QP controller:}
-Re-implement the previous mapping from wrench to torques by casting as an optimization problem (QP) that optimizes for ground reaction forces $f^d \in \Rnum^k$. 
-Enforce unilateral constraints for the leg that are in stance $f_{z,min} = 0$. 
+\noindent
+7) \textit{Quasi-static QP controller:}
+Re-implement the previous mapping from wrench to contact forces $f^d \in \Rnum^k$
+by casting it as an optimization problem (QP) that optimizes for these forces. 
+Enforce \textit{unilateral} constraints for the legs that are in stance $f_{z,min} = 0$. 
 
 \begin{equation} 
 \begin{aligned} 
@@ -145,9 +172,10 @@ C = \mat{C_0 & \dots & 0 \\ \vdots & \ddots & \vdots \\ 0 & \dots & C_c} \quad
 \bar{d} = \mat{\bar{d}_0 \\ \vdots \\ \bar{d}_c},
 \end{equation}
 %
-with: $A = J_b^T$ and $b = W^d$, $C_i = 	n_i^T$, $\underline{d}_i = 	f_{{min}_i}$, $\bar{d}_i =f_{{max}_i}$. The $S \in \Rnum^6$ is a selection matrix that allows you to promote the tracking in certain directions rather that others when the constraints are hit.
+with: $A = J_b^T$ and $b = W^d$, $C_i = 	n_i^T$, $\underline{d}_i = 	f_{{min}_i}$, $\bar{d}_i =f_{{max}_i}$. 
+The $S \in \Rnum^6$ is a selection matrix that allows you to promote the tracking in certain directions rather that others when the constraints are hit.
 
-Is it something missing in this optimization? There is not unique solution and this is due to the fact it exists a null-space  for $A$, that makes the cost positive semi-definite. What is its dimension?  Try to add a regularization term with adjustable gain $\alpha$ to make the 
+Is there something missing in this optimization? There is not unique solution and this is due to the fact it exists a null-space  for $A$, that makes the cost positive semi-definite. What is its dimension?  Try to add a regularization term with adjustable gain $\alpha$ to make the 
 Hessian of the cost positive definite:
 
 \begin{equation} 
@@ -165,14 +193,16 @@ c) Check the $Z$ component of the ground reaction forces is always positive. Doe
 
 \quad
 
-\noindent9) \textit{Some experiences with the quasi-static QP controller:}
+\noindent
+8) \textit{Some experiences with the quasi-static QP controller:}
 
-a) Try to set a static target for the com inside the triangle formed by the LF, RF and LH leg.
-b) After 1.5 $s$ remove the  $RH$ leg from the set of stance legs. How the load is redistributed on the other three legs? Check the contact force goes to zero for that leg.
+a) Try to set a static target for the CoM inside the triangle formed by the LF, RF and LH leg (need to comment sinusoidal reference).
+b) After 1.5 $s$ remove the  $RH$ leg from the set of stance legs. How the load is redistributed on the other three legs? Check the contact force goes to zero for that leg and the robot stays in equilibrium on only 3 legs.
 
 \quad
 
-\noindent10) \textit{Friction cones:}
+\noindent
+9) \textit{Friction cones:}
 Did you notice  some slippage at the feet while following the sinusoidal reference?
 Modify the $C_i$ matrix to add the friction cone constraints for each stance leg, with friction coefficient $\mu_i$:
 
@@ -198,13 +228,17 @@ Run again a simulation setting a conservative friction coefficient of 0.7 (the G
 a) Is the slippage still happening? has the tracking error increased?
 b)Plot the constraint violations to check is there is any. Try to reduce the friction coefficient and observe 
 the number constraint violations increases. 
-c) Try to tilt the cones setting the normals at the feet pointing 45 degs inward. 
+c) Try to tilt the cones setting the normals at the feet pointing 45 degs inward (not implemented in the code). 
 See the robustness becomes low because the contact forces are lying on the boundary of the cone. 
+d) reduce the friction coefficient and plot the constraint violations seeing they are changing. 
+
 
 \quad
 
-\noindent11) \textit{Friction cones and robustness:}
-Modify the regularization term. Exploit the force redundancy to regularize the contact forces to stay in the middle of the cone. 
+\noindent
+10) \textit{Friction cones and robustness  (not implemented in the code):}
+
+Modify the regularization term. Exploit the force redundancy to regularize the contact forces to stay in the middle of the cones. 
 Set the regularization matrix to:
 
 \begin{equation}
@@ -218,7 +252,7 @@ What is the size of the internal force redundancy with 4 legs on the ground?
 Now modify the regularization term to minimize joint torques (e.g. $\tau^T\tau$):
 
 \begin{equation}
-W = J_c W_{\tau}  J_c^T
+W = J_{cq} W_{\tau}  J_{cq}^T
 \end{equation}
 
 with $W_\tau \in \Rnum^n$ is the weighting matrix for the torque vector.

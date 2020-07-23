@@ -223,21 +223,21 @@ def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW,
     plt.grid()    
     
     plt.subplot(3,2,2)
-    plt.ylabel("$\phi$", fontsize=10)   
+    plt.ylabel("Roll")   
     plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
     if   (plot_var_log is not None):    
         plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     
     plt.subplot(3,2,4)
-    plt.ylabel("$\theta$", fontsize=10)   
+    plt.ylabel("Pitch")   
     plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
     if   (plot_var_log is not None):        
         plt.plot(time_log, plot_var_log[4,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     
     plt.subplot(3,2,6)
-    plt.ylabel("$\psi$", fontsize=10)
+    plt.ylabel("Yaw")
     plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
     if   (plot_var_log is not None):        
         plt.plot(time_log, plot_var_log[5,:],linestyle='-',lw=lw_act,color = 'blue')
@@ -341,4 +341,13 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, act_forces[11,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((0,450))
-                                                             
+
+def plotConstraitViolation(figure_id,constr_viol_log):
+    fig = plt.figure(figure_id)			
+    plt.plot(constr_viol_log[0,:],label="LF")
+    plt.plot(constr_viol_log[1,:],label="RF")
+    plt.plot(constr_viol_log[2,:],label="LH")
+    plt.plot(constr_viol_log[3,:],label="RH")
+    plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=2, mode="expand", borderaxespad=0.)
+    plt.ylabel("Constr violation", fontsize=10)
+    plt.grid()	                                                             
