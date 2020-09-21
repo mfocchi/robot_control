@@ -119,8 +119,9 @@ class ControlThread(threading.Thread):
         self.verbose = conf.verbose                                 
         self.grForcesW = np.zeros(12)
         self.basePoseW = np.zeros(6) 
-        self.J = [np.eye(3)]* 4   								
-                                
+        self.J = [np.eye(3)]* 4                                   
+        self.wJ = [np.eye(3)]* 4                       
+								
         # Loading a robot model of HyQ (Pinocchio)
         self.model = example_robot_data.loadHyQ().model
         self.data = self.model.createData()    
@@ -273,23 +274,26 @@ class ControlThread(threading.Thread):
         # update the feet jacobians
         self.J[p.u.leg_map["LF"]], self.J[p.u.leg_map["RF"]], self.J[p.u.leg_map["LH"]], self.J[p.u.leg_map["RH"]], flag = kin.getLegJacobians()
 								
+        #map them to WF
+        for leg in range(4):
+	        self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
+             
         # Update the joint and frame placements
         gen_velocities  = np.hstack((self.baseTwistW,self.qd))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.q))
         pin.forwardKinematics(self.model,self.data,configuration, gen_velocities)
         self.M =  pin.crba(self.model, self.data, configuration)
         self.h = pin.nonLinearEffects(self.model, self.data, configuration, gen_velocities)
-        self.h_joints = self.h[6:]						
-        							
-        # estimate ground reaxtion forces from tau (TODO missing the model of the leg)
-        for leg in range(4):
-            grf = np.linalg.inv(self.J[leg].T).dot(self.u.getLegJointState(leg, self.h_joints - self.tau ))                             
-            self.u.setLegJointState(leg, grf, self.grForcesW)  								
+        self.h_joints = self.h[6:]                        
                                     
+        # estimate ground reaxtion forces from tau 
+        for leg in range(4):
+            grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg, self.h_joints - self.tau ))                             
+            self.u.setLegJointState(leg, grf, self.grForcesW)                                  
+                                  
     def startupProcedure(self):
         p.unpause_physics_client(EmptyRequest()) #pulls robot up
         time.sleep(0.2)  # wait for callback to fill in jointmnames
-
 								
         p.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
         # set joint pdi gains
@@ -459,10 +463,10 @@ def talker(p):
         #################################################################          
         # map desired contact forces into torques (missing gravity compensation)                      
         #################################################################                                       
-        p.jacsT = block_diag(np.transpose(w_R_b.dot( p.J[p.u.leg_map["LF"]] )), 
-                        np.transpose(w_R_b.dot( p.J[p.u.leg_map["RF"]] )), 
-                        np.transpose(w_R_b.dot( p.J[p.u.leg_map["LH"]] )), 
-                        np.transpose(w_R_b.dot( p.J[p.u.leg_map["RH"]]  )))
+        p.jacsT = block_diag(np.transpose(p.wJ[p.u.leg_map["LF"]]), 
+                        np.transpose(p.wJ[p.u.leg_map["RF"]] ), 
+                        np.transpose(p.wJ[p.u.leg_map["LH"]] ), 
+                        np.transpose(p.wJ[p.u.leg_map["RH"]]  ))
         p.tau_ffwd =   p.h_joints - p.jacsT.dot(p.des_forcesW)         
  
 	
