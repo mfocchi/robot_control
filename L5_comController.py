@@ -126,9 +126,8 @@ class ControlThread(threading.Thread):
         self.data = self.model.createData()    
                              
         #send data to param server
-        data = {"verbose" : conf.verbose}
-        self.u.putIntoParamServer(data)	
-								
+        self.u.putIntoGlobalParamServer("verbose", self.verbose)   
+                                
     def run(self):        
         self.robot_name = ros.get_param('/robot_name')
         self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
