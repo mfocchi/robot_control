@@ -78,17 +78,27 @@ ros_pub = RosPub(True)
 
 class ControlThread(threading.Thread):
     def __init__(self):  
-        #start ros impedance controller
+        
+       #clean up previous process                
+
+        os.system("killall gzserver gzclient")								
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
-            print 'ROS MASTER is Online'
-        else:
-            print 'ROS MASTER is Offline, starting ros impedance controller...'
-            uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-            roslaunch.configure_logging(uuid)
-            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"])
-            self.launch.start() 
-            time.sleep(4.0)         
-                                
+            print 'ROS MASTER is active'
+            nodes = rosnode.get_node_names()
+            if "/rviz" in nodes:
+                 print("Rviz active")
+                 rvizflag=" rviz:=false"
+            else:                                                         
+                 rvizflag=" rviz:=true" 
+        #start ros impedance controller
+        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        roslaunch.configure_logging(uuid)   
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"])
+        #only available in ros lunar
+#        roslaunch_args=rvizflag                             
+#        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"],roslaunch_args=[roslaunch_args])
+        self.launch.start() 
+        ros.sleep(4.0)        
         threading.Thread.__init__(self)
         
         self.joint_names = ""
@@ -199,16 +209,15 @@ class ControlThread(threading.Thread):
          self.pub_des_jstate.publish(msg)     
 
     def register_node(self):
-        ros.init_node('controller_python', anonymous=False)
+        ros.init_node('controller_python', disable_signals=False, anonymous=False)
 
     def deregister_node(self):
-        print "deregistering nodes"					
-        os.system("killall -9 rosmaster")    
-        os.system("killall -9 gzserver")    
-        os.system("killall -9 gzclient")    
-        os.system("pkill rviz")
-        os.system("pkill roslaunch")                                
-        ros.signal_shutdown("manual kill")
+        print "deregistering nodes"     
+       
+        #os.system(" rosnode kill /hyq/ros_impedance_controller")    
+        #os.system(" rosnode kill /gazebo")    
+ 
+        
  
     def get_contact(self):
         return self.contactsW
@@ -475,14 +484,18 @@ def talker(p):
             time.sleep(conf.dt - elapsed_time)       
                                                 
         # stops the while loop if  you prematurely hit CTRL+C                    
+                # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():
-            print ("Shutting Down") 
-            p.deregister_node()                   
+            print ("Shutting Down")                    
             break;                                                
                              
     # restore PD when finished        
-    p.join()            
     p.pid.setPDs(400.0, 6.0, 0.0) 
+    ros.sleep(1.0)                
+    print ("Shutting Down")                 
+    ros.signal_shutdown("killed")           
+    p.deregister_node()        
+    
     plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
