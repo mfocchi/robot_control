@@ -253,11 +253,21 @@ class ControlThread(threading.Thread):
         model_state.model_name = "hyq"
         model_state.pose.position.x = 0.0
         model_state.pose.position.y = 0.0        
-        model_state.pose.position.z = 0.7
+        model_state.pose.position.z = 0.8
+
         model_state.pose.orientation.w = 1.0
         model_state.pose.orientation.x = 0.0       
         model_state.pose.orientation.y = 0.0
         model_state.pose.orientation.z = 0.0                
+								
+        model_state.twist.linear.x = 0.0
+        model_state.twist.linear.y = 0.0        
+        model_state.twist.linear.z = 0.0
+             
+        model_state.twist.angular.x = 0.0
+        model_state.twist.angular.y = 0.0        
+        model_state.twist.angular.z = 0.0
+             
         req_reset_world.model_state = model_state
         # send request and get response (in this case none)
         self.reset_world(req_reset_world) 
