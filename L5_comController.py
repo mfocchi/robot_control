@@ -25,14 +25,6 @@ from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty, EmptyRequest
 from termcolor import colored
 
-stderr = sys.stderr
-sys.stderr = open(os.devnull, 'w')
-#import utils
-sys.stderr = stderr
-from ros_impedance_controller.srv import set_pids
-from ros_impedance_controller.srv import set_pidsRequest
-from ros_impedance_controller.msg import pid
-
 #gazebo messages
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.srv import SetModelStateRequest
@@ -59,16 +51,18 @@ from gazebo_controller.math_tools import *
 #robot specific 
 from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
 
+#dynamics
+from custom_robot_wrapper import RobotWrapper
+
 
 # L5 Controller specific
 from utils.controlRoutines import projectionBasedController, QPController
 from scipy.linalg import block_diag
 from numpy import nan
 from utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
-import example_robot_data
+
   
-import pinocchio as pin
-from pinocchio.utils import *
+
 
 # config file
 import ex_5_conf as conf
@@ -121,15 +115,12 @@ class ControlThread(threading.Thread):
         self.basePoseW = np.zeros(6) 
         self.J = [np.eye(3)]* 4                                   
         self.wJ = [np.eye(3)]* 4                       
-								
-        # Loading a robot model of HyQ (Pinocchio)
-        self.model = example_robot_data.loadHyQ().model
-        self.data = self.model.createData()    
-                             
+                                
+                           
         #send data to param server
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
-                                
-    def run(self):        
+                             
+  
         self.robot_name = ros.get_param('/robot_name')
         self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
         self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
@@ -141,6 +132,15 @@ class ControlThread(threading.Thread):
         self.reset_gravity = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
+                                
+                                
+       # Loading a robot model of HyQ (Pinocchio)
+        ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
+        path      = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
+        urdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".urdf";
+        srdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".srdf";
+        self.robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
+                            
 
     def _receive_contact(self, msg):
         # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention)
@@ -259,7 +259,7 @@ class ControlThread(threading.Thread):
         model_state.pose.orientation.x = 0.0       
         model_state.pose.orientation.y = 0.0
         model_state.pose.orientation.z = 0.0                
-								
+                                
         model_state.twist.linear.x = 0.0
         model_state.twist.linear.y = 0.0        
         model_state.twist.linear.z = 0.0
@@ -286,16 +286,16 @@ class ControlThread(threading.Thread):
 								
         #map them to WF
         for leg in range(4):
-	        self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
+            self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
              
-        # Update the joint and frame placements
+        # Pinocchio Update the joint and frame placements
         gen_velocities  = np.hstack((self.baseTwistW,self.qd))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.q))
-        pin.forwardKinematics(self.model,self.data,configuration, gen_velocities)
-        self.M =  pin.crba(self.model, self.data, configuration)
-        self.h = pin.nonLinearEffects(self.model, self.data, configuration, gen_velocities)
-        self.h_joints = self.h[6:]                        
-                                    
+        self.robot.computeAllTerms(configuration, gen_velocities)    
+        self.M = self.robot.mass(self.q, False)    
+        self.h = self.robot.nle(configuration, gen_velocities, False)
+        self.h_joints = self.h[6:]  
+                                
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
             grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg, self.h_joints - self.tau ))                             
