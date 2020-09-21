@@ -447,14 +447,23 @@ def talker(p):
         # compute desired contact forces from the whole-body controller                      
         #################################################################
         
-        # EXERCISE 2: Projection-based controller (base frame)         
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, False, False)
-        
-	   # EXERCISE 3: Add Gravity Compensation (base frame) 
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, True, False)
-	 
-	   # EXERCISE 4: Add FFwd Term (base frame) 
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, True, True)
+        # EXERCISE 2: Projection-based controller (base frame) 
+        isCoMControlled = False 
+        gravityComp = False
+        ffwdOn = False        
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
+
+       # EXERCISE 3: Add Gravity Compensation (base frame) 
+        isCoMControlled = False 
+        gravityComp = True
+        ffwdOn = False
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
+     
+       # EXERCISE 4: Add FFwd Term (base frame) 
+#	   isCoMControlled = False 
+#        gravityComp = True
+#        ffwdOn = True				
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
                                 
         # EXERSISE 5: Projection-based controller (CoM)    
         # map from base to com frame (they are aligned)
@@ -462,9 +471,12 @@ def talker(p):
 #        p.comPoseW = copy.deepcopy(p.basePoseW)
 #        p.comPoseW[p.u.sp_crd["LX"]:p.u.sp_crd["LX"]+3] += W_base_to_com # + np.array([0.05, 0.0,0.0])
 #        p.comTwistW = np.dot( motionVectorTransform( W_base_to_com, np.eye(3)),p.baseTwistW)
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.comPoseW, p.comTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, True, True, True)
+#	   isCoMControlled = True 
+#        gravityComp = True
+#        ffwdOn = True	
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.comPoseW, p.comTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
 #        
-	   # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints				
+       # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
         normals = [None]*4                 
         normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
         normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
@@ -472,11 +484,16 @@ def talker(p):
         normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])    
         f_min = np.array([0.0,0.0,0.0, 0.0])    
         friction_coeff = np.array([0.6,0.6,0.6, 0.6])    
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, True, True, False, normals, f_min, friction_coeff)                                           
+#        isCoMControlled = False 
+#        gravityComp = True
+#        ffwdOn = True	
+#        conesOn = false
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn, conesOn, normals, f_min, friction_coeff)                                           
         
-	   # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints									
-	   #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, True, True, True, normals, f_min, friction_coeff)                                           
-        						
+       # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
+        #conesOn = True       
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, True, True, True, normals, f_min, friction_coeff)                                           
+                                
         #################################################################          
         # map desired contact forces into torques (missing gravity compensation)                      
         #################################################################                                       
