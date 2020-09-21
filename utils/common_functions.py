@@ -11,12 +11,7 @@ from custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-
-# Print options 
-np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
-np.set_printoptions(threshold=np.inf)
-sys.dont_write_bytecode = True
-
+from termcolor import colored
 from urdf_parser_py.urdf import URDF
 #make plot interactive
 plt.ion()
@@ -73,7 +68,7 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log):
+def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None):
     if name == 'position':
         plot_var_log = q_log
         plot_var_des_log = q_des_log
@@ -85,53 +80,38 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
         plot_var_des_log  = qdd_des_log
     elif name == 'torque':
         plot_var_log = tau_log
-        plot_var_des_log  = tau_log                                
+        if   (tau_ffwd_log is not None):    								
+            plot_var_des_log  = tau_ffwd_log 
     else:
-       print("wrong choice")                                    
+       print(colored("plotJopnt error: wrong input string", "red") )
+       return                                   
 
     lw_des=7
     lw_act=4          
-                
-            #neet to transpose the matrix other wise it cannot be plot with numpy array    
-    fig = plt.figure(figure_id)
+
+    njoints = plot_var_log.shape[0]																
+    
+    #neet to transpose the matrix other wise it cannot be plot with numpy array    
+    fig = plt.figure(figure_id)				
     fig.suptitle(name, fontsize=20)             
-    plt.subplot(3,2,1)
-    plt.ylabel("1 - Shoulder Pan")    
-    plt.plot(time_log, plot_var_des_log[0,:].T, linestyle='-', lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[0,:].T,linestyle='-', lw=lw_act,color = 'blue')
-    plt.grid()
+    labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
+    labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
+
+    if njoints == 6:
+        labels = labels_ur 		
+    if njoints == 12:
+        labels = labels_hyq 	             
+				
+    
+    for jidx in range(njoints):
+				
+	    plt.subplot(njoints/2,2,jidx+1)
+	    plt.ylabel(labels[jidx])    
+	    plt.plot(time_log, plot_var_des_log[jidx,:].T, linestyle='-', lw=lw_des,color = 'red')
+	    plt.plot(time_log, plot_var_log[jidx,:].T,linestyle='-', lw=lw_act,color = 'blue')
+	    plt.grid()
                 
-    plt.subplot(3,2,2)
-    plt.ylabel("2 - Shoulder Lift")
-    plt.plot(time_log, plot_var_des_log[1,:].T, linestyle='-', lw=lw_des,color = 'red', label="q_des")
-    plt.plot(time_log, plot_var_log[1,:].T,linestyle='-',lw=lw_act, color = 'blue', label="q")
-    plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
-    plt.grid()
     
-    plt.subplot(3,2,3)
-    plt.ylabel("3 - Elbow")    
-    plt.plot(time_log, plot_var_des_log[2,:].T,linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[2,:].T,linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()    
-    
-    plt.subplot(3,2,4)
-    plt.ylabel("4 - Wrist 1")    
-    plt.plot(time_log, plot_var_des_log[3,:].T,linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()
-    
-    plt.subplot(3,2,5)
-    plt.ylabel("5 - Wrist 2")    
-    plt.plot(time_log, plot_var_des_log[4,:].T,linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[4,:].T,linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()
-    
-    plt.subplot(3,2,6)
-    plt.ylabel("6 - Wrist 3") 
-    plt.plot(time_log, plot_var_des_log[5,:].T,linestyle='-',lw=lw_des,color = 'red')
-    plt.plot(time_log, plot_var_log[5,:].T,linestyle='-',lw=lw_act,color = 'blue')
-    plt.grid()
-                
 
                 
 def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, euler = None, euler_des = None, f_log=None):

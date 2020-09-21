@@ -353,7 +353,10 @@ class ControlThread(threading.Thread):
         
         p.q_des_log = np.empty((12,0 ))*nan    
         p.q_log = np.empty((12,0 )) *nan   
-        p.tau_ffwd_log = np.empty((12,0 ))*nan                                
+        p.qd_des_log = np.empty((12,0 ))*nan    
+        p.qd_log = np.empty((12,0 )) *nan  								
+        p.tau_ffwd_log = np.empty((12,0 ))*nan    
+        p.tau_log = np.empty((12,0 ))*nan                                  
         p.grForcesW_log = np.empty((12,0 ))  *nan 
         p.des_forcesW_log = np.empty((12,0 ))  *nan       
         p.Wffwd_log = np.empty((6,0 ))  *nan                    
@@ -376,7 +379,10 @@ class ControlThread(threading.Thread):
         p.des_baseAccW_log = np.hstack((p.des_baseAccW_log , p.des_acc.reshape(6,-1)))                    
         p.q_des_log = np.hstack((p.q_des_log , p.q_des.reshape(12,-1)))   
         p.q_log = np.hstack((p.q_log , p.q.reshape(12,-1)))       
+        p.qd_des_log = np.hstack((p.qd_des_log , p.qd_des.reshape(12,-1)))   
+        p.qd_log = np.hstack((p.qd_log , p.qd.reshape(12,-1)))      								
         p.tau_ffwd_log = np.hstack((p.tau_ffwd_log , p.tau_ffwd.reshape(12,-1)))                                
+        p.tau_log = np.hstack((p.tau_log , p.tau.reshape(12,-1)))      							
         p.grForcesW_log = np.hstack((p.grForcesW_log , p.grForcesW.reshape(12,-1)))    
         p.des_forcesW_log = np.hstack((p.des_forcesW_log , p.des_forcesW.reshape(12,-1)))
         p.Wffwd_log = np.hstack((p.Wffwd_log , p.Wffwd.reshape(6,-1)))               
@@ -509,8 +515,9 @@ def talker(p):
     plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
-    #plotConstraitViolation(3,p.constr_viol_log)			
-                
+    #plotConstraitViolation(3,p.constr_viol_log)            
+    #plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
+         
 if __name__ == '__main__':
     p = ControlThread()
     try:
