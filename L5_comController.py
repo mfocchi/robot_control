@@ -394,6 +394,7 @@ def talker(p):
     p.initKinematics(kin)  
     p.initVars()          
     p.startupProcedure() 
+    rate = ros.Rate(1/conf.dt) # 10hz
                                 
     # Reset reference to actual value  
     p.x0 = copy.deepcopy(p.basePoseW)
@@ -492,11 +493,7 @@ def talker(p):
         ros_pub.publishVisual()                        
                                 
         #wait for synconization of the control loop
-        elapsed_time = time.time() - start_loop
-        if elapsed_time < conf.dt:
-            time.sleep(conf.dt - elapsed_time)       
-                                                
-        # stops the while loop if  you prematurely hit CTRL+C                    
+        rate.sleep()       
                 # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():
             print ("Shutting Down")                    
