@@ -12,8 +12,13 @@ import numpy as np
 
 import roslaunch
 import os
-
 import time as tm
+
+#important to print properly matrix
+import sys
+np.set_printoptions(precision = 5, linewidth = 200, suppress = True)
+np.set_printoptions(threshold=np.inf)
+sys.dont_write_bytecode = True
 
 class RosPub():
     def __init__(self, only_visual = False):

@@ -45,28 +45,28 @@ from gazebo_msgs.msg import ODEPhysics
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Pose
 
-#important to print properly matrix
-np.set_printoptions(precision = 5, linewidth = 200, suppress = True)
-np.set_printoptions(threshold=np.inf)
-sys.dont_write_bytecode = True
-
 # ros utils
 import roslaunch
 import rosnode
 import rosgraph
 
-# Controller specific
-from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
-from utils.controlRoutines import projectionBasedController, QPController
-from scipy.linalg import block_diag
+#other utils
+from gazebo_controller.ros_publish import RosPub
+from gazebo_controller.pidManager import PidManager
 from gazebo_controller.utils import Utils
 from gazebo_controller.math_tools import *
-from numpy import nan
-from utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation
-import example_robot_data
-from ros_publish import RosPub  
-import copy
 
+#robot specific 
+from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
+
+
+# L5 Controller specific
+from utils.controlRoutines import projectionBasedController, QPController
+from scipy.linalg import block_diag
+from numpy import nan
+from utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+import example_robot_data
+  
 import pinocchio as pin
 from pinocchio.utils import *
 
