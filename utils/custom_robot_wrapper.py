@@ -17,7 +17,7 @@ class RobotWrapper(PinocchioRobotWrapper):
     
     @property
     def na(self):
-        if(self.model.joints[0].nq==7):
+        if(self.model.joints[1].nq==7):
             return self.model.nv-6
         return self.model.nv
 
