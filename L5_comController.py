@@ -296,6 +296,9 @@ class ControlThread(threading.Thread):
         self.h = self.robot.nle(configuration, gen_velocities, False)
         self.h_joints = self.h[6:]  
                                 
+        self.estimateContactForces()            
+
+    def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
             grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg, self.h_joints - self.tau ))                             
