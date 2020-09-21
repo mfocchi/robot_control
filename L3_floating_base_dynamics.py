@@ -4,7 +4,7 @@ import numpy as np
 import example_robot_data
 from pinocchio.utils import * #rand
 from pinocchio.robot_wrapper import RobotWrapper
-from pinocchio.utils import *
+
 
 
 # console print options to see matrix nicely

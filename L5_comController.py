@@ -463,9 +463,9 @@ def talker(p):
         p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
      
        # EXERCISE 4: Add FFwd Term (base frame) 
-#	   isCoMControlled = False 
+#       isCoMControlled = False 
 #        gravityComp = True
-#        ffwdOn = True				
+#        ffwdOn = True                
         #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
                                 
         # EXERSISE 5: Projection-based controller (CoM)    
@@ -474,9 +474,9 @@ def talker(p):
 #        p.comPoseW = copy.deepcopy(p.basePoseW)
 #        p.comPoseW[p.u.sp_crd["LX"]:p.u.sp_crd["LX"]+3] += W_base_to_com # + np.array([0.05, 0.0,0.0])
 #        p.comTwistW = np.dot( motionVectorTransform( W_base_to_com, np.eye(3)),p.baseTwistW)
-#	   isCoMControlled = True 
+#       isCoMControlled = True 
 #        gravityComp = True
-#        ffwdOn = True	
+#        ffwdOn = True    
 #        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.comPoseW, p.comTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
 #        
        # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
@@ -489,7 +489,7 @@ def talker(p):
         friction_coeff = np.array([0.6,0.6,0.6, 0.6])    
 #        isCoMControlled = False 
 #        gravityComp = True
-#        ffwdOn = True	
+#        ffwdOn = True    
 #        conesOn = false
         #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn, conesOn, normals, f_min, friction_coeff)                                           
         
