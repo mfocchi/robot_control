@@ -121,11 +121,10 @@ class ControlThread(threading.Thread):
 								
     def run(self):        
         self.robot_name = ros.get_param('/robot_name')
-        self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=1)
+        self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
         self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
         self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
-        self.pub_des_jstate = ros.Publisher("/"+self.robot_name+"/command", JointState, queue_size=1)
-        self.set_pd_service = ros.ServiceProxy("/" + self.robot_name + "/set_pids", set_pids)
+        self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1)
 
         # freeze base  and pause simulation service 
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -218,22 +217,6 @@ class ControlThread(threading.Thread):
     def get_jstate(self):
         return self.q
 
-    def setPDs(self, kp, kd, ki):
-        # create the message
-        req_msg = set_pidsRequest()
-        req_msg.data = []
-
-        # fill in the message with des values for kp kd
-        for i in range(len(self.joint_names)):
-            joint_pid = pid()
-            joint_pid.joint_name = self.joint_names[i]
-            joint_pid.p_value = kp
-            joint_pid.d_value = kd
-            joint_pid.i_value = ki
-            req_msg.data += [joint_pid]
-
-        # send request and get response (in this case none)
-        self.set_pd_service(req_msg)
         
     def freezeBase(self, flag):
         #toggle gravity
@@ -299,8 +282,10 @@ class ControlThread(threading.Thread):
         p.unpause_physics_client(EmptyRequest()) #pulls robot up
         time.sleep(0.2)  # wait for callback to fill in jointmnames
 
+								
+        p.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
         # set joint pdi gains
-        p.setPDs(400.0, 10.0, 0.0)
+        p.pid.setPDs(400.0, 6.0, 0.0)
         # GOZERO Keep the fixed configuration for the joints at the start of simulation
         p.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
         p.qd_des = np.zeros(12)
@@ -333,7 +318,7 @@ class ControlThread(threading.Thread):
             print("q err post grav comp", (p.q - p.q_des))
                                                 
         print("starting com controller (no joint PD)...")                
-        p.setPDs(0.0, 0.0, 0.0)
+        p.pid.setPDs(0.0, 0.0, 0.0)
                                 
     def initVars(self):
  
@@ -496,9 +481,8 @@ def talker(p):
             break;                                                
                              
     # restore PD when finished        
-    p.setPDs(400.0, 26.0, 0.0)
     p.join()            
-  
+    p.pid.setPDs(400.0, 6.0, 0.0) 
     plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
