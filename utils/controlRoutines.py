@@ -8,10 +8,10 @@ import scipy.io
 import scipy.sparse as sparse
 import numpy as np
 import yaml
-from gazebo_controller.math_tools import *
+from base_controller.math_tools import *
 # User defined packages
-from gazebo_controller.math_tools import Math
-from gazebo_controller.utils import Utils
+from base_controller.math_tools import Math
+from base_controller.utils import Utils
 
 from optimTools import quadprog_solve_qp
 from scipy.linalg import block_diag

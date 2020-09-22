@@ -83,11 +83,12 @@ class BaseController(threading.Thread):
 
 
         threading.Thread.__init__(self)
-        # instantiate graphic utils
+								
+        # instantiating objects
         self.ros_pub = RosPub(True)                    
-        
         self.joint_names = ""
         self.u = Utils()
+        self.kin = HyQKinematics()			
                                 
         self.comPoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
@@ -264,20 +265,20 @@ class BaseController(threading.Thread):
         kin.init_jacobians()  
                                 
     def mapBaseToWorld(self, B_var):
-        W_var = p.b_R_w.transpose().dot(B_var) + p.u.linPart(self.basePoseW)                            
+        W_var = self.b_R_w.transpose().dot(B_var) + self.u.linPart(self.basePoseW)                            
         return W_var
                                                                                                                                 
     def updateKinematics(self,kin):
         # q is continuously updated
         kin.update_homogeneous(self.q)
         kin.update_jacobians(self.q)
-        self.B_contacts = kin.forward_kin(p.q) 
+        self.B_contacts = kin.forward_kin(self.q) 
         # map feet contacts to wf
         self.W_contacts = np.zeros((3,4))
         for leg in range(4):
              self.W_contacts[:,leg] = self.mapBaseToWorld(self.B_contacts[leg, :].transpose())
         # update the feet jacobians
-        self.J[p.u.leg_map["LF"]], self.J[p.u.leg_map["RF"]], self.J[p.u.leg_map["LH"]], self.J[p.u.leg_map["RH"]], flag = kin.getLegJacobians()
+        self.J[self.u.leg_map["LF"]], self.J[self.u.leg_map["RF"]], self.J[self.u.leg_map["LH"]], self.J[self.u.leg_map["RH"]], flag = kin.getLegJacobians()
         #map jacobians to WF
         for leg in range(4):
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
@@ -300,82 +301,79 @@ class BaseController(threading.Thread):
                                   
                                  
     def startupProcedure(self):
-        p.unpause_physics_client(EmptyRequest()) #pulls robot up
+        self.unpause_physics_client(EmptyRequest()) #pulls robot up
         ros.sleep(0.2)  # wait for callback to fill in jointmnames
                                 
-        p.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
+        self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
         # set joint pdi gains
-        p.pid.setPDs(400.0, 6.0, 0.0)
+        self.pid.setPDs(400.0, 6.0, 0.0)
         # GOZERO Keep the fixed configuration for the joints at the start of simulation
-        p.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
-        p.qd_des = np.zeros(12)
-        p.tau_ffwd = np.zeros(12)
+        self.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
+        self.qd_des = np.zeros(12)
+        self.tau_ffwd = np.zeros(12)
                                 
        # these torques are to compensate the leg gravity
-        p.gravity_comp = np.array(
+        self.gravity_comp = np.array(
             [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
                                                 
         print("reset posture...")
-        p.freezeBase(1)
+        self.freezeBase(1)
         start_t = ros.get_time()
         while ros.get_time() - start_t < 1.0:
-            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
             ros.sleep(0.01)
-        if p.verbose:
-            print("q err prima freeze base", (p.q - p.q_des))
+        if self.verbose:
+            print("q err prima freeze base", (self.q - self.q_des))
   
         print("put on ground and start compensating gravity...")
-        p.freezeBase(0)                                                
+        self.freezeBase(0)                                                
         ros.sleep(1.0)
-        if p.verbose:
-            print("q err pre grav comp", (p.q - p.q_des))
+        if self.verbose:
+            print("q err pre grav comp", (self.q - self.q_des))
                                                 
         start_t = ros.get_time()
         while ros.get_time()- start_t < 1.0:
-            p.send_des_jstate(p.q_des, p.qd_des, p.gravity_comp)
+            self.send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
             ros.sleep(0.01)
-        if p.verbose:
-            print("q err post grav comp", (p.q - p.q_des))
+        if self.verbose:
+            print("q err post grav comp", (self.q - self.q_des))
                                                 
         print("starting com controller (no joint PD)...")                
-        p.pid.setPDs(0.0, 0.0, 0.0)
+        self.pid.setPDs(0.0, 0.0, 0.0)
 
     def initVars(self):
  
-        p.basePoseW_log = np.empty((6,0 ))*nan
-        p.baseTwistW_log = np.empty((6,0 ))*nan
-        p.q_des_log = np.empty((12,0 ))*nan    
-        p.q_log = np.empty((12,0 )) *nan   
-        p.qd_des_log = np.empty((12,0 ))*nan    
-        p.qd_log = np.empty((12,0 )) *nan                                  
-        p.tau_ffwd_log = np.empty((12,0 ))*nan    
-        p.tau_log = np.empty((12,0 ))*nan                                  
-        p.grForcesW_log = np.empty((12,0 ))  *nan 
-        p.time_log = np.array([])*nan
-        p.constr_viol_log = np.empty((4,0 ))*nan
-        p.time = 0.0
-
+        self.basePoseW_log = np.empty((6,0 ))*nan
+        self.baseTwistW_log = np.empty((6,0 ))*nan
+        self.q_des_log = np.empty((12,0 ))*nan    
+        self.q_log = np.empty((12,0 )) *nan   
+        self.qd_des_log = np.empty((12,0 ))*nan    
+        self.qd_log = np.empty((12,0 )) *nan                                  
+        self.tau_ffwd_log = np.empty((12,0 ))*nan    
+        self.tau_log = np.empty((12,0 ))*nan                                  
+        self.grForcesW_log = np.empty((12,0 ))  *nan 
+        self.time_log = np.array([])*nan
+        self.constr_viol_log = np.empty((4,0 ))*nan
+        self.time = 0.0
 
     def logData(self):
         
-        p.basePoseW_log = np.hstack((p.basePoseW_log , p.basePoseW.reshape(6,-1)))
-        p.baseTwistW_log = np.hstack((p.baseTwistW_log , p.baseTwistW.reshape(6,-1)))
-        p.q_des_log = np.hstack((p.q_des_log , p.q_des.reshape(12,-1)))   
-        p.q_log = np.hstack((p.q_log , p.q.reshape(12,-1)))       
-        p.qd_des_log = np.hstack((p.qd_des_log , p.qd_des.reshape(12,-1)))   
-        p.qd_log = np.hstack((p.qd_log , p.qd.reshape(12,-1)))                                      
-        p.tau_ffwd_log = np.hstack((p.tau_ffwd_log , p.tau_ffwd.reshape(12,-1)))                                
-        p.tau_log = np.hstack((p.tau_log , p.tau.reshape(12,-1)))                                  
-        p.grForcesW_log = np.hstack((p.grForcesW_log , p.grForcesW.reshape(12,-1)))    
-        p.time_log = np.hstack((p.time_log, p.time))
-     
+        self.basePoseW_log = np.hstack((self.basePoseW_log , self.basePoseW.reshape(6,-1)))
+        self.baseTwistW_log = np.hstack((self.baseTwistW_log , self.baseTwistW.reshape(6,-1)))
+        self.q_des_log = np.hstack((self.q_des_log , self.q_des.reshape(12,-1)))   
+        self.q_log = np.hstack((self.q_log , self.q.reshape(12,-1)))       
+        self.qd_des_log = np.hstack((self.qd_des_log , self.qd_des.reshape(12,-1)))   
+        self.qd_log = np.hstack((self.qd_log , self.qd.reshape(12,-1)))                                      
+        self.tau_ffwd_log = np.hstack((self.tau_ffwd_log , self.tau_ffwd.reshape(12,-1)))                                
+        self.tau_log = np.hstack((self.tau_log , self.tau.reshape(12,-1)))                                  
+        self.grForcesW_log = np.hstack((self.grForcesW_log , self.grForcesW.reshape(12,-1)))    
+        self.time_log = np.hstack((self.time_log, self.time))
 	
 def talker(p):
             
     p.start()
     p.register_node()
-    kin = HyQKinematics()
-    p.initKinematics(kin) 
+    p.initKinematics(p.kin) 
     p.initVars()        
     p.startupProcedure() 
 
@@ -386,7 +384,7 @@ def talker(p):
     #control loop
     while True:  
         #update the kinematics
-        p.updateKinematics(kin)    
+        p.updateKinematics(p.kin)    
 
         # controller                             
         p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd + p.gravity_comp;

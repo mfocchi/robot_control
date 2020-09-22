@@ -10,9 +10,8 @@ eigenpy.switchToNumpyMatrix()
 import os
 from utils.common_functions import *
 from utils.optimTools import quadprog_solve_qp
-from ros_publish import RosPub
-
-from gazebo_controller.math_tools import Math
+from base_controller.ros_publish import RosPub
+from base_controller.math_tools import Math
 import ex_2_conf as conf
 
 #instantiate graphic utils
