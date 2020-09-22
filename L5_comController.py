@@ -47,6 +47,7 @@ from gazebo_controller.ros_publish import RosPub
 from gazebo_controller.pidManager import PidManager
 from gazebo_controller.utils import Utils
 from gazebo_controller.math_tools import *
+from numpy import nan
 
 #robot specific 
 from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
@@ -58,24 +59,18 @@ from custom_robot_wrapper import RobotWrapper
 # L5 Controller specific
 from utils.controlRoutines import projectionBasedController, QPController
 from scipy.linalg import block_diag
-from numpy import nan
 from utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
-
-  
-
-
 # config file
 import ex_5_conf as conf
  
-# instantiate graphic utils
-ros_pub = RosPub(True)
+
 
 class ControlThread(threading.Thread):
     def __init__(self):  
         
        #clean up previous process                
 
-        os.system("killall gzserver gzclient")								
+        os.system("killall gzserver gzclient")                                
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
             print 'ROS MASTER is active'
             nodes = rosnode.get_node_names()
@@ -93,7 +88,11 @@ class ControlThread(threading.Thread):
 #        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"],roslaunch_args=[roslaunch_args])
         self.launch.start() 
         ros.sleep(4.0)        
+
+
         threading.Thread.__init__(self)
+        # instantiate graphic utils
+        self.ros_pub = RosPub(True)                    
         
         self.joint_names = ""
         self.u = Utils()
@@ -104,23 +103,18 @@ class ControlThread(threading.Thread):
         
         self.q = np.zeros(12)
         self.qd = np.zeros(12)
-        self.tau = np.zeros(12)								
+        self.tau = np.zeros(12)                                
         self.q_des =np.zeros(12)
         self.qd_des = np.zeros(12)
         self.tau_ffwd =np.zeros(12)
         
         self.b_R_w = np.eye(3)       
-        self.verbose = conf.verbose                                 
+                                  
         self.grForcesW = np.zeros(12)
         self.basePoseW = np.zeros(6) 
         self.J = [np.eye(3)]* 4                                   
         self.wJ = [np.eye(3)]* 4                       
                                 
-                           
-        #send data to param server
-        self.u.putIntoGlobalParamServer("verbose", self.verbose)   
-                             
-  
         self.robot_name = ros.get_param('/robot_name')
         self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
         self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
@@ -140,7 +134,10 @@ class ControlThread(threading.Thread):
         urdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".urdf";
         srdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".srdf";
         self.robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
-                            
+
+        #send data to param server
+        self.verbose = conf.verbose                                                                                                          
+        self.u.putIntoGlobalParamServer("verbose", self.verbose)                               
 
     def _receive_contact(self, msg):
         # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention)
@@ -182,7 +179,7 @@ class ControlThread(threading.Thread):
         self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
         
         mathJet = Math()
-        # compute orientation matrix								
+        # compute orientation matrix                                
         self.b_R_w = mathJet.rpyToRot(euler)
    
     def _receive_jstate(self, msg):
@@ -213,11 +210,8 @@ class ControlThread(threading.Thread):
 
     def deregister_node(self):
         print "deregistering nodes"     
-       
-        #os.system(" rosnode kill /hyq/ros_impedance_controller")    
-        #os.system(" rosnode kill /gazebo")    
- 
-        
+        os.system(" rosnode kill /hyq/ros_impedance_controller")    
+        os.system(" rosnode kill /gazebo")    
  
     def get_contact(self):
         return self.contactsW
@@ -276,15 +270,22 @@ class ControlThread(threading.Thread):
         kin.init_homogeneous()
         kin.init_jacobians()  
                                 
+    def mapBaseToWorld(self, B_var):
+        W_var = p.b_R_w.transpose().dot(B_var) + p.u.linPart(self.basePoseW)                            
+        return W_var
+                                                                                                                                
     def updateKinematics(self,kin):
         # q is continuously updated
         kin.update_homogeneous(self.q)
         kin.update_jacobians(self.q)
-        self.actual_feetB = kin.forward_kin(self.q)
+        self.B_contacts = kin.forward_kin(p.q) 
+        # map feet contacts to wf
+        self.W_contacts = np.zeros((3,4))
+        for leg in range(4):
+             self.W_contacts[:,leg] = self.mapBaseToWorld(self.B_contacts[leg, :].transpose())
         # update the feet jacobians
         self.J[p.u.leg_map["LF"]], self.J[p.u.leg_map["RF"]], self.J[p.u.leg_map["LH"]], self.J[p.u.leg_map["RH"]], flag = kin.getLegJacobians()
-								
-        #map them to WF
+        #map jacobians to WF
         for leg in range(4):
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
              
@@ -295,7 +296,7 @@ class ControlThread(threading.Thread):
         self.M = self.robot.mass(self.q, False)    
         self.h = self.robot.nle(configuration, gen_velocities, False)
         self.h_joints = self.h[6:]  
-                                
+        #compute contact forces                        
         self.estimateContactForces()            
 
     def estimateContactForces(self):           
@@ -306,8 +307,8 @@ class ControlThread(threading.Thread):
                                   
     def startupProcedure(self):
         p.unpause_physics_client(EmptyRequest()) #pulls robot up
-        time.sleep(0.2)  # wait for callback to fill in jointmnames
-								
+        ros.sleep(0.2)  # wait for callback to fill in jointmnames
+                                
         p.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
         # set joint pdi gains
         p.pid.setPDs(400.0, 6.0, 0.0)
@@ -315,30 +316,30 @@ class ControlThread(threading.Thread):
         p.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
         p.qd_des = np.zeros(12)
         p.tau_ffwd = np.zeros(12)
-								
-	   # these torques are to compensate the leg gravity
+                                
+       # these torques are to compensate the leg gravity
         p.gravity_comp = np.array(
             [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
                                                 
         print("reset posture...")
         p.freezeBase(1)
-        start_t = time.time()
-        while time.time() - start_t < 1.0:
+        start_t = ros.get_time()
+        while ros.get_time() - start_t < 1.0:
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-            time.sleep(0.01)
+            ros.sleep(0.01)
         if p.verbose:
             print("q err prima freeze base", (p.q - p.q_des))
   
         print("put on ground and start compensating gravity...")
         p.freezeBase(0)                                                
-        time.sleep(1.0)
+        ros.sleep(1.0)
         if p.verbose:
             print("q err pre grav comp", (p.q - p.q_des))
                                                 
-        start_t = time.time()
-        while time.time() - start_t < 1.0:
+        start_t = ros.get_time()
+        while ros.get_time()- start_t < 1.0:
             p.send_des_jstate(p.q_des, p.qd_des, p.gravity_comp)
-            time.sleep(0.01)
+            ros.sleep(0.01)
         if p.verbose:
             print("q err post grav comp", (p.q - p.q_des))
                                                 
@@ -357,7 +358,7 @@ class ControlThread(threading.Thread):
         p.q_des_log = np.empty((12,0 ))*nan    
         p.q_log = np.empty((12,0 )) *nan   
         p.qd_des_log = np.empty((12,0 ))*nan    
-        p.qd_log = np.empty((12,0 )) *nan  								
+        p.qd_log = np.empty((12,0 )) *nan                                  
         p.tau_ffwd_log = np.empty((12,0 ))*nan    
         p.tau_log = np.empty((12,0 ))*nan                                  
         p.grForcesW_log = np.empty((12,0 ))  *nan 
@@ -383,9 +384,9 @@ class ControlThread(threading.Thread):
         p.q_des_log = np.hstack((p.q_des_log , p.q_des.reshape(12,-1)))   
         p.q_log = np.hstack((p.q_log , p.q.reshape(12,-1)))       
         p.qd_des_log = np.hstack((p.qd_des_log , p.qd_des.reshape(12,-1)))   
-        p.qd_log = np.hstack((p.qd_log , p.qd.reshape(12,-1)))      								
+        p.qd_log = np.hstack((p.qd_log , p.qd.reshape(12,-1)))                                      
         p.tau_ffwd_log = np.hstack((p.tau_ffwd_log , p.tau_ffwd.reshape(12,-1)))                                
-        p.tau_log = np.hstack((p.tau_log , p.tau.reshape(12,-1)))      							
+        p.tau_log = np.hstack((p.tau_log , p.tau.reshape(12,-1)))                                  
         p.grForcesW_log = np.hstack((p.grForcesW_log , p.grForcesW.reshape(12,-1)))    
         p.des_forcesW_log = np.hstack((p.des_forcesW_log , p.des_forcesW.reshape(12,-1)))
         p.Wffwd_log = np.hstack((p.Wffwd_log , p.Wffwd.reshape(6,-1)))               
@@ -398,7 +399,6 @@ def talker(p):
     
     p.start()
     p.register_node()
-    name = "Python Controller"
     kin = HyQKinematics()
     p.initKinematics(kin)  
     p.initVars()          
@@ -411,10 +411,8 @@ def talker(p):
     p.des_twist = np.zeros(6)
     p.des_acc = np.zeros(6)       
 
-    # Control loop	           
+    # Control loop               
     while (p.time  < conf.exp_duration) or conf.CONTINUOUS:
-        start_loop = time.time()
-								
         #update the kinematics
         p.updateKinematics(kin)
                                 
@@ -429,22 +427,17 @@ def talker(p):
  
         # EXERCISE 6: Check static stability, move CoM out of the polygon   
         p.des_pose[p.u.sp_crd["LY"]] +=0.0004
-	
+    
         # EXERCISE 8.a: Swift the Com on triangle of LF, RF, LH
 #        p.des_pose[p.u.sp_crd["LX"]] = 0.1
 #        p.des_pose[p.u.sp_crd["LY"]] = 0.1 
         # EXERCISE 8.b: Unload RH leg 
-#        if p.time > 2.0:							
-#	        p.stance_legs[p.u.leg_map["RH"]] = False       
-								
-	   # map feet contactct to wf
-        B_contacts = kin.forward_kin(p.q) 
-        w_R_b = p.b_R_w.transpose()
-        W_contacts = np.zeros((3,4))
-        for leg in range(4):
-             W_contacts[:,leg] = w_R_b.dot(B_contacts[leg, :].transpose()) + p.u.linPart(p.basePoseW).transpose()
+#        if p.time > 2.0:                            
+#            p.stance_legs[p.u.leg_map["RH"]] = False       
+                                
 
-        # offset of the com wrt base origin in WF													
+
+        # offset of the com wrt base origin in WF                                                    
         W_base_to_com = p.b_R_w.dot( np.array([conf.Bcom_x, conf.Bcom_y, conf.Bcom_z]))
         #################################################################          
         # compute desired contact forces from the whole-body controller                      
@@ -454,19 +447,19 @@ def talker(p):
         isCoMControlled = False 
         gravityComp = False
         ffwdOn = False        
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, p.W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
 
        # EXERCISE 3: Add Gravity Compensation (base frame) 
         isCoMControlled = False 
         gravityComp = True
         ffwdOn = False
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, p.W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
      
        # EXERCISE 4: Add FFwd Term (base frame) 
 #       isCoMControlled = False 
 #        gravityComp = True
 #        ffwdOn = True                
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.basePoseW, p.baseTwistW, p.W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
                                 
         # EXERSISE 5: Projection-based controller (CoM)    
         # map from base to com frame (they are aligned)
@@ -477,7 +470,7 @@ def talker(p):
 #       isCoMControlled = True 
 #        gravityComp = True
 #        ffwdOn = True    
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.comPoseW, p.comTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, p.comPoseW, p.comTwistW, p.W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn)
 #        
        # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
         normals = [None]*4                 
@@ -491,11 +484,11 @@ def talker(p):
 #        gravityComp = True
 #        ffwdOn = True    
 #        conesOn = false
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn, conesOn, normals, f_min, friction_coeff)                                           
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, p.W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, isCoMControlled, gravityComp, ffwdOn, conesOn, normals, f_min, friction_coeff)                                           
         
        # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
         #conesOn = True       
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, True, True, True, normals, f_min, friction_coeff)                                           
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, p.basePoseW, p.baseTwistW, p.W_contacts,  p.des_pose, p.des_twist, p.des_acc, p.stance_legs, W_base_to_com, False, True, True, True, normals, f_min, friction_coeff)                                           
                                 
         #################################################################          
         # map desired contact forces into torques (missing gravity compensation)                      
@@ -506,17 +499,17 @@ def talker(p):
                         np.transpose(p.wJ[p.u.leg_map["RH"]]  ))
         p.tau_ffwd =   p.h_joints - p.jacsT.dot(p.des_forcesW)         
  
-	
-	
-	   # send desired command to the ros controller 	
+    
+    
+       # send desired command to the ros controller     
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
         p.logData()    
         p.time = p.time + conf.dt 
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            ros_pub.add_arrow(W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/400),"green")        
-            ros_pub.add_arrow(W_contacts[:,leg], p.u.getLegJointState(leg, p.des_forcesW/400),"blue")        
-        ros_pub.publishVisual()                        
+            p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/400),"green")        
+            p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.des_forcesW/400),"blue")        
+        p.ros_pub.publishVisual()                        
                                 
         #wait for synconization of the control loop
         rate.sleep()       
