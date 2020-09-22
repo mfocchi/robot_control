@@ -43,14 +43,14 @@ import rosnode
 import rosgraph
 
 #other utils
-from gazebo_controller.ros_publish import RosPub
-from gazebo_controller.pidManager import PidManager
-from gazebo_controller.utils import Utils
-from gazebo_controller.math_tools import *
+from base_controller.ros_publish import RosPub
+from base_controller.pidManager import PidManager
+from base_controller.utils import Utils
+from base_controller.math_tools import *
 from numpy import nan
 
 #robot specific 
-from gazebo_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
+from base_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
 
 #dynamics
 from custom_robot_wrapper import RobotWrapper
