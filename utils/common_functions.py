@@ -28,7 +28,7 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
     ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
     path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
     urdf      = path + "/ur_description/urdf/ur.urdf";
-    srdf      = path + '/ur5_description/srdf/ur5_gripper.srdf'
+    srdf      = path + '/ur_description/srdf/ur_gripper.srdf'
     robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
                 
   

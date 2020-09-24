@@ -53,7 +53,7 @@ from numpy import nan
 from base_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
 
 #dynamics
-from custom_robot_wrapper import RobotWrapper
+from utils.custom_robot_wrapper import RobotWrapper
 
 
 # L5 Controller specific

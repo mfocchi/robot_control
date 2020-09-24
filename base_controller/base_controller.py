@@ -5,7 +5,11 @@ Created on Fri Nov  2 16:52:08 2018
 @author: rorsolino
 """
 
-#!/usr/bin/env python
+import sys
+sys.path.append('../utils')
+from custom_robot_wrapper import RobotWrapper
+
+
 
 import copy
 import numpy as np
@@ -53,7 +57,7 @@ from numpy import nan
 from hyq_kinematics.hyq_kinematics import HyQKinematics
 
 #dynamics
-from custom_robot_wrapper import RobotWrapper
+
 
 
 class BaseController(threading.Thread):
