@@ -15,8 +15,8 @@ from numpy import nan
 import copy
 
 # L5 Controller specific
-from utils.controlRoutines import projectionBasedController, QPController
-from utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+from base_controller.utils.controlRoutines import projectionBasedController, QPController
+from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
 from scipy.linalg import block_diag
 
 # L5 config file

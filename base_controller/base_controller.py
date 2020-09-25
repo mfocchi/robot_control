@@ -5,10 +5,6 @@ Created on Fri Nov  2 16:52:08 2018
 @author: rorsolino
 """
 
-import sys
-sys.path.append('../utils')
-from custom_robot_wrapper import RobotWrapper
-
 
 
 import copy
@@ -47,16 +43,17 @@ import rosnode
 import rosgraph
 
 #other utils
-from ros_publish import RosPub
-from pidManager import PidManager
-from utils import Utils
-from math_tools import *
+from utils.ros_publish import RosPub
+from utils.pidManager import PidManager
+from utils.utils import Utils
+from utils.math_tools import *
 from numpy import nan
 
 #robot specific 
 from hyq_kinematics.hyq_kinematics import HyQKinematics
 
 #dynamics
+from utils.custom_robot_wrapper import RobotWrapper
 
 
 

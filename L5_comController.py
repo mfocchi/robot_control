@@ -43,23 +43,24 @@ import rosnode
 import rosgraph
 
 #other utils
-from base_controller.ros_publish import RosPub
-from base_controller.pidManager import PidManager
-from base_controller.utils import Utils
-from base_controller.math_tools import *
+from base_controller.utils.ros_publish import RosPub
+from base_controller.utils.pidManager import PidManager
+from base_controller.utils.utils import Utils
+from base_controller.utils.math_tools import *
 from numpy import nan
 
 #robot specific 
 from base_controller.hyq_kinematics.hyq_kinematics import HyQKinematics
 
 #dynamics
-from utils.custom_robot_wrapper import RobotWrapper
+from base_controller.utils.custom_robot_wrapper import RobotWrapper
 
 
 # L5 Controller specific
-from utils.controlRoutines import projectionBasedController, QPController
+from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+from base_controller.utils.controlRoutines import projectionBasedController, QPController
 from scipy.linalg import block_diag
-from utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+
 # config file
 import ex_5_conf as conf
  
