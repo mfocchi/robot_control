@@ -10,7 +10,7 @@ eigenpy.switchToNumpyMatrix()
 import os
 from base_controller.utils.common_functions import *
 from base_controller.utils.optimTools import quadprog_solve_qp
-from base_controller.base_controller.ros_publish import RosPub
+from base_controller.utils.ros_publish import RosPub
 
 import ex_1_conf as conf
 
