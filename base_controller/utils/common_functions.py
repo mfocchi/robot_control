@@ -112,7 +112,69 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
 	    plt.grid()
                 
     
-
+def plotEndeffImpedance(name, figure_id, x_log, f_log):
+    plot_var_des_log = None
+    if name == 'fx':
+        plot_var_log = f_log[0,:].T                           
+    elif name == 'fy':
+        plot_var_log = f_log[1,:].T 
+    elif  name == 'fz':    
+        plot_var_log = f_log[2,:].T                             
+    else:
+       print("wrong choice")                    
+       
+    lw_act=4  
+    lw_des=7
+                    
+    fig = plt.figure(figure_id)
+    fig.suptitle(name, fontsize=20)
+               
+    plt.subplot(3,1,1)
+    plt.ylabel("F vs X")                   
+    plt.plot(x_log[0,:].T, plot_var_log, lw=lw_act, color = 'blue')
+    plt.grid()
+    
+    plt.subplot(3,1,2) 
+    plt.ylabel("F vs Y")                   
+    plt.plot(x_log[1,:].T, plot_var_log, lw=lw_act, color = 'blue')
+    plt.grid()
+    
+    plt.subplot(3,1,3)
+    plt.ylabel("F vs Z")                   
+    plt.plot(x_log[2,:].T, plot_var_log, lw=lw_act, color = 'blue')
+    plt.grid()
+    
+def plotJointImpedance(name, figure_id, x_log, f_log):
+    plot_var_des_log = None
+    if name == 'fx':
+        plot_var_log = f_log[0,:].T                           
+    elif name == 'fy':
+        plot_var_log = f_log[1,:].T 
+    elif  name == 'fz':    
+        plot_var_log = f_log[2,:].T                             
+    else:
+       print("wrong choice")                    
+       
+    lw_act=4  
+    lw_des=7
+                    
+    fig = plt.figure(figure_id)
+    fig.suptitle(name, fontsize=20)
+               
+    plt.subplot(3,1,1)
+    plt.ylabel("F vs X")                   
+    plt.plot(x_log[0,:].T, plot_var_log, lw=lw_act, color = 'blue')
+    plt.grid()
+    
+    plt.subplot(3,1,2) 
+    plt.ylabel("F vs Y")                   
+    plt.plot(x_log[1,:].T, plot_var_log, lw=lw_act, color = 'blue')
+    plt.grid()
+    
+    plt.subplot(3,1,3)
+    plt.ylabel("F vs Z")                   
+    plt.plot(x_log[2,:].T, plot_var_log, lw=lw_act, color = 'blue')
+    plt.grid()
                 
 def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, euler = None, euler_des = None, f_log=None):
     plot_var_des_log = None

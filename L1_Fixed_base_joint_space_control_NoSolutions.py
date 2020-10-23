@@ -23,7 +23,7 @@ robot = importDisplayModel(False, False)
 zero = np.matrix([0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
 time = 0.0
 
-two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
+two_pi_f             = 2*np.pi*conf.freq   #omega (frequency times 2*PI)
 two_pi_f_amp         = np.multiply(two_pi_f, conf.amp) 
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
@@ -63,19 +63,18 @@ while True:
     # EXERCISE 2: Step reference Generation
     #...
 
- 
-    # Decimate print of time
-    #if (divmod(time ,1.0)[1]  == 0):
-       #print('Time %.3f s'%(time))
+    #Stops the simulation
     if time >= conf.exp_duration:
-        break
-                            
+        break         
+
+    #Compute robot dynamics matrixes  
     robot.computeAllTerms(q, qd) 
-    # joint space inertia matrix                
+
+    #Get joint space inertia matrix                
     M = robot.mass(q, False)
-    # bias terms                
+    #Get Coriolis term               
     h = robot.nle(q, qd, False)
-    #gravity terms                
+    #Get gravity terms                
     g = robot.gravity(q)
 				
         
@@ -84,8 +83,8 @@ while True:
                                 
     #CONTROLLERS 
                                    
-    #Exercise 3:  PD control
-    #...
+    # Exercise 3:  PD control
+    # tau = ...
     
     # Exercise 6: PD control + Gravity Compensation
     #...
@@ -104,6 +103,7 @@ while True:
      x = robot.framePlacement(q, frame_ee).translation    
      ros_pub.add_arrow(x.A1.tolist(),conf.extForce/100) 
     
+    # ------------------ SIMULATION ---------------
     #SIMULATION of the forward dynamics    
     M_inv = np.linalg.inv(M)  
     qdd = M_inv*(tau-h)    
@@ -135,8 +135,7 @@ while True:
         break;
             
 ros_pub.deregister_node()
-        
-                    
+                
                 
 # plot joint variables                                                                              
 plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)

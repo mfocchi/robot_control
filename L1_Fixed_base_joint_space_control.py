@@ -84,6 +84,7 @@ while True:
     if time >= conf.exp_duration:
         break
                             
+    
     robot.computeAllTerms(q, qd) 
     # joint space inertia matrix                
     M = robot.mass(q, False)
@@ -94,23 +95,23 @@ while True:
 				
         
     # EXERCISE  5: PD control critical damping
-#    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
-#    conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1]*M[1,1])
-#    conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2]*M[2,2])
-#    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
-#    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
-#    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
-#    print (2*np.sqrt(300*M[4,4])    )
+    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
+    conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1]*M[1,1])
+    conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2]*M[2,2])
+    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
+    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
+    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
+#    print (2*np.sqrt(300*M[1,1]))
                                 
     #CONTROLLERS                                    
     #Exercise 3:  PD control
-    #tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)
+#    tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)
     
     # Exercise 6: PD control + Gravity Compensation
-    #tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)  + g
+#    tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)  + g
     
     # Exercise 7: PD + gravity + Feed-Forward term
-    #tau= np.diag(M)*qdd_des + conf.kp*(q_des-q) + conf.kd*(qd_des-qd) + g
+#    tau= M*qdd_des + h + conf.kp*(q_des-q) + conf.kd*(qd_des-qd)
 
     # EXERCISE 8_ Inverse Dynamics
     tau=M*(qdd_des+ conf.kp*(q_des-q)+ conf.kd*(qd_des-qd)) + h    
@@ -126,7 +127,9 @@ while True:
      # (for plotting purposes) compute frame end effector position and velocity in the WF   
      x = robot.framePlacement(q, frame_ee).translation    
      ros_pub.add_arrow(x.A1.tolist(),conf.extForce/100) 
-    
+     
+     # ---------------------- SIMULATION -----------------------
+     
     #SIMULATION of the forward dynamics    
     M_inv = np.linalg.inv(M)  
     qdd = M_inv*(tau-h)    
@@ -163,7 +166,7 @@ ros_pub.deregister_node()
                 
 # plot joint variables                                                                              
 plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-#plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('torque', 3, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 
