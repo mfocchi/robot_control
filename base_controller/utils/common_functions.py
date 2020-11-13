@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 from termcolor import colored
-from urdf_parser_py.urdf import URDF
+#from urdf_parser_py.urdf import URDF
 #make plot interactive
 plt.ion()
 plt.close() 
@@ -82,6 +82,8 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
         plot_var_log = tau_log
         if   (tau_ffwd_log is not None):    								
             plot_var_des_log  = tau_ffwd_log 
+        else:
+		  plot_var_des_log = None												
     else:
        print(colored("plotJopnt error: wrong input string", "red") )
        return                                   
@@ -107,7 +109,8 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
 				
 	    plt.subplot(njoints/2,2,jidx+1)
 	    plt.ylabel(labels[jidx])    
-	    plt.plot(time_log, plot_var_des_log[jidx,:].T, linestyle='-', lw=lw_des,color = 'red')
+	    if   (plot_var_des_log is not None):
+	        plt.plot(time_log, plot_var_des_log[jidx,:].T, linestyle='-', lw=lw_des,color = 'red')
 	    plt.plot(time_log, plot_var_log[jidx,:].T,linestyle='-', lw=lw_act,color = 'blue')
 	    plt.grid()
                 
