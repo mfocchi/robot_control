@@ -70,10 +70,24 @@ euler_des = zero_cart
 while True:
     
     # EXERCISE 1: Sinusoidal reference generation for end effector   
-    #...
+    x_des  = x0  + np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
+    xd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
+    xdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
+    # Set constant reference after a while
+    if time >= conf.exp_duration_sin:
+        x_des  = x0
+        xd_des = xd0
+        xdd_des = xdd0
         
     # EXERCISE 2: Step reference generation  for end effector 
-    #...
+#    if time > 2.0:
+#        x_des = x0 + np.matrix([ 0.0, 0.0, 0.1]).T 
+#        xd_des =  zero_cart
+#        xdd_des = zero_cart 
+#    else:
+#        x_des = x0
+#        xd_des =  zero_cart
+#        xdd_des = zero_cart 
         
     # Decimate print of time
     #if (divmod(time ,1.0)[1]  == 0):
@@ -111,24 +125,24 @@ while True:
     tau_null = N*tau0
 				         
     # EXERCISE 4: PD control (cartesian task)
-    #Fdes = ...
+    Fdes = 
     #tau = ...         
              
     # EXERCISE 5: PD control + Gravity Compensation:
-    #Fdes = ...
+    #Fdes = F
     #tau = ... 
         
     # EXERCISE 6: PD control  + Gravity Compensation + Feed-Forward term
-    #Fdes = ...
+    #Fdes = lambda_ * xdd_des + F
     #tau = ... 
      
     # EXERCISE 7: Operational space inverse dynamics
     #Fdes = ...
-    #tau = ...  
+    #tau = Jt*Fdes + tau_null   
     
      # EXERCISE 8: OSID with bias compensation in joint space (simpler to compute)
     #Fdes = ...
-    #tau = ... 
+    #tau = Jt*F + tau_null 
     
      #EXERCISE 11: dyn consistent pseudon-inverse
     #Fdes = ...

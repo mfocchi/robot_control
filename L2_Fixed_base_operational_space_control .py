@@ -128,9 +128,9 @@ while True:
     tau_null = N*tau0
 				         
     # EXERCISE 4: PD control (cartesian task)
-    F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)
-    tau = J.T*F_des 
-    tau += tau_null 
+#    F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)
+#    tau = J.T*F_des 
+#    tau += tau_null 
     
     # EXERCISE 5: PD control + Gravity Compensation:
 #    F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)	+ JTpinv*g		
@@ -141,7 +141,7 @@ while True:
 #    tau = J.T*F_des + tau_null 
      
     # EXERCISE 7: Operational space inverse dynamics
-#    F_des = xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
+    F_des = xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
 #    u = -lambda_*(dJdq)  + JTpinv*h 
 #    tau = J.T*(lambda_*F_des + u) + tau_null    
     
@@ -150,11 +150,11 @@ while True:
 #    tau =  J.T*(lambda_*F_des) + h + tau_null
 
      # dyn consistent pseudo-inverse
-#    JTpinv_dyn = lambda_*J*M_inv
-#    N_dyn = (eye(6)-J.T*JTpinv_dyn)    
-#    u =   - lambda_*(dJdq)   + JTpinv_dyn*h    
-#    tau_null = N_dyn*tau0
-#    tau = J.T*(lambda_*F_des + u_dyn) + tau_null   
+    JTpinv_dyn = lambda_*J*M_inv
+    N_dyn = (eye(6)-J.T*JTpinv_dyn)    
+    u_dyn =   - lambda_*(dJdq) + JTpinv_dyn*(h-g)
+    tau_null = N_dyn*tau0
+    tau = J.T*(lambda_*F_des + u_dyn + JTpinv_dyn*g ) + tau_null   
     
 #    # EXERCISE 10: Control of orientation
 #    # actual end-effector orientation (columns are the axis of frame_ee expressed in WF (check rviz TF) )				
