@@ -17,12 +17,8 @@ from urdf_parser_py.urdf import URDF
 plt.ion()
 plt.close() 
 
-REF_SPHERE_RADIUS = 0.03
-EE_SPHERE_COLOR  = (1, 0.5, 0, 0.5)
-EE_REF_SPHERE_COLOR  = (1, 0, 0, 0.5)
 
-def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
-    
+def getRobotModel():    
     
     # Import the model
     ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
@@ -30,41 +26,9 @@ def importDisplayModel(DISPLAY, DISPLAY_FLOOR):
     urdf      = path + "/ur_description/urdf/ur.urdf";
     srdf      = path + '/ur_description/srdf/ur_gripper.srdf'
     robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
-                
-  
-    if DISPLAY:
-        import commands
-        import gepetto
-        from time import sleep
-                                
-#        for proc in psutil.process_iter():
-#                                        
-#         
-#         # check whether the process name matches
-#        # print(proc.name())
-#    
-#            if (proc.name() == 'gepetto-gui'):
-#                print('killing ', proc.name())
-#                proc.kill()         
- 
-        
-        l = commands.getstatusoutput("ps aux |grep 'gepetto-gui'|grep -v 'grep'|wc -l")
-        if int(l[1]) == 0:
-            os.system('gepetto-gui &')
-        sleep(1)
-        gepetto.corbaserver.Client()
-        robot.initViewer(loadModel=True)
-        gui = robot.viewer.gui
-        gui.addSphere('world/ee', 0.05, EE_SPHERE_COLOR)
-        if(DISPLAY_FLOOR):
-            gui.createSceneWithFloor('world')
-            gui.setLightingMode('world/floor', 'ON')
-        robot.displayCollisions(False)
-        robot.displayVisuals(True)
-                                                                            
+                                     
     #get urdf from ros just in case you need
-    #robot_urdf_ros = URDF.from_parameter_server() 
-                                                                                                                                                                                                                                                                                                                
+    #robot_urdf_ros = URDF.from_parameter_server()                                                                                                                                                                                                                                                                                                              
     
     return robot                    
 
@@ -89,7 +53,7 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
     lw_des=7
     lw_act=4          
 
-    njoints = plot_var_log.shape[0]																
+    njoints = plot_var_log.shape[1]																
     
     #neet to transpose the matrix other wise it cannot be plot with numpy array    
     fig = plt.figure(figure_id)				
@@ -101,14 +65,14 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
         labels = labels_ur 		
     if njoints == 12:
         labels = labels_hyq 	             
-				
+
     
     for jidx in range(njoints):
 				
 	    plt.subplot(njoints/2,2,jidx+1)
 	    plt.ylabel(labels[jidx])    
-	    plt.plot(time_log, plot_var_des_log[jidx,:].T, linestyle='-', lw=lw_des,color = 'red')
-	    plt.plot(time_log, plot_var_log[jidx,:].T,linestyle='-', lw=lw_act,color = 'blue')
+	    plt.plot(time_log, plot_var_des_log[:-1,jidx], linestyle='-', lw=lw_des,color = 'red')
+	    plt.plot(time_log, plot_var_log[:-1,jidx],linestyle='-', lw=lw_act,color = 'blue')
 	    plt.grid()
                 
     

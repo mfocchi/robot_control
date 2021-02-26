@@ -22,15 +22,15 @@ kp = np.eye(6)*600  # proportional gains
 kd = np.eye(6)*20 # derivative gains (critical damping)
 
 ## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY
-amp = np.matrix([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0]).T    # amplitude
-phi = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T    # phase
-freq = np.matrix([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0]).T  # frequency
+amp = np.array([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0])    # amplitude
+phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])      # phase
+freq = np.array([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0])    # frequency
 
 
 # Initial configuration / velocity / Acceleration
-q0  = np.matrix([ 0.0, 0.0, -0.5, 0.5, -1.57, 0.5]).T
-qd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
-qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
+q0  = np.array([ 0.0, 0.0, -0.5, 0.5, -1.57, 0.5]) 
+qd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
 
 
 #EXERCISE 4: high gains
@@ -39,7 +39,7 @@ qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 
 
 # Value of linear external force
-extForce = np.matrix([0.0, 0.0, 50.0]).T
+extForce = np.array([0.0, 0.0, 50.0])
 # FLAGS
 EXTERNAL_FORCE = True
 

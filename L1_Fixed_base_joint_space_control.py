@@ -6,7 +6,7 @@ from numpy import nan
 import math
 import time as tm
 import eigenpy
-eigenpy.switchToNumpyMatrix()
+
 import os
 from base_controller.utils.common_functions import *
 from base_controller.utils.optimTools import quadprog_solve_qp
@@ -16,11 +16,11 @@ import ex_1_conf as conf
 
 #instantiate graphic utils
 ros_pub = RosPub()
-robot = importDisplayModel(False, False)
+robot = getRobotModel()
 
 
 # Init variables
-zero = np.matrix([0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
+zero = np.array([0.0, 0.0,0.0, 0.0, 0.0, 0.0])
 time = 0.0
 
 two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
@@ -28,16 +28,17 @@ two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-q_log = np.empty((6,0))*nan
-q_des_log = np.empty((6,0))*nan
-qd_log = np.empty((6,0))*nan
-qd_des_log = np.empty((6,0))*nan
-qdd_log = np.empty((6,0))*nan
-qdd_des_log = np.empty((6,0))*nan
-tau_log = np.empty((6,0))*nan
+q_log = np.empty((6))*nan
+q_des_log = np.empty((6))*nan
+qd_log = np.empty((6))*nan
+qd_des_log = np.empty((6))*nan
+qdd_log = np.empty((6))*nan
+qdd_des_log = np.empty((6))*nan
+tau_log = np.empty((6))*nan
 f_log = np.empty((3,0))*nan
 x_log = np.empty((3,0))*nan
-time_log =  np.array([])
+time_log =  np.empty((0,0))*nan
+
 
 
 # EXERCISE 9: 
@@ -61,6 +62,7 @@ while True:
     q_des  = conf.q0 +   np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
     qd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
     qdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
+
     # Set constant reference after a while
     if time >= conf.exp_duration_sin:
         q_des  = conf.q0
@@ -91,7 +93,7 @@ while True:
     h = robot.nle(q, qd, False)
     #gravity terms                
     g = robot.gravity(q)
-				
+
         
     # EXERCISE  5: PD control critical damping
 #    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
@@ -104,17 +106,17 @@ while True:
                                 
     #CONTROLLERS                                    
     #Exercise 3:  PD control
-    #tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)
+    #tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)
     
     # Exercise 6: PD control + Gravity Compensation
-    #tau = conf.kp*(q_des-q) + conf.kd*(qd_des-qd)  + g
+    tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
     
     # Exercise 7: PD + gravity + Feed-Forward term
-    #tau= np.diag(M)*qdd_des + conf.kp*(q_des-q) + conf.kd*(qd_des-qd) + g
+    #tau= np.diag(M).dot(qdd_des) + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd) + g
 
     # EXERCISE 8_ Inverse Dynamics
-    tau=M*(qdd_des+ conf.kp*(q_des-q)+ conf.kd*(qd_des-qd)) + h    
-       
+    #tau= M.dot(qdd_des+ conf.kp.dot(q_des-q)+ conf.kd.dot(qd_des-qd)) + h    
+
     # Add external force if any (EXERCISE 11)
     if conf.EXTERNAL_FORCE  and time>2.0:
      #compute Jacobian and its derivative in the world frame  
@@ -122,28 +124,30 @@ while True:
      J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
      # take first 3 rows of J6 cause we have a point contact            
      J = J6[:3,:] 					
-     tau += J.transpose()*conf.extForce
+     tau += J.transpose().dot(conf.extForce)
      # (for plotting purposes) compute frame end effector position and velocity in the WF   
      x = robot.framePlacement(q, frame_ee).translation    
-     ros_pub.add_arrow(x.A1.tolist(),conf.extForce/100) 
+     ros_pub.add_arrow(x,conf.extForce/100) 
     
+
     #SIMULATION of the forward dynamics    
     M_inv = np.linalg.inv(M)  
-    qdd = M_inv*(tau-h)    
+    qdd = M_inv.dot(tau-h)    
     
     # Forward Euler Integration    
-    qd = qd + qdd*conf.dt
-    q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
+    qd = qd + qdd*conf.dt    
+    q = q + conf.dt*qd  + 0.5*conf.dt*conf.dt*qdd
     
+
     # Log Data into a vector
-    time_log = np.hstack((time_log, time))				
-    q_log = np.hstack((q_log, q ))
-    q_des_log= np.hstack((q_des_log, q_des))
-    qd_log= np.hstack((qd_log, qd))
-    qd_des_log= np.hstack((qd_des_log, qd_des))
-    qdd_log= np.hstack((qdd_log, qd))
-    qdd_des_log= np.hstack((qdd_des_log, qdd_des))
-    tau_log = np.hstack((tau_log, tau))                
+    time_log = np.append(time_log, time)	
+    q_log = np.vstack((q_log, q ))
+    q_des_log= np.vstack((q_des_log, q_des))
+    qd_log= np.vstack((qd_log, qd))
+    qd_des_log= np.vstack((qd_des_log, qd_des))
+    qdd_log= np.vstack((qdd_log, qd))
+    qdd_des_log= np.vstack((qdd_des_log, qdd_des))
+    tau_log = np.vstack((tau_log, tau))                
  
     # update time
     time = time + conf.dt                  
@@ -159,7 +163,7 @@ while True:
             
 ros_pub.deregister_node()
         
-                    
+                 
                 
 # plot joint variables                                                                              
 plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
