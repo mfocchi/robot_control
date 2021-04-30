@@ -117,18 +117,40 @@ while True:
     # EXERCISE 8_ Inverse Dynamics
     #tau= M.dot(qdd_des+ conf.kp.dot(q_des-q)+ conf.kd.dot(qd_des-qd)) + h    
 
-    # Add external force if any (EXERCISE 11)
-    if conf.EXTERNAL_FORCE  and time>2.0:
-     #compute Jacobian and its derivative in the world frame  
+   
+    x = robot.framePlacement(q, frame_ee).translation 
+				    # compute jacobian of the end effector (in the WF)        
+    J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
+    # take first 3 rows of J6 cause we have a point contact            
+    J = J6[:3,:] 
+    			
+    
+
+    if conf.EXTERNAL_FORCE: 
+     #compute ee position  in the world frame  
+     x = robot.framePlacement(q, frame_ee).translation  
      # compute jacobian of the end effector (in the WF)
      J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
      # take first 3 rows of J6 cause we have a point contact            
      J = J6[:3,:] 					
-     tau += J.transpose().dot(conf.extForce)
-     # (for plotting purposes) compute frame end effector position and velocity in the WF   
-     x = robot.framePlacement(q, frame_ee).translation    
-     ros_pub.add_arrow(x,conf.extForce/100) 
+
+     # Add external force at T =2.0s (EXERCISE 11)
+     if time>2.0:         
+         F_env = conf.extForce
+     else:
+         F_env = np.array([0.0, 0.0, 0.0])  									
+			
+	# Add  unilateral compliant contact (EXERCISE 12)
+#     xd = J.dot(qd)
+#     if (x[2]<0.0):      
+#        F_env = np.array([0, 0, -10000*(x[2]) -100*xd[2] ] )
+#     else:
+#        F_env = np.array([0.0, 0.0, 0.0])     								 
+							
+     tau += J.transpose().dot(F_env)     		      
+     ros_pub.add_arrow(x,F_env/100) 
     
+
 
     #SIMULATION of the forward dynamics    
     M_inv = np.linalg.inv(M)  

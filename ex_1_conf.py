@@ -28,7 +28,7 @@ freq = np.array([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0])    # frequency
 
 
 # Initial configuration / velocity / Acceleration
-q0  = np.array([ 0.0, 0.0, -0.5, 0.5, -1.57, 0.5]) 
+q0  = np.array([ 0.0, -0.3, 0.5, -1.57, -1.57, 0.5]) 
 qd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
 
