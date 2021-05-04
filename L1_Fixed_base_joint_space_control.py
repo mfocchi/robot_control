@@ -167,7 +167,7 @@ while True:
     q_des_log= np.vstack((q_des_log, q_des))
     qd_log= np.vstack((qd_log, qd))
     qd_des_log= np.vstack((qd_des_log, qd_des))
-    qdd_log= np.vstack((qdd_log, qd))
+    qdd_log= np.vstack((qdd_log, qdd))
     qdd_des_log= np.vstack((qdd_des_log, qdd_des))
     tau_log = np.vstack((tau_log, tau))                
  

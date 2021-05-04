@@ -82,13 +82,15 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
                 
 def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, euler = None, euler_des = None, f_log=None):
     plot_var_des_log = None
+			
     if name == 'position':
         plot_var_log = x_log
         if   (x_des_log is not None):                                
            plot_var_des_log = x_des_log                            
     elif name == 'force':
         plot_var_log = f_log
-    elif  name == 'velocity':    
+    elif  name == 'velocity': 
+        print "Plotting velocity"					
         plot_var_log = xd_log
         if   (xd_des_log is not None):                                
              plot_var_des_log = xd_des_log         
@@ -97,7 +99,7 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
         plot_var_des_log = euler_des                               
     else:
        print("wrong choice")                    
-       
+				
     lw_act=4  
     lw_des=7
                     
@@ -106,22 +108,22 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
     plt.subplot(3,1,1)
     plt.ylabel("end-effector x")
     if   (plot_var_des_log is not None):
-         plt.plot(time_log, plot_var_des_log[0,:].T, lw=lw_des, color = 'red')                    
-    plt.plot(time_log, plot_var_log[0,:].T, lw=lw_act, color = 'blue')
+         plt.plot(time_log, plot_var_des_log[:-1,0], lw=lw_des, color = 'red')                    
+    plt.plot(time_log, plot_var_log[:-1,0], lw=lw_act, color = 'blue')
     plt.grid()
     
     plt.subplot(3,1,2)
     plt.ylabel("end-effector y")    
     if   (plot_var_des_log is not None):
-         plt.plot(time_log, plot_var_des_log[1,:].T, lw=lw_des, color = 'red')                    
-    plt.plot(time_log, plot_var_log[1,:].T, lw=lw_act, color = 'blue')
+         plt.plot(time_log, plot_var_des_log[:-1,1], lw=lw_des, color = 'red')                    
+    plt.plot(time_log, plot_var_log[:-1,1], lw=lw_act, color = 'blue')
     plt.grid()
     
     plt.subplot(3,1,3)
     plt.ylabel("end-effector z")    
     if   (plot_var_des_log is not None):
-        plt.plot(time_log, plot_var_des_log[2,:].T, lw=lw_des, color = 'red')                                        
-    plt.plot(time_log, plot_var_log[2,:].T, lw=lw_act, color = 'blue')
+        plt.plot(time_log, plot_var_des_log[:-1,2], lw=lw_des, color = 'red')                                        
+    plt.plot(time_log, plot_var_log[:-1,2], lw=lw_act, color = 'blue')
     plt.grid()
       
     
