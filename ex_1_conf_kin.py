@@ -11,27 +11,27 @@ import math
 
 dt = 0.001                   # controller time step
 exp_duration_sin = 3.0 #sine reference duration
-exp_duration = 5.0 #simulation duration
+exp_duration = 3.0 #simulation duration
 
-SLOW_FACTOR = 1 #to slow down simulation
+SLOW_FACTOR = 2#to slow down simulation
 
 frame_name = 'ee_link'    # name of the frame to control (end-effector)
 
 #PD controller
 ## Matrix of gains
-kp = np.eye(6)*600  # proportional gains 
-kd = np.eye(6)*20 # derivative gains (critical damping)
+kp = np.eye(4)*600  # proportional gains 
+kd = np.eye(4)*20 # derivative gains (critical damping)
 
 ## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY
-amp = np.array([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0])    # amplitude
-phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])      # phase
-freq = np.array([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0])    # frequency
+amp = np.array([ 0.0, 0.2, 0.0, 0.0,])    # amplitude
+phi = np.array([ 0.0, 0.0, 0.0, 0.0,])      # phase
+freq = np.array([ 0.0, 1.0, 0.0, 0.0,])    # frequency
 
 
 # Initial configuration / velocity / Acceleration
-q0  = np.array([ 0.0, -0.3, 0.5, -1.57, -1.57, 0.5]) 
-qd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
+q0  = np.array([-0.0, 0.0,  0.0,  0.0]) 
+qd0 = np.array([ 0.0, 0.0, 0.0, 0.0])
+qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0]) 
 
 
 #EXERCISE 4: high gains

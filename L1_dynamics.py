@@ -10,17 +10,17 @@ import eigenpy
 import os
 from base_controller.utils.common_functions import *
 from base_controller.utils.optimTools import quadprog_solve_qp
-from base_controller.utils.ros_publish import RosPub
+from base_controller.utils.ros_publish_ur4 import RosPub
 
-import ex_1_conf as conf
+import ex_1_conf_kin as conf
 
 #instantiate graphic utils
 ros_pub = RosPub()
-robot = getRobotModel()
+robot = getRobotModel4()
 
 
 # Init variables
-zero = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+zero = np.array([0.0, 0.0, 0.0, 0.0])
 time = 0.0
 
 two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
@@ -28,13 +28,13 @@ two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-q_log = np.empty((6))*nan
-q_des_log = np.empty((6))*nan
-qd_log = np.empty((6))*nan
-qd_des_log = np.empty((6))*nan
-qdd_log = np.empty((6))*nan
-qdd_des_log = np.empty((6))*nan
-tau_log = np.empty((6))*nan
+q_log = np.empty((4))*nan
+q_des_log = np.empty((4))*nan
+qd_log = np.empty((4))*nan
+qd_des_log = np.empty((4))*nan
+qdd_log = np.empty((4))*nan
+qdd_des_log = np.empty((4))*nan
+tau_log = np.empty((4))*nan
 f_log = np.empty((3,0))*nan
 x_log = np.empty((3,0))*nan
 time_log =  np.empty((0,0))*nan
@@ -69,15 +69,15 @@ while True:
         qd_des=zero
         qdd_des=zero          
 
-    # EXERCISE 2: Step reference Generation
-#    if time > 2.0:
-#        q_des = conf.q0 + np.matrix([ 0.0, -0.4, 0.0, 0.0,  0.5, 0.0]).T 
-#        qd_des =  zero
-#        qdd_des = zero 
-#    else:
-#        q_des = conf.q0
-#        qd_des =  zero
-#        qdd_des = zero    
+#     # EXERCISE 2: Step reference Generation
+# #    if time > 2.0:
+# #        q_des = conf.q0 + np.matrix([ 0.0, -0.4, 0.0, 0.0,  0.5, 0.0]).T 
+# #        qd_des =  zero
+# #        qdd_des = zero 
+# #    else:
+# #        q_des = conf.q0
+# #        qd_des =  zero
+# #        qdd_des = zero    
 
  
     # Decimate print of time
@@ -85,7 +85,9 @@ while True:
        #print('Time %.3f s'%(time))
     if time >= conf.exp_duration:
         break
-                            
+
+    print("q value: ", q)
+    print("qd value: ", qd)
     robot.computeAllTerms(q, qd) 
     # joint space inertia matrix                
     M = robot.mass(q, False)
@@ -95,14 +97,14 @@ while True:
     g = robot.gravity(q)
 
         
-    # EXERCISE  5: PD control critical damping
-#    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
-#    conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1]*M[1,1])
-#    conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2]*M[2,2])
-#    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
-#    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
-#    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
-#    print (2*np.sqrt(300*M[4,4])    )
+#     # EXERCISE  5: PD control critical damping
+# #    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
+# #    conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1]*M[1,1])
+# #    conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2]*M[2,2])
+# #    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
+# #    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
+# #    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
+# #    print (2*np.sqrt(300*M[4,4])    )
                                 
     #CONTROLLERS                                    
     #Exercise 3:  PD control
@@ -124,8 +126,7 @@ while True:
     # take first 3 rows of J6 cause we have a point contact            
     J = J6[:3,:] 
     			
-    print("frame ee:", frame_ee)
-    print("End-effector Jacobian:", J6)
+    
 
     if conf.EXTERNAL_FORCE: 
      #compute ee position  in the world frame  
@@ -141,12 +142,12 @@ while True:
      else:
          F_env = np.array([0.0, 0.0, 0.0])  									
 			
-	# Add  unilateral compliant contact (EXERCISE 12)
-#     xd = J.dot(qd)
-#     if (x[2]<0.0):      
-#        F_env = np.array([0, 0, -10000*(x[2]) -100*xd[2] ] )
-#     else:
-#        F_env = np.array([0.0, 0.0, 0.0])     								 
+# 	# Add  unilateral compliant contact (EXERCISE 12)
+# #     xd = J.dot(qd)
+# #     if (x[2]<0.0):      
+# #        F_env = np.array([0, 0, -10000*(x[2]) -100*xd[2] ] )
+# #     else:
+# #        F_env = np.array([0.0, 0.0, 0.0])     								 
 							
      tau += J.transpose().dot(F_env)     		      
      ros_pub.add_arrow(x,F_env/100) 
@@ -172,9 +173,9 @@ while True:
     qdd_des_log= np.vstack((qdd_des_log, qdd_des))
     tau_log = np.vstack((tau_log, tau))                
  
+    print("tau value: ", tau)
     # update time
     time = time + conf.dt                  
-                
     #publish joint variables
     ros_pub.publish(robot, q, qd, tau)                   
     tm.sleep(conf.dt*conf.SLOW_FACTOR)

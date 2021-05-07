@@ -30,7 +30,21 @@ def getRobotModel():
     #get urdf from ros just in case you need
     #robot_urdf_ros = URDF.from_parameter_server()                                                                                                                                                                                                                                                                                                              
     
-    return robot                    
+    return robot    
+
+def getRobotModel4():    
+    
+    # Import the model
+    ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
+    path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
+    urdf      = path + "/ur_description/urdf/ur4_robot.urdf";
+    srdf      = path + '/ur_description/srdf/ur_gripper.srdf'
+    robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
+                                     
+    #get urdf from ros just in case you need
+    #robot_urdf_ros = URDF.from_parameter_server()                                                                                                                                                                                                                                                                                                              
+    
+    return robot                  
 
 def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None):
     if name == 'position':

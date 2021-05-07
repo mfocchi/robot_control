@@ -10,17 +10,17 @@ import eigenpy
 import os
 from base_controller.utils.common_functions import *
 from base_controller.utils.optimTools import quadprog_solve_qp
-from base_controller.utils.ros_publish import RosPub
+from base_controller.utils.ros_publish_ur4 import RosPub
 
-import ex_1_conf as conf
+import ex_1_conf_kin as conf
 
 #instantiate graphic utils
 ros_pub = RosPub()
-robot = getRobotModel()
+robot = getRobotModel4()
 
 
 # Init variables
-zero = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+zero = np.array([0.0, 0.0, 0.0, 0.0])
 time = 0.0
 
 two_pi_f             = 2*np.pi*conf.freq   # frequency (time 2 PI)
@@ -28,13 +28,13 @@ two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-q_log = np.empty((6))*nan
-q_des_log = np.empty((6))*nan
-qd_log = np.empty((6))*nan
-qd_des_log = np.empty((6))*nan
-qdd_log = np.empty((6))*nan
-qdd_des_log = np.empty((6))*nan
-tau_log = np.empty((6))*nan
+q_log = np.empty((4))*nan
+q_des_log = np.empty((4))*nan
+qd_log = np.empty((4))*nan
+qd_des_log = np.empty((4))*nan
+qdd_log = np.empty((4))*nan
+qdd_des_log = np.empty((4))*nan
+tau_log = np.empty((4))*nan
 f_log = np.empty((3,0))*nan
 x_log = np.empty((3,0))*nan
 time_log =  np.empty((0,0))*nan
@@ -86,6 +86,11 @@ while True:
     if time >= conf.exp_duration:
         break
                             
+    
+    # print("q:")
+    # print(q)
+    # print("qd:")
+    # print(qd)
     robot.computeAllTerms(q, qd) 
     # joint space inertia matrix                
     M = robot.mass(q, False)
@@ -109,7 +114,7 @@ while True:
     #tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)
     
     # Exercise 6: PD control + Gravity Compensation
-    tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
+    tau = 0*conf.kp.dot(q_des-q) + 0*conf.kd.dot(qd_des-qd)  + 0*g - 0.5*qd
     
     # Exercise 7: PD + gravity + Feed-Forward term
     #tau= np.diag(M).dot(qdd_des) + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd) + g
@@ -124,22 +129,22 @@ while True:
     # take first 3 rows of J6 cause we have a point contact            
     J = J6[:3,:] 
     			
-    print("frame ee:", frame_ee)
-    print("End-effector Jacobian:", J6)
+    # print("frame ee:", frame_ee)
+    # print("End-effector Jacobian:", J6)
 
-    if conf.EXTERNAL_FORCE: 
-     #compute ee position  in the world frame  
-     x = robot.framePlacement(q, frame_ee).translation  
-     # compute jacobian of the end effector (in the WF)
-     J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
-     # take first 3 rows of J6 cause we have a point contact            
-     J = J6[:3,:] 					
+    # if conf.EXTERNAL_FORCE: 
+    #  #compute ee position  in the world frame  
+    #  x = robot.framePlacement(q, frame_ee).translation  
+    #  # compute jacobian of the end effector (in the WF)
+    #  J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
+    #  # take first 3 rows of J6 cause we have a point contact            
+    #  J = J6[:3,:] 					
 
-     # Add external force at T =2.0s (EXERCISE 11)
-     if time>2.0:         
-         F_env = conf.extForce
-     else:
-         F_env = np.array([0.0, 0.0, 0.0])  									
+    #  # Add external force at T =2.0s (EXERCISE 11)
+    #  if time>2.0:         
+    #      F_env = conf.extForce
+    #  else:
+    #      F_env = np.array([0.0, 0.0, 0.0])  									
 			
 	# Add  unilateral compliant contact (EXERCISE 12)
 #     xd = J.dot(qd)
@@ -148,8 +153,8 @@ while True:
 #     else:
 #        F_env = np.array([0.0, 0.0, 0.0])     								 
 							
-     tau += J.transpose().dot(F_env)     		      
-     ros_pub.add_arrow(x,F_env/100) 
+    #  tau += 0*J.transpose().dot(F_env)     		      
+    #  ros_pub.add_arrow(x,F_env/100) 
     
 
 
@@ -159,7 +164,7 @@ while True:
     
     # Forward Euler Integration    
     qd = qd + qdd*conf.dt    
-    q = q + conf.dt*qd  + 0.5*conf.dt*conf.dt*qdd
+    q = q + conf.dt*qd  + 0.5*conf.dt*conf.dt*qdd 
     
 
     # Log Data into a vector
