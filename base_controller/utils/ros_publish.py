@@ -16,12 +16,12 @@ import time as tm
 
 
 class RosPub():
-    def __init__(self, only_visual = False):
-        if (not only_visual):                    
+    def __init__(self, robot_name="ur5", only_visual = False):
+        if (not only_visual):                           
             #launch rviz node if not yet done will start roscore too
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
             roslaunch.configure_logging(uuid)
-            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/visualize.launch"])
+            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/visualize_"+robot_name+".launch"])
             self.launch.start()                                                    
             ros.loginfo("RVIZ started")
             tm.sleep(1.0)
@@ -46,7 +46,7 @@ class RosPub():
         all_names = [name for name in robot.model.names]            
         msg = JointState()
         msg.header.stamp = ros.Time.now()            
-        msg.name = all_names[-6:] #remove universe joint that is not active
+        msg.name = all_names[-robot.nq:] #remove universe joint that is not active
         msg.position = q                
         msg.velocity = qd                
         msg.effort = tau              

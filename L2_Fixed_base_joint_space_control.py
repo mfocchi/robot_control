@@ -16,7 +16,7 @@ import ex_2_conf as conf
 
 #instantiate graphic utils
 os.system("killall rosmaster")
-ros_pub = RosPub()
+ros_pub = RosPub("ur5")
 robot = getRobotModel("ur5")
 
 
