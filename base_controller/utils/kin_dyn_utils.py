@@ -197,89 +197,96 @@ def geometric2analyticJacobian(J,T_0e):
 
 def numericalInverseKinematics(p,q0):
 
-    epsilon = 0.000001
-    alpha = 0.1
-    gamma = 0.1
-    e_bar1 = 1
+    # Error initialization
     e_bar = 1
-    lambda_ = 0.0000001
-    beta = 0.5
-    max_iter = 10000
     iter = 0
-    q_init = q0
 
+    # Recursion parameters
+    epsilon = 0.000001  # Tolerance
+    # alpha = 0.1
+    alpha = 1  # Step size
+    lambda_ = 0.0000001  # Damping coefficient for pseudo-inverse
+    max_iter = 10000  # Maximum number of iterations
+
+    # For line search only
+    gamma = 0.5
+    beta = 0.5
+
+    # Inverse kinematics without line search
+    # while np.linalg.norm(e_bar) >= epsilon and iter < max_iter:
+    #     J, _, _, _, _ = computeEndEffectorJacobian(q0)
+    #     _, _, _, _, T_0e = directKinematics(q0)
+    #
+    #     p_e = T_0e[:3, 3]
+    #     R = T_0e[:3, :3]
+    #     rpy = rot2eul(R)
+    #     roll = rpy[0]
+    #     p_e = np.append(p_e, roll)
+    #     e_bar = p_e - p
+    #
+    #     J_bar = geometric2analyticJacobian(J, T_0e)
+    #     J_bar = J_bar[:4, :]
+    #     JtJ = np.dot(J_bar.T, J_bar) + np.identity(J_bar.shape[1]) * lambda_
+    #     JtJ_inv = np.linalg.inv(JtJ)
+    #     P = JtJ_inv.dot(J_bar.T)
+    #     dq = -P.dot(e_bar)
+    #     q1 = q0 + dq * alpha
+    #     q0 = q1
+    #     iter += 1
+
+    # Inverse kinematics with line search
     while np.linalg.norm(e_bar) >= epsilon and iter < max_iter:
-        
+
         J,_,_,_,_ = computeEndEffectorJacobian(q0)
         _, _, _, _, T_0e = directKinematics(q0)
 
+        # Compute Newton step
         p_e = T_0e[:3,3]
         R = T_0e[:3,:3]
         rpy = rot2eul(R)
         roll = rpy[0]
         p_e = np.append(p_e,roll)
         e_bar = p_e - p
-
         J_bar = geometric2analyticJacobian(J,T_0e)
         J_bar = J_bar[:4,:]
         JtJ= np.dot(J_bar.T,J_bar) + np.identity(J_bar.shape[1])*lambda_
         JtJ_inv = np.linalg.inv(JtJ)
         P = JtJ_inv.dot(J_bar.T)
         dq = -P.dot(e_bar)
+
+        # Update
         q1 = q0 + dq*alpha
+
+        #Compute error of next step
+        _, _, _, _, T_0e1 = directKinematics(q1)
+        p_e1 = T_0e1[:3,3]
+        R1 = T_0e1[:3,:3]
+        rpy1 = rot2eul(R1)
+        roll1 = rpy1[0]
+        p_e1 = np.append(p_e1,roll1)
+        e_bar1 = p_e - p_e1
+        e_bar_check = -np.linalg.norm(e_bar) + np.linalg.norm(e_bar1)
+        threshold = gamma*alpha*np.linalg.norm(e_bar)
+
+        if e_bar_check >= threshold:
+            alpha = beta*alpha
+            print ("alpha: ", alpha)
+
         q0 = q1
         iter += 1
 
-    # while np.linalg.norm(e_bar) >= epsilon and iter < max_iter:
-        
-    #     J,_,_,_,_ = computeEndEffectorJacobian(q0)
-    #     _, _, _, _, T_0e = directKinematics(q0)
-
-    #     p_e = T_0e[:3,3]
-    #     R = T_0e[:3,:3]
-    #     rpy = rot2eul(R)
-    #     roll = rpy[0]
-    #     p_e = np.append(p_e,roll)
-    #     e_bar = p_e - p
-
-    #     J_bar = geometric2analyticJacobian(J,T_0e)
-    #     J_bar = J_bar[:4,:]
-    #     JtJ= np.dot(J_bar.T,J_bar) + np.identity(J_bar.shape[1])*lambda_
-    #     JtJ_inv = np.linalg.inv(JtJ)
-    #     P = JtJ_inv.dot(J_bar.T)
-    #     dq = -P.dot(e_bar)
-    #     q1 = q0 + dq*alpha
-
-    #     _, _, _, _, T_0e1 = directKinematics(q1)
-    #     p_e1 = T_0e1[:3,3]
-    #     R1 = T_0e1[:3,:3]
-    #     rpy1 = rot2eul(R1)
-    #     roll1 = rpy1[0]
-    #     p_e1 = np.append(p_e1,roll1)
-    #     e_bar1 = p_e1 - p_e
-
-    #     e_bar_check = -np.linalg.norm(e_bar) + np.linalg.norm(e_bar1)
-    #     threshold = gamma*alpha*np.linalg.norm(e_bar)
-
-    #     if e_bar_check >= threshold:
-    #         alpha = beta*alpha
-    #         print alpha
-
-    #     q0 = q1
-    #     iter += 1
-
     if iter >= max_iter:
-        print("Maximum number of iterations reached no solution was found")
+        print("Maximum number of iterations reached no solution was found, going to closest solution")
         q0 = q1
     else:
         print("Inverse kinematics solved in {} iterations".format(iter))
-        
+
     # unwrapping prevents from outputs larger than 2pi
     for i in range(len(q0)):
-        while q0[i] >= 2*math.pi:
-            q0[i] -= 2*math.pi 
-        while q0[i] < -2*math.pi:
-            q0[i] += 2*math.pi 
+        while q0[i] >= 2 * math.pi:
+            q0[i] -= 2 * math.pi
+        while q0[i] < -2 * math.pi:
+            q0[i] += 2 * math.pi
 
     return q0
 
