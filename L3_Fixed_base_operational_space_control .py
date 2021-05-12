@@ -14,8 +14,9 @@ from base_controller.utils.math_tools import Math
 import ex_3_conf as conf
 
 #instantiate graphic utils
+os.system("killall rosmaster")
 ros_pub = RosPub()
-robot = getRobotModel()
+robot = getRobotModel("ur5")
 
 math = Math()
 # Init variables

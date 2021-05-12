@@ -57,7 +57,7 @@ from base_controller.utils.custom_robot_wrapper import RobotWrapper
 
 
 # L5 Controller specific
-from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint, getRobotModel
 from base_controller.utils.controlRoutines import projectionBasedController, QPController
 from scipy.linalg import block_diag
 
@@ -83,7 +83,7 @@ class ControlThread(threading.Thread):
         #start ros impedance controller
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)   
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"])
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller.launch"])
         #only available in ros lunar
 #        roslaunch_args=rvizflag                             
 #        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"],roslaunch_args=[roslaunch_args])
@@ -129,13 +129,9 @@ class ControlThread(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
                                 
                                 
-       # Loading a robot model of HyQ (Pinocchio)
-        ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
-        path      = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
-        urdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".urdf";
-        srdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".srdf";
-        self.robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
-
+        # Loading a robot model of HyQ (Pinocchio)
+        self.robot = getRobotModel("hyq")
+        
         #send data to param server
         self.verbose = conf.verbose                                                                                                          
         self.u.putIntoGlobalParamServer("verbose", self.verbose)                               

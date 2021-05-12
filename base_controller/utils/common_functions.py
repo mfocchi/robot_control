@@ -18,13 +18,13 @@ plt.ion()
 plt.close() 
 
 
-def getRobotModel():    
+def getRobotModel(robot_name="ur5"):    
     
     # Import the model
     ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
-    path      = os.environ.get('UR5_MODEL_DIR', ERROR_MSG)
-    urdf      = path + "/ur_description/urdf/ur.urdf";
-    srdf      = path + '/ur_description/srdf/ur_gripper.srdf'
+    path      = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
+    urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"
+    srdf      = path + "/robot_urdf/" + robot_name + ".srdf"
     robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
                                      
     #get urdf from ros just in case you need

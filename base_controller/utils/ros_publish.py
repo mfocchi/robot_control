@@ -21,7 +21,7 @@ class RosPub():
             #launch rviz node if not yet done will start roscore too
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
             roslaunch.configure_logging(uuid)
-            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/robot_control/visualize.launch"])
+            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/visualize.launch"])
             self.launch.start()                                                    
             ros.loginfo("RVIZ started")
             tm.sleep(1.0)

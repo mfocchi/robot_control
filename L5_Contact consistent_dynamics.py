@@ -14,8 +14,9 @@ from base_controller.utils.ros_publish import RosPub
 import ex_5_conf as conf
     
 #instantiate graphic utils
+os.system("killall rosmaster")    
 ros_pub = RosPub()
-robot = getRobotModel()
+robot = getRobotModel("ur5")
 
 # Init variables
 zero = np.array([0.0, 0.0,0.0, 0.0, 0.0, 0.0])

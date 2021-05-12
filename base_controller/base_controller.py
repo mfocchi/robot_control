@@ -49,6 +49,8 @@ from utils.utils import Utils
 from utils.math_tools import *
 from numpy import nan
 
+from utils.common_functions import getRobotModel
+
 #robot specific 
 from hyq_kinematics.hyq_kinematics import HyQKinematics
 
@@ -63,7 +65,7 @@ class BaseController(threading.Thread):
         
        #clean up previous process                
 
-        os.system("killall gzserver gzclient")                                
+        os.system("killall rosmaster gzserver gzclient")                                
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
             print 'ROS MASTER is active'
             nodes = rosnode.get_node_names()
@@ -75,7 +77,7 @@ class BaseController(threading.Thread):
         #start ros impedance controller
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)   
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"])
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller.launch"])
         #only available in ros lunar
 #        roslaunch_args=rvizflag                             
 #        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"],roslaunch_args=[roslaunch_args])
@@ -122,12 +124,8 @@ class BaseController(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
                                 
                                 
-       # Loading a robot model of HyQ (Pinocchio)
-        ERROR_MSG = 'You should set the environment variable UR5_MODEL_DIR to something like "$DEVEL_DIR/install/share"\n';
-        path      = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
-        urdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".urdf";
-        srdf      = path + "/ros_impedance_controller/config/"+ self.robot_name+".srdf";
-        self.robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
+        # Loading a robot model of HyQ (Pinocchio)
+        self.robot = getRobotModel("hyq")
 								
 								
 	   #send data to param server
