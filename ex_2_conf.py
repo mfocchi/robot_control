@@ -16,41 +16,30 @@ SLOW_FACTOR = 1 #to slow down simulation
 
 frame_name = 'ee_link'    # name of the frame to control (end-effector)
 
-## Matrix of KP gains
-Kx= np.eye(3)
-Kx[0,0] = 1000
-Kx[1,1] = 1000
-Kx[2,2] = 1000
+#PD controller
+## Matrix of gains
+kp = np.eye(6)*600  # proportional gains 
+kd = np.eye(6)*20 # derivative gains (critical damping)
 
-Dx = np.eye(3)
-Dx[0,0] = 300
-Dx[1,1] = 300
-Dx[2,2] = 300
+## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY
+amp = np.array([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0])    # amplitude
+phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])      # phase
+freq = np.array([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0])    # frequency
 
-# P angular gains				
-Ktheta= np.eye(3)
-Ktheta[0,0] = 500
-Ktheta[1,1] = 500
-Ktheta[2,2] = 500
-# D angular gains
-Dtheta= np.eye(3)
-Dtheta[0,0] = 30
-Dtheta[1,1] = 30
-Dtheta[2,2] = 30
-
-## PARAMETERS OF REFERENCE CARTESIAN SINUSOIDAL TRAJECTORY
-amp=np.array([ 0.1, 0.0, 0.0])   # amplitude
-phi =np.array([ 0.0, 0.0, 0.0])  # phase
-freq=np.array([ 1.5, 0.0, 0.0])  # frequency
 
 # Initial configuration / velocity / Acceleration
-q0  = np.array([ 0.0, -1, 1, 0.5, 0, 0.5])
+q0  = np.array([ 0.0, -0.3, 0.5, -1.57, -1.57, 0.5]) 
 qd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
 
-# EXERCISE 9: Add external force
+
+#EXERCISE 4: high gains
+#kp=np.eye(6)*500
+#kd=np.eye(6)*30
+
+
 # Value of linear external force
-extForce = np.array([0.0, 0.0, 200.0])
+extForce = np.array([0.0, 0.0, 50.0])
 # FLAGS
 EXTERNAL_FORCE = True
 

@@ -20,7 +20,7 @@ from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstr
 from scipy.linalg import block_diag
 
 # L5 config file
-import ex_5_conf as conf
+import ex_6_conf as conf
  
 class AdvancedController(BaseController): 
 

@@ -12,13 +12,13 @@ np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
 
 # Loading a robot model
-model = example_robot_data.loadHyQ().model
+model = example_robot_data.load('hyq').model
 data = model.createData()
 
 #start configuration
 v  = np.array([0.0   ,  0.0 , 0.0,  0.0,  0.0,       0.0, #underactuated 	
 		     0.0,  0.0,  0.0,  0.0,     0.0,  0.0,  0.0,  0.0,  0.0,    0.0,  0.0,  0.0]) #actuated
-q = example_robot_data.loadHyQ().q0
+q = example_robot_data.load('hyq').q0
 
 # Update the joint and frame placements
 pin.forwardKinematics(model,data,q,v)
