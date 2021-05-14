@@ -44,10 +44,10 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
         plot_var_des_log  = qdd_des_log
     elif name == 'torque':
         plot_var_log = tau_log
-        if   (tau_ffwd_log is not None):    								
+        if   (tau_ffwd_log is not None):                                    
             plot_var_des_log  = tau_ffwd_log 
         else:
-		  plot_var_des_log = None												
+          plot_var_des_log = None                                                
     else:
        print(colored("plotJopnt error: wrong input string", "red") )
        return                                   
@@ -55,34 +55,35 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
     lw_des=7
     lw_act=4          
 
-    njoints = plot_var_log.shape[1]																
-    
+    njoints = plot_var_log.shape[1]                                                                
+
     #neet to transpose the matrix other wise it cannot be plot with numpy array    
-    fig = plt.figure(figure_id)				
+    fig = plt.figure(figure_id)                
     fig.suptitle(name, fontsize=20)             
     labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
     labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
 
     if njoints <= 6:
-        labels = labels_ur 		
-    if njoints <= 12:
-        labels = labels_hyq 	             
+        labels = labels_ur         
+    if njoints == 12:
+        labels = labels_hyq                  
 
     
     for jidx in range(njoints):
-				
-	    plt.subplot(njoints/2,2,jidx+1)
-	    plt.ylabel(labels[jidx])    
-	    plt.plot(time_log, plot_var_des_log[:-1,jidx], linestyle='-', lw=lw_des,color = 'red')
-	    plt.plot(time_log, plot_var_log[:-1,jidx],linestyle='-', lw=lw_act,color = 'blue')
-	    plt.grid()
+                
+        plt.subplot(njoints/2,2,jidx+1)
+        plt.ylabel(labels[jidx])    
+        if   (plot_var_des_log is not None):
+             plt.plot(time_log, plot_var_des_log[:-1,jidx], linestyle='-', lw=lw_des,color = 'red')
+        plt.plot(time_log, plot_var_log[:-1,jidx],linestyle='-', lw=lw_act,color = 'blue')
+        plt.grid()
                 
     
 
                 
 def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd_des_log=None, euler = None, euler_des = None, f_log=None):
     plot_var_des_log = None
-			
+            
     if name == 'position':
         plot_var_log = x_log
         if   (x_des_log is not None):                                
@@ -90,7 +91,7 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
     elif name == 'force':
         plot_var_log = f_log
     elif  name == 'velocity': 
-        print "Plotting velocity"					
+        print "Plotting velocity"                    
         plot_var_log = xd_log
         if   (xd_des_log is not None):                                
              plot_var_des_log = xd_des_log         
@@ -99,7 +100,7 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
         plot_var_des_log = euler_des                               
     else:
        print("wrong choice")                    
-				
+                
     lw_act=4  
     lw_des=7
                     
@@ -195,7 +196,7 @@ def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW,
     
         
 def plotGRFs(figure_id, time_log, des_forces, act_forces):
-	       
+           
     lw_act=4  
     lw_des=7
     # %% Input plots
@@ -208,14 +209,14 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, act_forces[0,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-				
+                
     plt.subplot(6,2,3)
     plt.ylabel("$LF_y$", fontsize=10)
     plt.plot(time_log, des_forces[1,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[1,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-				
+                
     plt.subplot(6,2,5)
     plt.ylabel("$LF_z$", fontsize=10)
     plt.plot(time_log, des_forces[2,:],linestyle='-',lw=lw_des,color = 'red')
@@ -225,26 +226,26 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
 
     #RF
     plt.subplot(6,2,2)
-    plt.ylabel("$RF_x$", fontsize=10)
+    plt.ylabel("$RF_x$", fontsize=plot_var_des_log10)
     plt.plot(time_log, des_forces[3,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[3,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-				
+                
     plt.subplot(6,2,4)
     plt.ylabel("$RF_y$", fontsize=10)
     plt.plot(time_log, des_forces[4,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[4,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-				
+                
     plt.subplot(6,2,6)
     plt.ylabel("$RF_z$", fontsize=10)
     plt.plot(time_log, des_forces[5,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[5,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((0,450))
-				
+                
      #LH
     plt.subplot(6,2,7)
     plt.ylabel("$LH_x$", fontsize=10)
@@ -252,22 +253,22 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, act_forces[6,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-				
+                
     plt.subplot(6,2,9)
     plt.ylabel("$LH_y$", fontsize=10)
     plt.plot(time_log, des_forces[7,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[7,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-				
-				
+                
+                
     plt.subplot(6,2,11)
     plt.ylabel("$LH_z$", fontsize=10)
     plt.plot(time_log, des_forces[8,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[8,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((0,450))
-				
+                
      #RH
     plt.subplot(6,2,8)
     plt.ylabel("$RH_x$", fontsize=10)
@@ -275,14 +276,14 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, act_forces[9,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-				
+                
     plt.subplot(6,2,10)
     plt.ylabel("$RH_y$", fontsize=10)
     plt.plot(time_log, des_forces[10,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[10,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     plt.ylim((-100,100))
-						
+                        
     plt.subplot(6,2,12)
     plt.ylabel("$RH_z$", fontsize=10)
     plt.plot(time_log, des_forces[11,:],linestyle='-',lw=lw_des,color = 'red')
@@ -291,11 +292,11 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.ylim((0,450))
 
 def plotConstraitViolation(figure_id,constr_viol_log):
-    fig = plt.figure(figure_id)			
+    fig = plt.figure(figure_id)            
     plt.plot(constr_viol_log[0,:],label="LF")
     plt.plot(constr_viol_log[1,:],label="RF")
     plt.plot(constr_viol_log[2,:],label="LH")
     plt.plot(constr_viol_log[3,:],label="RH")
     plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=2, mode="expand", borderaxespad=0.)
     plt.ylabel("Constr violation", fontsize=10)
-    plt.grid()	                                                             
+    plt.grid()                                                                 
