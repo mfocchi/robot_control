@@ -57,7 +57,7 @@ class RosPub():
     def publishVisual(self):                                
         #publish also the markers if any
         if len(self.markerArray.markers)>0:                                                                                                                            
-            self.marker_pub .publish(self.markerArray)  
+            self.marker_pub.publish(self.markerArray)  
         #reset the marker array making it ready for another round
         self.markerArray.markers = []                             
         self.id = 0
@@ -100,14 +100,44 @@ class RosPub():
        marker.action = marker.ADD  
        marker.points.append(Point(start[0], start[1], start[2]))    
        marker.points.append(Point(start[0] + vector[0], start[1] + vector[1], start[2] + vector[2]))                                                                                      
-       marker.scale.x = 0.05
-       marker.scale.y = 0.05
-       marker.scale.z = 0.05
+       marker.scale.x = 0.02
+       marker.scale.y = 0.04
+       marker.scale.z = 0.02
        marker.color.a = 1.0
 
        marker.id = self.id
        self.id += 1     
        self.markerArray.markers.append(marker)
+       
+    def add_cone(self,  origin, normal, friction_coeff, color = "green"):     
+        
+       height = 0.2;
+       radius = friction_coeff* height
+       tail_end = origin + normal*height; 
+       marker = Marker()
+       if (color == "green"):                    
+           marker.color.r = 0.0
+           marker.color.g = 1.0
+           marker.color.b = 0.0                    
+       if (color == "blue"):                    
+           marker.color.r = 0.0
+           marker.color.g = 0.0
+           marker.color.b = 1.0                                                
+
+       marker.header.frame_id = "world"
+       marker.type = marker.ARROW
+       marker.action = marker.ADD      
+       
+       marker.points.append(Point(tail_end[0], tail_end[1], tail_end[2]))    
+       marker.points.append(Point(origin[0], origin[1], origin[2]))
+       marker.scale.x = 0.0
+       marker.scale.y = 2*radius
+       marker.scale.z = height
+       marker.color.a = 0.7
+
+       marker.id = self.id
+       self.id += 1     
+       self.markerArray.markers.append(marker)   
                     
     def deregister_node(self):
         print("---------------------------------------------------------------")                       
