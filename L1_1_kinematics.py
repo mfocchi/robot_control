@@ -71,7 +71,6 @@ J,z1,z2,z3,z4 = eeJ(q)
 # compare with Pinocchio      
 Jee = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)  
 jacobian_diff = J - Jee
-print jacobian_diff
 
 ##################
 # exercise 2.3
@@ -83,22 +82,29 @@ J_r = g2a(J, T_0e)
 ###################
 
 # desired task space position
-p = np.array([-0.5, -0.2, 0.5, math.pi/3])
+# p = np.array([-0.5, -0.2, 0.5, math.pi/3])
 # outside of workspace, gets the solution with minumum error
-#p = np.array([-2.5, -0.2, 0.5, math.pi/3])
+# p = np.array([-2.5, -0.2, 0.5, math.pi/3])
+p = np.array([2.5, -0.2, -0.5, math.pi]) # not solvable, outside of workspace
 
 # initial value for numerical ik
-#q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi]) # good initialization
-q_i  = np.array([ -5, 5.0, -0.8, -math.pi]) # bad initialization
+q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi]) # good initialization
+# q_i  = np.array([ -5, 5.0, -0.8, -math.pi]) # bad initialization
+
 # solution of the numerical ik
 q_f = ik(p,q_i) 
 # compare solution with values obtained through direct kinematics
 T_01, T_02, T_03, T_04, T_0e = dk(q_f)
 rpy = rot2eul(T_0e[:3,:3])
 task_diff = p - np.hstack((T_0e[:3,3],rpy[0]))
-print "task"
-print task_diff
-print "qf"
+print "Point selected"
+print p
+print "Point obtained with IK solution"
+print np.hstack((T_0e[:3, 3], rpy[0]))
+print "Error"
+print np.linalg.norm(task_diff)
+
+print "Final joint positions"
 print q_f
     
 ###################
@@ -134,12 +140,13 @@ while np.count_nonzero(q - q_f) :
         print ("Shutting Down")                    
         break;
 
+
 ros_pub.deregister_node()  
                 
 # plot joint variables                                                                              
-plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+# plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+# plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+# plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 
 
 
