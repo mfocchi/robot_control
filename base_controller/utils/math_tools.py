@@ -105,9 +105,49 @@ class Math:
     
         return rpy;
                 
+    # from w_R_b returns the rpy angles into ZYX configuration
+    def rot2eul(self, R):
+        phi = np.arctan2(R[1,0], R[0,0])
+        theta = np.arctan2(-R[2,0], np.sqrt(pow(R[2,1],2) + pow(R[2,2],2) ))
+        psi = np.arctan2(R[2,1], R[2,2])
+       
+        #unit test should return roll = 0.5 pitch = 0.2  yaw = 0.3
+        # rot2eul(np.array([ [0.9363,   -0.1684,    0.3082], [0.2896 ,   0.8665  , -0.4065], [-0.1987 ,   0.4699  ,  0.8601]]))    
+        
+        # returns roll = psi, pitch = theta,  yaw = phi
+        return np.array((psi, theta, phi))
+            
+    # from the rpy angles into ZYX configuration returns w_R_b                            
+    def eul2Rot(self, rpy):
+        c_roll =  np.cos(rpy[0])
+        s_roll = np.sin(rpy[0])
+        c_pitch =      np.cos(rpy[1])        
+        s_pitch = np.sin(rpy[1])
+        c_yaw = np.cos(rpy[2])
+        s_yaw = np.sin(rpy[2])
+                                
+        Rx =  np.array([ [   1   ,         0           ,        0], 
+                         [   0   ,        c_roll  ,  -s_roll],
+                         [   0   ,      s_roll,      c_roll ]]);
+
+
+        Ry = np.array([[c_pitch     ,     0  ,   s_pitch],
+                       [      0       ,    1  ,   0],
+                       [ -s_pitch     ,    0   ,  c_pitch]]);
+          
+        
+        Rz = np.array([[ c_yaw  ,  -s_yaw ,        0],
+                      [  s_yaw ,  c_yaw ,          0],
+                      [0      ,     0     ,       1]]);
+        
+        
+
+        R =  Rz.dot(Ry.dot(Rx));
+        return R          
+                
      # used to compute 
-    # omega_dot = J_omega * euler_rates_dot + J_omega_dot*euler_rates                
-    def Jomega_dot(self, rpy, rpyd):
+    # omega_dot = J_omega * euler_rates_dot + J_omega_dot*euler_rates   expressed in ZYX convention          
+    def Tomega_dot(self, rpy, rpyd):
     
         roll = rpy[0]
         pitch = rpy[1]
@@ -116,25 +156,27 @@ class Math:
         pitchd = rpyd[1]
         yawd = rpyd[2]
     
-        Jomega_dot = np.array([[ -np.cos(yaw)*np.sin(pitch)*pitchd - np.cos(pitch)*np.sin(yaw)*yawd, - np.cos(yaw)*yawd, 0],
-                           [ np.cos(yaw)*np.cos(pitch)*yawd - np.sin(yaw)*np.sin(pitch)*pitchd, -np.sin(yaw)*yawd, 0  ],
-                          [ -np.cos(pitch)*pitchd,  0, 0 ]])
+        Tomega_dot = np.array([[ -np.cos(yaw)*np.sin(pitch)*pitchd - np.cos(pitch)*np.sin(yaw)*yawd,  -np.cos(yaw)*yawd, 0],
+                              [ np.cos(yaw)*np.cos(pitch)*yawd - np.sin(yaw)*np.sin(pitch)*pitchd,    -np.sin(yaw)*yawd, 0  ],
+                              [ -np.cos(pitch)*pitchd,  0, 0 ]])
+     
     
-        return Jomega_dot
+        return Tomega_dot
     
-    # returns w_omega = Jomega * euler_rates
-    def Jomega(self, rpy):
+    # returns w_omega = Jomega * euler_rates expressed in ZYX convention
+    def Tomega(self, rpy):
     
         #convention yaw pitch roll
     
         roll = rpy[0]
         pitch = rpy[1]
         yaw = rpy[2]
+        
 
-        Jomega = np.array([[np.cos(pitch)*np.cos(yaw),       -np.sin(yaw),                 0],
-                           [ np.cos(pitch)*np.sin(yaw),                  np.cos(yaw),                  0],
-                           [ -np.sin(pitch),      0 ,        1]])
-        return Jomega
+        Tomega = np.array([[np.cos(pitch)*np.cos(yaw),       -np.sin(yaw),                    0],
+                           [ np.cos(pitch)*np.sin(yaw),       np.cos(yaw),                    0],
+                           [ -np.sin(pitch),      0 ,                                         1]])
+        return Tomega
                                 
 
     def line(self, p1, p2):

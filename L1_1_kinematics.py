@@ -13,12 +13,12 @@ from base_controller.utils.kin_dyn_utils import computeEndEffectorJacobian as ee
 from base_controller.utils.kin_dyn_utils import numericalInverseKinematics as ik
 from base_controller.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 from base_controller.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
-from base_controller.utils.kin_dyn_utils import rot2eul
+from base_controller.utils.math_tools import Math
 
 import ex_1_conf as conf
 
 #instantiate graphic utils
-os.system("killall rosmaster")
+os.system("killall rosmaster rviz")
 ros_pub = RosPub("ur4")
 robot = getRobotModel("ur4")
 
@@ -45,6 +45,8 @@ qdd = conf.qdd0
 q_des = conf.q0
 qd_des = conf.qd0
 qdd_des = conf.qdd0
+
+math_utils = Math()
 
 # get the ID corresponding to the frame we want to control
 assert(robot.model.existFrame(conf.frame_name))
@@ -95,7 +97,7 @@ q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi]) # good initialization
 q_f = ik(p,q_i) 
 # compare solution with values obtained through direct kinematics
 T_01, T_02, T_03, T_04, T_0e = dk(q_f)
-rpy = rot2eul(T_0e[:3,:3])
+rpy = math_utils.rot2eul(T_0e[:3,:3])
 task_diff = p - np.hstack((T_0e[:3,3],rpy[0]))
 print "Point selected"
 print p

@@ -10,6 +10,7 @@ import os
 import math
 import pinocchio as pin
 from pinocchio.utils import *
+from base_controller.utils.math_tools import Math
 
 def setRobotParameters():
 
@@ -168,20 +169,11 @@ def computeEndEffectorJacobian(q):
 
     return J,z1,z2,z3,z4
 
-def rot2eul(R):
-    phi = np.arctan2(R[1,0], R[0,0])
-    theta = np.arctan2(-R[2,0], np.sqrt(pow(R[2,1],2) + pow(R[2,2],2) ))
-    psi = np.arctan2(R[2,1], R[2,2])
-   
-    #unit test should return roll = 0.5 pitch = 0.2  yaw = 0.3
-    # rot2eul(np.array([ [0.9363,   -0.1684,    0.3082], [0.2896 ,   0.8665  , -0.4065], [-0.1987 ,   0.4699  ,  0.8601]]))    
-    
-    # returns roll = psi, pitch = theta,  yaw = phi
-    return np.array((psi, theta, phi))
 
 def geometric2analyticJacobian(J,T_0e):
     R = T_0e[:3,:3]
-    rpy = rot2eul(R)
+    math_utils = Math()
+    rpy = math_utils.rot2eul(R)
     # compute the mapping between euler rates and angular velocity
     T = np.array([[math.cos(rpy[1])*math.cos(rpy[2]), -math.sin(rpy[2]), 0],
                   [math.cos(rpy[1])*math.sin(rpy[2]),  math.cos(rpy[2]), 0],
@@ -243,7 +235,8 @@ def numericalInverseKinematics(p,q0):
         # Compute Newton step
         p_e = T_0e[:3,3]
         R = T_0e[:3,:3]
-        rpy = rot2eul(R)
+        math_utils = Math()
+        rpy = math_utils.rot2eul(R)
         roll = rpy[0]
         p_e = np.append(p_e,roll)
         e_bar = p_e - p
@@ -261,7 +254,7 @@ def numericalInverseKinematics(p,q0):
         _, _, _, _, T_0e1 = directKinematics(q1)
         p_e1 = T_0e1[:3,3]
         R1 = T_0e1[:3,:3]
-        rpy1 = rot2eul(R1)
+        rpy1 = math_utils.rot2eul(R1)
         roll1 = rpy1[0]
         p_e1 = np.append(p_e1,roll1)
         e_bar1 = p_e - p_e1

@@ -18,7 +18,7 @@ from base_controller.utils.kin_dyn_utils import getC
 import ex_1_conf as conf
 
 #instantiate graphic utils
-os.system("killall rosmaster")
+os.system("killall rosmaster rviz")
 ros_pub = RosPub("ur4")
 robot = getRobotModel("ur4")
 
