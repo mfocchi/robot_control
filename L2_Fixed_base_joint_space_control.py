@@ -43,7 +43,7 @@ time_log =  np.empty((0,0))*nan
 
 
 # EXERCISE 2.2: 
-conf.qd0 = two_pi_f_amp
+#conf.qd0 = two_pi_f_amp
 
 q = conf.q0
 qd = conf.qd0

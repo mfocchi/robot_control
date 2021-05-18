@@ -106,7 +106,7 @@
 \newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
 
 
-\title{LAB 3: Joint Space Motion Control Lab: Control of a 6-DoF Serial Manipulator}
+\title{LAB 2: Joint Space Motion Control Lab: Control of a 6-DoF Serial Manipulator}
 \author{Michele Focchi and Octavio Villarreal}
 \date{}
 
@@ -117,7 +117,7 @@
 	\begin{itemize}
 		\item learning the basic procedure to design a motion controller in the joint space for a manipulator in free-motion (i.e. not in contact)
 		\item analyze the advantage/disadvantage of decentralized/ centralized approaches (i.e. feedback linearization)
-		\item implement the interaction with the envioronment with a compliant contact model	 
+		\item implement the interaction with the environment with a compliant contact model	 
 	\end{itemize}
 	
 	\noindent
@@ -153,7 +153,7 @@ roslaunch visualize.launch robot_name:=ur5 test_joints:=true
 
 \noindent
 \textbf{1.1 - Sinusoidal Reference generation:}
- Generate a sinusoidal reference for the $2^{nd}$ (Shoulder Lift) and $5^{th}$  (Wrist 2) joint with frequency 1.0 $Hz$ and 1.5 $Hz$ and amplitude 0.2$rad$ and 0.4 $rad$, respectively,  starting from their initial configurations in $q_0$. Keep the other joints at $q_0$. After 4.0 $s$ stop the sine and give a constant reference during other 1.0 $s$. Note that you need to generate also consistent references for velocity and acceleration.
+ Generate a sinusoidal reference for the $2^{nd}$ (Shoulder Lift) and $5^{th}$  (Wrist 2) joint with frequency 1.0 $Hz$ and 1.5 $Hz$ and amplitude 0.2$rad$ and 0.4 $rad$, respectively,  starting from their initial configurations in $q_0$. Keep the other joints at $q_0$. After 4.0 $s$ stop the sine and give a constant reference during  1.0 $s$. Note that you need to generate also consistent references for velocity and acceleration.
 
 \quad
 
@@ -212,7 +212,9 @@ At this point, let's see the impact of adding a feed-forward term to the PD cont
 
 \noindent
 \textbf{2.1 - Inverse Dynamics (Computed Torque):}
-To effectively compensate for the inertial couplings, we can compensate them by linearizing the (non linear) dynamics of the robot via a state feedback called feed-back linearization. This approach, that is valid for any non linear system, for articulated robots takes the name of \textit{Inverse Dynamics}(Computed Torque). The intuition is based on cancelling nonlinear terms and decoupling the dynamics of each link.
+To effectively compensate for the inertial couplings, we can compensate them by 
+linearizing the (non linear) dynamics of the robot via a state feedback called feed-back linearization. This approach, that is valid for any non linear system, for articulated robots takes the name of \textit{Inverse Dynamics}(Computed Torque). 
+The intuition is based on cancelling nonlinear terms and decoupling the dynamics of each link.
 The basic idea of feedback linearization is to construct a transformation which exactly linearizes the
 nonlinear system after a suitable state space change of coordinates. One can then design a second stage or
 outer-loop control in the new coordinates to satisfy the traditional control design specifications such as tracking,
@@ -284,14 +286,14 @@ the actual values $\dot{q}$ , $q$ to compute them. During the transient some cou
 \noindent 
 \textbf{ 2.7 - Unilateral Compliant contact:} 
 To complete this lab, we want to consider an interaction of the robot with the environment happening at the end-effector. 
-Model the contact using a compliant model with linear  springs $K_{env}\in R^{3 \times 3}$ and dampers $D_{env}\in R^{3 \times 3}$  and insert the resulting contact force $F_{env} \in R^3$ into the free-motion dynamics via the $J^T$. Consider the contact \textit{unilateral} and for now allow the force to be generated only along the Z direction (contact normal).
+Model the contact using a compliant model with linear  springs $K_{env}\in \Rnum^{3 \times 3}$ and dampers $D_{env}\in \Rnum^{3 \times 3}$  and insert the resulting contact force $F_{env} \in R^3$ into the free-motion dynamics via the $J^T$. Consider the contact \textit{unilateral} and for now allow the force to be generated only along the Z direction (contact normal).
 Note you need also to compute the end-effector velocity for the damping term (i.e. use $\dot{p} = J\dot{q}$).
 
 \begin{equation*}
 \begin{cases}
 	F_{env} = n^T (K_{env}(p_0 - p) - D_{env} \dot{p}) \quad &\text{   if}\quad n^T(p_0 -p ) >0 \\ 
 	F_{env} = 0     \quad &\text{if}\quad n^T(p_0 -p ) <0
-	\end{cases}
+\end{cases}
 \end{equation*}
 
 The approach we used to integrate the acceleration is not suitable for stiff dynamic equations. Try to increase the stiffness $K_{env}$ till the limit where the integration scheme becomes unstable.

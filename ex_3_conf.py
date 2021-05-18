@@ -9,7 +9,7 @@ import numpy as np
 import os
 
 dt = 0.001                   # controller time step
-exp_duration_sin = 3.0 #sine reference duration
+exp_duration_sin = 4.0 #sine reference duration
 exp_duration = 5.0 #simulation duration
 
 SLOW_FACTOR = 1 #to slow down simulation
@@ -28,15 +28,15 @@ Dx[1,1] = 300
 Dx[2,2] = 300
 
 # P angular gains				
-Ktheta= np.eye(3)
-Ktheta[0,0] = 500
-Ktheta[1,1] = 500
-Ktheta[2,2] = 500
+Ko= np.eye(3)
+Ko[0,0] = 800
+Ko[1,1] = 800
+Ko[2,2] = 800
 # D angular gains
-Dtheta= np.eye(3)
-Dtheta[0,0] = 30
-Dtheta[1,1] = 30
-Dtheta[2,2] = 30
+Do= np.eye(3)
+Do[0,0] = 100
+Do[1,1] = 100
+Do[2,2] = 100
 
 ## PARAMETERS OF REFERENCE CARTESIAN SINUSOIDAL TRAJECTORY
 amp=np.array([ 0.1, 0.0, 0.0])   # amplitude
@@ -52,5 +52,5 @@ qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 # Value of linear external force
 extForce = np.array([0.0, 0.0, 200.0])
 # FLAGS
-EXTERNAL_FORCE = True
+EXTERNAL_FORCE = False
 
