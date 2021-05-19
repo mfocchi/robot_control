@@ -151,72 +151,76 @@ while True:
 #    F_des = conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)	+ JTpinv.dot(g)		
 #    tau = J.T.dot(F_des) + tau_null 
         
+        
     # EXERCISE 1.7: PD control  + Gravity Compensation + Feed-Forward term
 #    F_des = lambda_.dot(pdd_des) + conf.Kx.dot(p_des-p)+conf.Dx.dot(pd_des-pd) + JTpinv.dot(g)
 #    tau = J.T.dot(F_des) + tau_null 
+     
      
     # EXERCISE 2.1: Cartesian space inverse dynamics
 #    F_des = pdd_des + conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)
 #    mu = -lambda_.dot(Jdqd)  + JTpinv.dot(h) 
 #    tau = J.T.dot(lambda_.dot(F_des) + mu) + tau_null    
     
+    
      # EXERCISE 2.2: Cartesian space inverse dynamics with bias compensation in joint space (simpler to compute)
 #    F_des = pdd_des + conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)    
 #    tau =  J.T.dot(lambda_.dot(F_des)) + h + tau_null
 
+
      # EXERCISE 3.1: Control of orientation with PD
 #    ORIENTATION_CONTROL = True
 #    # get the actual end-effector orientation (columns are the axis of frame_ee expressed in WF (check rviz TF) )				
-#    w_R_e = robot.framePlacement(q, frame_ee).rotation 
-#		
+#    w_R_e = robot.framePlacement(q, frame_ee).rotation 		
 #    #compute the actual end-effector twist (i.e. linear and angula velocity)
 #    twist = J6.dot(qd)
 #    # extract omega				
-#    omega = twist[3:6]
-#    
+#    omega = twist[3:6]    
 #    # compose the des orientation rotation matrix (x axis along x, y axis along -y, z axis along -z) NB the axis are the columns of the matrix w_R_des
 #    des_x_axis = np.array([1, 0, 0])
 #    des_y_axis = np.array([0, -1, 0])
 #    des_z_axis = np.array([0, 0 , -1 ])			
 #    w_R_des = np.vstack((des_x_axis.T, des_y_axis.T, des_z_axis.T))
-#    
-#    # EXERCISE 3.2 - Control of orientation with PD: singularity
-#    # rpy_des = np.array([0.8, math.pi/2 , 0.0])) # singularity
-#    # rpy_des = np.array([0.1, 0.2, 0.3])  # random orient with Euler Angles
 #    # desired angular velocity	(constant)			            
-#    #omega_des = np.array([0,0,0])
-#
-#    # EXERCISE 3.3: Control of orientation with PD - sinusoidal reference 
+#    omega_des = np.array([0,0,0])
+    
+    
+    
+    # EXERCISE 3.2 - Control of orientation with PD: singularity
+    # rpy_des = np.array([0.8, math.pi/2 , 0.0])) # singularity
+    # rpy_des = np.array([0.1, 0.2, 0.3])  # random orient with Euler Angles
+
+
+
+    # EXERCISE 3.3: Control of orientation with PD - sinusoidal reference 
 #    rpy_des = np.array([2.2*np.pi*np.sin(time), 0.0 , 0.0])
 #    rpyd_des = np.array([2.2*np.pi*np.cos(time), 0.0 , 0.0])  
-#    rpydd_des = np.array([-2.2*np.pi*np.sin(time), 0.0 , 0.0])
-#  
+#    rpydd_des = np.array([-2.2*np.pi*np.sin(time), 0.0 , 0.0]) 
 #    # compute rotation matrix representing the desired orientation from Euler Angles
 #    w_R_des = math_utils.eul2Rot(rpy_des)        
 #    # desired angular velocity		            
 #    omega_des = math_utils.Tomega(rpy_des).dot(rpyd_des)
 #    # desired angular acceleration			             
 #    omega_d_des = math_utils.Tomega(rpy_des).dot(rpydd_des) +  math_utils.Tomega_dot(rpy_des, rpyd_des).dot(rpyd_des)
-#  
+   
+   
+   
+    # EXERCISE 3.1: Control of orientation with PD   
 #    # compute rotation matrix from actual orientation of ee to the desired
-#    e_R_des = w_R_e.T.dot(w_R_des)
-#    
+#    e_R_des = w_R_e.T.dot(w_R_des)    
 #    # compute the angle-axis representation of the associated orientation error				
 #    # compoute the angle: method 1) with arc cos
 #    #cos_theta = (e_R_des[0,0]+ e_R_des[1,1]+ e_R_des[2,2]-1)/2
 #    #delta_theta = np.arccos( cos_theta) 
 #    #compoute the angle: method 2) with atan2
 #    delta_theta = math.atan2(np.sqrt(pow(e_R_des[2,1]-e_R_des[1,2], 2) +  pow(e_R_des[0,2]-e_R_des[2,0], 2) + pow(e_R_des[1,0]-e_R_des[0,1], 2)), e_R_des[0,0]+ e_R_des[1,1]+ e_R_des[2,2]-1 )  
-#
 #    # compute the axis    
-#    r_hat = 1/(2*np.sin(delta_theta))*np.array([e_R_des[2,1]-e_R_des[1,2], e_R_des[0,2]-e_R_des[2,0], e_R_des[1,0]-e_R_des[0,1]])    
-#    
+#    r_hat = 1/(2*np.sin(delta_theta))*np.array([e_R_des[2,1]-e_R_des[1,2], e_R_des[0,2]-e_R_des[2,0], e_R_des[1,0]-e_R_des[0,1]])     
 #    # compute the orientation error
 #    e_error_o = delta_theta * r_hat 
 #    # the error is expressed in the end-effector frame 
 #    # we need to map it in the world frame to compute the moment because the jacobian is in the WF
 #    w_error_o = w_R_e.dot(e_error_o) 				
-# 
 #    # Compute the virtual force (linear part of the wrench) 
 #    F_des = conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)
 #    # compute the virtual moment (angular part of the wrench) to realize the orientation task
@@ -224,10 +228,11 @@ while True:
 #    # stack the previously computed linear part with the angular part
 #    W_des = np.hstack([F_des, Gamma_des])
 #    # map to torques
-#    tau = J6.T.dot(W_des)    
-#        
+#    tau = J6.T.dot(W_des)            
 #    # extract actual euler angles for logging   
 #    rpy = math_utils.rot2eul(w_R_e)
+
+
 
     # EXERCISE 3.4: Control of orientation with PD - unwrapping  
     #unwrap euler angles   

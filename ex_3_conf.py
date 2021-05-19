@@ -34,9 +34,9 @@ Ko[1,1] = 800
 Ko[2,2] = 800
 # D angular gains
 Do= np.eye(3)
-Do[0,0] = 100
-Do[1,1] = 100
-Do[2,2] = 100
+Do[0,0] = 30
+Do[1,1] = 30
+Do[2,2] = 30
 
 ## PARAMETERS OF REFERENCE CARTESIAN SINUSOIDAL TRAJECTORY
 amp=np.array([ 0.1, 0.0, 0.0])   # amplitude

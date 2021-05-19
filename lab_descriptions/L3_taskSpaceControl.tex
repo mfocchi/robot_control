@@ -330,7 +330,7 @@ We can extract the angular velocity of the end-effector frame as the angular par
 \mat{\dot{p}\\ \omega} = J_{6\times6} \dot{q}
 \end{equation}
 
-Now, we can write the PD law using the orientation proportional $K_{o} = I_{6\times6}800$ and damping $D_o = I_{6\times6}100$ gains, setting the desired angular velocity to (0.0,0.0,0.0): 
+Now, we can write the PD law using the orientation proportional $K_{o} = I_{6\times6}800$ and damping $D_o = I_{6\times6}30$ gains, setting the desired angular velocity to (0.0,0.0,0.0): 
 
 \begin{align}
 & \Gamma^d  = K_{o} e_o  + D_o(\omega^d - \omega)  \\
@@ -344,7 +344,7 @@ Finally, we stack the orientation task $\Gamma^d$ below  the Cartesian task $F^d
 \end{align}
 
 Plot   the  orientation error and see that is going to zero.
- Note that, since you used a PD control law,  you will have tracking errors (both in the linear and in the angular  coordinates) because of gravity and inertial couplings.
+ Note that, since you used a PD control law,  you will have tracking errors (both in the linear and in the angular  coordinates) because of gravity and inertial couplings. Additionall, you will notice that increasing the damping gain  $D_o = I_{6\times6}30$ beyond 30 makes the system unstable.
 We saw that the acos(.) function provides an output only in the $\mat{ -\pi / 2  , \pi /2}$ range. 
 Use the atan2(.) function to compute the $\delta \theta$ that provides output in $\mat{ -\pi   , \pi }$.
 
@@ -369,7 +369,7 @@ Plot the tracking for the Euler Angles.
 
 
 \textit{3.4 - PD control of end-effector position + orientation: unwrapping}
-Note that the roll signal switches between $\pi$ and $-\pi$. Implement an \textit{unwrapping} algorithm to avoid this phenomena and get a continuous plot:
+Note that the roll signal switches between $\pi$ and $-\pi$. You do not see this in the orientation error because is always in the range $\pi$ and $-\pi$. Implement an \textit{unwrapping} algorithm to avoid this phenomena and get a continuous plot:
 
 \begin{verbatim}
 for i in range(3):
@@ -424,7 +424,7 @@ Remember that in this control law we need also to add the desired \textit{accele
 \dot{\omega}^d = T_{\omega}(\Phi^d) \ddot{\Phi}^d +  \dot{T_{\omega}}(\Phi^d,\dot{\Phi}^d ) \dot{\Phi^d}
 \end{equation}
 
-Note that the postural task is no longer needed, because we are assigning a 6D task. Therefore, the full control law is:
+Note that the postural task is no longer needed, because we are assigning a $6D$ task. Therefore, the full control law is:
  
 \begin{align}
 & F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
@@ -433,7 +433,8 @@ Note that the postural task is no longer needed, because we are assigning a 6D t
 & \tau = J^T\left( \Lambda W^d + \mu \right)
 \end{align} 
 
-Verify that the tracking is almost perfect (apart from the transient due to the difference from the initial state and the reference) both during the motion and at steady-state, showing a perfect cancellation of all the non-linear terms.
+Verify that the tracking is almost perfect (apart from the transient due to the difference from the initial state and the reference) both during the motion and at steady-state, showing a perfect cancellation of all the non-linear terms, making the system linear and decoupled. 
+An important consequence is that you can now increase at will the damping gain  $D_o = I_{6\times6}30$ beyond 30 without making the system unstable.
 
 %\section{Interaction control (Lecture H2)}
  
