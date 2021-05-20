@@ -299,4 +299,99 @@ def plotConstraitViolation(figure_id,constr_viol_log):
     plt.plot(constr_viol_log[3,:],label="RH")
     plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=2, mode="expand", borderaxespad=0.)
     plt.ylabel("Constr violation", fontsize=10)
-    plt.grid()                                                                 
+    plt.grid()                                                                     
+
+def plotEndeffImpedance(name, figure_id, x_log, x_des_log, f_log):                  
+    
+    title=""    
+    
+    if name == 'position':
+        title="Force vs Displacement" 
+    elif name == 'velocity':
+        title="Force vs Velocity" 
+    elif name == 'acceleration':
+        title="Force vs Acceleration"                           
+    else:
+        print("wrong choice in impedance plotting")
+ 
+    lw_act=4  
+    lw_des=7
+                    
+#    fig = plt.figure(figure_id)    
+    fig, axs = plt.subplots(3, 3)
+    fig.suptitle(title, fontsize=20)
+    
+    axs[0, 0].plot((x_log[0,:].T-x_des_log[0,:].T), f_log[0,:].T, lw=lw_act, color = 'blue')
+    axs[0, 0].set_title('Fx vs X')
+    axs[0, 0].grid()
+    
+    axs[0, 1].plot((x_log[1,:].T-x_des_log[1,:].T), f_log[0,:].T, lw=lw_act, color = 'blue')
+    axs[0, 1].set_title('Fx vs Y')
+    axs[0, 1].grid()
+    
+    axs[0, 2].plot((x_log[2,:].T-x_des_log[2,:].T), f_log[0,:].T, lw=lw_act, color = 'blue')
+    axs[0, 2].set_title('Fx vs Z')
+    axs[0, 2].grid()
+    
+    axs[1, 0].plot((x_log[0,:].T-x_des_log[0,:].T), f_log[1,:].T, lw=lw_act, color = 'blue')
+    axs[1, 0].set_title('Fy vs X')
+    axs[1, 0].grid()
+    
+    axs[1, 1].plot((x_log[1,:].T-x_des_log[1,:].T), f_log[1,:].T, lw=lw_act, color = 'blue')
+    axs[1, 1].set_title('Fy vs Y')
+    axs[1, 1].grid()
+    
+    axs[1, 2].plot((x_log[2,:].T-x_des_log[2,:].T), f_log[1,:].T, lw=lw_act, color = 'blue')
+    axs[1, 2].set_title('Fy vs Z')
+    axs[1, 2].grid()
+    
+    axs[2, 0].plot((x_log[0,:].T-x_des_log[0,:].T), f_log[2,:].T, lw=lw_act, color = 'blue')
+    axs[2, 0].set_title('Fz vs X')
+    axs[2, 0].grid()
+    
+    axs[2, 1].plot((x_log[1,:].T-x_des_log[1,:].T), f_log[2,:].T, lw=lw_act, color = 'blue')
+    axs[2, 1].set_title('Fz vs Y')
+    axs[2, 1].grid()
+    
+    axs[2, 2].plot((x_log[2,:].T-x_des_log[2,:].T), f_log[2,:].T, lw=lw_act, color = 'blue')
+    axs[2, 2].set_title('Fz vs Z')
+    axs[2, 2].grid()
+    
+def plotJointImpedance(name, q_log, q_des_log, tau_log):
+    
+    title=""
+    
+    if name == 'position':
+        title="Torque vs Angular Displacement"      
+    elif name == 'velocity':
+        title="Torue vs Angular Velocity" 
+    elif name == 'acceleration':
+        title="Torque vs Angular Acceleration"                           
+    else:
+        print("wrong choice in impedance plotting")
+ 
+    lw_act=4  
+    lw_des=3
+
+    #Number of joints
+    njoints = q_log.shape[0]                                                            
+    
+    #neet to transpose the matrix other wise it cannot be plot with numpy array    
+    fig = plt.figure()                
+    fig.suptitle(name, fontsize=20)             
+    labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
+    labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
+
+    if njoints == 6:
+        labels = labels_ur         
+    if njoints == 12:
+        labels = labels_hyq                  
+                
+    
+    for jidx in range(njoints):
+                
+        plt.subplot(njoints/2,2,jidx+1)
+        plt.ylabel(labels[jidx])    
+        plt.plot(q_log[jidx,:].T-q_des_log[jidx,:].T, tau_log[jidx,:].T, linestyle='-', lw=lw_des,color = 'blue')
+        plt.grid()
+        

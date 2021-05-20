@@ -345,7 +345,7 @@ Finally, we stack the orientation task $\Gamma^d$ below  the Cartesian task $F^d
 
 Plot   the  orientation error and see that is going to zero.
  Note that, since you used a PD control law,  you will have tracking errors (both in the linear and in the angular  coordinates) because of gravity and inertial couplings. Additionall, you will notice that increasing the damping gain  $D_o = I_{6\times6}30$ beyond 30 makes the system unstable.
-We saw that the acos(.) function provides an output only in the $\mat{ -\pi / 2  , \pi /2}$ range. 
+We saw that the acos(.) function provides an output only in the $\mat{ 0 , \pi}$ range. 
 Use the atan2(.) function to compute the $\delta \theta$ that provides output in $\mat{ -\pi   , \pi }$.
 
 \begin{equation}
@@ -381,6 +381,7 @@ for i in range(3):
     rpy_old[i] = rpy_unwrapped[i] 	
 \end{verbatim}
 
+Check at the end of this \href{https://youtu.be/sax0QzG8qAw }{video} what can happen to your robot if you do not do the unwrapping and you close the loop on Euler Angles to control orientation! 
 %Why the motion of the joints seems weird? Remember the concept dexterous workspace? Unfortunately even if in theory you could be able to specify both positions and orientations of the end-effector frame, this does not mean that you can specify any arbitrary orientation for all end-effector positions in the primary workspace (remember definition of dexterous workspace). This means that in some locations you might not be able to achieve every possible orientation, but just a subset of them. 
 %A way to increase the size of the dexterous workspace and be more free to specify any orientation is to add a deegree of freedom of redundancy (e.g. use 7 DoFs robot) %"natural" motion! 
 
