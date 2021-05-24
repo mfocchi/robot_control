@@ -78,30 +78,7 @@ tauZero = zero
 
 # CONTROL LOOP
 while True:
-    
-    # EXERCISE 1: Sinusoidal reference generation for end effector   
-    x_des  = x0  + np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
-    xd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
-    xdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
-    # Set constant reference after a while
-    if time >= conf.exp_duration_sin:
-        x_des  = x0
-        xd_des = xd0
-        xdd_des = xdd0
-        
-    # EXERCISE 2: Step reference generation  for end effector 
-#    if time > 2.0:
-#        x_des = x0 + np.matrix([ 0.0, 0.0, 0.1]).T 
-#        xd_des =  zero_cart
-#        xdd_des = zero_cart 
-#    else:
-#        x_des = x0
-#        xd_des =  zero_cart
-#        xdd_des = zero_cart 
-        
-    # Decimate print of time
-    #if (divmod(time ,1.0)[1]  == 0):
-       #print('Time %.3f s'%(time))
+   
 
     if time >= conf.exp_duration:
         break
@@ -126,52 +103,23 @@ while True:
     # compute frame end effector position and velocity in the WF   
     x = robot.framePlacement(q, frame_ee).translation                      
     xd = J*qd    
-
-    lambda_= np.linalg.inv(J*M_inv* J.T)
-
-    #Null space projector
-    N = (eye(6)-J.T*JTpinv)  
-    # null space torques (postural task)
-    tau0 = 50*(conf.q0-q) - 10*qd
-    tau_null = N*tau0
-				         
-    # EXERCISE 4: PD control (cartesian task)
-    Fdes = 
-    #tau = ...         
-             
-    # EXERCISE 5: PD control + Gravity Compensation:
-    #Fdes = F
-    #tau = ... 
-        
-    # EXERCISE 6: PD control  + Gravity Compensation + Feed-Forward term
-    #Fdes = lambda_ * xdd_des + F
-    #tau = ... 
-     
-    # EXERCISE 7: Operational space inverse dynamics
-    #Fdes = ...
-    #tau = Jt*Fdes + tau_null   
-    
-     # EXERCISE 8: OSID with bias compensation in joint space (simpler to compute)
-    #Fdes = ...
-    #tau = Jt*F + tau_null 
-
     
      # ---------------------- DISTURBANCES ---------------------- 
    
    if time > 1.0:
        
         #Torque disturbance        
-#        tauExt = np.multiply(conf.ampJS, np.sin(two_pi_f_JS*time + conf.phiJS)) #Sine
+        tauExt = np.multiply(conf.ampJS, np.sin(two_pi_f_JS*time + conf.phiJS)) #Sine
 #        tauExt = np.matrix([0.0, 0.0, 20.0, 0.0, 0.0, 0.0]).T                   #Step
 #        extForce = JTpinv*tauExt                                                #mapping torques -> forces
 
     # ---------------------- CONTROLLERS ---------------------- 
                    
      #Exercise 1:  joint-space PD impedance control
-#    tau = ...
+#    tau = conf.Ktheta*(q_des-q) + conf.Dtheta*(qd_des-qd)
                     
      #Exercise 2: joint-space PD impedance control + gravity and Coriolis compensation           
-#    tau = ...
+    tau = conf.Ktheta*(q_des-q) + conf.Dtheta*(qd_des-qd) + ...
     
     #Exercise 3: joint-space PD impedance control + gravity and Coriolis compensation + dynamic coupling compensation         
 #    tau = ...

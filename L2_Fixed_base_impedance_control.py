@@ -12,7 +12,7 @@ from base_controller.utils.common_functions import *
 from base_controller.utils.optimTools import quadprog_solve_qp
 from base_controller.utils.ros_publish import RosPub
 
-import ex_3_conf as conf
+import ex_2_conf_imp as conf
 
 #instantiate graphic utils
 ros_pub = RosPub()
@@ -23,6 +23,10 @@ robot = importDisplayModel(False, False)
 zero = np.matrix([0.0, 0.0,0.0, 0.0, 0.0, 0.0]).T
 zero_cart = np.matrix([ 0.0, 0.0,0.0]).T
 time = 0.0
+
+#Sine variable
+two_pi_f = 2*np.pi*conf.freq   # frequency (time 2 PI)
+two_pi_f_JS = 2*np.pi*conf.freqJS   # frequency (time 2 PI)
 
 # Init loggers
 q_log = np.empty((6,0))*nan
@@ -78,30 +82,7 @@ tauZero = zero
 
 # CONTROL LOOP
 while True:
-    
-    # EXERCISE 1: Sinusoidal reference generation for end effector   
-    x_des  = x0  + np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
-    xd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
-    xdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
-    # Set constant reference after a while
-    if time >= conf.exp_duration_sin:
-        x_des  = x0
-        xd_des = xd0
-        xdd_des = xdd0
-        
-    # EXERCISE 2: Step reference generation  for end effector 
-#    if time > 2.0:
-#        x_des = x0 + np.matrix([ 0.0, 0.0, 0.1]).T 
-#        xd_des =  zero_cart
-#        xdd_des = zero_cart 
-#    else:
-#        x_des = x0
-#        xd_des =  zero_cart
-#        xdd_des = zero_cart 
-        
-    # Decimate print of time
-    #if (divmod(time ,1.0)[1]  == 0):
-       #print('Time %.3f s'%(time))
+   
 
     if time >= conf.exp_duration:
         break
@@ -110,6 +91,7 @@ while True:
     robot.computeAllTerms(q, qd) 
     # joint space inertia matrix                
     M = robot.mass(q, False)
+    
     # bias terms                
     h = robot.nle(q, qd, False)
     #gravity terms                
@@ -121,63 +103,63 @@ while True:
     J = J6[:3,:]
     
     # Moore-penrose pseudoinverse  A^# = (A^TA)^-1 * A^T with A = J^T
-    JTpinv = np.linalg.inv(J*J.T)*J       
+    JTpinv = np.linalg.inv(J*J.T)*J    
+
+    # compute  the end-effector acceleration due to joint velocity            
+    dJdq = robot.frameClassicAcceleration(q, qd, None, frame_ee).linear    
     
     # compute frame end effector position and velocity in the WF   
     x = robot.framePlacement(q, frame_ee).translation                      
-    xd = J*qd    
+    xd = J*qd  
 
-    lambda_= np.linalg.inv(J*M_inv* J.T)
-
-    #Null space projector
-    N = (eye(6)-J.T*JTpinv)  
-    # null space torques (postural task)
-    tau0 = 50*(conf.q0-q) - 10*qd
-    tau_null = N*tau0
-				         
-    # EXERCISE 4: PD control (cartesian task)
-    Fdes = 
-    #tau = ...         
-             
-    # EXERCISE 5: PD control + Gravity Compensation:
-    #Fdes = F
-    #tau = ... 
-        
-    # EXERCISE 6: PD control  + Gravity Compensation + Feed-Forward term
-    #Fdes = lambda_ * xdd_des + F
-    #tau = ... 
-     
-    # EXERCISE 7: Operational space inverse dynamics
-    #Fdes = ...
-    #tau = Jt*Fdes + tau_null   
+    #Inverse of inertia matrix    
+    M_inv = np.linalg.inv(M)
     
-     # EXERCISE 8: OSID with bias compensation in joint space (simpler to compute)
-    #Fdes = ...
-    #tau = Jt*F + tau_null 
-
+    lambda_= np.linalg.inv(J*M_inv* J.T)  #better this if J is not invertible  
+    #lambda_ = np.linalg.pinv(J.T)*M*np.linalg.pinv(J)
     
-     # ---------------------- DISTURBANCES ---------------------- 
-   
-   if time > 1.0:
-       
+    
+    # External disturbances
+    if time > 1.0:
         #Torque disturbance        
-#        tauExt = np.multiply(conf.ampJS, np.sin(two_pi_f_JS*time + conf.phiJS)) #Sine
-#        tauExt = np.matrix([0.0, 0.0, 20.0, 0.0, 0.0, 0.0]).T                   #Step
+        tauExt = np.multiply(conf.ampJS, np.sin(two_pi_f_JS*time + conf.phiJS)) #Sine
+#        tauExt = np.matrix([0.0, 0.0, 20.0, 0.0, 0.0, 0.0]).T                  #Step
 #        extForce = JTpinv*tauExt                                                #mapping torques -> forces
+    
+        # End-effector foce disturbance
+#        extForce = np.multiply(conf.amp, np.sin(two_pi_f*time + conf.phi))     #Sine
+#        extForce = np.matrix([50.0, 50.0, 50.0]).T                             #Step            
+#        tauExt = J.transpose()*extForce                                        #mapping force -> torques
+#        ros_pub.add_arrow(x.A1.tolist(),extForce/100)                          #draw arrow to represent force disturbance
 
-    # ---------------------- CONTROLLERS ---------------------- 
+
+    # *********** CONTROLLERS *********** 
                    
      #Exercise 1:  joint-space PD impedance control
-#    tau = ...
+#    tau = conf.Ktheta*(q_des-q) + conf.Dtheta*(qd_des-qd)
                     
      #Exercise 2: joint-space PD impedance control + gravity and Coriolis compensation           
-#    tau = ...
+#    tau = conf.Ktheta*(q_des-q) + conf.Dtheta*(qd_des-qd) + h
     
     #Exercise 3: joint-space PD impedance control + gravity and Coriolis compensation + dynamic coupling compensation         
-#    tau = ...
+#    tau = M*(conf.Ktheta*(q_des-q) + conf.Dtheta*(qd_des-qd) + tauExt) + h - tauExt
     
     #Exercise 4: joint-space PD impedance control + gravity and Coriolis compensation + dynamic coupling compensation + inertia shapping      
-#    tau = ...
+    tau = M*conf.Mtheta_inv*(conf.Ktheta*(q_des-q) + conf.Dtheta*(qd_des-qd) + tauExt) + h - tauExt
+
+                                     
+    #Task-space PD impedance control
+#    F_des = conf.Kx * (x_des-x) + conf.Dx * (xd_des-xd)
+    
+    #PD control  + Gravity Compensation + Feed-Forward term
+#    F_des = lambda_* xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd) + JTpinv*g
+#    tau = J.T*F_des
+    
+    #Adding inverse dynamics
+    #F_des = xdd_des + conf.Kx*(x_des-x)+conf.Dx*(xd_des-xd)
+    #u = -lambda_*(dJdq)  + JTpinv*h 
+    #tau = J.T*(lambda_*F_des + u)   
+    
 
      
     # ---------------------- SIMULATION -----------------------
@@ -191,7 +173,7 @@ while True:
     q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
     
     # Log Data into a vector
-    time_log = np.hstack((time_log, time))				
+    time_log = np.hstack((time_log, time))                
     q_log = np.hstack((q_log, q ))
     q_des_log= np.hstack((q_des_log, q_des))
     qd_log= np.hstack((qd_log, qd))
@@ -225,15 +207,25 @@ while True:
             
 ros_pub.deregister_node()
         
+                    
+                
 # plot joint variables                                                                              
 #plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+#plotJoint('position', 3, time_log, tauExt_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+
+# plot end-effector variables
+#plotEndeff('position', 0,time_log, x_log, x_des_log)
 
 # plot joint impedances
-plotJointImpedance('position', q_log, q_des_log, tauExt_log)
-plotJointImpedance('velocity', qd_log, qd_des_log, tauExt_log)
+#plotJointImpedance('position', q_log, q_des_log, tauExt_log)
+#plotJointImpedance('velocity', qd_log, qd_des_log, tauExt_log)
 plotJointImpedance('acceleration', qdd_log, qdd_des_log, tauExt_log)
+
+# plot end-effector impedances
+#plotEndeffImpedance('position',1, x_log, x_des_log, f_log)
+#plotEndeffImpedance('velocity',2, xd_log, xd_des_log, f_log)
 
 
 
