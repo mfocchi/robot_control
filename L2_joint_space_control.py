@@ -75,7 +75,7 @@ while True:
         qd_des=zero
         qdd_des=zero          
 
-    # EXERCISE 1.2: Step reference Generation
+#    # EXERCISE 1.2: Step reference Generation
 #    if time > 2.0:
 #        q_des = conf.q0 + np.array([ 0.0, -0.4, 0.0, 0.0,  0.5, 0.0]) 
 #        qd_des =  zero
@@ -115,10 +115,10 @@ while True:
 #    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
 #    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
 #    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
-    #print (conf.kd[1,1])
+#    print (conf.kd[1,1])
         
     # EXERCISE  2.3: Inverse Dynamics (computed torque) - low gains
-    conf.kp = np.eye(6)*60
+    conf.kp = np.eye(6)*300
     conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0])
     conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1])
     conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2])
@@ -128,42 +128,42 @@ while True:
                                        
     #CONTROLLERS                                    
     #Exercise 1.3:  PD control
-    #tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)
+#    tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)
     
     # Exercise 1.6: PD control + Gravity Compensation
-    #tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
+#    tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
     
-    # Exercise 1.7: PD + gravity + Feed-Forward term   
-    #tau =  np.multiply(np.diag(M), qdd_des) + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
+    # Exercise 1.7: PD + gravity + Feed-Forward term
+#    tau =  np.multiply(np.diag(M), qdd_des) + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
  
     # EXERCISE 2.1 Inverse Dynamics (Computed Torque)
-    tau = M.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h    
+#    tau = M.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h
 
     # EXERCISE 2.5 Inverse Dynamics (Computed Torque) - uncertainty in the cancellation   
-#    M_hat  = M*1.1 
-#    h_hat  = h*1.1 
-#    tau = M_hat.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_hat
+    M_hat  = M*1.1 
+    h_hat  = h*1.1 
+    tau = M_hat.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_hat
 
     # EXERCISE 2.6  Inverse Dynamics (Desired states)
 #    M_des = robot.mass(q_des, True)            
 #    h_des = robot.nle(q_des, qd_des, True) 
 #    tau = M_des.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_des    
-##    			
+##                
     
-    if conf.EXTERNAL_FORCE:   		
-        # EXERCISE 2.4: Add external force at T = 3.0s
-        #     if time>3.0:         
-        #         F_env = conf.extForce
-        #     else:
-        #         F_env = np.array([0.0, 0.0, 0.0])  									
-        			
+    if conf.EXTERNAL_FORCE:           
+#         EXERCISE 2.4: Add external force at T = 3.0s
+             if time>3.0:         
+                 F_env = conf.extForce
+             else:
+                 F_env = np.array([0.0, 0.0, 0.0])                                      
+                    
         # EXERCISE 2.7: Add  unilateral compliant contact (normal spring)
-        pd = J.dot(qd)     
-        if (conf.n.dot(conf.p0 - p)>0.0):      
-            F_env = conf.n * np.dot(conf.n, conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd))
-        
-        else:
-            F_env = np.array([0.0, 0.0, 0.0]) 
+#        pd = J.dot(qd)     
+#        if (conf.n.dot(conf.p0 - p)>0.0):      
+#            F_env = conf.n * np.dot(conf.n, conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd))
+#        
+#        else:
+#            F_env = np.array([0.0, 0.0, 0.0]) 
             
         # EXERCISE 2.8: Add  unilateral compliant contact  (full 3D model)
 #        pd = J.dot(qd)     
@@ -191,9 +191,9 @@ while True:
 #        else:
 #            contact_sampled = False 
 #            F_env = np.array([0.0, 0.0, 0.0]) 
-        					 
-    ros_pub.add_marker(p)     				
-    tau += J.transpose().dot(F_env)     		      
+#                             
+    ros_pub.add_marker(p)                     
+    tau += J.transpose().dot(F_env)                   
   
     #SIMULATION of the forward dynamics    
     M_inv = np.linalg.inv(M)  
@@ -205,7 +205,7 @@ while True:
     
 
     # Log Data into a vector
-    time_log = np.append(time_log, time)	
+    time_log = np.append(time_log, time)    
     q_log = np.vstack((q_log, q ))
     q_des_log= np.vstack((q_des_log, q_des))
     qd_log= np.vstack((qd_log, qd))
