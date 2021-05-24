@@ -19,12 +19,17 @@ frame_name = 'ee_link'    # name of the frame to control (end-effector)
 #PD controller
 ## Matrix of gains
 kp = np.eye(6)*300  # proportional gains 
-kd = np.eye(6)*20 # derivative gains (critical damping)
+kd = np.eye(6)*30 # derivative gains (critical damping)
 
 ## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY (1, 2, 3, 4, 5, 6 joint)
-amp = np.array([ 0.0, 0.4, 0.0, 0.0, 0.4, 0.0])    # amplitude
+amp = np.array([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0])    # amplitude
 phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])      # phase
-freq = np.array([ 0.0, 1.0, 0.0, 0.0, 1.0, 0.0])    # frequency
+freq = np.array([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0])    # frequency
+
+## bigger inertia variation on joint 2
+#amp = np.array([ 0.0, 0.4, 0.8, 0.0, 0.4, 0.0])    # amplitude
+#phi = np.array([ 0.0, 0.0, 3.14, 0.0, 0.0, 0.0])      # phase
+#freq = np.array([ 0.0, 1.0, 1.0, 0.0, 1.5, 0.0])    # frequency
 
 
 # Initial configuration / velocity / Acceleration
@@ -41,11 +46,11 @@ qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 # Value of linear external force
 extForce = np.array([0.0, 0.0, 50.0])
 # FLAGS
-EXTERNAL_FORCE = True
+EXTERNAL_FORCE = False
 
 # EXERCISE 2.7: Add  unilateral compliant contact
 n = np.array([0.0,0.0,1.0]) # contact normal
 p0 = np.array([0.0,0.0,0.0]) # contact position     
 K_env = np.eye(3)*10000 # contact stiffness 
 D_env = np.eye(3)*1000   # contact damping
-mu = 0.8
+mu =1.0

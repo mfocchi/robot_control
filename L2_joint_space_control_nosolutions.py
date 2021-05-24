@@ -43,7 +43,7 @@ time_log =  np.empty((0,0))*nan
 
 
 # EXERCISE 2.2: 
-#conf.qd0 = two_pi_f_amp
+#conf.qd0 = ...
 
 q = conf.q0
 qd = conf.qd0
@@ -65,30 +65,10 @@ contact_sampled = False
 while True:
     
     # EXERCISE 1.1: Sinusoidal reference Generation
-    q_des  = conf.q0 +   np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
-    qd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
-    qdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
 
-    # Set constant reference after a while
-    if time >= conf.exp_duration_sin:
-        q_des  = conf.q0
-        qd_des=zero
-        qdd_des=zero          
 
     # EXERCISE 1.2: Step reference Generation
-#    if time > 2.0:
-#        q_des = conf.q0 + np.array([ 0.0, -0.4, 0.0, 0.0,  0.5, 0.0]) 
-#        qd_des =  zero
-#        qdd_des = zero 
-#    else:
-#        q_des = conf.q0
-#        qd_des =  zero
-#        qdd_des = zero    
-        
-    # EXERCISE 2.4: Constant reference
-#    q_des = conf.q0
-#    qd_des =  zero
-#    qdd_des = zero   
+
  
     # Decimate print of time
     #if (divmod(time ,1.0)[1]  == 0):
@@ -113,80 +93,49 @@ while True:
 
         
     # EXERCISE  1.5: PD control - critical damping
-#    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
-#    conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1]*M[1,1])
-#    conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2]*M[2,2])
-#    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
-#    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
-#    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
-#    print (conf.kd[1,1])
-#    print (conf.kd[4,4])
+
         
-    
     # EXERCISE  2.3: Inverse Dynamics (computed torque) - low gains
-#    conf.kp = np.eye(6)*60
-#    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0])
-#    conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1])
-#    conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2])
-#    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3])
-#    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4])
-#    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5])
-                                       
+
     #CONTROLLERS                                    
     #Exercise 1.3:  PD control
-    tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)
     
     # Exercise 1.6: PD control + Gravity Compensation
-#    tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
     
     # Exercise 1.7: PD + gravity + Feed-Forward term   
-#    M_des = robot.mass(q_des) 
-#    tau =  np.multiply(np.diag(M_des), qdd_des) + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
- 
+    
     # EXERCISE 2.1 Inverse Dynamics (Computed Torque)
-#    tau = M.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h    
-
+    
     # EXERCISE 2.5 Inverse Dynamics (Computed Torque) - uncertainty in the cancellation   
-#    M_hat  = M*1.1 
-#    h_hat  = h*1.1 
-#    tau = M_hat.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_hat
+
 
     # EXERCISE 2.6  Inverse Dynamics (Desired states)
-#    M_des = robot.mass(q_des)            
-#    h_des = robot.nle(q_des, qd_des) 
-#    tau = M_des.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_des    
-##    			
+    			
     
     if conf.EXTERNAL_FORCE:   		
         # EXERCISE 2.4: Add external force at T = 3.0s
-#        if time>3.0:         
-#            F_env = conf.extForce
-#        else:
-#            F_env = np.array([0.0, 0.0, 0.0])  									
+        #     if time>3.0:         
+        #         F_env = conf.extForce
+        #     else:
+        #         F_env = np.array([0.0, 0.0, 0.0])  									
         			
         # EXERCISE 2.7: Add  unilateral compliant contact (normal spring)
 #        pd = J.dot(qd)     
-#        if (conf.n.dot(conf.p0 - p)>0.0):      
-#            F = conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd)
-#            F_proj =  np.dot(conf.n, conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd))
-#            F_env = conf.n * F_proj
-#        
-#        else:
-#            F_env = np.array([0.0, 0.0, 0.0]) 
+     
             
-#        # EXERCISE 2.8: Add  unilateral compliant contact  (full 3D model)
+        # EXERCISE 2.8: Add  unilateral compliant contact  (full 3D model)
 #        pd = J.dot(qd)     
 #        if (conf.n.dot(conf.p0 - p)>0.0): 
 #            # sample P0
 #            if (not contact_sampled): 
 #                conf.p0 = p
 #                contact_sampled = True
-#            F_env =  conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd)
-##                        
-##
-###            # EXERCISE 2.9: Friction coefficient
-##            # clamp to friction cone
-##            # X component
+#            
+#            ros_pub.add_arrow(p,F_env/100)              
+#
+#            # EXERCISE 2.9: Friction coefficient
+#            # clamp to friction cone
+#            # X component
 ##            if (F_env[0] >= conf.mu * F_env[2]):
 ##                F_env[0] = conf.mu * F_env[2]
 ##            if (F_env[0] <= -conf.mu * F_env[2]):
@@ -196,15 +145,15 @@ while True:
 ##                F_env[1] = conf.mu * F_env[2]
 ##            if (F_env[1] <= -conf.mu * F_env[2]):
 ##                F_env[1] = -conf.mu * F_env[2]
-##            ros_pub.add_cone(p, conf.n, conf.mu, color = "blue")  
-               
+##            ros_pub.add_cone(p, conf.n, conf.mu, color = "blue")                 
 #        else:
 #            contact_sampled = False 
-#            F_env = np.array([0.0, 0.0, 0.0])
+#            F_env = np.array([0.0, 0.0, 0.0]) 
+        
         ros_pub.add_arrow(p,F_env/100)      
         tau += J.transpose().dot(F_env)          					 
     ros_pub.add_marker(p)     				
-    		      
+  		      
   
     #SIMULATION of the forward dynamics    
     M_inv = np.linalg.inv(M)  
