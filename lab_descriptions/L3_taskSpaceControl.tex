@@ -229,7 +229,7 @@ Add  a secondary postural task in the joint space with  gains $K_q= 50 I_{6 \tim
 to add the contributions of the two  tasks use the Null-space projector $N$ of $J^{T\#}$ to ensure that the postural task does not enter in conflict with the primary end-effector task:
 
 \begin{align}
-N & = I_{6 \times 6} - J^T J^{T\#}
+N & = I_{6 \times 6} - J^T J^{T\#}\\
 \tau& = \tau_c  + N\tau_0 
 \end{align}
 
@@ -240,10 +240,10 @@ This is because this lives in the null-space of $J^{T\#}$ (that has the same dim
 
 \noindent
 \textbf{1.6 - Cartesian Space PD control + Gravity Compensation:}
-Add a gravity compensation term computed in the task space $G= J^{-T}g$).
+Add a gravity compensation term computed in the task space $G= J^{T\#}g$).
 
 \begin{align}
-\tau_c & = J^T\left( K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{-T}g \right)
+\tau_c & = J^T\left( K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{T\#}g \right)
 \end{align}
 
 Give the step reference generated in (2.1) as input to the system. 
@@ -257,7 +257,7 @@ Add also a feed-forward acceleration action to the PD control. Use the the refle
 at the end-effector $\Lambda = (J M^{-1} J^T)^{-1}$ (note that we no longer use only the diagonal elements!):
 
 \begin{align}
-\tau_c & = J^T\left( \Lambda \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{-T}g \right)
+\tau_c & = J^T\left( \Lambda \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{T\#}g \right)
 \end{align}
 
 Note that J should be full row rank  otherwise you need to add a damping term to make $JM^{-1}J^T$ invertible.
@@ -357,7 +357,7 @@ We can extract the angular velocity of the end-effector frame as the angular par
 \mat{\dot{p}\\ \omega} = J_{6\times6} \dot{q}
 \end{equation}
 
-Now, we can write the PD law using the orientation proportional $K_{o} = 800I_{6\times6}$ and damping $D_o = 30I_{6\times6}$ gains, setting the desired angular velocity to (0.0,0.0,0.0): 
+Now, we can write the PD law using the orientation proportional $K_{o} = 800I_{3\times3}$ and damping $D_o = 30I_{3\times3}$ gains, setting the desired angular velocity to (0.0,0.0,0.0): 
 
 \begin{align}
 & \Gamma^d  = K_{o} e_o  + D_o(\omega^d - \omega)  \\
@@ -365,12 +365,12 @@ Now, we can write the PD law using the orientation proportional $K_{o} = 800I_{6
 
 Finally, we stack the orientation task $\Gamma^d$ below  the Cartesian task $F^d$ (that was previously computed) to form the desired \textit{wrench} $W^d$ that we can map to torques via $J^T$ and compensate for gravity:
 \begin{align}
-&W^d=\mat{F^d \\ \Gamma^d}
+&W^d=\mat{F^d \\ \Gamma^d}\\
 &\tau = J^TW^d + g
 \end{align}
 
 Plot   the  orientation error and see that is going to zero.
- Note that, since you used a PD control law,  you will have tracking errors (both in the linear and in the angular  coordinates) because of gravity and inertial couplings. Additionally, you will notice that increasing the damping gain  $D_o = I_{6\times6}30$ beyond 30 makes the system unstable.
+ Note that, since you used a PD control law,  you will have tracking errors (both in the linear and in the angular  coordinates) because of gravity and inertial couplings. Additionally, you will notice that increasing the damping gain  $D_o = 30I_{3\times3}$ beyond 30 makes the system unstable.
 We saw that the acos(.) function provides an output only in the $\mat{ 0 , \pi}$ range. 
 instead, use the atan2(.) function to compute  $\Delta \theta$, that provides output in $\mat{ -\pi   , \pi }$.
 
@@ -396,12 +396,12 @@ plot of the Euler Angles representation suffers from discontinuities.
 This is one of the reasons for which we chose to close the loop on orientation error and not on Euler Angles for orientation control. 
 %With angle-axis we still have a singularity at zero but we can deal with that with the atan2(.). 
 
-\textit{3.3 - PD control of end-effector position + orientation: sinusoidal reference}
-Try to set a sinusoidal reference (which mimics a drilling operation)  $ 2.2 \pi sin(t)$ for the desired roll angle $\psi^d$ and 0.0 for desired pitch and yaw. Remember that you should also compute a consistent time-varying reference also for the angular velocity $\omega^{d}$ in a PD control law. In this case, remember that you need to compute the derivatives of the Euler Angles (Euler rates) and map  them into $\omega$ via  $\omega^d = T_{\omega}(\Phi^d)\dot{\Phi^d}$. 
+\textit{3.3 - PD control of end-effector position + orientation - sinusoidal reference:}
+Try to set a sinusoidal reference (which mimics a drilling operation)  $ 2.2 \pi sin(t)$ for the desired roll angle $\psi^d$ and 0.0 for desired pitch and yaw. Remember that you should also compute a consistent time-varying reference also for the angular velocity $\omega^{d}$ in a PD control law. In this case, remember that you need to compute the derivatives of the Euler Angles (Euler rates) and map  them into $\omega$ via  $\omega^d = T_{\omega}(\Phi^d)\dot{\Phi}^d$. 
 Plot the tracking for the Euler Angles.
 
 
-\textit{3.4 - PD control of end-effector position + orientation: unwrapping}
+\textit{3.4 - PD control of end-effector position + orientation - unwrapping:}
 Note that the roll signal switches between $\pi$ and $-\pi$. You do not see this in the orientation error because is always in the range $\pi$ and $-\pi$. Implement an \textit{unwrapping} algorithm to avoid this phenomena and get a continuous plot:
 
 \begin{verbatim}
@@ -470,7 +470,7 @@ Note that the postural task is no longer needed, because we are assigning a $6D$
 \end{align} 
 
 Verify that the tracking is almost perfect (apart from the transient due to the difference from the initial state and the reference) both during the motion and at steady-state, showing a perfect cancellation of all the non-linear terms, making the system linear and decoupled. 
-An important consequence is that you can now increase at will the damping gain  $D_o = I_{6\times6}30$ beyond 30 without making the system unstable.
+An important consequence is that you can now increase at will the damping gain  $D_o = 30I_{3\times3}$ beyond 30 without making the system unstable.
 
 %\section{Interaction control (Lecture H2)}
  
