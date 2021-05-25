@@ -147,7 +147,16 @@ cd ~/ros_ws
 catkin_make install
 \end{verbatim}
 
+If you use Spyder use this configuration (Fig. \ref{fig:spyder}) in \codeword{Run/Configure...} to enable the interactive shell:
 
+\begin{figure}[bht]
+	\centering
+	\includegraphics[width=8cm]{spyderConfig.png}
+	\caption{Spyder configuration for interactive shell.}
+	\label{fig:spyder}
+\end{figure}
+
+It is also useful to install \codeword{rope} package to enjoy auto-completion of variables with \codeword{pip install rope}.
 To test the RVIZ visualization and have a grasp on the kinematic of the UR5 robot, try to move the joints with the sliders, running:
 %
 \begin{verbatim}
@@ -268,6 +277,7 @@ Note that because our robot is redundant for the (3D) positioning task the Jacob
 
 \begin{align}
 &F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
+& \Lambda = (J M^{-1}J^T)^{-1}\\
 &\mu(q,\dot{q})  = J^{T\#} h -\Lambda \dot{J} \dot{q} \\
 &\tau_c  = J^T\left( \Lambda F^d +  \mu(q,\dot{q}) \right)
 \end{align}
@@ -310,7 +320,7 @@ The secondary postural task will no longer be necessary because the dimension of
 Now we want also to control  the orientation  of the end-effector (advice: the Jacobian is now $6\times6$ ). 
 Implement a PD control law and use the \textit{angle-axis} representation to compute the orientation error ${}_we_o$. 
 
-First define the rotation matrix that represents the desired orientation ${}_wR_d = [\hat{x}^d, \hat{y}^d, \hat{z}^d]$ with  ($\hat{x}_d$ axis along $\hat{x}_w$, $\hat{y}_d$ axis  along $-\hat{y}_w$, $\hat{z}_d$ axis along $-\hat{z}_w$).
+First define the rotation matrix that represents the desired orientation, ${}_wR_d = [\hat{x}^d, \hat{y}^d, \hat{z}^d]$ with  ($\hat{x}_d$ axis along $\hat{x}_w$, $\hat{y}_d$ axis  along $-\hat{y}_w$, $\hat{z}_d$ axis along $-\hat{z}_w$). This is equivalent to rotate the world frame 180 degrees with respect to its $X$ axis. % for some reason the result is opposite for rotations smaller that 180 degs TODO
 Then compute the rotation matrix that represents the relative rotation from the \textit{actual} end-effector orientation ${}_wR_{ee}$ to the \textit{desired} orientation ${}_wR_d$:
 
 \begin{align}
@@ -375,18 +385,19 @@ instead, use the atan2(.) function to compute  $\Delta \theta$, that provides ou
 Now we want to change the orientation set-point  ${}_wR_{d}$ at will. To do so 
 is is convenient to use Euler Angles. Define the sequence (note that it is not a vector!)  
 $\Phi^d$ of Euler Angles in ZYX convention that represent the desired orientation 
-and map it into ${}_wR_{d}$ using the function  \codeword{eul2Rot($\Phi^d$)}. 
+and map it into ${}_wR_{d}$ using the function  \codeword{eul2Rot}($\Phi^d$). 
 
 To check the tracking in terms of Euler Angles you need to convert the rotation matrix ${}_wR_{ee}$ 
-that represents the actual orientation  into the correspondent Euler Angles using the dual function \codeword{rot2eul(${}_wR_{ee}$)}.
+that represents the actual orientation  into the correspondent Euler Angles using the dual function \codeword{rot2eul}(${}_wR_{ee}$).
 
 Set some values for the sequence $\Phi^d$ such that the representation is at singularity (i.e. $\theta = \pi/2$), 
 and see that while the error orientation angle-axis is still continuous, the 
 plot of the Euler Angles representation suffers from discontinuities. 
-This is one of the reasons for which we chose to close the loop on orientation error and not on Euler Angles for orientation control. With angle-axis we still have a singularity at zero but we can deal with that with the ata2(.). 
+This is one of the reasons for which we chose to close the loop on orientation error and not on Euler Angles for orientation control. 
+%With angle-axis we still have a singularity at zero but we can deal with that with the atan2(.). 
 
 \textit{3.3 - PD control of end-effector position + orientation: sinusoidal reference}
-Try to set a sinusoidal reference (which mimics a drilling operation)  $ 2.2 \pi sin(t)$ for the desired roll angle $\psi^d$ and 0.0 for desired pitch and yaw. Remember that you should also compute a consistent time-varying reference also for the angular velocity $\omega_{d}$ in a PD control law. In this case, remember that you need to compute the derivatives of the Euler Angles (Euler rates) and map  them into $\omega$ via  $\omega^d = T_{\omega}(\Phi^d)\dot{\Phi^d}$. 
+Try to set a sinusoidal reference (which mimics a drilling operation)  $ 2.2 \pi sin(t)$ for the desired roll angle $\psi^d$ and 0.0 for desired pitch and yaw. Remember that you should also compute a consistent time-varying reference also for the angular velocity $\omega^{d}$ in a PD control law. In this case, remember that you need to compute the derivatives of the Euler Angles (Euler rates) and map  them into $\omega$ via  $\omega^d = T_{\omega}(\Phi^d)\dot{\Phi^d}$. 
 Plot the tracking for the Euler Angles.
 
 
@@ -403,7 +414,7 @@ for i in range(3):
     rpy_old[i] = rpy_unwrapped[i] 	
 \end{verbatim}
 
-Check at the end of this \href{https://youtu.be/sax0QzG8qAw }{video} what can happen to your robot if you do not do the unwrapping and you close the loop on Euler Angles to control orientation! 
+Check at the end of this \href{https://youtu.be/sax0QzG8qAw }{video} what can happen to your robot, if you do not do the unwrapping and you close the loop on Euler Angles to control orientation! 
 %Why the motion of the joints seems weird? Remember the concept dexterous workspace? Unfortunately even if in theory you could be able to specify both positions and orientations of the end-effector frame, this does not mean that you can specify any arbitrary orientation for all end-effector positions in the primary workspace (remember definition of dexterous workspace). This means that in some locations you might not be able to achieve every possible orientation, but just a subset of them. 
 %A way to increase the size of the dexterous workspace and be more free to specify any orientation is to add a deegree of freedom of redundancy (e.g. use 7 DoFs robot) %"natural" motion! 
 
@@ -420,9 +431,9 @@ quaternion representation and check that it gives the same result as closing the
 \noindent
 \textit{3.6 - Implement the full (6D) task space inverse-dynamics:}
 Implement the full inverse dynamics algorithm to remove the inertial/coriolis couplings and gravity for a 6D task.
-Observe that the $\Lambda$ should be recomputed from the $6\times6$ Jacobian. Note that this matrix 
+Observe that the inertia reflected at the end-effector $\Lambda$ is now a $6\times6$ matrix and should be recomputed from the $6\times6$ Jacobian. Note that this matrix 
 can become singular if the Jacobian is no longer full-row rank. 
-Actually, check the rank of the Jacobian drops from 6 to 5 in the initial position $q_0$ therefore some mobility is lost 
+Actually, verify that the rank of the Jacobian drops from 6 to 5 in the initial position $q_0$ therefore some mobility is lost 
 at the very beginning.
 
  \begin{equation}
@@ -435,13 +446,13 @@ at the very beginning.
  \end{equation}
 
 How do you solve this? Try to set a threshold $\rho = 0.0001$ for the singular values in the 
-SVD decomposition in the \codeword{np.linalg.pinv} function or, equivalently, implement  a damping in the pseudo-inverse (check that they produce the same output). 
+SVD decomposition in the \codeword{np.linalg.pinv} function or, equivalently, implement  a damping in the pseudo-inverse of $J^T$ as follows and check that they produce the same output: 
 
 \begin{equation}
-J^{\#} = J^T\left(J J^T + I_{3\times 3}\rho^2\right)^{-1}
+J^{T\#} = J^T\left(J J^T + I_{6\times 6}\rho^2\right)^{-1}
 \end{equation} 
 
-Remember that in this control law we need also to add the desired \textit{acceleration} terms (both linear and angular) and we are still missing the $\dot{omega}^d$ term. $\dot{omega}^d$ can be obtained in a similar way to the desired angular velocity, by differentiating the previous relationship:
+Remember that for this control law we need also to add the desired \textit{acceleration} terms (both linear and angular) and we are still missing the $\dot{\omega}^d$ term. $\dot{\omega}^d$ can be obtained in a similar way to the desired angular velocity, by differentiating the previous relationship:
 
 \begin{equation}
 \dot{\omega}^d = T_{\omega}(\Phi^d) \ddot{\Phi}^d +  \dot{T_{\omega}}(\Phi^d,\dot{\Phi}^d ) \dot{\Phi^d}
@@ -453,6 +464,8 @@ Note that the postural task is no longer needed, because we are assigning a $6D$
 & F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
 & \Gamma^d  = \dot{\omega}^d + K_{o} e_o  + D_o(\omega^d - \omega)  \\
 & W^d = \mat{F^d \\ \Gamma^d} \\
+& \Lambda = (J M^{-1}J^T + \rho^2 I_{6 \times6})^{-1}\\
+&\mu(q,\dot{q})  = J^{T\#} h -\Lambda \dot{J} \dot{q} \\
 & \tau = J^T\left( \Lambda W^d + \mu \right)
 \end{align} 
 

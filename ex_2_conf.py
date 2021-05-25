@@ -8,7 +8,7 @@ Created on Thu Apr 18 09:47:07 2019
 import numpy as np
 import os
 
-dt = 0.001                   # controller time step
+dt = 0.001                   # controller time step [s]
 exp_duration_sin = 4.0 #sine reference duration
 exp_duration = 5.0 #simulation duration
 

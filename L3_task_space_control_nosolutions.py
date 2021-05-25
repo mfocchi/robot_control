@@ -77,29 +77,15 @@ FirstTime = True
 while True:
     
     # EXERCISE 1.1: Sinusoidal reference generation for the end effector   
-    p_des  = p0  + np.multiply( conf.amp, np.sin(two_pi_f*time + conf.phi))
-    pd_des = np.multiply(two_pi_f_amp , np.cos(two_pi_f*time + conf.phi))
-    pdd_des = np.multiply( two_pi_f_squared_amp , -np.sin(two_pi_f*time + conf.phi))
+
     # Set constant reference after a while
-    if time >= conf.exp_duration_sin:
-        p_des  = p0
-        pd_des = pd0
-        pdd_des = pdd0
+
         
     #  EXERCISE 1.2: Step reference generation for the end effector 
-#    if time > 2.0:
-#        p_des = p0 + np.array([ 0.0, 0.0, 0.1])
-#        pd_des =  zero_cart
-#        pdd_des = zero_cart 
-#    else:
-#        p_des = p0
-#        pd_des =  zero_cart
-#        pdd_des = zero_cart 
+
 
 #    EXERCISE 2.3: Constant reference
-#    p_des = p0
-#    pd_des =  zero_cart
-#    pdd_des = zero_cart 
+
 
     # Decimate print of time
     #if (divmod(time ,1.0)[1]  == 0):
@@ -143,69 +129,32 @@ while True:
     N = eye(6)-J.T.dot(JTpinv)
 
     # EXERCISE 1.4: PD control (cartesian task)  
-    F_des = conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)
-    tau = (J.T).dot(F_des)      				
+  				
 
     # EXERCISE 1.5: PD control (cartesian task) + postural task  
     # null space torques (postural task)
-    tau0 = 50*(conf.q0-q) - 10*qd
-    tau_null = N.dot(tau0)						
-#    tau = (J.T).dot(F_des)  + tau_null 
     
     # EXERCISE 1.6: PD control + Gravity Compensation:
-#    F_des = conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)	+ JTpinv.dot(g)		
-#    tau = J.T.dot(F_des) + tau_null 
-        
+      
         
     # EXERCISE 1.7: PD control  + Gravity Compensation + Feed-Forward term
-#    F_des = lambda_.dot(pdd_des) + conf.Kx.dot(p_des-p)+conf.Dx.dot(pd_des-pd) + JTpinv.dot(g)
-#    tau = J.T.dot(F_des) + tau_null 
-     
-     
+         
     # EXERCISE 2.1: Cartesian space inverse dynamics
-#    F_des = pdd_des + conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)
-#    mu =  JTpinv.dot(h) -lambda_.dot(Jdqd) 
-#    tau = J.T.dot(lambda_.dot(F_des) + mu) + tau_null    
-    
     
      # EXERCISE 2.2: Cartesian space inverse dynamics with bias compensation in joint space (simpler to compute)
-#    F_des = pdd_des + conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)    
-#    tau =  J.T.dot(lambda_.dot(F_des)) + h + tau_null
 
 
      # EXERCISE 3.1:  Control of orientation with PD: constant orientation
-#    ORIENTATION_CONTROL = True
-#    # get the actual end-effector orientation (columns are the axis of frame_ee expressed in WF (check rviz TF) )				
-#    w_R_e = robot.framePlacement(q, frame_ee).rotation 		
-#    #compute the actual end-effector twist (i.e. linear and angula velocity)
-#    twist = J6.dot(qd)
-#    # extract omega				
-#    omega = twist[3:6]    
+
     
     #compose the des orientation rotation matrix 180deg about x (x axis along x, y axis along -y, z axis along -z) NB the axis are the columns of the matrix w_R_des 
-#    des_x_axis = np.array([1, 0, 0])
-#    des_y_axis = np.array([0, -1, 0])
-#    des_z_axis = np.array([0, 0 , -1 ])		
-#    w_R_des = np.vstack((des_x_axis.T, des_y_axis.T, des_z_axis.T))		            
-#    omega_des = np.array([0,0,0])
+
 
     # EXERCISE 3.2 - Control of orientation with PD: singularity with Euler Angles
-    # rpy_des = np.array([0.8, math.pi/2 , 0.0]) # singularity
-#    rpy_des = np.array([0.2, 0.4, 0.8])  # random orient with Euler Angles
-#    w_R_des = math_utils.eul2Rot(rpy_des)
-#    omega_des = np.array([0,0,0])
+
 
     # EXERCISE 3.3: Control of orientation with PD - sinusoidal reference 
-#    rpy_des = np.array([2.2*np.pi*np.sin(time), 0.0 , 0.0])
-#    rpyd_des = np.array([2.2*np.pi*np.cos(time), 0.0 , 0.0])  
-#    rpydd_des = np.array([-2.2*np.pi*np.sin(time), 0.0 , 0.0]) 
-#    # compute rotation matrix representing the desired orientation from Euler Angles
-#    w_R_des = math_utils.eul2Rot(rpy_des)        
-#    # desired angular velocity		            
-#    omega_des = math_utils.Tomega(rpy_des).dot(rpyd_des)
-#    # desired angular acceleration			             
-#    omega_d_des = math_utils.Tomega(rpy_des).dot(rpydd_des) +  math_utils.Tomega_dot(rpy_des, rpyd_des).dot(rpyd_des)
-#   
+
    
    
     # EXERCISE 3.1: Control of orientation with PD   
@@ -323,5 +272,6 @@ try:
     plotEndeff('orientation', 3,time_log, p_log, p_des_log, pd_log, pd_des_log, rpy_log, rpy_des_log)
     plotEndeff('orientation', 4,time_log, p_log, p_des_log, pd_log, pd_des_log, error_o_log)
 except: 
-    pass   
+    pass    
+
     
