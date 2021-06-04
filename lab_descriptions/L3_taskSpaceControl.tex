@@ -107,7 +107,8 @@
 
 
 \title{LAB 3: Task Space Motion Control}
-\author{Michele Focchi and Octavio Villarreal}
+\author{Michele Focchi and Octavio Villarreal \\
+Edited by Thiago Boaventura}
 \date{}
 
 \begin{document}
@@ -115,8 +116,8 @@
 	\noindent
 	The goals of this assignment are:
 	\begin{itemize}
-		\item learning the basic procedure to design a motion controller in the \textit{task} space for a manipulator in free-motion (i.e. not in contact)
-		\item analyze the advantage/disadvantage of decentralized/ centralized approaches (i.e. feedback linearization)
+		\item learning the basic procedure to design a motion controller in the \textit{task} space for a manipulator in free motion (i.e. not in contact)
+		\item analyze the advantages/disadvantages of decentralized/ centralized approaches (i.e. feedback linearization)
 		\item implement the control of the orientation using angle-axis representation
 		\item implement the control of interaction with impedance control  
 	\end{itemize}
@@ -133,7 +134,7 @@
 	%
 	%\noindent
 	In this assignment we will design the reference trajectory and close the loop at the end-effector point. We will have to deal with dynamic coupling and 
-	hot to appropriately solve the undeterminancy, in the case that robot is redundant with respect to the task dimension. Initially we will design some reference trajectory to track, defined at the joint level. Then, we will design several control laws with increasing complexity evaluating their impact on the accuracy and the tracking errors at the joint.
+	how to appropriately solve the indeterminacy, in the case the robot is redundant with respect to the task dimension. Initially, we will design some reference trajectories to track, defined at the joint level. Then, we will design several control laws with increasing complexity evaluating their impact on the accuracy and the tracking errors of the joint.
 
 \section{Preliminaries}
 
@@ -149,7 +150,7 @@ roslaunch visualize.launch robot_name:=ur5 test_joints:=true
 
 \noindent
 \textbf{1.1 - Generate Sinusoidal Reference:}
-Generate a sinusoidal reference for the $X$ direction of the end effector with 0.1 $m$  amplitude and 1.5 $Hz$ frequency, starting from the initial configurations $p_0$. Keep the other directions $Y$ and $Z$ at 0. After 4.0 $s$ stop the sine and give a constant reference during 1.0 $s$. Note that you need to generate also consistent references for velocity and acceleration.
+Generate a sinusoidal reference for the $X$ direction of the end-effector with 0.1 $m$  amplitude and 1.5 $Hz$ frequency, starting from the initial configurations $p_0$. Keep the other directions $Y$ and $Z$ at 0. After 4.0 $s$ stop the sine and give a constant reference during 1.0 $s$. Note that you also need to generate consistent references for velocity and acceleration.
 
 
 \quad
@@ -173,7 +174,7 @@ q^d = IK(p^d) \\
 \end{cases}
 \end{equation*}
 
-Notice that since the task is three-dimensional the Jacobian will not be square and you need to employ $J^{\#}$ rather $J^{-1}$.
+Notice that since the task is three-dimensional, the Jacobian will not be square and you need to employ $J^{\#}$ rather $J^{-1}$.
 Use a standard PD control to close the loop at the joint level, with a feed-forward term. Evaluate the tracking of the end-effector.
 %Algorithm for IK: \href{https://gepettoweb.laas.fr/doc/stack-of-tasks/pinocchio/master/doxygen-html/md_doc_b-examples_i-inverse-kinematics.html}{pinocchio example}).
 
@@ -189,12 +190,12 @@ Implement a PD control law for the position of the end-effector (that's why the 
 \tau_c & = J^T\left(K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})\right)
 \end{align}
 
-Since we are considering only the position of the end-effector you should use only the first 3 rows of the Jacobian $J \in \Rnum^{6 \times 6}$. 
+Since we are considering only the position of the end-effector, you should use only the first 3 rows of the Jacobian $J \in \Rnum^{6 \times 6}$. 
 Use  as proportional gain the positive definite matrix $K_x = diag(1000, 1000, 1000)$ $N/m$ and as the derivative gain $D_x  = diag(300, 300, 300)$ $Ns/m$. 
-Try to simulate and observe how the robot behaves without any \textit{postural task} to solve the undeterminancy (we have a 3D task and 6 DoFs at the joints).
+Try to simulate and observe how the robot behaves without any \textit{postural task} to solve the indeterminacy (we have a 3D task and 6 DoFs at the joints).
 Use the sinusoidal reference generated in (1) as input to the system. Plot the tracking error, see that there is a big steady-state error due to gravity in the $Z$ direction but that there are also couplings that affect  the tracking in the 
 $X$, $Y$ directions. Try to change the stiffness gain $K_x$ in the $X$,$Y$ directions and see that their tracking improves. See the joints are moving randomly 
-because there is no control in the null-space and we have 6 DoFs with a $3D$ task, and this motion, affects the tracking if the end-effector. 
+because there is no control in the null space and we have 6 DoFs with a $3D$ task, and this motion affects the tracking of the end-effector. 
 
 \quad
 
@@ -207,13 +208,13 @@ Add  a secondary postural task in the joint space with  gains $K_q= 50 I_{6 \tim
 N & = I_{6 \times 6} - J^T J^{T\#}
 \end{align}
 
-then add the contributions of the two  tasks. By using the Null-space projector $N$ of $J^{T\#}$ you ensure that postural task does not enter in conflict with the primary end-effector task:
+then add the contributions of the two  tasks. By using the Null-space projector $N$ of $J^{T\#}$ you ensure that the postural task does not enter in conflict with the primary end-effector task:
 \begin{align}
 \tau& = \tau_c  + N\tau_0 
 \end{align}
 
 Observe that the joints now are no longer wobbling around, and the tracking of the end-effector is no longer affected by the random motion of the joints. 
-This is because this lives in the null-space of $J^{T\#}$ (that has the same dimension of the null-space of $J$) that is the set of torques that do not affect the end-effector motion.
+This is because this lives in the null-space of $J^{T\#}$ (that has the same dimension of the null-space of $J$), that is, the set of torques that do not affect the end-effector motion.
 
 \quad
 
@@ -240,8 +241,8 @@ at the end-effector $\Lambda = (J M^{-1} J^T)^{-1}$ (note that we no longer use 
 \end{align}
 
 Note that J should be full row rank  otherwise you need to add a damping term to make $JM^{-1}J^T$ invertible.
-We employ the expression of $\Lambda = (JM^{-1}J^T)^{-1}$ because this is valid also for redundant robots, while $\Lambda = J^{-T}M J^{-1}$ is only  valid for non-redundant robots. 
-Give the sinusoidal reference generated in (1). See that the tracking error is improved for a time-varying reference on the $X$ direction, but still there are tracking errors on $Y$ and $Z$ direction due to the inertial couplings and to the non-consistency of the initial state (for velocity).
+We employ the expression of $\Lambda = (JM^{-1}J^T)^{-1}$ because this is valid also for redundant robots, while $\Lambda = J^{-T}M J^{-1}$ is only  valid for nonredundant robots. 
+Give the sinusoidal reference generated in (1). See that the tracking error is improved for a time-varying reference on the $X$ direction, but still there are tracking errors on $Y$ and $Z$ direction due to the inertial couplings and to the inconsistency of the initial state (for velocity).
 
 \section{Centralized task space control (Lecture H0)}
 
@@ -251,7 +252,7 @@ Similarly to what we did in the joint space case, to effectively compensate for 
 
 \noindent
 \textit{2.1 - Cartesian space inverse dynamics:}
-Implement Cartesian space inverse dynamics with a postural task in the null space of the end-effector task, to attract the robot configuration $q_0$. Observe that the tracking is now almost perfect, there are no coupling between different directions anymore.  Observe that if you reduce the gains the tracking remains good apart in the discontinuity at the end of the sinusoidal trajectory.  
+Implement Cartesian space inverse dynamics with a postural task in the null space of the end-effector task, to attract the robot configuration $q_0$. Observe that the tracking is now almost perfect, there are no coupling between different directions anymore.  Observe that if you reduce the gain, the tracking remains good despite the discontinuity at the end of the sinusoidal trajectory.  
 
 \begin{align}
 &F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
@@ -285,7 +286,7 @@ If you reduce by half the $K_x$ gains you should see the deflection due to $F_{e
 \section{Orientation control (Lecture H1)}
 
 Until now we only defined a 3D task for the end-effector position. Now we want also to control the orientation and define a full 6D task. 
-The secondary postural task will no longer be necessary because the dimension of the task is the same as the number of joints (i.e. dimension of the joint space). Note that you can control orientation employing different parametrization of the orientation to compute the orientation error. 
+The secondary postural task will no longer be necessary because the dimension of the task is the same as the number of joints (i.e. dimension of the joint space). Note that you can control the orientation employing different parametrization of the orientation to compute the orientation error. 
 
 \quad
 
@@ -293,7 +294,7 @@ The secondary postural task will no longer be necessary because the dimension of
 \textit{3.1 - PD control of end-effector position + orientation:}
 Add orientation  control of the end-effector (advice: the Jacobian is $6\times6$ now). Implement a PD control law and using the \textit{angle-axis} representation to compute the orientation error ${}_we_o$. 
 
-First compose the rotation matrix that represents the desired orientation ${}_wR_d = [\hat{x}^d, \hat{y}^d, \hat{z}^d]$ with  ($\hat{x}_d$ axis along $\hat{x}_w$, $\hat{y}_d$ axis  along $-\hat{y}_w$, $\hat{z}_d$ axis along $-\hat{z}_w$).
+First, compose the rotation matrix that represents the desired orientation ${}_wR_d = [\hat{x}^d, \hat{y}^d, \hat{z}^d]$ with  ($\hat{x}_d$ axis along $\hat{x}_w$, $\hat{y}_d$ axis  along $-\hat{y}_w$, $\hat{z}_d$ axis along $-\hat{z}_w$).
 Then compute the rotation matrix that represents the relative rotation from the \textit{actual} end-effector orientation ${}_wR_{ee}$ to the \textit{desired} orientation ${}_wR_d$:
 
 \begin{align}
@@ -343,8 +344,8 @@ Finally, we stack the orientation task $\Gamma^d$ below  the Cartesian task $F^d
 &\tau = J^TW^d
 \end{align}
 
-Plot   the  orientation error and see that is going to zero.
- Note that, since you used a PD control law,  you will have tracking errors (both in the linear and in the angular  coordinates) because of gravity and inertial couplings. Additionall, you will notice that increasing the damping gain  $D_o = I_{6\times6}30$ beyond 30 makes the system unstable.
+Plot   the  orientation error and see that it is going to zero.
+ Note that, since you used a PD control law,  you will have tracking errors (both in the linear and in the angular  coordinates) because of gravity and inertial couplings. Additionally, you will notice that increasing the damping gain  $D_o = I_{6\times6}30$ beyond 30 makes the system unstable.
 We saw that the acos(.) function provides an output only in the $\mat{ 0 , \pi}$ range. 
 Use the atan2(.) function to compute the $\delta \theta$ that provides output in $\mat{ -\pi   , \pi }$.
 
@@ -359,17 +360,17 @@ Use the atan2(.) function to compute the $\delta \theta$ that provides output in
 Now we want to change the orientation set-point  ${}_wR_des$ at will. To do so 
 is is convenient to use Euler Angles. Define the sequence (note it is not a vector)  $\Phi^d$ of Euler Angles in ZYX convention that represent the desired orientation and map it into ${}_wR_des$ using the function  \codeword{eul2Rot($\Phi^d$)}. 
 
-To check the tracking in terms of Euler Angles you need to convert the rotation matrix ${}_wR_{ee}$ that represents the actual orientation  into the correspondent Euler Angles using the dual function \codeword{rot2eul(${}_wR_{ee}$)}.
+To check the tracking in terms of Euler Angles, you need to convert the rotation matrix ${}_wR_{ee}$ that represents the actual orientation  into the correspondent Euler Angles using the dual function \codeword{rot2eul(${}_wR_{ee}$)}.
 
-Set some values for the sequence $\Phi^d$ such that the representation is at singularity (i.e. $\theta = \pi/2$), and see that while the error orientation angle-axis is still continuous the plot of the Euler Angles representation suffers from discontinuities. This is one of the reasons for which we chose to close the loop on orientation error and not on Euler Angles for orientation control.
+Set some values for the sequence $\Phi^d$ such that the representation is at singularity (i.e. $\theta = \pi/2$), and see that while the error orientation angle-axis is still continuous the plot of the Euler Angle representation suffers from discontinuities. This is one of the reasons for which we chose to close the loop on orientation error and not on Euler Angles for orientation control.
 
 \textit{3.3 - PD control of end-effector position + orientation: sinusoidal reference}
-Try to set a sinusoidal reference (which mimics a drilling operation)  $ 2.2 \pi sin(t)$ for the desired roll angle $\psi^d$ and 0.0 for desired pitch and yaw. Remember that you should also compute a consistent time-varying reference also for the angular velocity $\omega_des$ in a PD control law. In this case, remember that you need to compute the derivatives of the Euler Angles (Euler rates) and map  them into $\omega$ via  $\omega^d = T_{\omega}(\Phi^d)\dot{\Phi^d}$. 
-Plot the tracking for the Euler Angles.
+Try to set a sinusoidal reference (which mimics a drilling operation)  $ 2.2 \pi sin(t)$ for the desired roll angle $\psi^d$ and 0.0 for the desired pitch and yaw. Remember that you should also compute a consistent time-varying reference for the angular velocity $\omega_des$ in a PD control law. In this case, remember that you need to compute the derivatives of the Euler Angles (Euler rates) and map  them into $\omega$ via  $\omega^d = T_{\omega}(\Phi^d)\dot{\Phi^d}$. 
+Plot Euler Angle tracking.
 
 
 \textit{3.4 - PD control of end-effector position + orientation: unwrapping}
-Note that the roll signal switches between $\pi$ and $-\pi$. You do not see this in the orientation error because is always in the range $\pi$ and $-\pi$. Implement an \textit{unwrapping} algorithm to avoid this phenomena and get a continuous plot:
+Note that the roll signal switches between $\pi$ and $-\pi$. You do not see this in the orientation error because it is always in the range $\pi$ and $-\pi$. Implement an \textit{unwrapping} algorithm to avoid this phenomena and get a continuous plot:
 
 \begin{verbatim}
 for i in range(3):
@@ -381,7 +382,7 @@ for i in range(3):
     rpy_old[i] = rpy_unwrapped[i] 	
 \end{verbatim}
 
-Check at the end of this \href{https://youtu.be/sax0QzG8qAw }{video} what can happen to your robot if you do not do the unwrapping and you close the loop on Euler Angles to control orientation! 
+Check at the end of this \href{https://youtu.be/sax0QzG8qAw }{video} what can happen to your robot if you do not do the unwrapping and you close the loop with Euler Angles to control the orientation! 
 %Why the motion of the joints seems weird? Remember the concept dexterous workspace? Unfortunately even if in theory you could be able to specify both positions and orientations of the end-effector frame, this does not mean that you can specify any arbitrary orientation for all end-effector positions in the primary workspace (remember definition of dexterous workspace). This means that in some locations you might not be able to achieve every possible orientation, but just a subset of them. 
 %A way to increase the size of the dexterous workspace and be more free to specify any orientation is to add a deegree of freedom of redundancy (e.g. use 7 DoFs robot) %"natural" motion! 
 
@@ -400,7 +401,7 @@ quaternion representation and check that it gives the same result as closing the
 Implement the full inverse dynamics algorithm to remove the inertial/coriolis couplings and gravity for a 6D task.
 Observe that the $\Lambda$ should be recomputed from the $6\times6$ Jacobian. Note that this matrix 
 can become singular if the Jacobian is no longer full-row rank. 
-Actually, check the rank of the Jacobian drops from 6 to 5 in the initial position $q_0$ therefore some mobility is lost 
+Actually, notice that the rank of the Jacobian drops from 6 to 5 in the initial position $q_0$, therefore some mobility is lost 
 at the very beginning.
 
  \begin{equation}
@@ -434,8 +435,8 @@ Note that the postural task is no longer needed, because we are assigning a $6D$
 & \tau = J^T\left( \Lambda W^d + \mu \right)
 \end{align} 
 
-Verify that the tracking is almost perfect (apart from the transient due to the difference from the initial state and the reference) both during the motion and at steady-state, showing a perfect cancellation of all the non-linear terms, making the system linear and decoupled. 
-An important consequence is that you can now increase at will the damping gain  $D_o = I_{6\times6}30$ beyond 30 without making the system unstable.
+Verify that the tracking is almost perfect (apart from the transient due to the difference from the initial state and the reference) both during the motion and at steady-state, showing a perfect cancellation of all nonlinear terms, making the system linear and decoupled. 
+An important consequence is that you can now increase the damping gain  $D_o = I_{6\times6}30$ beyond 30 without making the system unstable.
 
 %\section{Interaction control (Lecture H2)}
  
