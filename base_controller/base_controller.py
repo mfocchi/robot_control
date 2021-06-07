@@ -88,7 +88,7 @@ class BaseController(threading.Thread):
         threading.Thread.__init__(self)
 								
         # instantiating objects
-        self.ros_pub = RosPub(True)                    
+        self.ros_pub = RosPub("hyq",True)                    
         self.joint_names = ""
         self.u = Utils()
         self.kin = HyQKinematics()			

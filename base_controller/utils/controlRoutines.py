@@ -49,7 +49,7 @@ def computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_p
     #the orient error is expressed in the base_frame so it should be rotated wo have the wrench in the world frame
     w_err = b_R_w.transpose().dot(err)        
     # map des euler tates into des omega
-    Jomega =  mathJet.Jomega(util.angPart(act_pose))
+    Jomega =  mathJet.Tomega(util.angPart(act_pose))
    
     # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an Euclidean space with Jomega                
     Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_ang.dot(w_err) + Kd_ang.dot(Jomega.dot((util.angPart(des_twist) - util.angPart(act_twist))))
@@ -71,7 +71,7 @@ def computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_p
        # compute inertia in the WF  w_I = R' * B_I * R
         W_Inertia = np.dot(b_R_w.transpose(), np.dot(B_Inertia, b_R_w))
         # compute w_des_omega_dot  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates
-        Jomega_dot =  mathJet.Jomega_dot(util.angPart(des_pose),  util.angPart(des_twist))
+        Jomega_dot =  mathJet.Tomega_dot(util.angPart(des_pose),  util.angPart(des_twist))
         w_des_omega_dot = Jomega.dot(util.angPart(des_acc)) + Jomega_dot.dot(util.angPart(des_twist))                
         ffdAngular = W_Inertia.dot(w_des_omega_dot) 
         #ffdAngular = W_Inertia.dot(util.angPart(des_acc))
