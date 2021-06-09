@@ -45,8 +45,9 @@ class RosPub():
                                 
         all_names = [name for name in robot.model.names]            
         msg = JointState()
-        msg.header.stamp = ros.Time.now()            
-        msg.name = all_names[-robot.nq:] #remove universe joint that is not active
+        msg.header.stamp = ros.Time.now() 
+        # check if it is a floating base robot                   
+        msg.name = all_names[-robot.na:] #remove universe joint that is not active
         msg.position = q                
         msg.velocity = qd                
         msg.effort = tau              
