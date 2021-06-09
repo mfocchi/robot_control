@@ -17,6 +17,7 @@ import time as tm
 
 class RosPub():
     def __init__(self, robot_name="ur5", only_visual = False):
+        print("Starting---------------------------------------------------------------")   
         if (not only_visual):                           
             #launch rviz node if not yet done will start roscore too
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
@@ -29,7 +30,7 @@ class RosPub():
             ros.init_node('ros_pub_node', anonymous=False, log_level=ros.FATAL)
            #set joint state publisher 
             self.joint_pub = ros.Publisher("/joint_states", JointState, queue_size=1)                                
-        print("---------------------------------------------------------------")   
+   
        
         self.marker_pub = ros.Publisher('/vis' , MarkerArray, queue_size=1)                                
         self.markerArray = MarkerArray()

@@ -88,7 +88,8 @@ class BaseController(threading.Thread):
         threading.Thread.__init__(self)
 								
         # instantiating objects
-        self.ros_pub = RosPub("hyq",True)                    
+        self.robot_name = ros.get_param('/robot_name')
+        self.ros_pub = RosPub(self.robot_name,True)                    
         self.joint_names = ""
         self.u = Utils()
         self.kin = HyQKinematics()			
@@ -111,7 +112,7 @@ class BaseController(threading.Thread):
         self.J = [np.eye(3)]* 4                                   
         self.wJ = [np.eye(3)]* 4                       
                                 
-        self.robot_name = ros.get_param('/robot_name')
+      
         self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
         self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
         self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
@@ -124,8 +125,8 @@ class BaseController(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
                                 
                                 
-        # Loading a robot model of HyQ (Pinocchio)
-        self.robot = getRobotModel("hyq")
+        # Loading a robot model of robot (Pinocchio)
+        self.robot = getRobotModel(self.robot_name)
 								
 								
 	   #send data to param server
@@ -203,7 +204,7 @@ class BaseController(threading.Thread):
 
     def deregister_node(self):
         print "deregistering nodes"     
-        os.system(" rosnode kill /hyq/ros_impedance_controller")    
+        os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")    
         os.system(" rosnode kill /gazebo")    
  
     def get_contact(self):
@@ -237,7 +238,7 @@ class BaseController(threading.Thread):
         req_reset_world = SetModelStateRequest()
         #create model state
         model_state = ModelState()        
-        model_state.model_name = "hyq"
+        model_state.model_name = self.robot_name
         model_state.pose.position.x = 0.0
         model_state.pose.position.y = 0.0        
         model_state.pose.position.z = 0.8
@@ -401,6 +402,7 @@ def talker(p):
 
         #wait for synconization of the control loop
         rate.sleep()     
+ 
         p.time = p.time + dt 								
 	   # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():
