@@ -11,6 +11,7 @@ import math
 import pinocchio as pin
 from pinocchio.utils import *
 from base_controller.utils.math_tools import Math
+import time as tm 
 
 def setRobotParameters():
 
@@ -187,7 +188,7 @@ def geometric2analyticJacobian(J,T_0e):
 
     return J_r[0]
 
-def numericalInverseKinematics(p,q0):
+def numericalInverseKinematics(p_d,q0):
 
     # Error initialization
     e_bar = 1
@@ -239,13 +240,14 @@ def numericalInverseKinematics(p,q0):
         rpy = math_utils.rot2eul(R)
         roll = rpy[0]
         p_e = np.append(p_e,roll)
-        e_bar = p_e - p
+        e_bar = p_d - p_e 
+         
         J_bar = geometric2analyticJacobian(J,T_0e)
         J_bar = J_bar[:4,:]
         JtJ= np.dot(J_bar.T,J_bar) + np.identity(J_bar.shape[1])*lambda_
         JtJ_inv = np.linalg.inv(JtJ)
         P = JtJ_inv.dot(J_bar.T)
-        dq = -P.dot(e_bar)
+        dq = P.dot(e_bar)
 
         # Update
         q1 = q0 + dq*alpha
@@ -257,14 +259,17 @@ def numericalInverseKinematics(p,q0):
         rpy1 = math_utils.rot2eul(R1)
         roll1 = rpy1[0]
         p_e1 = np.append(p_e1,roll1)
-        e_bar1 = p_e - p_e1
-        e_bar_check = -np.linalg.norm(e_bar) + np.linalg.norm(e_bar1)
+        e_bar1 = p_d - p_e1
+       # print "e_bar1", np.linalg.norm(e_bar1), "e_bar", np.linalg.norm(e_bar)
+
+        
+        e_bar_check = np.linalg.norm(e_bar) - np.linalg.norm(e_bar1)
         threshold = gamma*alpha*np.linalg.norm(e_bar)
 
-        if e_bar_check >= threshold:
+        if e_bar_check <= threshold:
             alpha = beta*alpha
-            print ("alpha: ", alpha)
-
+            #print ("alpha: ", alpha)
+               
         q0 = q1
         iter += 1
 
