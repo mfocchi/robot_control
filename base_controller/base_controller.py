@@ -98,16 +98,17 @@ class BaseController(threading.Thread):
         self.baseTwistW = np.zeros(6)
         self.stance_legs = np.array([True, True, True, True])
         
-        self.q = np.zeros(12)
-        self.qd = np.zeros(12)
-        self.tau = np.zeros(12)                                
-        self.q_des =np.zeros(12)
-        self.qd_des = np.zeros(12)
-        self.tau_ffwd =np.zeros(12)
+        self.q = np.zeros(self.robot.na)
+        self.qd = np.zeros(self.robot.na)
+        self.tau = np.zeros(self.robot.na)                                
+        self.q_des =np.zeros(self.robot.na)
+        self.qd_des = np.zeros(self.robot.na)
+        self.tau_ffwd =np.zeros(self.robot.na)
+        self.gravity_comp = np.zeros(self.robot.na)
         
         self.b_R_w = np.eye(3)       
                                   
-        self.grForcesW = np.zeros(12)
+        self.grForcesW = np.zeros(self.robot.na)
         self.basePoseW = np.zeros(6) 
         self.J = [np.eye(3)]* 4                                   
         self.wJ = [np.eye(3)]* 4                       
@@ -179,9 +180,9 @@ class BaseController(threading.Thread):
     def _receive_jstate(self, msg):
           #need to map to robcogen only the arrays coming from gazebo because of ROS convention is different
          self.joint_names = msg.name   
-         q_ros = np.zeros(12)
-         qd_ros = np.zeros(12)
-         tau_ros = np.zeros(12)             
+         q_ros = np.zeros(self.robot.na)
+         qd_ros = np.zeros(self.robot.na)
+         tau_ros = np.zeros(self.robot.na)             
          for i in range(len(self.joint_names)):           
              q_ros[i] = msg.position[i]
              qd_ros[i] = msg.velocity[i]
@@ -312,10 +313,7 @@ class BaseController(threading.Thread):
             # set joint pdi gains
             self.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0) 
             # GOZERO Keep the fixed configuration for the joints at the start of simulation
-            self.q_des = conf.robot_params[robot_name]['q_0']
-            self.qd_des = np.zeros(12)
-            self.tau_ffwd = np.zeros(12)
-            self.gravity_comp = np.zeros(12)
+            self.q_des[:12] = conf.robot_params[robot_name]['q_0']     
             
             if (robot_name == 'hyq'):                        
                 # these torques are to compensate the leg gravity
@@ -352,13 +350,13 @@ class BaseController(threading.Thread):
  
         self.basePoseW_log = np.empty((6,0 ))*nan
         self.baseTwistW_log = np.empty((6,0 ))*nan
-        self.q_des_log = np.empty((12,0 ))*nan    
-        self.q_log = np.empty((12,0 )) *nan   
-        self.qd_des_log = np.empty((12,0 ))*nan    
-        self.qd_log = np.empty((12,0 )) *nan                                  
-        self.tau_ffwd_log = np.empty((12,0 ))*nan    
-        self.tau_log = np.empty((12,0 ))*nan                                  
-        self.grForcesW_log = np.empty((12,0 ))  *nan 
+        self.q_des_log = np.empty((self.robot.na,0 ))*nan    
+        self.q_log = np.empty((self.robot.na,0 )) *nan   
+        self.qd_des_log = np.empty((self.robot.na,0 ))*nan    
+        self.qd_log = np.empty((self.robot.na,0 )) *nan                                  
+        self.tau_ffwd_log = np.empty((self.robot.na,0 ))*nan    
+        self.tau_log = np.empty((self.robot.na,0 ))*nan                                  
+        self.grForcesW_log = np.empty((self.robot.na,0 ))  *nan 
         self.time_log = np.array([])*nan
         self.constr_viol_log = np.empty((4,0 ))*nan
         self.time = 0.0
@@ -367,13 +365,13 @@ class BaseController(threading.Thread):
         
         self.basePoseW_log = np.hstack((self.basePoseW_log , self.basePoseW.reshape(6,-1)))
         self.baseTwistW_log = np.hstack((self.baseTwistW_log , self.baseTwistW.reshape(6,-1)))
-        self.q_des_log = np.hstack((self.q_des_log , self.q_des.reshape(12,-1)))   
-        self.q_log = np.hstack((self.q_log , self.q.reshape(12,-1)))       
-        self.qd_des_log = np.hstack((self.qd_des_log , self.qd_des.reshape(12,-1)))   
-        self.qd_log = np.hstack((self.qd_log , self.qd.reshape(12,-1)))                                      
-        self.tau_ffwd_log = np.hstack((self.tau_ffwd_log , self.tau_ffwd.reshape(12,-1)))                                
-        self.tau_log = np.hstack((self.tau_log , self.tau.reshape(12,-1)))                                  
-        self.grForcesW_log = np.hstack((self.grForcesW_log , self.grForcesW.reshape(12,-1)))    
+        self.q_des_log = np.hstack((self.q_des_log , self.q_des.reshape(self.robot.na,-1)))   
+        self.q_log = np.hstack((self.q_log , self.q.reshape(self.robot.na,-1)))       
+        self.qd_des_log = np.hstack((self.qd_des_log , self.qd_des.reshape(self.robot.na,-1)))   
+        self.qd_log = np.hstack((self.qd_log , self.qd.reshape(self.robot.na,-1)))                                      
+        self.tau_ffwd_log = np.hstack((self.tau_ffwd_log , self.tau_ffwd.reshape(self.robot.na,-1)))                                
+        self.tau_log = np.hstack((self.tau_log , self.tau.reshape(self.robot.na,-1)))                                  
+        self.grForcesW_log = np.hstack((self.grForcesW_log , self.grForcesW.reshape(self.robot.na,-1)))    
         self.time_log = np.hstack((self.time_log, self.time))
 	
 def talker(p):
@@ -383,10 +381,7 @@ def talker(p):
     p.initKinematics(p.kin) 
     p.initVars()        
     p.startupProcedure(robot_name) 
-          
-    p.qd_des = np.zeros(12)
-    p.tau_ffwd = np.zeros(12)
-
+         
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[robot_name]['dt']) 
              
@@ -396,9 +391,9 @@ def talker(p):
         p.updateKinematics(p.kin)    
 
         # controller                             
-        p.tau_ffwd = conf.robot_params[robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[robot_name]['kd']*p.qd + p.gravity_comp;
-        #p.tau_ffwd  = np.zeros(12);       
-								
+        p.tau_ffwd = conf.robot_params[robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[robot_name]['kd']*p.qd + p.gravity_comp    
+        #p.tau_ffwd = np.zeros(p.robot.na)						
+        
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
 	   # log variables

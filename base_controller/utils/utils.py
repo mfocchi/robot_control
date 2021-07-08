@@ -145,5 +145,7 @@ class Utils:
         ros_out[0:3] = ros_in[0:3] 
         ros_out[3:6] = ros_in[6:9] 
         ros_out[6:9] = ros_in[3:6] 
-        ros_out[9:12] = ros_in[9:12] 
+        ros_out[9:12] = ros_in[9:12]
+        if (len(ros_in)>12):
+            ros_out[12:] = ros_in[12:] #copy last joints if any
         return ros_out

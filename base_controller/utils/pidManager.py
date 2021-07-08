@@ -11,7 +11,7 @@ class PidManager:
         self.joint_names = jnames
         self.set_pd_service = ros.ServiceProxy("/set_pids", set_pids)
         self.joint_pid = pid()
-        self.joint_pid_log = [pid(), pid(), pid(), pid(), pid(), pid(), pid(), pid(), pid(), pid(), pid(), pid()]
+        self.joint_pid_log = len(jnames)*[pid()]
         self.req_msg = set_pidsRequest()						
 	                                
     def setPDs(self, kp, kd, ki):              
