@@ -32,6 +32,8 @@ from gazebo_msgs.msg import ModelState
 #gazebo services
 from gazebo_msgs.srv import SetPhysicsProperties
 from gazebo_msgs.srv import SetPhysicsPropertiesRequest
+from gazebo_msgs.srv import GetPhysicsProperties
+from gazebo_msgs.srv import GetPhysicsPropertiesRequest
 from geometry_msgs.msg import Vector3
 from gazebo_msgs.msg import ODEPhysics
 from std_msgs.msg import Float64
@@ -85,6 +87,9 @@ class BaseController(threading.Thread):
         self.launch.start() 
         ros.sleep(4.0)        
 
+        # Loading a robot model of robot (Pinocchio)
+        self.robot = getRobotModel(robot_name, generate_urdf = True)
+        
 
         threading.Thread.__init__(self)
 								
@@ -121,14 +126,11 @@ class BaseController(threading.Thread):
 
         # freeze base  and pause simulation service 
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
-        self.reset_gravity = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
+        self.set_physics_client = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
+        self.get_physics_client = ros.ServiceProxy('/gazebo/get_physics_properties', GetPhysicsProperties)
+ 
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
-        self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
-                                
-                                
-        # Loading a robot model of robot (Pinocchio)
-        self.robot = getRobotModel(robot_name, generate_urdf = True)
-								
+        self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
 								
 	   #send data to param server
         self.verbose = True	#this can be read from config file																							
@@ -214,27 +216,28 @@ class BaseController(threading.Thread):
         return self.basePoseW
     def get_jstate(self):
         return self.q
-
         
-    def freezeBase(self, flag):
-        #toggle gravity
+    def resetGravity(self, flag):
+        # get actual configs
+        physics_props = self.get_physics_client()         
+       
         req_reset_gravity = SetPhysicsPropertiesRequest()
         #ode config
-        req_reset_gravity.time_step = 0.001
-        req_reset_gravity.max_update_rate = 1000                
-        req_reset_gravity.ode_config.sor_pgs_iters = 50
-        req_reset_gravity.ode_config.sor_pgs_w = 1.3        
-        req_reset_gravity.ode_config.contact_surface_layer = 0.001
-        req_reset_gravity.ode_config.contact_max_correcting_vel = 100
-        req_reset_gravity.ode_config.erp = 0.2
-        req_reset_gravity.ode_config.max_contacts = 20        
+        req_reset_gravity.time_step = physics_props.time_step
+        req_reset_gravity.max_update_rate = physics_props.max_update_rate           
+        req_reset_gravity.ode_config =physics_props.ode_config
+        req_reset_gravity.gravity =  physics_props.gravity
+       
         
         if (flag):
-            req_reset_gravity.gravity.z =  0.0
+            req_reset_gravity.gravity.z =  -0.02
         else:
             req_reset_gravity.gravity.z = -9.81                
-        self.reset_gravity(req_reset_gravity)
-
+        self.set_physics_client(req_reset_gravity)
+        
+    def freezeBase(self, flag):
+        
+        self.resetGravity(flag) 
         # create the message
         req_reset_world = SetModelStateRequest()
         #create model state
@@ -288,6 +291,7 @@ class BaseController(threading.Thread):
         # Pinocchio Update the joint and frame placements
         gen_velocities  = np.hstack((self.baseTwistW,self.qd))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.q))
+        
         self.robot.computeAllTerms(configuration, gen_velocities)    
         self.M = self.robot.mass(self.q, False)    
         self.h = self.robot.nle(configuration, gen_velocities, False)
@@ -304,14 +308,12 @@ class BaseController(threading.Thread):
                                   
                                  
     def startupProcedure(self, robot_name):
-        
-     
-            self.unpause_physics_client(EmptyRequest()) #pulls robot up
-            ros.sleep(0.2)  # wait for callback to fill in jointmnames
-                                    
+            ros.sleep(0.05)  # wait for callback to fill in jointmnames
+            
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
             self.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0) 
+           
             # GOZERO Keep the fixed configuration for the joints at the start of simulation
             self.q_des[:12] = conf.robot_params[robot_name]['q_0']     
             
@@ -328,6 +330,7 @@ class BaseController(threading.Thread):
                     ros.sleep(0.01)
                 if self.verbose:
                     print("q err prima freeze base", (self.q - self.q_des))
+  
           
                 print("put on ground and start compensating gravity...")
                 self.freezeBase(0)                                                
@@ -343,8 +346,14 @@ class BaseController(threading.Thread):
                     print("q err post grav comp", (self.q - self.q_des))
                                                         
                 print("starting com controller (no joint PD)...")                
-                self.pid.setPDs(0.0, 0.0, 0.0)
+                self.pid.setPDs(0.0, 0.0, 0.0)                  
             
+            if (robot_name == 'solo'):                        
+                start_t = ros.get_time()
+                while ros.get_time() - start_t < 1.0:
+                    self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                    ros.sleep(0.01)
+          
 
     def initVars(self):
  
@@ -380,22 +389,26 @@ def talker(p):
     p.register_node()
     p.initKinematics(p.kin) 
     p.initVars()        
+   
     p.startupProcedure(robot_name) 
          
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[robot_name]['dt']) 
-             
+    
+#    ros.sleep(1.0)
+#    p.resetGravity(True) 
+    
     #control loop
     while True:  
         #update the kinematics
         p.updateKinematics(p.kin)    
-
+          
         # controller                             
         p.tau_ffwd = conf.robot_params[robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[robot_name]['kd']*p.qd + p.gravity_comp    
         #p.tau_ffwd = np.zeros(p.robot.na)						
         
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-
+          
 	   # log variables
         p.logData()    
         
@@ -403,6 +416,11 @@ def talker(p):
         for leg in range(4):
             p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/(4*p.robot.robot_mass)),"green")        
         p.ros_pub.publishVisual()      				
+
+#        if (p.time>2.0):            
+#            p.q_des[14] += 0.1
+#            p.q_des[15] += -0.1     
+        
 
         #wait for synconization of the control loop
         rate.sleep()     
