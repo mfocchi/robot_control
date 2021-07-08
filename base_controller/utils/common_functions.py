@@ -12,13 +12,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 from termcolor import colored
+import rospkg
 #from urdf_parser_py.urdf import URDF
 #make plot interactive
 plt.ion()
 plt.close() 
 
 
-def getRobotModel(robot_name="ur5"):    
+def getRobotModel(robot_name="ur5", generate_urdf = False):    
+
+    if (generate_urdf):  
+        try:          
+            xacro_path = rospkg.RosPack().get_path(robot_name+'_description')
+            package = 'xacro'
+            executable = 'xacro'
+            name = 'xacro'
+            namespace = '/'
+            args = xacro_path+'/robots/'+robot_name+'.urdf.xacro --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
+            os.system("rosrun xacro xacro "+args)  
+            print "URDF generated"
+        except:
+            print robot_name+'_description not present'
+            
+        
     
     # Import the model
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
