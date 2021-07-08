@@ -8,11 +8,17 @@ from pinocchio.explog import exp
 import numpy as np
 
 class RobotWrapper(PinocchioRobotWrapper):
+
+    
     
     @staticmethod
     def BuildFromURDF(filename, package_dirs=None, root_joint=None, verbose=False, meshLoader=None):
         robot = RobotWrapper()
         robot.initFromURDF(filename, package_dirs, root_joint, verbose, meshLoader)
+        #additional var        
+        pin.crba(robot.model, robot.data, np.zeros(robot.model.nq))
+        robot.robot_mass = robot.data.M[0,0] 
+        
         return robot
     
     @property
@@ -20,7 +26,8 @@ class RobotWrapper(PinocchioRobotWrapper):
         if(self.model.joints[1].nq==7):
             return self.model.nv-6
         return self.model.nv
-
+                             
+        
     def mass(self, q, update=True):
         if(update):
             return pin.crba(self.model, self.data, q)
