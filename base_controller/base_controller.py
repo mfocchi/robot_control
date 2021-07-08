@@ -57,7 +57,8 @@ from hyq_kinematics.hyq_kinematics import HyQKinematics
 #dynamics
 from utils.custom_robot_wrapper import RobotWrapper
 
-
+import  params as conf
+robot_name = "hyq"
 
 class BaseController(threading.Thread):
     
@@ -65,7 +66,7 @@ class BaseController(threading.Thread):
         
        #clean up previous process                
 
-        os.system("killall rosmaster gzserver gzclient")                                
+        os.system("killall rosmaster rviz gzserver gzclient")                                
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
             print 'ROS MASTER is active'
             nodes = rosnode.get_node_names()
@@ -76,8 +77,8 @@ class BaseController(threading.Thread):
                  rvizflag=" rviz:=true" 
         #start ros impedance controller
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-        roslaunch.configure_logging(uuid)   
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller.launch"])
+        roslaunch.configure_logging(uuid)        
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+robot_name+".launch"])
         #only available in ros lunar
 #        roslaunch_args=rvizflag                             
 #        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"],roslaunch_args=[roslaunch_args])
@@ -88,8 +89,7 @@ class BaseController(threading.Thread):
         threading.Thread.__init__(self)
 								
         # instantiating objects
-        self.robot_name = ros.get_param('/robot_name')
-        self.ros_pub = RosPub(self.robot_name,True)                    
+        self.ros_pub = RosPub(robot_name,True)                    
         self.joint_names = ""
         self.u = Utils()
         self.kin = HyQKinematics()			
@@ -113,9 +113,9 @@ class BaseController(threading.Thread):
         self.wJ = [np.eye(3)]* 4                       
                                 
       
-        self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
-        self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
-        self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
+        self.sub_contact = ros.Subscriber("/"+robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
+        self.sub_pose = ros.Subscriber("/"+robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
+        self.sub_jstate = ros.Subscriber("/"+robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1)
 
         # freeze base  and pause simulation service 
@@ -126,7 +126,7 @@ class BaseController(threading.Thread):
                                 
                                 
         # Loading a robot model of robot (Pinocchio)
-        self.robot = getRobotModel(self.robot_name)
+        self.robot = getRobotModel(robot_name, generate_urdf = True)
 								
 								
 	   #send data to param server
@@ -134,7 +134,7 @@ class BaseController(threading.Thread):
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
                                 
     def _receive_contact(self, msg):
-        # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention)
+        # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention) TODO publish them in ros_impedance_controller
 #        self.grForcesW[0] = msg.states[0].wrenches[0].force.x
 #        self.grForcesW[1] =  msg.states[0].wrenches[0].force.y
 #        self.grForcesW[2] =  msg.states[0].wrenches[0].force.z
@@ -204,7 +204,7 @@ class BaseController(threading.Thread):
 
     def deregister_node(self):
         print "deregistering nodes"     
-        os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")    
+        os.system(" rosnode kill /"+robot_name+"/ros_impedance_controller")    
         os.system(" rosnode kill /gazebo")    
  
     def get_contact(self):
@@ -238,7 +238,7 @@ class BaseController(threading.Thread):
         req_reset_world = SetModelStateRequest()
         #create model state
         model_state = ModelState()        
-        model_state.model_name = self.robot_name
+        model_state.model_name = robot_name
         model_state.pose.position.x = 0.0
         model_state.pose.position.y = 0.0        
         model_state.pose.position.z = 0.8
@@ -279,6 +279,7 @@ class BaseController(threading.Thread):
              self.W_contacts[:,leg] = self.mapBaseToWorld(self.B_contacts[leg, :].transpose())
         # update the feet jacobians
         self.J[self.u.leg_map["LF"]], self.J[self.u.leg_map["RF"]], self.J[self.u.leg_map["LH"]], self.J[self.u.leg_map["RH"]], flag = kin.getLegJacobians()
+        
         #map jacobians to WF
         for leg in range(4):
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
@@ -297,49 +298,55 @@ class BaseController(threading.Thread):
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
             grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg, self.h_joints - self.tau ))                             
-            self.u.setLegJointState(leg, grf, self.grForcesW)                                  
+            self.u.setLegJointState(leg, grf, self.grForcesW)   
+                                 
                                   
                                  
-    def startupProcedure(self):
-        self.unpause_physics_client(EmptyRequest()) #pulls robot up
-        ros.sleep(0.2)  # wait for callback to fill in jointmnames
-                                
-        self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
-        # set joint pdi gains
-        self.pid.setPDs(400.0, 6.0, 0.0)
-        # GOZERO Keep the fixed configuration for the joints at the start of simulation
-        self.q_des = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
-        self.qd_des = np.zeros(12)
-        self.tau_ffwd = np.zeros(12)
-                                
-       # these torques are to compensate the leg gravity
-        self.gravity_comp = np.array(
-            [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
-                                                
-        print("reset posture...")
-        self.freezeBase(1)
-        start_t = ros.get_time()
-        while ros.get_time() - start_t < 1.0:
-            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-            ros.sleep(0.01)
-        if self.verbose:
-            print("q err prima freeze base", (self.q - self.q_des))
-  
-        print("put on ground and start compensating gravity...")
-        self.freezeBase(0)                                                
-        ros.sleep(1.0)
-        if self.verbose:
-            print("q err pre grav comp", (self.q - self.q_des))
-                                                
-        start_t = ros.get_time()
-        while ros.get_time()- start_t < 1.0:
-            self.send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
-            ros.sleep(0.01)
-        if self.verbose:
-            print("q err post grav comp", (self.q - self.q_des))
-                                                
-        print("starting com controller (no joint PD)...")                
-        self.pid.setPDs(0.0, 0.0, 0.0)
+    def startupProcedure(self, robot_name):
+        
+     
+            self.unpause_physics_client(EmptyRequest()) #pulls robot up
+            ros.sleep(0.2)  # wait for callback to fill in jointmnames
+                                    
+            self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
+            # set joint pdi gains
+            self.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0) 
+            # GOZERO Keep the fixed configuration for the joints at the start of simulation
+            self.q_des = conf.robot_params[robot_name]['q_0']
+            self.qd_des = np.zeros(12)
+            self.tau_ffwd = np.zeros(12)
+            self.gravity_comp = np.zeros(12)
+            
+            if (robot_name == 'hyq'):                        
+                # these torques are to compensate the leg gravity
+                self.gravity_comp = np.array(
+                    [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
+                                                        
+                print("reset posture...")
+                self.freezeBase(1)
+                start_t = ros.get_time()
+                while ros.get_time() - start_t < 1.0:
+                    self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                    ros.sleep(0.01)
+                if self.verbose:
+                    print("q err prima freeze base", (self.q - self.q_des))
+          
+                print("put on ground and start compensating gravity...")
+                self.freezeBase(0)                                                
+                ros.sleep(1.0)
+                if self.verbose:
+                    print("q err pre grav comp", (self.q - self.q_des))
+                                                        
+                start_t = ros.get_time()
+                while ros.get_time()- start_t < 1.0:
+                    self.send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
+                    ros.sleep(0.01)
+                if self.verbose:
+                    print("q err post grav comp", (self.q - self.q_des))
+                                                        
+                print("starting com controller (no joint PD)...")                
+                self.pid.setPDs(0.0, 0.0, 0.0)
+            
 
     def initVars(self):
  
@@ -375,11 +382,13 @@ def talker(p):
     p.register_node()
     p.initKinematics(p.kin) 
     p.initVars()        
-    p.startupProcedure() 
+    p.startupProcedure(robot_name) 
+          
+    p.qd_des = np.zeros(12)
+    p.tau_ffwd = np.zeros(12)
 
-    #looop frequency
-    dt = 0.004                   
-    rate = ros.Rate(1/dt) # 250Hz can be read from config file
+    #loop frequency       
+    rate = ros.Rate(1/conf.robot_params[robot_name]['dt']) 
              
     #control loop
     while True:  
@@ -387,7 +396,7 @@ def talker(p):
         p.updateKinematics(p.kin)    
 
         # controller                             
-        p.tau_ffwd = 300.0 * np.subtract(p.q_des,   p.q)  - 10*p.qd + p.gravity_comp;
+        p.tau_ffwd = conf.robot_params[robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[robot_name]['kd']*p.qd + p.gravity_comp;
         #p.tau_ffwd  = np.zeros(12);       
 								
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -397,20 +406,20 @@ def talker(p):
         
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/400),"green")        
+            p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/(4*p.robot.robot_mass)),"green")        
         p.ros_pub.publishVisual()      				
 
         #wait for synconization of the control loop
         rate.sleep()     
  
-        p.time = p.time + dt 								
+        p.time = p.time + conf.robot_params[robot_name]['dt']			
 	   # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():
             print ("Shutting Down")                    
             break;                                                
                              
     # restore PD when finished        
-    p.pid.setPDs(400.0, 6.0, 0.0) 
+    p.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0) 
     ros.sleep(1.0)                
     print ("Shutting Down")                 
     ros.signal_shutdown("killed")           
