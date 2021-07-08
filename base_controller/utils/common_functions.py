@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import sys
 from termcolor import colored
 import rospkg
+import rospy as ros
 #from urdf_parser_py.urdf import URDF
 #make plot interactive
 plt.ion()
@@ -20,7 +21,11 @@ plt.close()
 
 
 def getRobotModel(robot_name="ur5", generate_urdf = False):    
-
+    try:
+        flywheel = ros.get_param('/flywheel')
+    except:
+        pass
+    
     if (generate_urdf):  
         try:          
             xacro_path = rospkg.RosPack().get_path(robot_name+'_description')
@@ -28,7 +33,7 @@ def getRobotModel(robot_name="ur5", generate_urdf = False):
             executable = 'xacro'
             name = 'xacro'
             namespace = '/'
-            args = xacro_path+'/robots/'+robot_name+'.urdf.xacro --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
+            args = xacro_path+'/robots/'+robot_name+'.urdf.xacro --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf flywheel:='+flywheel
             os.system("rosrun xacro xacro "+args)  
             print "URDF generated"
         except:
