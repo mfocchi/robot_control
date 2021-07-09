@@ -1,4 +1,4 @@
-
+from __future__ import print_function
 from roslib.scriptutil import get_param_server
 from roslib.names import ns_join, get_ros_namespace, make_caller_id
 import socket
@@ -81,7 +81,7 @@ class Utils:
 
         except socket.error:
             raise ROSParamIOException("Unable to communicate with master!")
-        print "set parameter [%s] to [%s]" % ('hyq', data)
+        print ("set parameter [%s] to [%s]" % ('hyq', data))
         eval(help( get_param_server().setParam()) )								
         pass
 
@@ -91,7 +91,7 @@ class Utils:
             ros.set_param(label, data)
         except socket.error:
             raise ROSParamIOException("Unable to communicate with master!")
-        print "set parameter %s into global param server" % label
+        print ("set parameter %s into global param server" % label)
         pass
 
 #########################################################################

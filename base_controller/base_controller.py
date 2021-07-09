@@ -5,7 +5,7 @@ Created on Fri Nov  2 16:52:08 2018
 @author: rorsolino
 """
 
-
+from __future__ import print_function
 
 import copy
 import numpy as np
@@ -51,6 +51,8 @@ from utils.utils import Utils
 from utils.math_tools import *
 from numpy import nan
 
+
+
 from utils.common_functions import getRobotModel
 
 #robot specific 
@@ -70,7 +72,7 @@ class BaseController(threading.Thread):
 
         os.system("killall rosmaster rviz gzserver gzclient")                                
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
-            print 'ROS MASTER is active'
+            print ('ROS MASTER is active')
             nodes = rosnode.get_node_names()
             if "/rviz" in nodes:
                  print("Rviz active")
@@ -87,6 +89,10 @@ class BaseController(threading.Thread):
         self.launch.start() 
         ros.sleep(4.0)        
 
+        
+
+        
+        
         # Loading a robot model of robot (Pinocchio)
         self.robot = getRobotModel(robot_name, generate_urdf = True)
         
@@ -132,10 +138,11 @@ class BaseController(threading.Thread):
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
 								
-	   #send data to param server
-        self.verbose = True	#this can be read from config file																							
+        #send data to param server
+        self.verbose = conf.verbose
+																							
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
-                                
+                                 
     def _receive_contact(self, msg):
         # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention) TODO publish them in ros_impedance_controller
 #        self.grForcesW[0] = msg.states[0].wrenches[0].force.x
@@ -206,7 +213,7 @@ class BaseController(threading.Thread):
         ros.init_node('controller_python', disable_signals=False, anonymous=False)
 
     def deregister_node(self):
-        print "deregistering nodes"     
+        print( "deregistering nodes"     )
         os.system(" rosnode kill /"+robot_name+"/ros_impedance_controller")    
         os.system(" rosnode kill /gazebo")    
  
