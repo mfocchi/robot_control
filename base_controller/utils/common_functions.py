@@ -21,10 +21,7 @@ plt.close()
 
 
 def getRobotModel(robot_name="ur5", generate_urdf = False):    
-    try:
-        flywheel = ros.get_param('/flywheel')
-    except:
-        pass
+
     
     if (generate_urdf):  
         try:          
@@ -33,11 +30,18 @@ def getRobotModel(robot_name="ur5", generate_urdf = False):
             executable = 'xacro'
             name = 'xacro'
             namespace = '/'
-            args = xacro_path+'/robots/'+robot_name+'.urdf.xacro --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf flywheel:='+flywheel
+            args = xacro_path+'/robots/'+robot_name+'.urdf.xacro --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
+            
+            try:
+                flywheel = ros.get_param('/flywheel')
+                args+=' flywheel:='+flywheel
+            except:
+                pass          
+            
             os.system("rosrun xacro xacro "+args)  
-            print "URDF generated"
+            print ("URDF generated")
         except:
-            print robot_name+'_description not present'
+            print (robot_name+'_description not present')
             
         
     
@@ -111,8 +115,7 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
            plot_var_des_log = x_des_log                            
     elif name == 'force':
         plot_var_log = f_log
-    elif  name == 'velocity': 
-        print "Plotting velocity"                    
+    elif  name == 'velocity':                
         plot_var_log = xd_log
         if   (xd_des_log is not None):                                
              plot_var_des_log = xd_des_log         
