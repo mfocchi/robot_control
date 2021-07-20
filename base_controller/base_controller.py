@@ -62,7 +62,7 @@ from hyq_kinematics.hyq_kinematics import HyQKinematics
 from utils.custom_robot_wrapper import RobotWrapper
 
 import  params as conf
-robot_name = "hyq"
+robot_name = "solo"
 
 class BaseController(threading.Thread):
     
@@ -357,10 +357,10 @@ class BaseController(threading.Thread):
             
             if (robot_name == 'solo'):                        
                 start_t = ros.get_time()
-                while ros.get_time() - start_t < 1.0:
+                while ros.get_time() - start_t < 0.5:
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                     ros.sleep(0.01)
-          
+                self.pid.setPDs(0.0, 0.0, 0.0)                    
 
     def initVars(self):
  
@@ -402,8 +402,15 @@ def talker(p):
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[robot_name]['dt']) 
     
-#    ros.sleep(1.0)
-#    p.resetGravity(True) 
+    ros.sleep(0.1)
+    p.resetGravity(True) 
+    
+    print ("Start flight phase")
+    
+    p.time = 0.0
+    RPM2RAD =2*np.pi/60.0
+    omega = 5000*RPM2RAD
+    
     
     #control loop
     while True:  
@@ -414,6 +421,13 @@ def talker(p):
         p.tau_ffwd = conf.robot_params[robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[robot_name]['kd']*p.qd + p.gravity_comp    
         #p.tau_ffwd = np.zeros(p.robot.na)						
         
+        
+        #        p.q_des[14] += omega *conf.robot_params[robot_name]['dt']		
+#        p.q_des[15] += -omega *conf.robot_params[robot_name]['dt']	    
+
+        p.tau_ffwd[14]= 0.21
+        p.tau_ffwd[15] = -0.21
+        
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
           
 	   # log variables
@@ -423,11 +437,12 @@ def talker(p):
         for leg in range(4):
             p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/(4*p.robot.robot_mass)),"green")        
         p.ros_pub.publishVisual()      				
+            
 
-#        if (p.time>2.0):            
-#            p.q_des[14] += 0.1
-#            p.q_des[15] += -0.1     
-        
+                
+        if (p.time>0.5): 
+            print ("pitch", p.basePoseW[p.u.sp_crd["AY"]])
+            break;
 
         #wait for synconization of the control loop
         rate.sleep()     
@@ -444,6 +459,10 @@ def talker(p):
     print ("Shutting Down")                 
     ros.signal_shutdown("killed")           
     p.deregister_node()   
+    
+    
+    plt.plot(p.tau_log[14, :])    
+    plt.plot(p.qd_log[14, :])  
     
 if __name__ == '__main__':
 
