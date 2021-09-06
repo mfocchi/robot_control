@@ -162,7 +162,7 @@ def talker(p):
                         np.transpose(p.wJ[p.u.leg_map["RF"]] ), 
                         np.transpose(p.wJ[p.u.leg_map["LH"]] ), 
                         np.transpose(p.wJ[p.u.leg_map["RH"]]  ))
-        p.tau_ffwd =   p.h_joints - p.jacsT.dot(p.des_forcesW)         
+        p.tau_ffwd =   p.u.mapFromRos(p.h_joints) - p.jacsT.dot(p.des_forcesW)         
  
     
     

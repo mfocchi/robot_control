@@ -116,10 +116,10 @@ class BaseController(threading.Thread):
                                   
         self.grForcesW = np.zeros(self.robot.na)
         self.basePoseW = np.zeros(6) 
-        self.J = [np.eye(3)]* 4
+        self.J = [np.zeros((6,self.robot.nv))]* 4
         self.wJ = [np.eye(3)]* 4
         self.W_contacts = [np.zeros((3))]*4                       
-        self.B_contacts = [np.zeros((3))]*4                         
+        self.B_contacts = [np.zeros((3))]*4   
       
         self.sub_contact = ros.Subscriber("/"+robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
         self.sub_pose = ros.Subscriber("/"+robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
@@ -273,28 +273,34 @@ class BaseController(threading.Thread):
                                                                                                                                 
     def updateKinematics(self):
         # q is continuously updated
-       
-        # Pinocchio Update the joint and frame placements
-        gen_velocities  = np.hstack((self.baseTwistW,self.u.mapToRos(self.qd)))
-        fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))
- 
+        # to compute in the base frame 
+        gen_velocities  = np.hstack((self.baseTwistW,self.u.mapFromRos(self.qd)))
+        fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapFromRos(self.q)))
+	 
         self.robot.computeAllTerms(fb_jointstate, gen_velocities)   
-        
+        np.set_printoptions(precision = 5, linewidth = 1000, suppress = True)
         for leg in range(4):
             self.B_contacts[leg] = self.robot.framePlacement(fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]) ).translation 
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
-       
-
+    
+ 
         for leg in range(4):
             leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
-            self.J[leg] = self.robot.frameJacobian(fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]   
+            self.J[leg] = self.robot.frameJacobian(fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
- 
+           
+   
+       # Pinocchio Update the joint and frame placements
+        gen_velocities  = np.hstack((self.baseTwistW,self.qd))
+        configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+        
+        self.robot.computeAllTerms(configuration, gen_velocities)    
         self.M = self.robot.mass(self.q, False)    
-        self.h = self.robot.nle(np.hstack(( np.zeros((3)), self.quaternion, self.u.mapToRos(self.q))), gen_velocities, True)
+        self.h = self.robot.nle(configuration, gen_velocities)
         self.h_joints = self.h[6:]  
         #compute contact forces                        
-        self.estimateContactForces()             
+        self.estimateContactForces()       
+
 
     def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
