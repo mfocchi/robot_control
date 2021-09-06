@@ -149,3 +149,24 @@ class Utils:
         if (len(ros_in)>12):
             ros_out[12:] = ros_in[12:] #copy last joints if any
         return ros_out
+        
+    
+    def mapToRos(self, ros_in):
+        ros_out = np.zeros_like(ros_in)
+        ros_out[0:3] = ros_in[0:3] 
+        ros_out[3:6] = ros_in[6:9] 
+        ros_out[6:9] = ros_in[3:6] 
+        ros_out[9:12] = ros_in[9:12]
+        if (len(ros_in)>12):
+            ros_out[12:] = ros_in[12:] #copy last joints if any
+        return ros_out
+        
+    def mapIndexToRos(self, index_in):
+        index_out =  index_in
+        if index_in == 1:
+            index_out = 2            
+        if index_in == 2:
+            index_out = 1            
+        return index_out
+        
+            

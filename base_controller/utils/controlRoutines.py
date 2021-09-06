@@ -96,10 +96,10 @@ def projectionBasedController(conf, act_pose, act_twist,  W_contacts,  des_pose,
                               stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
     # and COM trajectories)
-    d1 = cross_mx(W_contacts[:,util.leg_map["LF"]] - util.linPart(act_pose))
-    d2 = cross_mx(W_contacts[:,util.leg_map["RF"]] - util.linPart(act_pose))
-    d3 = cross_mx(W_contacts[:,util.leg_map["LH"]] - util.linPart(act_pose))
-    d4 = cross_mx(W_contacts[:,util.leg_map["RH"]] - util.linPart(act_pose))
+    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - util.linPart(act_pose))
+    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - util.linPart(act_pose))
+    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - util.linPart(act_pose))
+    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - util.linPart(act_pose))
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
                         np.hstack([d1, d2, d3, d4])])

@@ -8,7 +8,6 @@ Created on Fri Nov  2 16:52:08 2018
 from __future__ import print_function
 
 import copy
-import numpy as np
 import os
 
 import rospy as ros
@@ -52,17 +51,14 @@ from utils.math_tools import *
 from numpy import nan
 
 
-
+import pinocchio as pin
 from utils.common_functions import getRobotModel
-
-#robot specific 
-from hyq_kinematics.hyq_kinematics import HyQKinematics
 
 #dynamics
 from utils.custom_robot_wrapper import RobotWrapper
-
+np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  params as conf
-robot_name = "solo"
+robot_name = "hyq"
 
 class BaseController(threading.Thread):
     
@@ -102,8 +98,7 @@ class BaseController(threading.Thread):
         # instantiating objects
         self.ros_pub = RosPub(robot_name,True)                    
         self.joint_names = ""
-        self.u = Utils()
-        self.kin = HyQKinematics()			
+        self.u = Utils()	
                                 
         self.comPoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
@@ -121,9 +116,10 @@ class BaseController(threading.Thread):
                                   
         self.grForcesW = np.zeros(self.robot.na)
         self.basePoseW = np.zeros(6) 
-        self.J = [np.eye(3)]* 4                                   
-        self.wJ = [np.eye(3)]* 4                       
-                                
+        self.J = [np.eye(3)]* 4
+        self.wJ = [np.eye(3)]* 4
+        self.W_contacts = [np.zeros((3))]*4                       
+        self.B_contacts = [np.zeros((3))]*4                         
       
         self.sub_contact = ros.Subscriber("/"+robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
         self.sub_pose = ros.Subscriber("/"+robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
@@ -237,7 +233,7 @@ class BaseController(threading.Thread):
        
         
         if (flag):
-            req_reset_gravity.gravity.z =  -0.02
+            req_reset_gravity.gravity.z =  -0.2
         else:
             req_reset_gravity.gravity.z = -9.81                
         self.set_physics_client(req_reset_gravity)
@@ -271,37 +267,31 @@ class BaseController(threading.Thread):
         # send request and get response (in this case none)
         self.reset_world(req_reset_world) 
 
-    def initKinematics(self,kin):
-        kin.init_homogeneous()
-        kin.init_jacobians()  
-                                
     def mapBaseToWorld(self, B_var):
         W_var = self.b_R_w.transpose().dot(B_var) + self.u.linPart(self.basePoseW)                            
         return W_var
                                                                                                                                 
-    def updateKinematics(self,kin):
+    def updateKinematics(self):
         # q is continuously updated
-        kin.update_homogeneous(self.q)
-        kin.update_jacobians(self.q)
-        self.B_contacts = kin.forward_kin(self.q) 
-        # map feet contacts to wf
-        self.W_contacts = np.zeros((3,4))
-        for leg in range(4):
-             self.W_contacts[:,leg] = self.mapBaseToWorld(self.B_contacts[leg, :].transpose())
-        # update the feet jacobians
-        self.J[self.u.leg_map["LF"]], self.J[self.u.leg_map["RF"]], self.J[self.u.leg_map["LH"]], self.J[self.u.leg_map["RH"]], flag = kin.getLegJacobians()
-        
-        #map jacobians to WF
-        for leg in range(4):
-            self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
-             
+       
         # Pinocchio Update the joint and frame placements
-        gen_velocities  = np.hstack((self.baseTwistW,self.qd))
-        configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.q))
+        gen_velocities  = np.hstack((self.baseTwistW,self.u.mapToRos(self.qd)))
+        fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))
+ 
+        self.robot.computeAllTerms(fb_jointstate, gen_velocities)   
         
-        self.robot.computeAllTerms(configuration, gen_velocities)    
+        for leg in range(4):
+            self.B_contacts[leg] = self.robot.framePlacement(fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]) ).translation 
+            self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
+       
+
+        for leg in range(4):
+            leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
+            self.J[leg] = self.robot.frameJacobian(fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]   
+            self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
+ 
         self.M = self.robot.mass(self.q, False)    
-        self.h = self.robot.nle(configuration, gen_velocities, False)
+        self.h = self.robot.nle(np.hstack(( np.zeros((3)), self.quaternion, self.u.mapToRos(self.q))), gen_velocities, True)
         self.h_joints = self.h[6:]  
         #compute contact forces                        
         self.estimateContactForces()             
@@ -309,10 +299,9 @@ class BaseController(threading.Thread):
     def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
-            grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg, self.h_joints - self.tau ))                             
+            grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.u.mapFromRos(self.h_joints)-self.tau ))        
             self.u.setLegJointState(leg, grf, self.grForcesW)   
                                  
-                                  
                                  
     def startupProcedure(self, robot_name):
             ros.sleep(0.05)  # wait for callback to fill in jointmnames
@@ -394,7 +383,6 @@ def talker(p):
             
     p.start()
     p.register_node()
-    p.initKinematics(p.kin) 
     p.initVars()        
    
     p.startupProcedure(robot_name) 
@@ -402,20 +390,20 @@ def talker(p):
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[robot_name]['dt']) 
     
-    ros.sleep(0.1)
-    p.resetGravity(True) 
+#    ros.sleep(0.1)
+#    p.resetGravity(True) 
+#    
+#    print ("Start flight phase")
     
-    print ("Start flight phase")
-    
-    p.time = 0.0
-    RPM2RAD =2*np.pi/60.0
-    omega = 5000*RPM2RAD
+#    p.time = 0.0
+#    RPM2RAD =2*np.pi/60.0
+#    omega = 5000*RPM2RAD
     
     
     #control loop
     while True:  
         #update the kinematics
-        p.updateKinematics(p.kin)    
+        p.updateKinematics()    
           
         # controller                             
         p.tau_ffwd = conf.robot_params[robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[robot_name]['kd']*p.qd + p.gravity_comp    
@@ -425,8 +413,9 @@ def talker(p):
         #        p.q_des[14] += omega *conf.robot_params[robot_name]['dt']		
 #        p.q_des[15] += -omega *conf.robot_params[robot_name]['dt']	    
 
-        p.tau_ffwd[14]= 0.21
-        p.tau_ffwd[15] = -0.21
+        #max torque
+#        p.tau_ffwd[14]= 0.21
+#        p.tau_ffwd[15] = -0.21
         
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
           
@@ -435,18 +424,16 @@ def talker(p):
         
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/(4*p.robot.robot_mass)),"green")        
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")        
         p.ros_pub.publishVisual()      				
-            
-
-                
-        if (p.time>0.5): 
-            print ("pitch", p.basePoseW[p.u.sp_crd["AY"]])
-            break;
+  
+#        if (p.time>0.5): 
+#            print ("pitch", p.basePoseW[p.u.sp_crd["AY"]])
+#            break;
 
         #wait for synconization of the control loop
         rate.sleep()     
- 
+       
         p.time = p.time + conf.robot_params[robot_name]['dt']			
 	   # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():

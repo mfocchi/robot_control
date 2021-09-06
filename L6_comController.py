@@ -66,7 +66,6 @@ def talker(p):
     
     p.start()
     p.register_node()
-    p.initKinematics(p.kin)  
     p.initVars()          
     p.startupProcedure(robot_name) 
     rate = ros.Rate(1/conf.dt) # 10hz
@@ -80,7 +79,7 @@ def talker(p):
     # Control loop               
     while (p.time  < conf.exp_duration) or conf.CONTINUOUS:
         #update the kinematics
-        p.updateKinematics(p.kin)
+        p.updateKinematics()
                                 
         # EXERCISE 1: Sinusoidal Reference Generation
         # Reference Generation
@@ -173,8 +172,8 @@ def talker(p):
         p.time = p.time + conf.dt 
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.grForcesW/400),"green")        
-            p.ros_pub.add_arrow(p.W_contacts[:,leg], p.u.getLegJointState(leg, p.des_forcesW/400),"blue")        
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/400),"green")        
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.des_forcesW/400),"blue")        
         p.ros_pub.publishVisual()                        
                                 
         #wait for synconization of the control loop
