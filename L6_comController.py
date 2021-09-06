@@ -21,7 +21,8 @@ from scipy.linalg import block_diag
 
 # L5 config file
 import ex_6_conf as conf
- 
+robot_name = "hyq"
+
 class AdvancedController(BaseController): 
 
     def __init__(self):  
@@ -67,7 +68,7 @@ def talker(p):
     p.register_node()
     p.initKinematics(p.kin)  
     p.initVars()          
-    p.startupProcedure() 
+    p.startupProcedure(robot_name) 
     rate = ros.Rate(1/conf.dt) # 10hz
                                 
     # Reset reference to actual value  
