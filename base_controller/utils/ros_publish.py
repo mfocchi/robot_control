@@ -13,7 +13,8 @@ import numpy as np
 import roslaunch
 import os
 import time as tm
-
+import tf
+from rospy import Time
 
 class RosPub():
     def __init__(self, robot_name="ur5", only_visual = False):
@@ -35,7 +36,9 @@ class RosPub():
         self.marker_pub = ros.Publisher('/vis' , MarkerArray, queue_size=1)                                
         self.markerArray = MarkerArray()
         self.markerArray.markers = []     
-        self.id = 0                             
+        self.id = 0           
+        self.broadcaster = tf.TransformBroadcaster()  
+        self.fixedBaseRobot = False
                                 
     def publish(self,robot, q, qd = None, tau = None):
     
@@ -47,8 +50,17 @@ class RosPub():
         all_names = [name for name in robot.model.names]            
         msg = JointState()
         msg.header.stamp = ros.Time.now() 
-        # check if it is a floating base robot                   
-        msg.name = all_names[-robot.na:] #remove universe joint that is not active
+        # check if it is a floating base robot
+        try: 
+            index_of_actuated_joints = robot.na
+        except:#fixed base
+            index_of_actuated_joints = robot.nv
+            self.fixedBaseRobot = True
+            
+        if (self.fixedBaseRobot):
+            self.broadcaster.sendTransform((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')  
+                   
+        msg.name = all_names[-index_of_actuated_joints:] #remove universe joint that is not active
         msg.position = q                
         msg.velocity = qd                
         msg.effort = tau              
