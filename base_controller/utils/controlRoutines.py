@@ -154,6 +154,11 @@ def QPController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, d
                                          normals[util.leg_map["RF"]], 
                                          normals[util.leg_map["LH"]], 
                                          normals[util.leg_map["RH"]]    )                                                 
+    # compute unilateral constraints Cx >= params.f_min => -Cx <= -params.f_min
+    C =  - block_diag( params.normals[util.leg_map["LF"]] , 
+                       params.normals[util.leg_map["RF"]], 
+                       params.normals[util.leg_map["LH"]], 
+                       params.normals[util.leg_map["RH"]]    )                                                 
     #not need to nullify columns relative to legs that are not in contact because the QP solver removes 0 = 0 constraints                                                                                           #
     d = -f_min.reshape((4,))
                 
