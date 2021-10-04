@@ -16,7 +16,7 @@ from utils import Utils
 from optimTools import quadprog_solve_qp
 from scipy.linalg import block_diag
 
-def computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, W_base_to_com, isCoMControlled, GravityComp, ffwdOn):
+def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance_legs, params):
     util = Utils()
     # The inertia matrix (for simplicity we will use the same for com and base frame)
     B_Inertia = np.array([     [conf.robotInertia.Ixx, conf.robotInertia.Ixy, conf.robotInertia.Ixz],
@@ -34,13 +34,13 @@ def computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_p
     Wfbk = np.zeros(6)
                 
     # linear part                
-    Wfbk[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = Kp_lin.dot(util.linPart(des_pose) - util.linPart(act_pose)) + Kd_lin.dot(util.linPart(des_twist) - util.linPart(act_twist))
+    Wfbk[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = Kp_lin.dot(util.linPart(des_state.des_pose) - util.linPart(act_state.act_pose)) + Kd_lin.dot(util.linPart(des_state.des_twist) - util.linPart(act_state.act_twist))
     # angular part                
     # actual orientation 
-    b_R_w = mathJet.rpyToRot(util.angPart(act_pose))
+    b_R_w = mathJet.rpyToRot(util.angPart(act_state.act_pose))
                 
     # Desired Orientation
-    Rdes = mathJet.rpyToRot(util.angPart(des_pose))
+    Rdes = mathJet.rpyToRot(util.angPart(des_state.des_pose))
     # compute orientation error
     Re = Rdes.dot(b_R_w.transpose())
     # express orientation error in angle-axis form                 
@@ -49,32 +49,32 @@ def computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_p
     #the orient error is expressed in the base_frame so it should be rotated wo have the wrench in the world frame
     w_err = b_R_w.transpose().dot(err)        
     # map des euler tates into des omega
-    Jomega =  mathJet.Tomega(util.angPart(act_pose))
+    Jomega =  mathJet.Tomega(util.angPart(act_state.act_pose))
    
     # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an Euclidean space with Jomega                
-    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_ang.dot(w_err) + Kd_ang.dot(Jomega.dot((util.angPart(des_twist) - util.angPart(act_twist))))
+    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_ang.dot(w_err) + Kd_ang.dot(Jomega.dot((util.angPart(des_state.des_twist) - util.angPart(act_state.act_twist))))
 
 
     #EXERCISE 3: Compute graviy wrench
     Wg = np.zeros(6)   
-    if (GravityComp):         
+    if (params.gravityComp == True):
         mg = conf.robotMass * np.array([0, 0, conf.gravity])
         Wg[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = mg
         #in case you are closing the loop on base frame
-        if (not isCoMControlled):                 
-            Wg[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = np.cross(W_base_to_com, mg)
+        if (not params.isCoMControlled):                 
+            Wg[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = np.cross(params.W_base_to_com, mg)
                     
     # EXERCISE 4: Feed-forward wrench
     Wffwd = np.zeros(6)                                                                
-    if (ffwdOn):    
-        ffdLinear = conf.robotMass * util.linPart(des_acc) 
+    if (params.ffwdOn):    
+        ffdLinear = conf.robotMass * util.linPart(des_state.des_acc) 
        # compute inertia in the WF  w_I = R' * B_I * R
         W_Inertia = np.dot(b_R_w.transpose(), np.dot(B_Inertia, b_R_w))
         # compute w_des_omega_dot  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates
-        Jomega_dot =  mathJet.Tomega_dot(util.angPart(des_pose),  util.angPart(des_twist))
-        w_des_omega_dot = Jomega.dot(util.angPart(des_acc)) + Jomega_dot.dot(util.angPart(des_twist))                
+        Jomega_dot =  mathJet.Tomega_dot(util.angPart(des_state.des_pose),  util.angPart(des_state.des_twist))
+        w_des_omega_dot = Jomega.dot(util.angPart(des_state.des_acc)) + Jomega_dot.dot(util.angPart(des_state.des_twist))                
         ffdAngular = W_Inertia.dot(w_des_omega_dot) 
-        #ffdAngular = W_Inertia.dot(util.angPart(des_acc))
+        #ffdAngular = W_Inertia.dot(util.angPart(des_state.des_acc))
         Wffwd = np.hstack([ffdLinear, ffdAngular])
         
 
@@ -82,11 +82,11 @@ def computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_p
                  
 # Whole body controller for HyQ that includes ffd wrench + fb Wrench (Virtual PD) + gravity compensation
 # all vector is in the wf
-def projectionBasedController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, W_base_to_com, isCoMControlled, GravityComp, ffwdOn ):
+def projectionBasedController(conf, act_state, des_state, W_contacts, stance_legs,  params):
     util = Utils()
                        
     # EXERCISE 2.1: compute virtual impedances  
-    Wffwd, Wfbk, Wg = computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, W_base_to_com, isCoMControlled, GravityComp, ffwdOn)                
+    Wffwd, Wfbk, Wg = computeVirtualImpedanceWrench(conf, act_state, des_state,  W_contacts,  stance_legs,  params)                
     # Total Wrench (FFwd + Feedback + Gravity)
     TotWrench =  Wffwd + Wfbk + Wg                     
                 
@@ -96,10 +96,10 @@ def projectionBasedController(conf, act_pose, act_twist,  W_contacts,  des_pose,
                               stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
     # and COM trajectories)
-    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - util.linPart(act_pose))
-    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - util.linPart(act_pose))
-    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - util.linPart(act_pose))
-    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - util.linPart(act_pose))
+    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - util.linPart(act_state.act_pose))
+    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - util.linPart(act_state.act_pose))
+    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - util.linPart(act_state.act_pose))
+    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - util.linPart(act_state.act_pose))
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
                         np.hstack([d1, d2, d3, d4])])
@@ -114,11 +114,11 @@ def projectionBasedController(conf, act_pose, act_twist,  W_contacts,  des_pose,
 
 # Whole body controller for HyQ that includes ffd wrench + fb Wrench (Virtual PD) + gravity compensation
 #every vector is in the wf                
-def QPController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, W_base_to_com, isCoMControlled, GravityComp, ffwdOn, frictionCones, normals, f_min, mu):
+def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   params):
     util = Utils()
                 
     # compute virtual impedances                
-    Wffwd, Wfbk, Wg = computeVirtualImpedanceWrench(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, des_acc, stance_legs, W_base_to_com, isCoMControlled, GravityComp, ffwdOn )
+    Wffwd, Wfbk, Wg = computeVirtualImpedanceWrench(conf, act_state, des_state,  W_contacts,  stance_legs,  params) 
     # Total Wrench
     TotWrench =    Wfbk+ Wffwd+ Wg   
           
@@ -135,10 +135,11 @@ def QPController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, d
                               stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
     # and COM trajectories)
-    d1 = cross_mx(W_contacts[:,util.leg_map["LF"]] - util.linPart(act_pose))
-    d2 = cross_mx(W_contacts[:,util.leg_map["RF"]] - util.linPart(act_pose))
-    d3 = cross_mx(W_contacts[:,util.leg_map["LH"]] - util.linPart(act_pose))
-    d4 = cross_mx(W_contacts[:,util.leg_map["RH"]] - util.linPart(act_pose))
+                         
+    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - util.linPart(act_state.act_pose))
+    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - util.linPart(act_state.act_pose))
+    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - util.linPart(act_state.act_pose))
+    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - util.linPart(act_state.act_pose))
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
                         np.hstack([d1, d2, d3, d4])])
@@ -149,32 +150,27 @@ def QPController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, d
     G = JbT.T.dot(JbT) + np.eye(12) * 1e-4  #regularize and make it definite positive
     g = -JbT.T.dot(TotWrench)                 
     
-    # compute unilateral constraints Cx >= f_min => -Cx <= -f_min
-    C =  - block_diag( normals[util.leg_map["LF"]] , 
-                                         normals[util.leg_map["RF"]], 
-                                         normals[util.leg_map["LH"]], 
-                                         normals[util.leg_map["RH"]]    )                                                 
     # compute unilateral constraints Cx >= params.f_min => -Cx <= -params.f_min
     C =  - block_diag( params.normals[util.leg_map["LF"]] , 
                        params.normals[util.leg_map["RF"]], 
                        params.normals[util.leg_map["LH"]], 
                        params.normals[util.leg_map["RH"]]    )                                                 
     #not need to nullify columns relative to legs that are not in contact because the QP solver removes 0 = 0 constraints                                                                                           #
-    d = -f_min.reshape((4,))
+    d = -params.f_min.reshape((4,))
                 
     # EXERCISE 11: compute friction cones inequalities A_f x <= 0
-    if (frictionCones):                                                                
+    if (params.frictionCones):                                                                
         C_leg = [None]*4            
         for leg in range(4):
             #compute tangential components
-            ty = np.cross(normals[leg], np.array([1,0,0]))
-            tx = np.cross(ty, normals[leg])
+            ty = np.cross(params.normals[leg], np.array([1,0,0]))
+            tx = np.cross(ty, params.normals[leg])
                                             
             C_leg[leg] = np.array([
-                tx  - mu[leg]*normals[leg] ,
-                -tx - mu[leg]*normals[leg] ,
-                ty  - mu[leg]*normals[leg] ,
-                -ty - mu[leg]*normals[leg] ])
+                tx  - params.friction_coeff[leg]*params.normals[leg] ,
+                -tx - params.friction_coeff[leg]*params.normals[leg] ,
+                ty  - params.friction_coeff[leg]*params.normals[leg] ,
+                -ty - params.friction_coeff[leg]*params.normals[leg] ])
             
                        
         C =   block_diag( C_leg[util.leg_map["LF"]] , 
@@ -188,7 +184,7 @@ def QPController(conf, act_pose, act_twist,  W_contacts,  des_pose, des_twist, d
     #compute constraint violations (take smallest distance from constraint)
     constr_viol = np.zeros(4)
     for leg in range(4): 
-       if (frictionCones):
+       if (params.frictionCones):
             constraintsPerLeg = 4  
        else:
           constraintsPerLeg = 1                                    
