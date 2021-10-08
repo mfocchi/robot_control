@@ -18,10 +18,7 @@ from scipy.linalg import block_diag
 
 def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance_legs, params):
     util = Utils()
-    # The inertia matrix (for simplicity we will use the same for com and base frame)
-    B_Inertia = np.array([     [conf.robotInertia.Ixx, conf.robotInertia.Ixy, conf.robotInertia.Ixz],
-                             [conf.robotInertia.Ixy, conf.robotInertia.Iyy,  conf.robotInertia.Iyz],
-                             [conf.robotInertia.Ixz,  conf.robotInertia.Iyz, conf.robotInertia.Izz]])
+
     # Load math functions 
     mathJet = Math()
 
@@ -58,18 +55,18 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     #EXERCISE 3: Compute graviy wrench
     Wg = np.zeros(6)   
     if (params.gravityComp == True):
-        mg = conf.robotMass * np.array([0, 0, conf.gravity])
+        mg = params.robot.robotMass() * np.array([0, 0, conf.gravity])
         Wg[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = mg
         #in case you are closing the loop on base frame
-        if (not params.isCoMControlled):                 
+        if (not params.isCoMControlled):  # act_state  = base position in this case
             Wg[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = np.cross(params.W_base_to_com, mg)
                     
     # EXERCISE 4: Feed-forward wrench
     Wffwd = np.zeros(6)                                                                
     if (params.ffwdOn):    
-        ffdLinear = conf.robotMass * util.linPart(des_state.des_acc) 
+        ffdLinear = params.robot.robotMass() * util.linPart(des_state.des_acc) 
        # compute inertia in the WF  w_I = R' * B_I * R
-        W_Inertia = np.dot(b_R_w.transpose(), np.dot(B_Inertia, b_R_w))
+        W_Inertia = np.dot(b_R_w.transpose(), np.dot(params.robotInertiaB, b_R_w))
         # compute w_des_omega_dot  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates
         Jomega_dot =  mathJet.Tomega_dot(util.angPart(des_state.des_pose),  util.angPart(des_state.des_twist))
         w_des_omega_dot = Jomega.dot(util.angPart(des_state.des_acc)) + Jomega_dot.dot(util.angPart(des_state.des_twist))                
@@ -134,7 +131,7 @@ def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   param
     S_mat = np.diag(np.hstack([stance_legs[util.leg_map["LF"]] * np.ones(3), stance_legs[util.leg_map["RF"]] * np.ones(3),
                               stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
-    # and COM trajectories)
+    # and COM/BASE trajectories, this will depend on what what put in act_state)
                          
     d1 = cross_mx(W_contacts[util.leg_map["LF"]] - util.linPart(act_state.act_pose))
     d2 = cross_mx(W_contacts[util.leg_map["RF"]] - util.linPart(act_state.act_pose))

@@ -44,20 +44,5 @@ KdPitch = 100
 KdYaw =   100
     
 
-# Inertia properties
-robotMass = 85.446
-
-class robotInertia :
-    pass
-robotInertia.Ixx = 4.0745
-robotInertia.Iyy =  11.3576
-robotInertia.Izz = 12.5675
-robotInertia.Ixy = 0.1458
-robotInertia.Ixz = -0.2245
-robotInertia.Iyz =-0.0133
-  
-Bcom_x = 0.00942549 
-Bcom_y = 0 
-Bcom_z = -0.0433895
 
    

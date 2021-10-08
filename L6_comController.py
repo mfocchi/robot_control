@@ -120,7 +120,9 @@ def talker(p):
         # offset of the com wrt base origin in WF 
         params = Params()  
         params.gravityComp = False                                                  
-        params.W_base_to_com = p.b_R_w.dot( np.array([conf.Bcom_x, conf.Bcom_y, conf.Bcom_z]))
+        params.W_base_to_com = p.u.linPart(p.comPoseW)   -   p.u.linPart(p.basePoseW) 
+        params.robot = p.robot
+        params.robotInertiaB = p.compositeRobotInertiaB
         
         #################################################################          
         # compute desired contact forces from the whole-body controller                      
@@ -147,12 +149,10 @@ def talker(p):
 #                                
 #        # EXERSISE 5: Projection-based controller (CoM)    
 #        # map from base to com frame (they are aligned)
-#        p.comPoseW = copy.deepcopy(p.basePoseW)
-#        p.comPoseW[p.u.sp_crd["LX"]:p.u.sp_crd["LX"]+3] += params.W_base_to_com # + np.array([0.05, 0.0,0.0])
-#        p.comTwistW = np.dot( motionVectorTransform( params.W_base_to_com, np.eye(3)),p.baseTwistW)
 #        act_state.act_pose = p.comPoseW
 #        act_state.act_twist = p.comTwistW 
 #        params.isCoMControlled = True 
+#        params.robotInertiaB = p.centroidalInertiaB
 #        params.gravityComp = True
 #        params.ffwdOn = True 
 #        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
