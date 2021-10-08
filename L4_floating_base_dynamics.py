@@ -4,7 +4,7 @@ import numpy as np
 import example_robot_data
 from pinocchio.utils import * #rand
 from pinocchio.robot_wrapper import RobotWrapper
-
+from base_controller.utils.common_functions import getRobotModel
 
 
 # console print options to see matrix nicely
@@ -12,72 +12,74 @@ np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
 
 # Loading a robot model
-model = example_robot_data.load('hyq').model
-data = model.createData()
+robot = getRobotModel('hyq', generate_urdf = True)
+
 
 #start configuration
 v  = np.array([0.0   ,  0.0 , 0.0,  0.0,  0.0,       0.0, #underactuated 	
 		     0.0,  0.0,  0.0,  0.0,     0.0,  0.0,  0.0,  0.0,  0.0,    0.0,  0.0,  0.0]) #actuated
 q = example_robot_data.load('hyq').q0
-
+#q[3:3+4] = np.array([0,0.3,0,1])
+#print(q)
 # Update the joint and frame placements
-pin.forwardKinematics(model,data,q,v)
-pin.updateFramePlacements(model,data)
+pin.forwardKinematics(robot.model,robot.data,q,v)
+pin.updateFramePlacements(robot.model,robot.data)
 
 
-M =  pin.crba(model, data, q)
-H = pin.nonLinearEffects(model, data, q, v)
-G = pin.computeGeneralizedGravity(model,data, q)
+M =  pin.crba(robot.model, robot.data, q)
+H = pin.nonLinearEffects(robot.model, robot.data, q, v)
+G = pin.computeGeneralizedGravity(robot.model,robot.data, q)
 
 #EXERCISE 1: Compute the com of the robot (in WF)
 mass_robot = 0
 w_com_robot =np.zeros((3))
-for idx,name in enumerate(model.joints): 
-	if (idx>0): #skip the first universe link		 
-
-		mass_link = model.inertias[idx].mass
+for idx,name in enumerate(robot.model.joints): 
+	if (idx>0): #skip the first universe link	
+		mass_link = robot.model.inertias[idx].mass
 		mass_robot+= mass_link
-		#com_link = data.oMi[idx].act(model.inertias[idx].lever)				
-		com_link =  model.inertias[idx].lever		
-		w_com_link = data.oMi[idx].rotation.dot(com_link) + data.oMi[idx].translation		
+		#com_link = robot.data.oMi[idx].act(robot.model.inertias[idx].lever)				
+		com_link =  robot.model.inertias[idx].lever		
+		w_com_link = robot.data.oMi[idx].rotation.dot(com_link) + robot.data.oMi[idx].translation		
 		w_com_robot +=  mass_link * w_com_link
 w_com_robot /=mass_robot
 print "Com Position w_com_robot: ", w_com_robot
 # compute using native pinocchio function
-com_test = pin.centerOfMass(model, data, q, v)
+com_test = pin.centerOfMass(robot.model, robot.data, q, v)
 print "Com Position (pinocchio): ", com_test
+
+
 
 # EXERCIZE 2: Compute robot kinetic energy
 #get a random generalized velocity 
-#v = rand(model.nv)
+#v = rand(robot.model.nv)
 ## Update the joint and frame placements
-#pin.forwardKinematics(model,data,q,v)
+#pin.forwardKinematics(robot.model,robot.data,q,v)
 ## compute using generalized velocities and system mass matrix
 #EkinRobot = 0.5*v.transpose().dot(M.dot(v))
 #
 ## compute using separate link contributions using spatial algebra
 #EKinSystem= 0
 ##get the spatial velocities of each link
-#twists = [f for f  in data.v]
-#inertias = [f for f  in model.inertias]
+#twists = [f for f  in robot.data.v]
+#inertias = [f for f  in robot.model.inertias]
 #for idx, inertia in enumerate(inertias):
 #	EKinSystem += inertias[idx].vtiv(twists[idx]) # twist x I twist
 #EKinSystem *= .5;
 #print "TEST1: ", EkinRobot - EKinSystem
 ## use pinocchio native function
-#pin.computeKineticEnergy(model,data,q,v)
-#print "TEST2: ", EkinRobot - data.kinetic_energy
+#pin.computeKineticEnergy(robot.model,robot.data,q,v)
+#print "TEST2: ", EkinRobot - robot.data.kinetic_energy
 
 
 ##EXERCISE 3: Build the transformation matrix to use com coordinates
 # get the location of the base frame
-w_base = data.oMi[1].translation
+w_base = robot.data.oMi[1].translation
 #compute centroidal quantitities (hg, Ag and Ig)
-pin.ccrba(model, data, q, v)
+pin.ccrba(robot.model, robot.data, q, v)
 
 #print "Base Position w_base  ", w_base
-#G_T_B = np.zeros((model.nv, model.nv))
-#G_Tf_B = np.zeros((model.nv, model.nv))
+#G_T_B = np.zeros((robot.model.nv, robot.model.nv))
+#G_Tf_B = np.zeros((robot.model.nv, robot.model.nv))
 #G_X_B = np.zeros((6, 6))
 #
 ## compute the motion transform from frame B to framge G (G_X_B)
@@ -91,7 +93,7 @@ pin.ccrba(model, data, q, v)
 # Couplings from joints on the floating base 
 #Mbj = M[:6, 6:]
 # Composite rigid body inertia matrix expressed at the CoM: gMb
-#gMb = data.Ig
+#gMb = robot.data.Ig
 #
 ## G_M_b^-1 * G_Xf_B * M_bj
 #S_G_B = np.linalg.inv(gMb).dot(G_Xf_B.dot(Mbj))
