@@ -38,7 +38,7 @@ class RobotWrapper(PinocchioRobotWrapper):
             return pin.nonLinearEffects(self.model, self.data, q, v)
         return self.data.nle
         
-    def com(self, q=None, v=None, a=None, update=True):
+    def robotComW(self, q=None, v=None, a=None, update=True):
         if(update==False or q is None):
             return PinocchioRobotWrapper.com(self, q);
         if a is None:
@@ -47,17 +47,41 @@ class RobotWrapper(PinocchioRobotWrapper):
             return PinocchioRobotWrapper.com(self, q, v)
         return PinocchioRobotWrapper.com(self, q, v,a)
         
+       
     def Jcom(self, q, update=True):
         if(update):
             return pin.jacobianCenterOfMass(self.model, self.data, q)
         return self.data.Jcom
-        
+
+    # centoidal momentum matrix    
     def momentumJacobian(self, q, v, update=True):
         if(update):
             pin.ccrba(self.model, self.data, q, v);
         return self.data.Ag;
 
+    #Robot Centroidal (e.g wrt to com not to base frame origin) inertia in WF (changes with orientation) 
+    def centroidalInertiaW(self, q, v, update=True):
+        if(update):
+            pin.ccrba(self.model, self.data, q, v);
+        return self.data.Ig.inertia;
 
+    # Robot Centroidal inertia (e.g wrt to com) in BF (does not changes with orientation)
+    def centroidalInertiaB(self, q, v, update=True):
+        if(update):
+            pin.ccrba(self.model, self.data, q, v);
+        return self.data.Ycrb[1].inertia;        
+        
+        
+    #Composite rigid body inertia wrt to the origin of BASE FRAME expressed in BASE FRAME (does not change with orientation)
+    def compositeRobotInertiaB(self, q, update=True):
+        if(update):
+            pin.crba(self.model, self.data, q)
+        return self.data.M[3:3+3,3:3+3];
+        
+    def robotMass(self):
+        pin.crba(self.model, self.data, pin.neutral(self.model))
+        return self.data.M[0,0]
+        
     def computeAllTerms(self, q, v):
         ''' pin.computeAllTerms is equivalent to calling:
             pinocchio::forwardKinematics

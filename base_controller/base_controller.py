@@ -85,10 +85,6 @@ class BaseController(threading.Thread):
         self.launch.start() 
         ros.sleep(4.0)        
 
-        
-
-        
-        
         # Loading a robot model of robot (Pinocchio)
         self.robot = getRobotModel(robot_name, generate_urdf = True)
         
@@ -103,6 +99,8 @@ class BaseController(threading.Thread):
         self.comPoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
         self.stance_legs = np.array([True, True, True, True])
+        self.centroidalInertiaB = np.identity(3)
+        self.compositeRobotInertiaB = np.identity(3)
         
         self.q = np.zeros(self.robot.na)
         self.qd = np.zeros(self.robot.na)
@@ -138,6 +136,7 @@ class BaseController(threading.Thread):
         self.verbose = conf.verbose
 																							
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
+        
                                  
     def _receive_contact(self, msg):
         # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention) TODO publish them in ros_impedance_controller
@@ -273,34 +272,42 @@ class BaseController(threading.Thread):
                                                                                                                                 
     def updateKinematics(self):
         # q is continuously updated
-        # to compute in the base frame 
+        # to compute in the base frame  you should put neutral base
         gen_velocities  = np.hstack((self.baseTwistW,self.u.mapFromRos(self.qd)))
-        fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapFromRos(self.q)))
+        neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapFromRos(self.q)))
 	 
-        self.robot.computeAllTerms(fb_jointstate, gen_velocities)   
+        self.robot.computeAllTerms(neutral_fb_jointstate, gen_velocities)   
         np.set_printoptions(precision = 5, linewidth = 1000, suppress = True)
         for leg in range(4):
-            self.B_contacts[leg] = self.robot.framePlacement(fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]) ).translation 
+            self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]) ).translation 
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
     
  
         for leg in range(4):
             leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
-            self.J[leg] = self.robot.frameJacobian(fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
+            self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
-           
-   
+        
        # Pinocchio Update the joint and frame placements
         gen_velocities  = np.hstack((self.baseTwistW,self.qd))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+
         
         self.robot.computeAllTerms(configuration, gen_velocities)    
         self.M = self.robot.mass(self.q, False)    
         self.h = self.robot.nle(configuration, gen_velocities)
         self.h_joints = self.h[6:]  
         #compute contact forces                        
-        self.estimateContactForces()       
-
+        self.estimateContactForces()  
+        
+        # compute com / robot inertias
+        self.comPoseW = copy.deepcopy(self.basePoseW)
+        self.comPoseW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"]+3] = self.robot.robotComW(configuration) # + np.array([0.05, 0.0,0.0])
+        W_base_to_com = self.u.linPart(self.comPoseW)  - self.u.linPart(self.basePoseW) 
+        self.comTwistW = np.dot( motionVectorTransform( W_base_to_com, np.eye(3)),self.baseTwistW)
+        
+        self.centroidalInertiaB = self.robot.centroidalInertiaB(configuration, gen_velocities)
+        self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(configuration)
 
     def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
@@ -336,7 +343,7 @@ class BaseController(threading.Thread):
           
                 print("put on ground and start compensating gravity...")
                 self.freezeBase(0)                                                
-                ros.sleep(1.0)
+                ros.sleep(0.5)
                 if self.verbose:
                     print("q err pre grav comp", (self.q - self.q_des))
                                                         
@@ -405,7 +412,8 @@ def talker(p):
 #    RPM2RAD =2*np.pi/60.0
 #    omega = 5000*RPM2RAD
     
-    
+
+
     #control loop
     while True:  
         #update the kinematics
