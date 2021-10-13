@@ -25,12 +25,18 @@ plt.ion()
 plt.close() 
 
 class Twist:
-    linear = np.zeros((3))
-    angular = np.zeros((3))
+    linear = np.empty((3))*np.nan
+    angular = np.empty((3))*np.nan
+    def set(self, value):
+        self.linear = value[:3]
+        self.angular = value[3:]
 
 class Pose:
-    position = np.zeros((3))  
-    orientation = np.zeros((3))    
+    position = np.empty((3))*np.nan
+    orientation = np.empty((3))*np.nan
+    def set(self, value):
+        self.position = value[:3]
+        self.orientation = value[3:]    
     
 class State:
     pose = Pose()
