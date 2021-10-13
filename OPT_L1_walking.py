@@ -21,15 +21,18 @@ from scipy.linalg import block_diag
 from base_controller.utils.math_tools import motionVectorTransform
 from base_controller.utils.common_functions import State
 
-import ex_6_conf as conf
+# L5 config file
+import OPT_L1_walking_conf as conf
+
 robot_name = "hyq"
 
-class Params:
-    pass 
+
 class ActualState:
     pass 
 class DesiredState:
     pass 
+des_state = DesiredState()
+act_state = ActualState() 
 
 class AdvancedController(BaseController): 
 
@@ -53,14 +56,10 @@ class AdvancedController(BaseController):
         p.Wfbk_log = np.empty((6,0))  *nan  
         p.Wg_log = np.empty((6,0 ))  *nan                        
         p.constr_viol_log = np.empty((4,0 ))*nan
-								
-        p.two_pi_f             = 2*np.pi*conf.freq   # 2 PI * frequency  
-        p.two_pi_f_amp         = np.multiply(p.two_pi_f, conf.amp) # A * 2 PI * frequency  
-        p.two_pi_f_squared_amp = np.multiply(p.two_pi_f, p.two_pi_f_amp)  # A * (2 PI * frequency)^2
+
 
     def logData(self):
         BaseController.logData(self)
-								
         p.des_basePoseW_log = np.hstack((p.des_basePoseW_log , p.des_pose.reshape(6,-1)))
         p.des_baseTwistW_log = np.hstack((p.des_baseTwistW_log , p.des_twist.reshape(6,-1)))
         p.des_baseAccW_log = np.hstack((p.des_baseAccW_log , p.des_acc.reshape(6,-1)))                    
@@ -84,111 +83,55 @@ def talker(p):
     p.des_pose  = p.x0
     p.des_twist = np.zeros(6)
     p.des_acc = np.zeros(6)       
+   
+    refclass = ReferenceGenerator(config)
+    
+ # input to reference generator
+    initial_state = State() 
+    # intial com position (Z noot needed cause we use robot height)
+    initial_state.pose.position = p.ba
+    # intial com orientation
+    initial_state.pose.orientation = np.array([0.0, 0.0, 0.0])
+    # intial com velocity (only useful for dist rejection)
+    initial_state.twist.linear = np.array([0.0, 0.0, 0.0])
+    
+    #desired velocity
+    class desired_velocity():
+        pass
+    desired_velocity.lin_x = 0.05
+    desired_velocity.lin_y = 0.0
+    desired_velocity.ang_z = 0.0
+    
+    refclass.getReferenceData(initial_state, desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robotHeight)    
+    
 
     # Control loop               
     while (p.time  < conf.exp_duration) or conf.CONTINUOUS:
         #update the kinematics
         p.updateKinematics()
-                                
-        # EXERCISE 1: Sinusoidal Reference Generation
-        # Reference Generation
-        p.des_pose  = p.x0 +  conf.amp*np.sin(p.two_pi_f*p.time + conf.phi)
-        p.des_twist  = p.two_pi_f_amp * np.cos(p.two_pi_f*p.time + conf.phi)
-        p.des_acc = - p.two_pi_f_squared_amp * np.sin(p.two_pi_f*p.time + conf.phi)
-        #use this to compute acceleration for a custom trajectory
-        #des_acc = np.subtract(des_twist, p.des_twist_old)/p.Ts
-        #p.des__twist_old = des_base_twist
- 
-        # EXERCISE 6: Check static stability, move CoM out of the polygon   
-        #p.des_pose[p.u.sp_crd["LY"]] +=0.0004
-    
-        # EXERCISE 8.a: Swift the Com on triangle of LF, RF, LH
-#        p.des_pose[p.u.sp_crd["LX"]] = 0.1
-#        p.des_pose[p.u.sp_crd["LY"]] = 0.1 
-        # EXERCISE 8.b: Unload RH leg 
-#        if p.time > 2.0:                            
-#            p.stance_legs[p.u.leg_map["RH"]] = False       
-   
-        des_state = DesiredState()
+     
         des_state.des_pose = p.des_pose
         des_state.des_twist = p.des_twist
         des_state.des_acc = p.des_acc        
-        act_state = ActualState()              
         act_state.act_pose = p.basePoseW
         act_state.act_twist = p.baseTwistW   
+                              
+        # set robot specific params                             
+        conf.params.robot = p.robot                      
+        conf.params.W_base_to_com = p.u.linPart(p.comPoseW)   -   p.u.linPart(p.basePoseW)         
+        conf.params.robotInertiaB = p.compositeRobotInertiaB        
+     
+        #QP controller
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, conf.params)
 
-        # offset of the com wrt base origin in WF 
-        params = Params()  
-        params.gravityComp = False                                                  
-        params.W_base_to_com = p.u.linPart(p.comPoseW)   -   p.u.linPart(p.basePoseW) 
-        params.robot = p.robot
-        params.robotInertiaB = p.compositeRobotInertiaB
-        
-        #################################################################          
-        # compute desired contact forces from the whole-body controller                      
-        #################################################################
-          
-        
-        # EXERCISE 2: Projection-based controller (base frame)        
-#        params.isCoMControlled = False 
-#        params.gravityComp = False
-#        params.ffwdOn = False        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
-
-        # EXERCISE 3: Add Gravity Compensation (base frame)        
-#        params.isCoMControlled = False 
-#        params.gravityComp = True
-#        params.ffwdOn = False                                       
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
-#     
-        # EXERCISE 4: Add FFwd Term (base frame) 
-#        params.isCoMControlled = False 
-#        params.gravityComp = True
-#        params.ffwdOn = True        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
-#                                
-#        # EXERSISE 5: Projection-based controller (CoM)    
-#        # map from base to com frame (they are aligned)
-#        act_state.act_pose = p.comPoseW
-#        act_state.act_twist = p.comTwistW 
-#        params.isCoMControlled = True 
-#        params.robotInertiaB = p.centroidalInertiaB
-#        params.gravityComp = True
-#        params.ffwdOn = True 
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
-#        
-        # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
-        params.normals = [None]*4                 
-        params.normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
-        params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
-        params.normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
-        params.normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])  
-        params.f_min = np.array([0.0,0.0,0.0, 0.0])    
-        params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])    
-   
-        params.isCoMControlled = False 
-        params.gravityComp = True
-        params.ffwdOn = True    
-        params.frictionCones = False
-      
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
-        
-        # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
-        #params.frictionCones = True       
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)                                           
-                                
-        #################################################################          
-        # map desired contact forces into torques (missing gravity compensation)                      
-        #################################################################                                       
+        # map desired contact forces into torques                                     
         p.jacsT = block_diag(np.transpose(p.wJ[p.u.leg_map["LF"]]), 
                         np.transpose(p.wJ[p.u.leg_map["RF"]] ), 
                         np.transpose(p.wJ[p.u.leg_map["LH"]] ), 
                         np.transpose(p.wJ[p.u.leg_map["RH"]]  ))
         p.tau_ffwd =   p.u.mapFromRos(p.h_joints) - p.jacsT.dot(p.des_forcesW)         
  
-    
-    
-       # send desired command to the ros controller     
+        # send desired command to the ros controller     
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
         p.logData()    
         p.time = p.time + conf.dt 
