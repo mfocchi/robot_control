@@ -100,7 +100,7 @@ def talker(p):
         #p.des__twist_old = des_base_twist
  
         # EXERCISE 6: Check static stability, move CoM out of the polygon   
-        p.des_pose[p.u.sp_crd["LY"]] +=0.0004
+        #p.des_pose[p.u.sp_crd["LY"]] +=0.0004
     
         # EXERCISE 8.a: Swift the Com on triangle of LF, RF, LH
 #        p.des_pose[p.u.sp_crd["LX"]] = 0.1
@@ -157,12 +157,12 @@ def talker(p):
 #        params.ffwdOn = True 
 #        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
 #        
-       # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
-        normals = [None]*4                 
-        normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
-        normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
-        normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
-        normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])    
+        # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
+        params.normals = [None]*4                 
+        params.normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
+        params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
+        params.normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
+        params.normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])  
         params.f_min = np.array([0.0,0.0,0.0, 0.0])    
         params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])    
    
@@ -170,8 +170,7 @@ def talker(p):
         params.gravityComp = True
         params.ffwdOn = True    
         params.frictionCones = False
-        params.normals = normals
-     
+      
         p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
         
         # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
