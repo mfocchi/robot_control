@@ -9,9 +9,12 @@ import os
 import numpy as np
 import rospy as ros
 
+
 class Utils:
 
     def __init__(self):
+        
+        
         self.leg_map = {
             "LF": 0,
             "RF": 1,
@@ -77,7 +80,7 @@ class Utils:
     def putIntoParamServer(self, data):
 
         try:
-            self.succeed(get_param_server().setParam(self.get_caller_id(),  "hyq", data))
+            self.succeed(get_param_server().setParam(self.get_caller_id(),  "", data))
 
         except socket.error:
             raise ROSParamIOException("Unable to communicate with master!")
@@ -85,15 +88,17 @@ class Utils:
         eval(help( get_param_server().setParam()) )								
         pass
 
-    def putIntoGlobalParamServer(self,label, data):
+    def putIntoGlobalParamServer(self,label, data, verbose = False):
 
         try:
             ros.set_param(label, data)
         except socket.error:
             raise ROSParamIOException("Unable to communicate with master!")
-        print ("set parameter %s into global param server" % label)
+        if (verbose):
+            print ("set parameter %s into global param server" % label)
         pass
 
+ 
 #########################################################################
 
     def getIdx(self, leg, coord):

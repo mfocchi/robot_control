@@ -14,10 +14,50 @@ import sys
 from termcolor import colored
 import rospkg
 import rospy as ros
+import rosnode
+import roslaunch
+import rosgraph
+from roslaunch.parent import ROSLaunchParent
+
 #from urdf_parser_py.urdf import URDF
 #make plot interactive
 plt.ion()
 plt.close() 
+
+class Twist:
+    linear = np.zeros((3))
+    angular = np.zeros((3))
+
+class Pose:
+    position = np.zeros((3))  
+    orientation = np.zeros((3))    
+    
+class State:
+    pose = Pose()
+    twist = Twist()
+    
+def checkRosMaster():
+    if rosgraph.is_master_online():  # Checks the master uri and results boolean (True or False)
+        print(colored('ROS MASTER is Online','red'))
+    else:
+        print(colored('ROS MASTER is NOT Online, Starting roscore!!','red'))
+        parent = ROSLaunchParent("roscore", [], is_core=True)  # run_id can be any string
+        parent.start()
+
+def startNode(node_name):
+    ros.init_node('sub_pub_node_python', anonymous=False)
+    nodes = rosnode.get_node_names()
+    if "/reference_generator" in nodes:
+        print(colored("Re Starting ref generator","red"))
+        os.system("rosnode kill /"+node_name)
+    package = node_name
+    executable = node_name
+    name = node_name
+    namespace = ''
+    node = roslaunch.core.Node(package, executable, name, namespace, output="screen")
+    launch = roslaunch.scriptapi.ROSLaunch()
+    launch.start()
+    process = launch.launch(node)
 
 
 def getRobotModel(robot_name="ur5", generate_urdf = False):    
