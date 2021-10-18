@@ -65,9 +65,10 @@ def checkRosMaster():
         print(colored('ROS MASTER is NOT Online, Starting roscore!!','red'))
         parent = ROSLaunchParent("roscore", [], is_core=True)  # run_id can be any string
         parent.start()
+        ros.init_node('sub_pub_node_python', anonymous=False)
 
 def startNode(node_name):
-    ros.init_node('sub_pub_node_python', anonymous=False)
+    
     nodes = rosnode.get_node_names()
     if "/reference_generator" in nodes:
         print(colored("Re Starting ref generator","red"))

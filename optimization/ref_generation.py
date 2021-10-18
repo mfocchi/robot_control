@@ -9,7 +9,7 @@ from reference_generator.srv import request_reference
 from reference_generator.srv import request_referenceResponse
 from reference_generator.srv import request_referenceRequest
 from base_controller.utils.utils import Utils
-from base_controller.utils.common_functions import startNode
+from base_controller.utils.common_functions import startNode, checkRosMaster
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -22,6 +22,7 @@ class ReferenceGenerator:
     
     def __init__(self, config):
 
+        checkRosMaster()
         startNode("reference_generator")
         ros.wait_for_service("/reference_generator/request_reference")
         self.response = request_referenceResponse()
@@ -267,25 +268,25 @@ class ReferenceGenerator:
             temp.append(eval(" self.response.grforces[self.u.leg_map.get(leg)].data[i]."+coord))
         return temp
 
-    def plotReference(self,refClass, active_plots):
+    def plotReference(self, active_plots):
     
         plt.close('all')
     
-        number_of_samples = refClass.prediction_horizon
+        number_of_samples = self.prediction_horizon
     
-        time = np.zeros(len(refClass.response.time_parametrization))
+        time = np.zeros(len(self.response.time_parametrization))
         accumulated_time = 0
-        for i in range(len(refClass.response.time_parametrization)):
+        for i in range(len(self.response.time_parametrization)):
             time[i] = accumulated_time
-            accumulated_time += refClass.response.time_parametrization[i]
+            accumulated_time += self.response.time_parametrization[i]
     
         if active_plots.swing:
             plt.figure()
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.swing[0,:]) * 0.25, linestyle='--', marker='o',label="LF")
-            plt.plot(time, np.transpose(refClass.swing[1,:]) * 0.5, linestyle='--', marker='o',label="RF")
-            plt.plot(time, np.transpose(refClass.swing[2,:]) * 0.75,linestyle='--', marker='o', label="LH")
-            plt.plot(time, np.transpose(refClass.swing[3,:]) * 1, linestyle='--', marker='o',label="RH")
+            plt.plot(time, np.transpose(self.swing[0,:]) * 0.25, linestyle='--', marker='o',label="LF")
+            plt.plot(time, np.transpose(self.swing[1,:]) * 0.5, linestyle='--', marker='o',label="RF")
+            plt.plot(time, np.transpose(self.swing[2,:]) * 0.75,linestyle='--', marker='o', label="LH")
+            plt.plot(time, np.transpose(self.swing[3,:]) * 1, linestyle='--', marker='o',label="RH")
             plt.legend()
             plt.title('Swing vector: reference')
             plt.show()
@@ -293,10 +294,10 @@ class ReferenceGenerator:
         if active_plots.grforces:
             plt.figure()
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.grForcesLFWz_gt), marker='o', label="LF")
-            plt.plot(time, np.transpose(refClass.grForcesRFWz_gt), marker='o', label="RF")
-            plt.plot(time, np.transpose(refClass.grForcesLHWz_gt), marker='o', label="LH")
-            plt.plot(time, np.transpose(refClass.grForcesRHWz_gt), marker='o', label="RH")
+            plt.plot(time, np.transpose(self.grForcesLFWz_gt), marker='o', label="LF")
+            plt.plot(time, np.transpose(self.grForcesRFWz_gt), marker='o', label="RF")
+            plt.plot(time, np.transpose(self.grForcesLHWz_gt), marker='o', label="LH")
+            plt.plot(time, np.transpose(self.grForcesRHWz_gt), marker='o', label="RH")
             plt.legend()
             plt.title('Ground reaction force: reference')
             plt.show()
@@ -304,10 +305,10 @@ class ReferenceGenerator:
         if active_plots.feet:
             plt.figure()
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.footPosLFWx),linestyle='--', marker='o', label="LF")
-            plt.plot(time, np.transpose(refClass.footPosRFWx),linestyle='--', marker='o', label="RF")
-            plt.plot(time, np.transpose(refClass.footPosLHWx),linestyle='--', marker='o', label="LH")
-            plt.plot(time,  np.transpose(refClass.footPosRHWx),linestyle='--', marker='o', label="RH")
+            plt.plot(time, np.transpose(self.footPosLFWx),linestyle='--', marker='o', label="LF")
+            plt.plot(time, np.transpose(self.footPosRFWx),linestyle='--', marker='o', label="RF")
+            plt.plot(time, np.transpose(self.footPosLHWx),linestyle='--', marker='o', label="LH")
+            plt.plot(time,  np.transpose(self.footPosRHWx),linestyle='--', marker='o', label="RH")
             plt.legend()
             plt.title('Foot location: reference x')
             plt.show()
@@ -315,10 +316,10 @@ class ReferenceGenerator:
             plt.figure()
             #plt.subplot(1, 2, 1)
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.footPosLFWy),linestyle='--', marker='o', label="LF")
-            plt.plot(time, np.transpose(refClass.footPosRFWy),linestyle='--', marker='o', label="RF")
-            plt.plot(time, np.transpose(refClass.footPosLHWy),linestyle='--', marker='o', label="LH")
-            plt.plot(time, np.transpose(refClass.footPosRHWy),linestyle='--', marker='o', label="RH")
+            plt.plot(time, np.transpose(self.footPosLFWy),linestyle='--', marker='o', label="LF")
+            plt.plot(time, np.transpose(self.footPosRFWy),linestyle='--', marker='o', label="RF")
+            plt.plot(time, np.transpose(self.footPosLHWy),linestyle='--', marker='o', label="LH")
+            plt.plot(time, np.transpose(self.footPosRHWy),linestyle='--', marker='o', label="RH")
             plt.legend()
             plt.title('Foot location: reference y')
             plt.show()
@@ -326,10 +327,10 @@ class ReferenceGenerator:
             plt.figure()
             # plt.subplot(1, 2, 1)
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.footPosLFWz),linestyle='--', marker='o', label="LF")
-            plt.plot(time, np.transpose(refClass.footPosRFWz),linestyle='--', marker='o', label="RF")
-            plt.plot(time, np.transpose(refClass.footPosLHWz),linestyle='--', marker='o', label="LH")
-            plt.plot(time, np.transpose(refClass.footPosRHWz),linestyle='--', marker='o',label="RH")
+            plt.plot(time, np.transpose(self.footPosLFWz),linestyle='--', marker='o', label="LF")
+            plt.plot(time, np.transpose(self.footPosRFWz),linestyle='--', marker='o', label="RF")
+            plt.plot(time, np.transpose(self.footPosLHWz),linestyle='--', marker='o', label="LH")
+            plt.plot(time, np.transpose(self.footPosRHWz),linestyle='--', marker='o',label="RH")
             plt.legend()
             plt.title('Foot location: reference z')
             plt.show()
@@ -337,18 +338,18 @@ class ReferenceGenerator:
         if active_plots.com:
             plt.figure()
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.actual_CoMXW),label="X", marker='.', linewidth=1.)
-            plt.plot(time, np.transpose(refClass.actual_CoMYW),label="Y",marker='.',  linewidth=2.)
-            plt.plot(time, np.transpose(refClass.actual_CoMZW),label="Z",marker='.',  linewidth=3.)
+            plt.plot(time, np.transpose(self.actual_CoMXW),label="X", marker='.', linewidth=1.)
+            plt.plot(time, np.transpose(self.actual_CoMYW),label="Y",marker='.',  linewidth=2.)
+            plt.plot(time, np.transpose(self.actual_CoMZW),label="Z",marker='.',  linewidth=3.)
             plt.title('COM position: reference')
             plt.legend()
             plt.show()
     
             plt.figure()
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.com_VxW),label="X", marker='.',  linewidth=1.)
-            plt.plot(time, np.transpose(refClass.com_VyW),label="Y", marker='.', linewidth=2.)
-            plt.plot(time, np.transpose(refClass.com_VzW),label="Z", marker='.', linewidth=3.)
+            plt.plot(time, np.transpose(self.com_VxW),label="X", marker='.',  linewidth=1.)
+            plt.plot(time, np.transpose(self.com_VyW),label="Y", marker='.', linewidth=2.)
+            plt.plot(time, np.transpose(self.com_VzW),label="Z", marker='.', linewidth=3.)
             plt.title('COM velocity: reference')
             plt.legend()
             plt.show()
@@ -356,18 +357,18 @@ class ReferenceGenerator:
         if active_plots.orientation:
             plt.figure()
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.rollW),label="X", marker='.', linewidth=1.)
-            plt.plot(time,  np.transpose(refClass.pitchW),label="Y",marker='.',  linewidth=2.)
-            plt.plot(time, np.transpose(refClass.yawW),label="Z",  marker='.',linewidth=3.)
+            plt.plot(time, np.transpose(self.rollW),label="X", marker='.', linewidth=1.)
+            plt.plot(time,  np.transpose(self.pitchW),label="Y",marker='.',  linewidth=2.)
+            plt.plot(time, np.transpose(self.yawW),label="Z",  marker='.',linewidth=3.)
             plt.title('Orientation angular: reference')
             plt.legend()
             plt.show()
     
             plt.figure()
             plt.rcParams['axes.grid'] = True
-            plt.plot(time, np.transpose(refClass.omegaXW),label="X",  linewidth=1.)
-            plt.plot(time, np.transpose(refClass.omegaYW),label="Y",  linewidth=2.)
-            plt.plot(time, np.transpose(refClass.omegaZW),label="Z",  linewidth=3.)
+            plt.plot(time, np.transpose(self.omegaXW),label="X",  linewidth=1.)
+            plt.plot(time, np.transpose(self.omegaYW),label="Y",  linewidth=2.)
+            plt.plot(time, np.transpose(self.omegaZW),label="Z",  linewidth=3.)
             plt.title('Orientation ang. velocity: reference')
             plt.legend()
             plt.show()

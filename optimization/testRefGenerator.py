@@ -6,7 +6,7 @@ Created on Mon Oct 11 10:11:28 2021
 """
 
 from ref_generation import ReferenceGenerator
-from base_controller.utils.common_functions import checkRosMaster, State
+from base_controller.utils.common_functions import  State
 from base_controller.utils.utils import Utils
 import os
 import numpy as np
@@ -21,8 +21,6 @@ class config:
 if __name__ == "__main__":
     u = Utils()
     
-    checkRosMaster()
-
     # config
     config.prediction_horizon= 600
     config.cycle_time = 8.0
@@ -35,6 +33,7 @@ if __name__ == "__main__":
     config.offset_d = 0.8
     config.robot_name = 'hyq'
     config.robot_mass = 85
+    config.robot_height = 0.555
     config.foot_hip_y_offset = 0.15
     config.verbose = 0 # 1 /2 
       
@@ -68,9 +67,9 @@ if __name__ == "__main__":
     initial_feet[u.leg_map.get("RF")] =  np.array([0.3, -0.3, 0.0])
     initial_feet[u.leg_map.get("LH")] =  np.array([-0.3, 0.3, 0.0])
     initial_feet[u.leg_map.get("RH")] =  np.array([-0.3, -0.3, 0.0])
-    robot_height = 0.555
+    
 
-    refclass.getReferenceData(initial_state, desired_velocity,  initial_feet,  swing_status, robot_height)
+    refclass.getReferenceData(initial_state, desired_velocity,  initial_feet,  swing_status, config.robot_height)
 
     active_plots.swing = False
     active_plots.feet = True
@@ -78,7 +77,7 @@ if __name__ == "__main__":
     active_plots.orientation = False
     active_plots.grforces = False    
     
-    refclass.plotReference(refclass, active_plots)
+    refclass.plotReference(active_plots)
     
     
     

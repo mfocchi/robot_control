@@ -39,6 +39,8 @@ class AdvancedController(BaseController):
         #send data to param server
         self.verbose = conf.verbose                                                                                                          
         self.u.putIntoGlobalParamServer("verbose", self.verbose)	
+        self.refclass = ReferenceGenerator(conf)
+  
         
     def initVars(self):
         BaseController.initVars(self)
@@ -79,21 +81,10 @@ def talker(p):
     p.x0 = copy.deepcopy(p.basePoseW)
     p.des_pose  = p.x0
     p.des_twist = np.zeros(6)
-    p.des_acc = np.zeros(6)       
-   
-    #refclass = ReferenceGenerator(conf)
+    p.des_acc = np.zeros(6)  
+     
     initial_state.set(act_state)
-#    
-#    #desired velocity
-#    class desired_velocity():
-#        pass
-#    desired_velocity.lin_x = 0.05
-#    desired_velocity.lin_y = 0.0
-#    desired_velocity.ang_z = 0.0
-#    
-#    refclass.getReferenceData(initial_state, desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robotHeight)    
-    
-
+    p.refclass.getReferenceData(initial_state, conf.desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robot_height)
     # Control loop               
     while (p.time  < conf.exp_duration) or conf.CONTINUOUS:
         #update the kinematics
@@ -140,12 +131,23 @@ def talker(p):
                              
     # restore PD when finished        
     p.pid.setPDs(400.0, 6.0, 0.0) 
+    
+    
+    class active_plots:
+        pass
+    active_plots.swing = False
+    active_plots.feet = True
+    active_plots.com = True
+    active_plots.orientation = False
+    active_plots.grforces = False   
+    p.refclass.plotReference(active_plots)
+    
     ros.sleep(1.0)                
     print ("Shutting Down")                 
     ros.signal_shutdown("killed")           
     p.deregister_node()        
     
-    plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
+    #plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
     #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
     #plotConstraitViolation(3,p.constr_viol_log)            

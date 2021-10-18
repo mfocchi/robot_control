@@ -12,7 +12,7 @@ from base_controller.utils.utils import Utils
 LINE_WIDTH = 60
 
 dt = 0.004  # controller time step
-exp_duration = 5.0 #simulation duration
+exp_duration = 3.0 #simulation duration
 CONTINUOUS = False
 verbose = False
 
@@ -63,13 +63,11 @@ params.frictionCones = True
 params.f_min = np.array([0.0,0.0,0.0, 0.0])    
 
 # PLANNER PARAMS
-desired_velocity_x = 0.05 # in HORIZONTAL FRAME
-desired_velocity_y = 0.0   # in HORIZONTAL FRAME
-desired_velocity_heading = 0.0
-robotMass = 87.404
-robotHeight = 0.55
-step_height = 0.15
-
+class desired_velocity():
+    pass
+desired_velocity.lin_x = 0.05
+desired_velocity.lin_y = 0.0
+desired_velocity.ang_z = 0.0
 
 prediction_horizon= 100
 cycle_time = 8.0
@@ -81,6 +79,8 @@ offset_b = 0.3
 offset_c = 0.55
 offset_d = 0.8
 robot_name = 'hyq'
+robot_mass = 85
+robot_height = 0.555
 foot_hip_y_offset = 0.15
 verbose = 0 # 1 /2 
       
