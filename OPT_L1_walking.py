@@ -20,19 +20,16 @@ from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstr
 from scipy.linalg import block_diag
 from base_controller.utils.math_tools import motionVectorTransform
 from base_controller.utils.common_functions import State
+from optimization.ref_generation import ReferenceGenerator
 
-# L5 config file
+# config file
 import OPT_L1_walking_conf as conf
 
 robot_name = "hyq"
 
-
-class ActualState:
-    pass 
-class DesiredState:
-    pass 
-des_state = DesiredState()
-act_state = ActualState() 
+des_state = State(desired = True)
+act_state = State() 
+initial_state = State() 
 
 class AdvancedController(BaseController): 
 
@@ -84,25 +81,17 @@ def talker(p):
     p.des_twist = np.zeros(6)
     p.des_acc = np.zeros(6)       
    
-    refclass = ReferenceGenerator(config)
-    
- # input to reference generator
-    initial_state = State() 
-    # intial com position (Z noot needed cause we use robot height)
-    initial_state.pose.position = p.ba
-    # intial com orientation
-    initial_state.pose.orientation = np.array([0.0, 0.0, 0.0])
-    # intial com velocity (only useful for dist rejection)
-    initial_state.twist.linear = np.array([0.0, 0.0, 0.0])
-    
-    #desired velocity
-    class desired_velocity():
-        pass
-    desired_velocity.lin_x = 0.05
-    desired_velocity.lin_y = 0.0
-    desired_velocity.ang_z = 0.0
-    
-    refclass.getReferenceData(initial_state, desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robotHeight)    
+    #refclass = ReferenceGenerator(conf)
+    initial_state.set(act_state)
+#    
+#    #desired velocity
+#    class desired_velocity():
+#        pass
+#    desired_velocity.lin_x = 0.05
+#    desired_velocity.lin_y = 0.0
+#    desired_velocity.ang_z = 0.0
+#    
+#    refclass.getReferenceData(initial_state, desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robotHeight)    
     
 
     # Control loop               
@@ -110,11 +99,12 @@ def talker(p):
         #update the kinematics
         p.updateKinematics()
      
-        des_state.des_pose = p.des_pose
-        des_state.des_twist = p.des_twist
-        des_state.des_acc = p.des_acc        
-        act_state.act_pose = p.basePoseW
-        act_state.act_twist = p.baseTwistW   
+        des_state.pose.set(p.des_pose)
+        des_state.twist.set(p.des_twist)
+        des_state.accel.set(p.des_acc)         
+        act_state.pose.set(p.basePoseW)
+        act_state.twist.set(p.baseTwistW)  
+                                                       
                               
         # set robot specific params                             
         conf.params.robot = p.robot                      

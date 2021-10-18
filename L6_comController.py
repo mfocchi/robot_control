@@ -26,10 +26,8 @@ robot_name = "hyq"
 
 class Params:
     pass 
-class ActualState:
-    pass 
-class DesiredState:
-    pass 
+des_state = State(desired = True)
+act_state = State() 
 
 class AdvancedController(BaseController): 
 
@@ -109,13 +107,12 @@ def talker(p):
 #        if p.time > 2.0:                            
 #            p.stance_legs[p.u.leg_map["RH"]] = False       
    
-        des_state = DesiredState()
-        des_state.des_pose = p.des_pose
-        des_state.des_twist = p.des_twist
-        des_state.des_acc = p.des_acc        
-        act_state = ActualState()              
-        act_state.act_pose = p.basePoseW
-        act_state.act_twist = p.baseTwistW   
+
+        des_state.pose.set(p.des_pose)
+        des_state.twist.set(p.des_twist)
+        des_state.accel.set(p.des_acc)         
+        act_state.pose.set(p.basePoseW)
+        act_state.twist.set(p.baseTwistW)   
 
         # offset of the com wrt base origin in WF 
         params = Params()  
@@ -170,7 +167,7 @@ def talker(p):
         params.gravityComp = True
         params.ffwdOn = True    
         params.frictionCones = False
-      
+        
         p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
         
         # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    

@@ -31,13 +31,17 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     Wfbk = np.zeros(6)
                 
     # linear part                
-    Wfbk[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = Kp_lin.dot(util.linPart(des_state.des_pose) - util.linPart(act_state.act_pose)) + Kd_lin.dot(util.linPart(des_state.des_twist) - util.linPart(act_state.act_twist))
+    Wfbk[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = Kp_lin.dot(des_state.pose.position - act_state.pose.position) + Kd_lin.dot(des_state.twist.linear - act_state.twist.linear)
     # angular part                
     # actual orientation 
-    b_R_w = mathJet.rpyToRot(util.angPart(act_state.act_pose))
+
+    b_R_w = mathJet.rpyToRot(act_state.pose.orientation)
                 
     # Desired Orientation
-    Rdes = mathJet.rpyToRot(util.angPart(des_state.des_pose))
+    Rdes = mathJet.rpyToRot(des_state.pose.orientation)
+    
+      
+
     # compute orientation error
     Re = Rdes.dot(b_R_w.transpose())
     # express orientation error in angle-axis form                 
@@ -46,10 +50,10 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     #the orient error is expressed in the base_frame so it should be rotated wo have the wrench in the world frame
     w_err = b_R_w.transpose().dot(err)        
     # map des euler tates into des omega
-    Jomega =  mathJet.Tomega(util.angPart(act_state.act_pose))
+    Jomega =  mathJet.Tomega(act_state.pose.orientation)
    
     # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an Euclidean space with Jomega                
-    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_ang.dot(w_err) + Kd_ang.dot(Jomega.dot((util.angPart(des_state.des_twist) - util.angPart(act_state.act_twist))))
+    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_ang.dot(w_err) + Kd_ang.dot(Jomega.dot((des_state.twist.angular - act_state.twist.angular)))
 
 
     #EXERCISE 3: Compute graviy wrench
@@ -64,12 +68,12 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     # EXERCISE 4: Feed-forward wrench
     Wffwd = np.zeros(6)                                                                
     if (params.ffwdOn):    
-        ffdLinear = params.robot.robotMass() * util.linPart(des_state.des_acc) 
+        ffdLinear = params.robot.robotMass() * des_state.accel.linear
        # compute inertia in the WF  w_I = R' * B_I * R
         W_Inertia = np.dot(b_R_w.transpose(), np.dot(params.robotInertiaB, b_R_w))
         # compute w_des_omega_dot  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates
-        Jomega_dot =  mathJet.Tomega_dot(util.angPart(des_state.des_pose),  util.angPart(des_state.des_twist))
-        w_des_omega_dot = Jomega.dot(util.angPart(des_state.des_acc)) + Jomega_dot.dot(util.angPart(des_state.des_twist))                
+        Jomega_dot =  mathJet.Tomega_dot(des_state.pose.orientation,  des_state.twist.angular)
+        w_des_omega_dot = Jomega.dot(des_state.accel.angular) + Jomega_dot.dot(des_state.twist.angular)                
         ffdAngular = W_Inertia.dot(w_des_omega_dot) 
         #ffdAngular = W_Inertia.dot(util.angPart(des_state.des_acc))
         Wffwd = np.hstack([ffdLinear, ffdAngular])
@@ -93,10 +97,10 @@ def projectionBasedController(conf, act_state, des_state, W_contacts, stance_leg
                               stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
     # and COM trajectories)
-    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - util.linPart(act_state.act_pose))
-    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - util.linPart(act_state.act_pose))
-    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - util.linPart(act_state.act_pose))
-    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - util.linPart(act_state.act_pose))
+    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - act_state.pose.position)
+    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - act_state.pose.position)
+    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - act_state.pose.position)
+    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - act_state.pose.position)
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
                         np.hstack([d1, d2, d3, d4])])
@@ -133,10 +137,10 @@ def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   param
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
     # and COM/BASE trajectories, this will depend on what what put in act_state)
                          
-    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - util.linPart(act_state.act_pose))
-    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - util.linPart(act_state.act_pose))
-    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - util.linPart(act_state.act_pose))
-    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - util.linPart(act_state.act_pose))
+    d1 = cross_mx(W_contacts[util.leg_map["LF"]] - act_state.pose.position)
+    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - act_state.pose.position)
+    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - act_state.pose.position)
+    d4 = cross_mx(W_contacts[util.leg_map["RH"]] - act_state.pose.position)
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
                         np.hstack([d1, d2, d3, d4])])

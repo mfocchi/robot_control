@@ -18,6 +18,7 @@ import rosnode
 import roslaunch
 import rosgraph
 from roslaunch.parent import ROSLaunchParent
+import copy
 
 #from urdf_parser_py.urdf import URDF
 #make plot interactive
@@ -28,20 +29,35 @@ class Twist:
     linear = np.empty((3))*np.nan
     angular = np.empty((3))*np.nan
     def set(self, value):
-        self.linear = value[:3]
-        self.angular = value[3:]
+        self.linear = copy.deepcopy(value[:3])
+        self.angular = copy.deepcopy(value[3:])
 
 class Pose:
     position = np.empty((3))*np.nan
     orientation = np.empty((3))*np.nan
     def set(self, value):
-        self.position = value[:3]
-        self.orientation = value[3:]    
+        self.position = copy.deepcopy(value[:3])
+        self.orientation = copy.deepcopy(value[3:])
+            
     
 class State:
-    pose = Pose()
-    twist = Twist()
     
+    def __init__(self, desired = False):
+        self.pose = Pose()
+        self.twist = Twist()
+        if (desired):
+            self.accel = Twist()
+            
+    def set(self, value):
+        self.pose.set(value.getPose())
+        self.twist.set(value.getTwist())
+            
+    def getPose(self):
+        return np.hstack([self.pose.position, self.pose.orientation]) 
+            
+    def getTwist(self):
+        return np.hstack([self.twist.linear, self.twist.angular])
+        
 def checkRosMaster():
     if rosgraph.is_master_online():  # Checks the master uri and results boolean (True or False)
         print(colored('ROS MASTER is Online','red'))
