@@ -17,7 +17,9 @@ class RobotWrapper(PinocchioRobotWrapper):
         robot.initFromURDF(filename, package_dirs, root_joint, verbose, meshLoader)
         #additional var        
         pin.crba(robot.model, robot.data, np.zeros(robot.model.nq))
-        robot.robot_mass = robot.data.M[0,0] 
+        robot.robot_mass = robot.data.M[0,0]
+        robot.urdf_filename = filename
+        robot.package_dirs = package_dirs
         
         return robot
     
