@@ -106,6 +106,8 @@ class BaseController(threading.Thread):
         self.qd = np.zeros(self.robot.na)
         self.tau = np.zeros(self.robot.na)                                
         self.q_des =np.zeros(self.robot.na)
+        # GOZERO Keep the fixed configuration for the joints at the start of simulation
+        self.q_des[:12] = conf.robot_params[robot_name]['q_0']   
         self.qd_des = np.zeros(self.robot.na)
         self.tau_ffwd =np.zeros(self.robot.na)
         self.gravity_comp = np.zeros(self.robot.na)
@@ -317,14 +319,13 @@ class BaseController(threading.Thread):
                                  
                                  
     def startupProcedure(self, robot_name):
-            ros.sleep(0.05)  # wait for callback to fill in jointmnames
+            ros.sleep(0.5)  # wait for callback to fill in jointmnames
             
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
             self.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0) 
            
-            # GOZERO Keep the fixed configuration for the joints at the start of simulation
-            self.q_des[:12] = conf.robot_params[robot_name]['q_0']     
+  
             
             if (robot_name == 'hyq'):                        
                 # these torques are to compensate the leg gravity
@@ -363,6 +364,7 @@ class BaseController(threading.Thread):
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                     ros.sleep(0.01)
                 self.pid.setPDs(0.0, 0.0, 0.0)                    
+            print("finished startup")    
 
     def initVars(self):
  
