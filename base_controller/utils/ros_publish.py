@@ -18,7 +18,8 @@ from rospy import Time
 
 class RosPub():
     def __init__(self, robot_name="ur5", only_visual = False):
-        print("Starting---------------------------------------------------------------")   
+        
+        print("Starting ros impedance controller---------------------------------------------------------------")   
         if (not only_visual):                           
             #launch rviz node if not yet done will start roscore too
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)

@@ -46,7 +46,14 @@ class RobotWrapper(PinocchioRobotWrapper):
                 return PinocchioRobotWrapper.com(self, q)
             return PinocchioRobotWrapper.com(self, q, v)
         return PinocchioRobotWrapper.com(self, q, v,a)
-        
+
+    def robotComB(self, q_j, qd_j):
+         floating_base_q = np.hstack(( pin.neutral(self.robot.model)[0:7], qj))
+         if qd_j is None:                    
+            return PinocchioRobotWrapper.com(self, floating_base_q);
+         else:
+            floating_base_qd = np.hstack(( np.zeros(6), qj))
+            return PinocchioRobotWrapper.com(self, floating_base_q, floating_base_qd)
        
     def Jcom(self, q, update=True):
         if(update):
