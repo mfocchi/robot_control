@@ -55,7 +55,6 @@ import pinocchio as pin
 from utils.common_functions import getRobotModel
 
 #dynamics
-from utils.custom_robot_wrapper import RobotWrapper
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  params as conf
 robot_name = "hyq"
@@ -275,11 +274,12 @@ class BaseController(threading.Thread):
     def updateKinematics(self):
         # q is continuously updated
         # to compute in the base frame  you should put neutral base
-        gen_velocities  = np.hstack((self.baseTwistW,self.u.mapFromRos(self.qd)))
-        neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapFromRos(self.q)))
-	 
-        self.robot.computeAllTerms(neutral_fb_jointstate, gen_velocities)   
-        np.set_printoptions(precision = 5, linewidth = 1000, suppress = True)
+        gen_velocities  = np.hstack((self.baseTwistW,self.u.mapToRos(self.qd)))
+        neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))
+        pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate, gen_velocities)
+        pin.computeJointJacobians(self.robot.model, self.robot.data)  
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
+  
         for leg in range(4):
             self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]) ).translation 
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
@@ -289,16 +289,14 @@ class BaseController(threading.Thread):
             leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
             self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
-        
+
        # Pinocchio Update the joint and frame placements
         gen_velocities  = np.hstack((self.baseTwistW,self.qd))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
 
-        
-        self.robot.computeAllTerms(configuration, gen_velocities)    
-        self.M = self.robot.mass(self.q, False)    
-        self.h = self.robot.nle(configuration, gen_velocities)
+        self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities) 
         self.h_joints = self.h[6:]  
+        
         #compute contact forces                        
         self.estimateContactForces()  
         
@@ -368,31 +366,33 @@ class BaseController(threading.Thread):
 
     def initVars(self):
  
-        self.basePoseW_log = np.empty((6,0 ))*nan
-        self.baseTwistW_log = np.empty((6,0 ))*nan
-        self.q_des_log = np.empty((self.robot.na,0 ))*nan    
-        self.q_log = np.empty((self.robot.na,0 )) *nan   
-        self.qd_des_log = np.empty((self.robot.na,0 ))*nan    
-        self.qd_log = np.empty((self.robot.na,0 )) *nan                                  
-        self.tau_ffwd_log = np.empty((self.robot.na,0 ))*nan    
-        self.tau_log = np.empty((self.robot.na,0 ))*nan                                  
-        self.grForcesW_log = np.empty((self.robot.na,0 ))  *nan 
-        self.time_log = np.array([])*nan
-        self.constr_viol_log = np.empty((4,0 ))*nan
+        self.basePoseW_log = np.empty((6, conf.robot_params[robot_name]['buffer_size']))*nan
+        self.baseTwistW_log = np.empty((6,conf.robot_params[robot_name]['buffer_size'] ))*nan
+        self.q_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'] ))*nan    
+        self.q_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] )) *nan   
+        self.qd_des_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))*nan    
+        self.qd_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] )) *nan                                  
+        self.tau_ffwd_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))*nan    
+        self.tau_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))*nan                                  
+        self.grForcesW_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))  *nan 
+        self.time_log = np.empty((conf.robot_params[robot_name]['buffer_size']))*nan
+        self.constr_viol_log = np.empty((4,conf.robot_params[robot_name]['buffer_size'] ))*nan
         self.time = 0.0
+        self.log_counter = 0
 
     def logData(self):
-        
-        self.basePoseW_log = np.hstack((self.basePoseW_log , self.basePoseW.reshape(6,-1)))
-        self.baseTwistW_log = np.hstack((self.baseTwistW_log , self.baseTwistW.reshape(6,-1)))
-        self.q_des_log = np.hstack((self.q_des_log , self.q_des.reshape(self.robot.na,-1)))   
-        self.q_log = np.hstack((self.q_log , self.q.reshape(self.robot.na,-1)))       
-        self.qd_des_log = np.hstack((self.qd_des_log , self.qd_des.reshape(self.robot.na,-1)))   
-        self.qd_log = np.hstack((self.qd_log , self.qd.reshape(self.robot.na,-1)))                                      
-        self.tau_ffwd_log = np.hstack((self.tau_ffwd_log , self.tau_ffwd.reshape(self.robot.na,-1)))                                
-        self.tau_log = np.hstack((self.tau_log , self.tau.reshape(self.robot.na,-1)))                                  
-        self.grForcesW_log = np.hstack((self.grForcesW_log , self.grForcesW.reshape(self.robot.na,-1)))    
-        self.time_log = np.hstack((self.time_log, self.time))
+        if (p.log_counter<conf.robot_params[robot_name]['buffer_size'] ):
+            self.basePoseW_log[:, self.log_counter] = self.basePoseW
+            self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
+            self.q_des_log[:, self.log_counter] =  self.q_des
+            self.q_log[:,self.log_counter] =  self.q  
+            self.qd_des_log[:,self.log_counter] =  self.qd_des
+            self.qd_log[:,self.log_counter] = self.qd                       
+            self.tau_ffwd_log[:,self.log_counter] = self.tau_ffwd                    
+            self.tau_log[:,self.log_counter] = self.tau                     
+            self.grForcesW_log[:,self.log_counter] =  self.grForcesW
+            self.time_log[self.log_counter] = self.time
+            self.log_counter+=1
 	
 def talker(p):
             
