@@ -17,8 +17,8 @@ import threading
 
 from sensor_msgs.msg import JointState
 from gazebo_msgs.msg import ContactsState
-from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
+from ros_impedance_controller.msg import BaseState
 
 from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty, EmptyRequest
@@ -121,7 +121,8 @@ class BaseController(threading.Thread):
         self.B_contacts = [np.zeros((3))]*4   
       
         self.sub_contact = ros.Subscriber("/"+robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
-        self.sub_pose = ros.Subscriber("/"+robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1)
+       
+        self.sub_pose = ros.Subscriber("/"+robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1)
         self.sub_jstate = ros.Subscriber("/"+robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1)
 
@@ -158,25 +159,25 @@ class BaseController(threading.Thread):
     def _receive_pose(self, msg):
         
         self.quaternion = (
-            msg.pose.pose.orientation.x,
-            msg.pose.pose.orientation.y,
-            msg.pose.pose.orientation.z,
-            msg.pose.pose.orientation.w)
+            msg.pose.orientation.x,
+            msg.pose.orientation.y,
+            msg.pose.orientation.z,
+            msg.pose.orientation.w)
         euler = euler_from_quaternion(self.quaternion)
 
-        self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
-        self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
-        self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
+        self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.position.x
+        self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.position.y
+        self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.position.z
         self.basePoseW[self.u.sp_crd["AX"]] = euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = euler[2]
 
-        self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
-        self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
-        self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.twist.linear.z
-        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
-        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
-        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
+        self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.linear.x
+        self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.linear.y
+        self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.linear.z
+        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.angular.x
+        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.angular.y
+        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.angular.z
         
         mathJet = Math()
         # compute orientation matrix                                
