@@ -18,7 +18,8 @@ import threading
 from sensor_msgs.msg import JointState
 from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import JointState
-from ros_impedance_controller.msg import BaseState
+from nav_msgs.msg import Odometry
+#from ros_impedance_controller.msg import BaseState # no longer used
 
 from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty, EmptyRequest
@@ -122,11 +123,12 @@ class BaseController(threading.Thread):
         self.W_contacts = [np.zeros((3))]*4                       
         self.B_contacts = [np.zeros((3))]*4   
       
-        self.sub_contact = ros.Subscriber("/"+robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=100)
-       
-        self.sub_pose = ros.Subscriber("/"+robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1)
-        self.sub_jstate = ros.Subscriber("/"+robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1)                  
-        self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1)
+        #uncomment if you want to use receivestate ground truth
+        #self.sub_contact = ros.Subscriber("/"+robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=1, buff_size=2**24,  tcp_nodelay=True)       
+        #self.sub_pose = ros.Subscriber("/"+robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1,buff_size=2**24, tcp_nodelay=True) no longer used
+        self.sub_pose = ros.Subscriber("/"+robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)     
+        self.sub_jstate = ros.Subscriber("/"+robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)                  
+        self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
 
         # freeze base  and pause simulation service 
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -161,25 +163,25 @@ class BaseController(threading.Thread):
     def _receive_pose(self, msg):
         
         self.quaternion = (
-            msg.pose.orientation.x,
-            msg.pose.orientation.y,
-            msg.pose.orientation.z,
-            msg.pose.orientation.w)
+            msg.pose.pose.orientation.x,
+            msg.pose.pose.orientation.y,
+            msg.pose.pose.orientation.z,
+            msg.pose.pose.orientation.w)
         euler = euler_from_quaternion(self.quaternion)
 
-        self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.position.x
-        self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.position.y
-        self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.position.z
+        self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
+        self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
+        self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
         self.basePoseW[self.u.sp_crd["AX"]] = euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = euler[2]
 
-        self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.linear.x
-        self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.linear.y
-        self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.linear.z
-        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.angular.x
-        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.angular.y
-        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.angular.z
+        self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
+        self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
+        self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.twist.linear.z
+        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
+        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
+        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
         
         mathJet = Math()
         # compute orientation matrix                                
@@ -476,6 +478,11 @@ if __name__ == '__main__':
     try:
         talker(p)
     except ros.ROSInterruptException:
-        pass
+        from utils.common_functions import plotCoM,  plotJoint
+        
+       
+        plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
+        plotCoM('position', 1, p.time_log, None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
+    
     
         
