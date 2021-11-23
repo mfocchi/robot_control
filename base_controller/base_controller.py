@@ -61,9 +61,9 @@ robot_name = "hyq"
 
 class BaseController(threading.Thread):
     
-    def __init__(self):  
+    def __init__(self, robot_name=robot_name, launch_file=None):
         
-       #clean up previous process                
+        #clean up previous process
 
         os.system("killall rosmaster rviz gzserver gzclient")                                
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
@@ -76,13 +76,15 @@ class BaseController(threading.Thread):
                  rvizflag=" rviz:=true" 
         #start ros impedance controller
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-        roslaunch.configure_logging(uuid)        
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+robot_name+".launch"])
+        roslaunch.configure_logging(uuid)
+        if launch_file is None:
+            launch_file = robot_name
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+launch_file+".launch"])
         #only available in ros lunar
 #        roslaunch_args=rvizflag                             
 #        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"],roslaunch_args=[roslaunch_args])
         self.launch.start() 
-        ros.sleep(4.0)        
+        ros.sleep(1.0)
 
         # Loading a robot model of robot (Pinocchio)
         self.robot = getRobotModel(robot_name, generate_urdf = True)
