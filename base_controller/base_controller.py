@@ -384,7 +384,7 @@ class BaseController(threading.Thread):
         self.log_counter = 0
 
     def logData(self):
-        if (p.log_counter<conf.robot_params[robot_name]['buffer_size'] ):
+        if (self.log_counter<conf.robot_params[robot_name]['buffer_size'] ):
             self.basePoseW_log[:, self.log_counter] = self.basePoseW
             self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
             self.q_des_log[:, self.log_counter] =  self.q_des
