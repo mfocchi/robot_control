@@ -29,17 +29,18 @@ two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-q_log = np.empty((6))*nan
-q_des_log = np.empty((6))*nan
-qd_log = np.empty((6))*nan
-qd_des_log = np.empty((6))*nan
-qdd_log = np.empty((6))*nan
-qdd_des_log = np.empty((6))*nan
-tau_log = np.empty((6))*nan
-f_log = np.empty((3,0))*nan
-x_log = np.empty((3,0))*nan
-time_log =  np.empty((0,0))*nan
-
+buffer_size = conf.exp_duration/conf.dt 
+q_log = np.empty((6, buffer_size))*nan
+q_des_log = np.empty((6, buffer_size))*nan
+qd_log = np.empty((6, buffer_size))*nan
+qd_des_log = np.empty((6, buffer_size))*nan
+qdd_log = np.empty((6, buffer_size))*nan
+qdd_des_log = np.empty((6, buffer_size))*nan
+tau_log = np.empty((6, buffer_size))*nan
+f_log = np.empty((3,buffer_size))*nan
+x_log = np.empty((3, buffer_size))*nan
+time_log =  np.empty((buffer_size))*nan
+log_counter = 0
 
 
 # EXERCISE 2.2: 
@@ -216,14 +217,46 @@ while True:
     
 
     # Log Data into a vector
-    time_log = np.append(time_log, time)	
-    q_log = np.vstack((q_log, q ))
-    q_des_log= np.vstack((q_des_log, q_des))
-    qd_log= np.vstack((qd_log, qd))
+    time_log[log_counter] = time
+    q_log[:,log_counter] = q
+    q_des_log[:,log_counter] = q_des
+    qd_log[:,log_counter] = qd
+    
+
     qd_des_log= np.vstack((qd_des_log, qd_des))
     qdd_log= np.vstack((qdd_log, qdd))
     qdd_des_log= np.vstack((qdd_des_log, qdd_des))
-    tau_log = np.vstack((tau_log, tau))                
+    tau_log = np.vstack((tau_log, tau))      
+    log_counter+=1
+    
+    
+    def logData(self):
+        if (self.log_counter<conf.robot_params[robot_name]['buffer_size'] ):
+            self.basePoseW_log[:, self.log_counter] = self.basePoseW
+            self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
+            self.q_des_log[:, self.log_counter] =  self.q_des
+            self.q_log[:,self.log_counter] =  self.q  
+            self.qd_des_log[:,self.log_counter] =  self.qd_des
+            self.qd_log[:,self.log_counter] = self.qd                       
+            self.tau_ffwd_log[:,self.log_counter] = self.tau_ffwd                    
+            self.tau_log[:,self.log_counter] = self.tau                     
+            self.grForcesW_log[:,self.log_counter] =  self.grForcesW
+          
+            self.log_counter+=1
+
+
+    self.basePoseW_log[:, self.log_counter] = self.basePoseW
+            self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
+            self.q_des_log[:, self.log_counter] =  self.q_des
+            self.q_log[:,self.log_counter] =  self.q  
+            self.qd_des_log[:,self.log_counter] =  self.qd_des
+            self.qd_log[:,self.log_counter] = self.qd                       
+            self.tau_ffwd_log[:,self.log_counter] = self.tau_ffwd                    
+            self.tau_log[:,self.log_counter] = self.tau                     
+            self.grForcesW_log[:,self.log_counter] =  self.grForcesW
+            self.time_log[self.log_counter] = self.time
+    log_counter+=1
+         
  
     # update time
     time = time + conf.dt                  
