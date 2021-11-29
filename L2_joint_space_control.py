@@ -29,7 +29,7 @@ two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-buffer_size = conf.exp_duration/conf.dt 
+buffer_size = int(math.floor(conf.exp_duration/conf.dt))
 q_log = np.empty((6, buffer_size))*nan
 q_des_log = np.empty((6, buffer_size))*nan
 qd_log = np.empty((6, buffer_size))*nan
@@ -221,40 +221,10 @@ while True:
     q_log[:,log_counter] = q
     q_des_log[:,log_counter] = q_des
     qd_log[:,log_counter] = qd
-    
-
-    qd_des_log= np.vstack((qd_des_log, qd_des))
-    qdd_log= np.vstack((qdd_log, qdd))
-    qdd_des_log= np.vstack((qdd_des_log, qdd_des))
-    tau_log = np.vstack((tau_log, tau))      
-    log_counter+=1
-    
-    
-    def logData(self):
-        if (self.log_counter<conf.robot_params[robot_name]['buffer_size'] ):
-            self.basePoseW_log[:, self.log_counter] = self.basePoseW
-            self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
-            self.q_des_log[:, self.log_counter] =  self.q_des
-            self.q_log[:,self.log_counter] =  self.q  
-            self.qd_des_log[:,self.log_counter] =  self.qd_des
-            self.qd_log[:,self.log_counter] = self.qd                       
-            self.tau_ffwd_log[:,self.log_counter] = self.tau_ffwd                    
-            self.tau_log[:,self.log_counter] = self.tau                     
-            self.grForcesW_log[:,self.log_counter] =  self.grForcesW
-          
-            self.log_counter+=1
-
-
-    self.basePoseW_log[:, self.log_counter] = self.basePoseW
-            self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
-            self.q_des_log[:, self.log_counter] =  self.q_des
-            self.q_log[:,self.log_counter] =  self.q  
-            self.qd_des_log[:,self.log_counter] =  self.qd_des
-            self.qd_log[:,self.log_counter] = self.qd                       
-            self.tau_ffwd_log[:,self.log_counter] = self.tau_ffwd                    
-            self.tau_log[:,self.log_counter] = self.tau                     
-            self.grForcesW_log[:,self.log_counter] =  self.grForcesW
-            self.time_log[self.log_counter] = self.time
+    qd_des_log[:,log_counter] = qd_des
+    qdd_log[:,log_counter] = qdd
+    qdd_des_log[:,log_counter] = qdd_des
+    tau_log[:,log_counter] = tau
     log_counter+=1
          
  

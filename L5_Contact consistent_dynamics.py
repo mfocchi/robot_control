@@ -27,16 +27,18 @@ two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-q_log = np.empty((6))*nan
-q_des_log = np.empty((6))*nan
-qd_log = np.empty((6))*nan
-qd_des_log = np.empty((6))*nan
-qdd_log = np.empty((6))*nan
-qdd_des_log = np.empty((6))*nan
-tau_log = np.empty((6))*nan
-f_log = np.empty((3))*nan
-x_log = np.empty((3))*nan
-time_log =  np.empty((0,0))*nan
+buffer_size = int(math.floor(conf.exp_duration/conf.dt))
+q_log = np.empty((6, buffer_size))*nan
+q_des_log = np.empty((6, buffer_size))*nan
+qd_log = np.empty((6, buffer_size))*nan
+qd_des_log = np.empty((6, buffer_size))*nan
+qdd_log = np.empty((6, buffer_size))*nan
+qdd_des_log = np.empty((6, buffer_size))*nan
+tau_log = np.empty((6, buffer_size))*nan
+f_log = np.empty((3,buffer_size))*nan
+x_log = np.empty((3, buffer_size))*nan
+time_log =  np.empty((buffer_size))*nan
+log_counter = 0
 
 z_gnd = 0.0
 ground_contact = False
@@ -245,16 +247,17 @@ while True:
 
 
     # Log Data into a vector
-    time_log = np.append(time_log, time)	
-    q_log = np.vstack((q_log, q ))
-    q_des_log= np.vstack((q_des_log, q_des))
-    qd_log= np.vstack((qd_log, qd))
-    qd_des_log= np.vstack((qd_des_log, qd_des))
-    qdd_log= np.vstack((qdd_log, qdd))
-    qdd_des_log= np.vstack((qdd_des_log, qdd_des))
-    tau_log = np.vstack((tau_log, tau)) 
-    f_log = np.vstack((f_log, f))				
-    x_log = np.vstack((x_log, x))	
+    time_log[log_counter] = time
+    q_log[:,log_counter] = q
+    q_des_log[:,log_counter] = q_des
+    qd_log[:,log_counter] = qd
+    qd_des_log[:,log_counter] = qd_des
+    qdd_log[:,log_counter] = qdd
+    qdd_des_log[:,log_counter] = qdd_des
+    tau_log[:,log_counter] = tau
+    f_log[:,log_counter] = f		
+    x_log[:,log_counter] = x
+    log_counter+=1
 
     # update time
     time = time + conf.dt 
