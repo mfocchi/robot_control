@@ -91,7 +91,7 @@ p = np.array([-0.5, -0.2, 0.5, math.pi/3])
 
 # initial value for numerical ik
 q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi]) # good initialization
-# q_i  = np.array([ -5, 5.0, -0.8, -math.pi]) # bad initialization
+#q_i  = np.array([ -5, 5.0, -0.8, -math.pi]) # bad initialization
 
 # solution of the numerical ik
 q_f = ik(p,q_i) 
