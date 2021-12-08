@@ -25,6 +25,11 @@ import copy
 plt.ion()
 plt.close() 
 
+lw_des=7
+lw_act=4   
+marker_size= 0   
+
+
 class Twist:
     linear = np.empty((3))*np.nan
     angular = np.empty((3))*np.nan
@@ -143,9 +148,7 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
        print(colored("plotJopnt error: wrong input string", "red") )
        return                                   
 
-    lw_des=7
-    lw_act=4   
-    marker_size= 0       
+    
 
     njoints = min(plot_var_log.shape)                                                                
 
@@ -196,8 +199,7 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
     else:
        print("wrong choice")                    
                 
-    lw_act=4  
-    lw_des=7
+
                     
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)                   
@@ -241,23 +243,22 @@ def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW,
     else:
        print("wrong choice")                                    
 
-    lw_des=7
-    lw_act=4          
+           
                 
     #neet to transpose the matrix other wise it cannot be plot with numpy array    
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)             
     plt.subplot(3,2,1)
     plt.ylabel("CoM X")    
-    plt.plot(time_log, plot_var_log[0,:],linestyle='-', marker="o",markersize=7,lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[0,:],linestyle='-', marker="o",markersize=marker_size,lw=lw_act,color = 'blue')
     if   (plot_var_des_log is not None):                
-        plt.plot(time_log, plot_var_des_log[0,:], linestyle='-',  marker="o",markersize=7, lw=lw_des,color = 'red')
+        plt.plot(time_log, plot_var_des_log[0,:], linestyle='-',  marker="o",markersize=marker_size, lw=lw_des,color = 'red')
    
     plt.grid()
                 
     plt.subplot(3,2,3)
     plt.ylabel("CoM Y")
-    plt.plot(time_log, plot_var_log[1,:],linestyle='-',marker="o",markersize=7, lw=lw_act, color = 'blue', label="q")
+    plt.plot(time_log, plot_var_log[1,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act, color = 'blue', label="q")
     if   (plot_var_des_log is not None):           
         plt.plot(time_log, plot_var_des_log[1,:], linestyle='-', lw=lw_des,color = 'red', label="q_des")
     plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
@@ -265,28 +266,28 @@ def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW,
     
     plt.subplot(3,2,5)
     plt.ylabel("CoM Z")    
-    plt.plot(time_log, plot_var_log[2,:],linestyle='-',marker="o",markersize=7, lw=lw_act,color = 'blue')    
+    plt.plot(time_log, plot_var_log[2,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')    
     if   (plot_var_des_log is not None):    
        plt.plot(time_log, plot_var_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()    
     
     plt.subplot(3,2,2)
     plt.ylabel("Roll")   
-    plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',marker="o",markersize=7, lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
     if   (plot_var_des_log is not None):    
         plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()
     
     plt.subplot(3,2,4)
     plt.ylabel("Pitch")   
-    plt.plot(time_log, plot_var_log[4,:],linestyle='-',marker="o",markersize=7, lw=lw_act,color = 'blue')    
+    plt.plot(time_log, plot_var_log[4,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')    
     if   (plot_var_des_log is not None):        
         plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()
     
     plt.subplot(3,2,6)
     plt.ylabel("Yaw")
-    plt.plot(time_log, plot_var_log[5,:],linestyle='-',marker="o",markersize=7, lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[5,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
     if   (plot_var_des_log is not None):             
         plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()
@@ -296,8 +297,7 @@ def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW,
         
 def plotGRFs(figure_id, time_log, des_forces, act_forces):
            
-    lw_act=4  
-    lw_des=7
+
     # %% Input plots
 
     fig = plt.figure(figure_id)
