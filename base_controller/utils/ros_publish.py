@@ -155,9 +155,9 @@ class RosPub():
        self.markerArray.markers.append(marker)   
                     
     def deregister_node(self):
-        print("---------------------------------------------------------------")                       
+        print("---------------------------------------------------------------")                  
         ros.signal_shutdown("manual kill")
-        self.launch.shutdown()
+      
 
     def isShuttingDown(self):
        return ros.is_shutdown()

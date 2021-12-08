@@ -22,7 +22,7 @@ from base_controller.utils.math_tools import motionVectorTransform
 from base_controller.utils.common_functions import State
 
 import ex_6_conf as conf
-robot_name = "hyq"
+robotName = "hyq"
 
 class Params:
     pass 
@@ -32,48 +32,47 @@ act_state = State()
 class AdvancedController(BaseController): 
 
     def __init__(self):  
-        BaseController.__init__(self)
+        BaseController.__init__(self, robot_name=robotName)
         
         #send data to param server
         self.verbose = conf.verbose                                                                                                          
         self.u.putIntoGlobalParamServer("verbose", self.verbose)	
         
     def initVars(self):
-        BaseController.initVars(self)
-								
-        p.des_basePoseW_log = np.empty((6,0 ))*nan
-        p.des_baseTwistW_log = np.empty((6,0 ))*nan
-        p.des_baseAccW_log = np.empty((6,0 )) *nan
-        p.constr_viol = np.empty((4,0 )) *nan
-        
-        p.des_forcesW_log = np.empty((12,0 ))  *nan       
-        p.Wffwd_log = np.empty((6,0 ))  *nan                    
-        p.Wfbk_log = np.empty((6,0))  *nan  
-        p.Wg_log = np.empty((6,0 ))  *nan                        
-        p.constr_viol_log = np.empty((4,0 ))*nan
-								
-        p.two_pi_f             = 2*np.pi*conf.freq   # 2 PI * frequency  
-        p.two_pi_f_amp         = np.multiply(p.two_pi_f, conf.amp) # A * 2 PI * frequency  
-        p.two_pi_f_squared_amp = np.multiply(p.two_pi_f, p.two_pi_f_amp)  # A * (2 PI * frequency)^2
+        BaseController.initVars(self)	
+
+        self.des_basePoseW_log = np.empty((6, conf.buffer_size))*nan
+        self.des_baseTwistW_log = np.empty((6,conf.buffer_size ))*nan        
+        self.des_baseAccW_log = np.empty((6,conf.buffer_size ))*nan        
+        self.des_forcesW_log = np.empty((12,conf.buffer_size ))*nan        
+        self.Wffwd_log = np.empty((6, conf.buffer_size ))*nan        
+        self.Wfbk_log = np.empty((6,conf.buffer_size ))*nan        
+        self.Wg_log = np.empty((6,conf.buffer_size))*nan        
+        self.constr_viol_log = np.empty((4,conf.buffer_size ))*nan               							
+        self.two_pi_f             = 2*np.pi*conf.freq   # 2 PI * frequency  
+        self.two_pi_f_amp         = np.multiply(p.two_pi_f, conf.amp) # A * 2 PI * frequency  
+        self.two_pi_f_squared_amp = np.multiply(p.two_pi_f, p.two_pi_f_amp)  # A * (2 PI * frequency)^2
+
 
     def logData(self):
-        BaseController.logData(self)
-								
-        p.des_basePoseW_log = np.hstack((p.des_basePoseW_log , p.des_pose.reshape(6,-1)))
-        p.des_baseTwistW_log = np.hstack((p.des_baseTwistW_log , p.des_twist.reshape(6,-1)))
-        p.des_baseAccW_log = np.hstack((p.des_baseAccW_log , p.des_acc.reshape(6,-1)))                    
-        p.des_forcesW_log = np.hstack((p.des_forcesW_log , p.des_forcesW.reshape(12,-1)))
-        p.Wffwd_log = np.hstack((p.Wffwd_log , p.Wffwd.reshape(6,-1)))               
-        p.Wfbk_log =  np.hstack((p.Wfbk_log , p.Wfbk.reshape(6,-1)))          
-        p.Wg_log =  np.hstack((p.Wg_log , p.Wg.reshape(6,-1)))          
-        p.constr_viol_log = np.hstack((p.constr_viol_log, p.constr_viol.reshape(4,-1)))      
+        if (self.log_counter < conf.buffer_size):
+            BaseController.logData(self)
+            self.des_basePoseW_log[:, self.log_counter] = self.des_pose
+            self.des_baseTwistW_log[:, self.log_counter] =  self.des_twist           
+            self.des_baseAccW_log[:, self.log_counter] =  self.des_acc       
+            self.des_forcesW_log[:, self.log_counter] =  self.des_forcesW            
+            self.Wffwd_log[:, self.log_counter] =  self.Wffwd            
+            self.Wfbk_log[:, self.log_counter] =  self.Wfbk            
+            self.Wg_log[:, self.log_counter] =  self.Wg            
+            self.constr_viol_log[:, self.log_counter] =  self.constr_viol
+        
 
 def talker(p):
     
     p.start()
     p.register_node()
     p.initVars()          
-    p.startupProcedure(robot_name) 
+    p.startupProcedure() 
     rate = ros.Rate(1/conf.dt) # 10hz
     
                                 

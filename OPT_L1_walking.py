@@ -25,7 +25,7 @@ from optimization.ref_generation import ReferenceGenerator
 # config file
 import OPT_L1_walking_conf as conf
 
-robot_name = "hyq"
+robotName = "hyq"
 
 des_state = State(desired = True)
 act_state = State() 
@@ -34,7 +34,7 @@ initial_state = State()
 class AdvancedController(BaseController): 
 
     def __init__(self):  
-        BaseController.__init__(self)
+        BaseController.__init__(self, robot_name=robotName)
         
         #send data to param server
         self.verbose = conf.verbose                                                                                                          
@@ -43,37 +43,37 @@ class AdvancedController(BaseController):
   
         
     def initVars(self):
-        BaseController.initVars(self)
-								
-        p.des_basePoseW_log = np.empty((6,0 ))*nan
-        p.des_baseTwistW_log = np.empty((6,0 ))*nan
-        p.des_baseAccW_log = np.empty((6,0 )) *nan
-        p.constr_viol = np.empty((4,0 )) *nan
-        
-        p.des_forcesW_log = np.empty((12,0 ))  *nan       
-        p.Wffwd_log = np.empty((6,0 ))  *nan                    
-        p.Wfbk_log = np.empty((6,0))  *nan  
-        p.Wg_log = np.empty((6,0 ))  *nan                        
-        p.constr_viol_log = np.empty((4,0 ))*nan
+        BaseController.initVars(self)	
+
+        self.des_basePoseW_log = np.empty((6, conf.buffer_size))*nan
+        self.des_baseTwistW_log = np.empty((6,conf.buffer_size ))*nan        
+        self.des_baseAccW_log = np.empty((6,conf.buffer_size ))*nan        
+        self.des_forcesW_log = np.empty((12,conf.buffer_size ))*nan        
+        self.Wffwd_log = np.empty((6, conf.buffer_size ))*nan        
+        self.Wfbk_log = np.empty((6,conf.buffer_size ))*nan        
+        self.Wg_log = np.empty((6,conf.buffer_size))*nan        
+        self.constr_viol_log = np.empty((4,conf.buffer_size ))*nan               							
 
 
     def logData(self):
-        BaseController.logData(self)
-        p.des_basePoseW_log = np.hstack((p.des_basePoseW_log , p.des_pose.reshape(6,-1)))
-        p.des_baseTwistW_log = np.hstack((p.des_baseTwistW_log , p.des_twist.reshape(6,-1)))
-        p.des_baseAccW_log = np.hstack((p.des_baseAccW_log , p.des_acc.reshape(6,-1)))                    
-        p.des_forcesW_log = np.hstack((p.des_forcesW_log , p.des_forcesW.reshape(12,-1)))
-        p.Wffwd_log = np.hstack((p.Wffwd_log , p.Wffwd.reshape(6,-1)))               
-        p.Wfbk_log =  np.hstack((p.Wfbk_log , p.Wfbk.reshape(6,-1)))          
-        p.Wg_log =  np.hstack((p.Wg_log , p.Wg.reshape(6,-1)))          
-        p.constr_viol_log = np.hstack((p.constr_viol_log, p.constr_viol.reshape(4,-1)))      
+        if (self.log_counter < conf.buffer_size):
+            BaseController.logData(self)
+            self.des_basePoseW_log[:, self.log_counter] = self.des_pose
+            self.des_baseTwistW_log[:, self.log_counter] =  self.des_twist           
+            self.des_baseAccW_log[:, self.log_counter] =  self.des_acc       
+            self.des_forcesW_log[:, self.log_counter] =  self.des_forcesW            
+            self.Wffwd_log[:, self.log_counter] =  self.Wffwd            
+            self.Wfbk_log[:, self.log_counter] =  self.Wfbk            
+            self.Wg_log[:, self.log_counter] =  self.Wg            
+            self.constr_viol_log[:, self.log_counter] =  self.constr_viol        
+        
 
 def talker(p):
     
     p.start()
     p.register_node()
     p.initVars()          
-    p.startupProcedure(robot_name) 
+    p.startupProcedure() 
     rate = ros.Rate(1/conf.dt) # 10hz
     
                                 
@@ -84,7 +84,10 @@ def talker(p):
     p.des_acc = np.zeros(6)  
      
     initial_state.set(act_state)
-    p.refclass.getReferenceData(initial_state, conf.desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robot_height)
+#    p.refclass.getReferenceData(initial_state, conf.desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robot_height)
+#    print(conf.desired_velocity.lin_x)
+#    import time
+#    time.sleep(3)    
     # Control loop               
     while (p.time  < conf.exp_duration) or conf.CONTINUOUS:
         #update the kinematics

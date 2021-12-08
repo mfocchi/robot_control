@@ -22,7 +22,9 @@ qd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 
 
+
 # CONTROLLER PARAMS
+buffer_size = 30001
 
 # Gains for the virtual model
 gravity = 9.81
@@ -69,7 +71,7 @@ desired_velocity.lin_x = 0.05
 desired_velocity.lin_y = 0.0
 desired_velocity.ang_z = 0.0
 
-prediction_horizon= 100
+prediction_horizon= 600
 cycle_time = 8.0
 time_resolution = 0.04
 gait_type = 0 # 0: crawl 1: pace 2: trot 

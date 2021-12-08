@@ -25,6 +25,8 @@ amp                  = np.array([ 0.0, 0.0, 0.03, 0.0, 0.1, 0.0]).T     # amplit
 freq                 = np.array([ 0.0, 0.0, 0.5, 0.0, 1.0, 0.0]).T           # frequency (time 2 PI)
 phi                  = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T     # phase
 
+buffer_size = 30001
+
 # Gains for the virtual model
 gravity = 9.81
 Kp_lin_x = 2000
