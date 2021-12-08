@@ -33,7 +33,7 @@ class AdvancedController(BaseController):
 
     def __init__(self):  
         BaseController.__init__(self, robot_name=robotName)
-        
+       
         #send data to param server
         self.verbose = conf.verbose                                                                                                          
         self.u.putIntoGlobalParamServer("verbose", self.verbose)	
@@ -167,7 +167,7 @@ def talker(p):
         params.ffwdOn = True    
         params.frictionCones = False
         
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
         
         # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
         #params.frictionCones = True       
@@ -190,8 +190,8 @@ def talker(p):
         p.time = p.time + conf.dt 
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/400),"green")        
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.des_forcesW/400),"blue")        
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(5*p.robot.robotMass())),"green")        
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.des_forcesW/(5*p.robot.robotMass())),"blue")        
         p.ros_pub.publishVisual()                        
                                 
         #wait for synconization of the control loop

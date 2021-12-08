@@ -27,22 +27,17 @@ qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 buffer_size = 30001
 
 # Gains for the virtual model
-gravity = 9.81
-Kp_lin_x = 2000
-Kp_lin_y = 2000
-Kp_lin_z = 2000
+control_params = {}
+control_params['hyq'] = {'Kp_lin_x': 2000, 'Kp_lin_y': 2000, 'Kp_lin_z': 2000,    
+                       'Kd_lin_x': 200, 'Kd_lin_y': 200, 'Kd_lin_z': 200,                       
+                       'KpRoll': 1000, 'KpPitch': 1000, 'KpYaw': 1000, 
+                       'KdRoll': 100, 'KdPitch': 100, 'KdYaw': 100, 'gravity': 9.81}
 
-Kd_lin_x = 200
-Kd_lin_y = 200
-Kd_lin_z = 200
 
-KpRoll =  1000
-KpPitch = 1000
-KpYaw =   1000
-
-KdRoll =  100
-KdPitch = 100
-KdYaw =   100
+control_params['solo'] = {'Kp_lin_x': 200, 'Kp_lin_y': 200, 'Kp_lin_z': 200,    
+                       'Kd_lin_x': 20, 'Kd_lin_y': 20, 'Kd_lin_z': 20,                       
+                       'KpRoll': 10, 'KpPitch': 10, 'KpYaw': 10, 
+                       'KdRoll': 1, 'KdPitch': 1, 'KdYaw': 1, 'gravity': 9.81}
     
 class params:
     pass 
