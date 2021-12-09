@@ -15,7 +15,7 @@ from base_controller.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory a
 from base_controller.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
 from base_controller.utils.math_tools import Math
 
-import ex_1_conf as conf
+import L1_conf as conf
 
 #instantiate graphic utils
 os.system("killall rosmaster rviz")

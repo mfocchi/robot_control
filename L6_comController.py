@@ -21,7 +21,7 @@ from scipy.linalg import block_diag
 from base_controller.utils.math_tools import motionVectorTransform
 from base_controller.utils.common_functions import State
 
-import ex_6_conf as conf
+import L6_conf as conf
 robotName = "hyq"
 
 class Params:

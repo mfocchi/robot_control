@@ -12,7 +12,7 @@ from base_controller.utils.common_functions import *
 from base_controller.utils.optimTools import quadprog_solve_qp
 from base_controller.utils.ros_publish import RosPub
 
-import ex_2_conf as conf
+import L2_conf as conf
 
 #instantiate graphic utils
 os.system("killall rosmaster rviz")
