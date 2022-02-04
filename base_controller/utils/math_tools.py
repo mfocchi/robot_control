@@ -45,55 +45,33 @@ class Math:
         return -plane_normal[0]/plane_normal[2]*xy_components[0] - \
                plane_normal[1]/plane_normal[2]*xy_components[1] + z_intercept
 
-    def rpyToRot(self, roll, pitch, yaw):
-    
+    def rpyToRot(self, *args):
+        if len(args) == 3:  # equivalent to rpyToRot(self, roll, pitch, yaw)
+            roll = args[0]
+            pitch = args[1]
+            yaw = args[2]
+        elif len(args) == 1:  # equivalent to rpyToRot(self, roll_pitch_yaw)
+            roll = args[0][0]
+            pitch = args[0][1]
+            yaw = args[0][2]
+        else:
+            print('Wrong number of arguments')
+            return
 
-        
-        Rx =  np.array([ [   1   ,    0           ,        0], 
-                         [0   ,    np.cos(roll) ,  np.sin(roll)],
-                         [0   ,    -np.sin(roll),  np.cos(roll)]]);
+        Rx = np.array([[1, 0, 0],
+                       [0, np.cos(roll), np.sin(roll)],
+                       [0, -np.sin(roll), np.cos(roll)]])
 
+        Ry = np.array([[np.cos(pitch), 0, -np.sin(pitch)],
+                       [0, 1, 0],
+                       [np.sin(pitch), 0, np.cos(pitch)]])
 
-        Ry = np.array([[np.cos(pitch)     ,     0  ,   -np.sin(pitch)],
-              [      0       ,    1  ,   0],
-              [np.sin(pitch)     ,    0   ,  np.cos(pitch)]]);
-          
-        
-        Rz = np.array([[ np.cos(yaw)  ,  np.sin(yaw) ,        0],
-                      [-np.sin(yaw) ,  np.cos(yaw) ,          0],
-                      [0      ,     0     ,       1]]);
-        
-        
+        Rz = np.array([[np.cos(yaw), np.sin(yaw), 0],
+                       [-np.sin(yaw), np.cos(yaw), 0],
+                       [0, 0, 1]])
 
-        R =  Rx.dot(Ry.dot(Rz));
+        R = Rx.dot(Ry.dot(Rz))
         return R
-                                
-    def rpyToRot(self, rpy):
-        c_roll =  np.cos(rpy[0])
-        s_roll = np.sin(rpy[0])
-        c_pitch =      np.cos(rpy[1])        
-        s_pitch = np.sin(rpy[1])
-        c_yaw = np.cos(rpy[2])
-        s_yaw = np.sin(rpy[2])
-                                
-        Rx =  np.array([ [   1   ,    0           ,        0], 
-                         [   0   ,        c_roll  ,  s_roll],
-                         [   0   ,    -s_roll,      c_roll ]]);
-
-
-        Ry = np.array([[c_pitch     ,     0  ,   -s_pitch],
-              [      0       ,    1  ,   0],
-              [ s_pitch     ,    0   ,  c_pitch]]);
-          
-        
-        Rz = np.array([[ c_yaw  ,  s_yaw ,        0],
-                      [  -s_yaw ,  c_yaw ,          0],
-                      [0      ,     0     ,       1]]);
-        
-        
-
-        R =  Rx.dot(Ry.dot(Rz));
-        return R                                
                                 
     # the dual of rpyToRot()
      # set of Euler angles (according to ZYX convention) representing the orientation of frame represented by b_R_w
