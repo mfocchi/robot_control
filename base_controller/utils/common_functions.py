@@ -65,7 +65,6 @@ def checkRosMaster():
         print(colored('ROS MASTER is NOT Online, Starting roscore!!','red'))
         parent = ROSLaunchParent("roscore", [], is_core=True)  # run_id can be any string
         parent.start()
-        ros.init_node('sub_pub_node_python', anonymous=False)
 
 def startNode(node_name):
     
