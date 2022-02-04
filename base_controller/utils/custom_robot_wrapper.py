@@ -215,4 +215,80 @@ class RobotWrapper(PinocchioRobotWrapper):
                     res += [(i, self.collision_model.collisionPairs[i])];
         return res;
 
+    @property
+    def getEndEffectorsFrameId(self):
+        idx = []
+        for f in self.model.frames:
+            if 'foot' in f.name and 'joint' not in f.name:
+                idx.append(self.model.getFrameId(f.name))
+        return idx
+
+    @property
+    def getEndEffectorsFrameNames(self):
+        names = []
+        for f in self.model.frames:
+            if 'foot' in f.name:
+                names.append(f.name)
+        return names
+
+    @property
+    def nee(self):
+        return len(self.getEndEffectorsFrameId)
+
+    def getEEStackJacobians(self, q, component='full', ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
+        ee_idxs = self.getEndEffectorsFrameId
+        nee = len(ee_idxs)
+        if component == 'full':
+            nc = 6
+            startJc = 0
+            stopJc = 6
+
+        elif component == 'linear':
+            nc = 3
+            startJc = 0
+            stopJc = 3
+
+        elif component == 'angular':
+            nc = 3
+            startJc = 3
+            stopJc = 6
+
+        Jc = np.zeros([nc * nee, self.nv])
+        for i in range(0, nee):
+            idx = ee_idxs[i]
+            Jc[nc * i:nc * (i + 1), :] = pin.computeFrameJacobian(self.model, self.data, q, idx, ref_frame)[
+                                         startJc:stopJc]
+        return Jc
+
+    def KKTMatrixAtEndEffectors(self, q, component='full', ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
+        M = self.mass(q)
+        ee_idxs = self.getEndEffectorsFrameId
+        nee = len(ee_idxs)
+        if nee == 0:
+            return M
+        Jc = self.getEEStackJacobians(q, component, ref_frame)
+
+        zeros = np.zeros([Jc.shape[0], Jc.shape[0]])
+
+        raw0 = np.hstack([M, Jc.transpose()])
+        raw1 = np.hstack([Jc, zeros])
+        KKTMatrix = np.vstack([raw0, raw1])
+        return KKTMatrix
+
+    def KKTMatrixAtEndEffectorsInv(self, q, component='full', ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
+        Jc = self.getEEStackJacobians(q, component, ref_frame)
+        return pin.computeKKTContactDynamicMatrixInverse(self.model, self.data, q, Jc)
+
+    def dJdq(self, q, v, index, component='full', update_kinematics=True,
+             ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
+        frame_acc = self.frameClassicAcceleration(q, v, None, index, update_kinematics, ref_frame)
+        if component == 'full':
+            res = np.hstack([frame_acc.linear, frame_acc.angular])
+        elif component == 'linear':
+            res = frame_acc.linear
+        elif component == 'angular':
+            res = frame_acc.angular
+        return res
 __all__ = ['RobotWrapper']
+
+
