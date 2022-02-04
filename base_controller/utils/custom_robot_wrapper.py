@@ -47,12 +47,12 @@ class RobotWrapper(PinocchioRobotWrapper):
             return PinocchioRobotWrapper.com(self, q, v)
         return PinocchioRobotWrapper.com(self, q, v,a)
 
-    def robotComB(self, q_j, qd_j):
-         floating_base_q = np.hstack(( pin.neutral(self.robot.model)[0:7], qj))
+    def robotComB(self, q_j, qd_j=None):
+         floating_base_q = np.hstack(( pin.neutral(self.model)[0:7], q_j))
          if qd_j is None:                    
             return PinocchioRobotWrapper.com(self, floating_base_q);
          else:
-            floating_base_qd = np.hstack(( np.zeros(6), qj))
+            floating_base_qd = np.hstack(( np.zeros(6), qd_j))
             return PinocchioRobotWrapper.com(self, floating_base_q, floating_base_qd)
        
     def Jcom(self, q, update=True):
@@ -133,6 +133,7 @@ class RobotWrapper(PinocchioRobotWrapper):
     def frameVelocity(self, q, v, index, update_kinematics=True, ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
         if update_kinematics:
             pin.forwardKinematics(self.model, self.data, q, v)
+        v_local = pin.getFrameVelocity(self.model, self.data, index)
         v_local = pin.getFrameVelocity(self.model, self.data, index)
         if ref_frame==pin.ReferenceFrame.LOCAL:
             return v_local
