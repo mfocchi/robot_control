@@ -23,10 +23,10 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     mathJet = Math()
 
     # Feedback wrench (Virtual PD)
-    Kp_lin = np.diag([conf.Kp_lin_x, conf.Kp_lin_y, conf.Kp_lin_z])
-    Kd_lin = np.diag([conf.Kd_lin_x, conf.Kd_lin_y, conf.Kd_lin_z])
-    Kp_ang = np.diag([conf.KpRoll, conf.KpPitch, conf.KpYaw])
-    Kd_ang = np.diag([conf.KdRoll, conf.KdPitch, conf.KdYaw])
+    Kp_lin = np.diag([conf['Kp_lin_x'], conf['Kp_lin_y'], conf['Kp_lin_z']])
+    Kd_lin = np.diag([conf['Kd_lin_x'], conf['Kd_lin_x'], conf['Kd_lin_x']])
+    Kp_ang = np.diag([conf['KpRoll'], conf['KpPitch'], conf['KpYaw']])
+    Kd_ang = np.diag([conf['KdRoll'], conf['KdPitch'], conf['KdYaw']])
 
     Wfbk = np.zeros(6)
                 
@@ -59,7 +59,7 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     #EXERCISE 3: Compute graviy wrench
     Wg = np.zeros(6)   
     if (params.gravityComp == True):
-        mg = params.robot.robotMass() * np.array([0, 0, conf.gravity])
+        mg = params.robot.robotMass() * np.array([0, 0, conf['gravity']])
         Wg[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = mg
         #in case you are closing the loop on base frame
         if (not params.isCoMControlled):  # act_state  = base position in this case

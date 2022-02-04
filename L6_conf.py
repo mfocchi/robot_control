@@ -25,24 +25,23 @@ amp                  = np.array([ 0.0, 0.0, 0.03, 0.0, 0.1, 0.0]).T     # amplit
 freq                 = np.array([ 0.0, 0.0, 0.5, 0.0, 1.0, 0.0]).T           # frequency (time 2 PI)
 phi                  = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T     # phase
 
+buffer_size = 30001
+
 # Gains for the virtual model
-gravity = 9.81
-Kp_lin_x = 2000
-Kp_lin_y = 2000
-Kp_lin_z = 2000
 
-Kd_lin_x = 200
-Kd_lin_y = 200
-Kd_lin_z = 200
+control_params = {}
+control_params['hyq'] = {'Kp_lin_x': 2000, 'Kp_lin_y': 2000, 'Kp_lin_z': 2000,    
+                       'Kd_lin_x': 200, 'Kd_lin_y': 200, 'Kd_lin_z': 200,                       
+                       'KpRoll': 1000, 'KpPitch': 1000, 'KpYaw': 1000, 
+                       'KdRoll': 100, 'KdPitch': 100, 'KdYaw': 100, 'gravity': 9.81}
 
-KpRoll =  1000
-KpPitch = 1000
-KpYaw =   1000
 
-KdRoll =  100
-KdPitch = 100
-KdYaw =   100
-    
+control_params['solo'] = {'Kp_lin_x': 200, 'Kp_lin_y': 200, 'Kp_lin_z': 200,    
+                       'Kd_lin_x': 20, 'Kd_lin_y': 20, 'Kd_lin_z': 20,                       
+                       'KpRoll': 200, 'KpPitch': 200, 'KpYaw': 200, 
+                       'KdRoll': 1, 'KdPitch': 1, 'KdYaw': 1, 'gravity': 9.81}
+
+
 
 
    

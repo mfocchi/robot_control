@@ -11,7 +11,7 @@ from base_controller.utils.common_functions import *
 from base_controller.utils.optimTools import quadprog_solve_qp
 from base_controller.utils.ros_publish import RosPub
 from base_controller.utils.math_tools import Math
-import ex_3_conf as conf
+import L3_conf as conf
 
 #instantiate graphic utils
 os.system("killall rosmaster rviz")
@@ -29,16 +29,20 @@ two_pi_f_amp         = np.multiply(two_pi_f, conf.amp)
 two_pi_f_squared_amp = np.multiply(two_pi_f, two_pi_f_amp)
 
 # Init loggers
-p_log = np.empty((3))*nan
-p_des_log = np.empty((3))*nan
-pd_log = np.empty((3))*nan
-pd_des_log = np.empty((3))*nan
-pdd_des_log = np.empty((3))*nan
-rpy_log = np.empty((3))*nan
-rpy_des_log = np.empty((3))*nan
-error_o_log = np.empty((3))*nan
-tau_log = np.empty((6))*nan
-time_log =  np.empty((0,0))*nan
+
+# Init loggers
+buffer_size = int(math.floor(conf.exp_duration/conf.dt))
+log_counter = 0
+p_log = np.empty((3, buffer_size))*nan
+p_des_log = np.empty((3,buffer_size))*nan
+pd_log = np.empty((3,buffer_size))*nan
+pd_des_log = np.empty((3,buffer_size))*nan
+pdd_des_log = np.empty((3,buffer_size))*nan
+rpy_log = np.empty((3,buffer_size))*nan
+rpy_des_log = np.empty((3,buffer_size))*nan
+error_o_log = np.empty((3,buffer_size))*nan
+tau_log = np.empty((6,buffer_size))*nan
+time_log =  np.empty((buffer_size))*nan
 
 rpy_old = np.zeros((3))
 rpy_unwrapped = np.zeros((3))
@@ -279,27 +283,31 @@ while True:
     qd = qd + qdd*conf.dt
     q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
 				    
-    # Log Data into a vector				
-    time_log = np.append(time_log, time)	           
-    p_log = np.vstack((p_log, p ))
-    p_des_log= np.vstack((p_des_log, p_des))
-    pd_log= np.vstack((pd_log, pd))
-    pd_des_log= np.vstack((pd_des_log, pd_des))
-    pdd_des_log= np.vstack((pdd_des_log, pdd_des))
-    tau_log = np.vstack((tau_log, tau)) 
+
+    # Log Data into a vector
+    time_log[log_counter] = time
+    p_log[:,log_counter] = p
+    p_des_log[:,log_counter] = p_des
+    pd_log[:,log_counter] = pd
+    pd_des_log[:,log_counter] = pd_des
+    tau_log[:,log_counter] = tau
+  
+    
+    
     try: 
         UNWRAPPPING
-        rpy_log= np.vstack((rpy_log, rpy_unwrapped))
-        rpy_des_log= np.vstack((rpy_des_log, rpy_des_unwrapped))
+        rpy_log[:,log_counter] = rpy_unwrapped
+        rpy_des_log[:,log_counter] = rpy_des_unwrapped
     except:    
-        rpy_log= np.vstack((rpy_log, rpy))
-        rpy_des_log= np.vstack((rpy_des_log, rpy_des))
+        rpy_log[:,log_counter] = rpy
+        rpy_des_log[:,log_counter] = rpy_des
     try: 
         ORIENTATION_CONTROL
-        error_o_log= np.vstack((error_o_log, w_error_o))
+        error_o_log[:,log_counter] =  w_error_o
     except: 
         pass                      
  
+    log_counter+=1  
     # update time
     time = time + conf.dt                  
     

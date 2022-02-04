@@ -58,12 +58,13 @@ from utils.common_functions import getRobotModel
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  params as conf
-robot_name = "hyq"
+robotName = "hyq"
 
 class BaseController(threading.Thread):
     
-    def __init__(self, robot_name=robot_name, launch_file=None):
+    def __init__(self, robot_name="hyq", launch_file=None):
         
+        self.robot_name = robot_name
         #clean up previous process
 
         os.system("killall rosmaster rviz gzserver gzclient")                                
@@ -79,7 +80,7 @@ class BaseController(threading.Thread):
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
         if launch_file is None:
-            launch_file = robot_name
+            launch_file = self.robot_name
         self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+launch_file+".launch"])
         #only available in ros lunar
 #        roslaunch_args=rvizflag                             
@@ -88,13 +89,13 @@ class BaseController(threading.Thread):
         ros.sleep(1.0)
 
         # Loading a robot model of robot (Pinocchio)
-        self.robot = getRobotModel(robot_name, generate_urdf = True)
+        self.robot = getRobotModel(self.robot_name, generate_urdf = True)
         
 
         threading.Thread.__init__(self)
 								
         # instantiating objects
-        self.ros_pub = RosPub(robot_name,True)                    
+        self.ros_pub = RosPub(self.robot_name,True)                    
         self.joint_names = ""
         self.u = Utils()	
                                 
@@ -109,7 +110,7 @@ class BaseController(threading.Thread):
         self.tau = np.zeros(self.robot.na)                                
         self.q_des =np.zeros(self.robot.na)
         # GOZERO Keep the fixed configuration for the joints at the start of simulation
-        self.q_des[:12] = conf.robot_params[robot_name]['q_0']   
+        self.q_des[:12] = conf.robot_params[self.robot_name]['q_0']   
         self.qd_des = np.zeros(self.robot.na)
         self.tau_ffwd =np.zeros(self.robot.na)
         self.gravity_comp = np.zeros(self.robot.na)
@@ -124,10 +125,10 @@ class BaseController(threading.Thread):
         self.B_contacts = [np.zeros((3))]*4   
       
         #uncomment if you want to use receivestate ground truth
-        #self.sub_contact = ros.Subscriber("/"+robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=1, buff_size=2**24,  tcp_nodelay=True)       
-        #self.sub_pose = ros.Subscriber("/"+robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1,buff_size=2**24, tcp_nodelay=True) no longer used
-        self.sub_pose = ros.Subscriber("/"+robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)     
-        self.sub_jstate = ros.Subscriber("/"+robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)                  
+        #self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=1, buff_size=2**24,  tcp_nodelay=True)       
+        #self.sub_pose = ros.Subscriber("/"+self.robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1,buff_size=2**24, tcp_nodelay=True) no longer used
+        self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)     
+        self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)                  
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
 
         # freeze base  and pause simulation service 
@@ -215,8 +216,10 @@ class BaseController(threading.Thread):
 
     def deregister_node(self):
         print( "deregistering nodes"     )
-        os.system(" rosnode kill /"+robot_name+"/ros_impedance_controller")    
-        os.system(" rosnode kill /gazebo")    
+        self.ros_pub.deregister_node()
+        os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")    
+        os.system(" rosnode kill /gazebo")   
+      
  
     def get_contact(self):
         return self.contactsW
@@ -250,7 +253,7 @@ class BaseController(threading.Thread):
         req_reset_world = SetModelStateRequest()
         #create model state
         model_state = ModelState()        
-        model_state.model_name = robot_name
+        model_state.model_name = self.robot_name
         model_state.pose.position.x = 0.0
         model_state.pose.position.y = 0.0        
         model_state.pose.position.z = 0.8
@@ -321,16 +324,16 @@ class BaseController(threading.Thread):
             self.u.setLegJointState(leg, grf, self.grForcesW)   
                                  
                                  
-    def startupProcedure(self, robot_name):
+    def startupProcedure(self):
             ros.sleep(0.5)  # wait for callback to fill in jointmnames
             
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
-            self.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0) 
+            self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0) 
            
   
             
-            if (robot_name == 'hyq'):                        
+            if (self.robot_name == 'hyq'):                        
                 # these torques are to compensate the leg gravity
                 self.gravity_comp = np.array(
                     [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
@@ -361,32 +364,32 @@ class BaseController(threading.Thread):
                 print("starting com controller (no joint PD)...")                
                 self.pid.setPDs(0.0, 0.0, 0.0)                  
             
-            if (robot_name == 'solo'):                        
+            if (self.robot_name == 'solo'):                        
                 start_t = ros.get_time()
                 while ros.get_time() - start_t < 0.5:
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                     ros.sleep(0.01)
-                self.pid.setPDs(0.0, 0.0, 0.0)                    
+                #self.pid.setPDs(0.0, 0.0, 0.0)                    
             print("finished startup")    
 
     def initVars(self):
  
-        self.basePoseW_log = np.empty((6, conf.robot_params[robot_name]['buffer_size']))*nan
-        self.baseTwistW_log = np.empty((6,conf.robot_params[robot_name]['buffer_size'] ))*nan
-        self.q_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'] ))*nan    
-        self.q_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] )) *nan   
-        self.qd_des_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))*nan    
-        self.qd_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] )) *nan                                  
-        self.tau_ffwd_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))*nan    
-        self.tau_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))*nan                                  
-        self.grForcesW_log = np.empty((self.robot.na,conf.robot_params[robot_name]['buffer_size'] ))  *nan 
-        self.time_log = np.empty((conf.robot_params[robot_name]['buffer_size']))*nan
-        self.constr_viol_log = np.empty((4,conf.robot_params[robot_name]['buffer_size'] ))*nan
+        self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
+        self.baseTwistW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
+        self.q_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan   
+        self.qd_des_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
+        self.qd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan                                  
+        self.tau_ffwd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
+        self.tau_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan                                  
+        self.grForcesW_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan 
+        self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
+        self.constr_viol_log = np.empty((4,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.time = 0.0
         self.log_counter = 0
 
     def logData(self):
-        if (self.log_counter<conf.robot_params[robot_name]['buffer_size'] ):
+        if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
             self.basePoseW_log[:, self.log_counter] = self.basePoseW
             self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
             self.q_des_log[:, self.log_counter] =  self.q_des
@@ -405,10 +408,10 @@ def talker(p):
     p.register_node()
     p.initVars()        
    
-    p.startupProcedure(robot_name) 
+    p.startupProcedure() 
          
     #loop frequency       
-    rate = ros.Rate(1/conf.robot_params[robot_name]['dt']) 
+    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
     
 #    ros.sleep(0.1)
 #    p.resetGravity(True) 
@@ -427,12 +430,13 @@ def talker(p):
         p.updateKinematics()    
           
         # controller                             
-        p.tau_ffwd = conf.robot_params[robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[robot_name]['kd']*p.qd + p.gravity_comp    
+        p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp  
+        #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:] 
         #p.tau_ffwd = np.zeros(p.robot.na)						
         
         
-        #        p.q_des[14] += omega *conf.robot_params[robot_name]['dt']		
-#        p.q_des[15] += -omega *conf.robot_params[robot_name]['dt']	    
+        #        p.q_des[14] += omega *conf.robot_params[p.robot_name_]['dt']		
+#        p.q_des[15] += -omega *conf.robot_params[p.robot_name_]['dt']	    
 
         #max torque
 #        p.tau_ffwd[14]= 0.21
@@ -455,26 +459,25 @@ def talker(p):
         #wait for synconization of the control loop
         rate.sleep()     
        
-        p.time = p.time + conf.robot_params[robot_name]['dt']			
+        p.time = p.time + conf.robot_params[p.robot_name]['dt']			
 	   # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():
             print ("Shutting Down")                    
             break;                                                
                              
     # restore PD when finished        
-    p.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0) 
+    p.pid.setPDs(conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.0) 
     ros.sleep(1.0)                
     print ("Shutting Down")                 
     ros.signal_shutdown("killed")           
     p.deregister_node()   
     
     
-    plt.plot(p.tau_log[14, :])    
-    plt.plot(p.qd_log[14, :])  
+
     
 if __name__ == '__main__':
 
-    p = BaseController()
+    p = BaseController(robotName)
     try:
         talker(p)
     except ros.ROSInterruptException:

@@ -15,7 +15,7 @@ from base_controller.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory a
 from base_controller.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
 from base_controller.utils.math_tools import Math
 
-import ex_1_conf as conf
+import L1_conf as conf
 
 #instantiate graphic utils
 os.system("killall rosmaster rviz")
@@ -91,7 +91,7 @@ p = np.array([-0.5, -0.2, 0.5, math.pi/3])
 
 # initial value for numerical ik
 q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi]) # good initialization
-# q_i  = np.array([ -5, 5.0, -0.8, -math.pi]) # bad initialization
+#q_i  = np.array([ -5, 5.0, -0.8, -math.pi]) # bad initialization
 
 # solution of the numerical ik
 q_f = ik(p,q_i) 

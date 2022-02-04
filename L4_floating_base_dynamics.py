@@ -3,7 +3,6 @@ import pinocchio as pin
 import numpy as np
 import example_robot_data
 from pinocchio.utils import * #rand
-from pinocchio.robot_wrapper import RobotWrapper
 from base_controller.utils.common_functions import getRobotModel
 
 
@@ -12,19 +11,22 @@ np.set_printoptions(precision = 3, linewidth = 200, suppress = True)
 np.set_printoptions(threshold=np.inf)
 
 # Loading a robot model
-robot = getRobotModel('hyq', generate_urdf = True)
+robot = getRobotModel('solo', generate_urdf = True)
 
 
 #start configuration
 v  = np.array([0.0   ,  0.0 , 0.0,  0.0,  0.0,       0.0, #underactuated 	
 		     0.0,  0.0,  0.0,  0.0,     0.0,  0.0,  0.0,  0.0,  0.0,    0.0,  0.0,  0.0]) #actuated
 q = example_robot_data.load('hyq').q0
-#q[3:3+4] = np.array([0,0.3,0,1])
+
+#q[:3] = np.array([1,1,1])
+Q = pin.Quaternion(pin.rpy.rpyToMatrix(0.1,0.1,0))
+#q[3:3+4] = np.array([Q.x, Q.y, Q.z, Q.w])
 #print(q)
 # Update the joint and frame placements
 pin.forwardKinematics(robot.model,robot.data,q,v)
 pin.updateFramePlacements(robot.model,robot.data)
-
+robot.computeAllTerms(q, v) 
 
 M =  pin.crba(robot.model, robot.data, q)
 H = pin.nonLinearEffects(robot.model, robot.data, q, v)
@@ -46,6 +48,9 @@ print "Com Position w_com_robot: ", w_com_robot
 # compute using native pinocchio function
 com_test = pin.centerOfMass(robot.model, robot.data, q, v)
 print "Com Position (pinocchio): ", com_test
+
+#print(robot.frameJacobian(q,  robot.model.getFrameId('lf_foot'), True,pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)  )
+
 
 
 
@@ -69,6 +74,7 @@ print "Com Position (pinocchio): ", com_test
 ## use pinocchio native function
 #pin.computeKineticEnergy(robot.model,robot.data,q,v)
 #print "TEST2: ", EkinRobot - robot.data.kinetic_energy
+
 
 
 ##EXERCISE 3: Build the transformation matrix to use com coordinates

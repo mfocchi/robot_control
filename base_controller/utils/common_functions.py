@@ -25,6 +25,11 @@ import copy
 plt.ion()
 plt.close() 
 
+lw_des=7
+lw_act=4   
+marker_size= 0   
+
+
 class Twist:
     linear = np.empty((3))*np.nan
     angular = np.empty((3))*np.nan
@@ -122,13 +127,16 @@ def getRobotModel(robot_name="ur5", generate_urdf = False):
 def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None):
     if name == 'position':
         plot_var_log = q_log
-        plot_var_des_log = q_des_log
+        if   (q_des_log is not None):
+            plot_var_des_log = q_des_log
     elif name == 'velocity':
         plot_var_log = qd_log
-        plot_var_des_log  = qd_des_log
+        if   (qd_des_log is not None):
+            plot_var_des_log  = qd_des_log
     elif name == 'acceleration':
         plot_var_log = qdd_log
-        plot_var_des_log  = qdd_des_log
+        if   (qdd_des_log is not None):
+            plot_var_des_log  = qdd_des_log
     elif name == 'torque':
         plot_var_log = tau_log
         if   (tau_ffwd_log is not None):                                    
@@ -139,30 +147,33 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
        print(colored("plotJopnt error: wrong input string", "red") )
        return                                   
 
-    lw_des=7
-    lw_act=4          
+    
 
-    njoints = plot_var_log.shape[1]                                                                
+    njoints = min(plot_var_log.shape)                                                                
 
     #neet to transpose the matrix other wise it cannot be plot with numpy array    
     fig = plt.figure(figure_id)                
     fig.suptitle(name, fontsize=20)             
     labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
     labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
+    labels_flywheel = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE", 
+                  "back_wheel", "front_wheel", "left_wheel", "right_wheel"]
 
     if njoints <= 6:
         labels = labels_ur         
     if njoints == 12:
         labels = labels_hyq                  
-
-    
+    if njoints == 16:
+        labels = labels_flywheel
+        
     for jidx in range(njoints):
-                
+     
         plt.subplot(njoints/2,2,jidx+1)
         plt.ylabel(labels[jidx])    
         if   (plot_var_des_log is not None):
-             plt.plot(time_log, plot_var_des_log[:-1,jidx], linestyle='-', lw=lw_des,color = 'red')
-        plt.plot(time_log, plot_var_log[:-1,jidx],linestyle='-', lw=lw_act,color = 'blue')
+             plt.plot(time_log, plot_var_des_log[jidx,:], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
+        plt.plot(time_log, plot_var_log[jidx,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
+        
         plt.grid()
                 
     
@@ -187,95 +198,97 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
     else:
        print("wrong choice")                    
                 
-    lw_act=4  
-    lw_des=7
+
                     
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)                   
     plt.subplot(3,1,1)
     plt.ylabel("end-effector x")
     if   (plot_var_des_log is not None):
-         plt.plot(time_log, plot_var_des_log[:-1,0], lw=lw_des, color = 'red')                    
-    plt.plot(time_log, plot_var_log[:-1,0], lw=lw_act, color = 'blue')
+         plt.plot(time_log, plot_var_des_log[0,:], lw=lw_des, color = 'red')                    
+    plt.plot(time_log, plot_var_log[0,:], lw=lw_act, color = 'blue')
     plt.grid()
     
     plt.subplot(3,1,2)
     plt.ylabel("end-effector y")    
     if   (plot_var_des_log is not None):
-         plt.plot(time_log, plot_var_des_log[:-1,1], lw=lw_des, color = 'red')                    
-    plt.plot(time_log, plot_var_log[:-1,1], lw=lw_act, color = 'blue')
+         plt.plot(time_log, plot_var_des_log[1,:], lw=lw_des, color = 'red')                    
+    plt.plot(time_log, plot_var_log[1,:], lw=lw_act, color = 'blue')
     plt.grid()
     
     plt.subplot(3,1,3)
     plt.ylabel("end-effector z")    
     if   (plot_var_des_log is not None):
-        plt.plot(time_log, plot_var_des_log[:-1,2], lw=lw_des, color = 'red')                                        
-    plt.plot(time_log, plot_var_log[:-1,2], lw=lw_act, color = 'blue')
+        plt.plot(time_log, plot_var_des_log[2,:], lw=lw_des, color = 'red')                                        
+    plt.plot(time_log, plot_var_log[2,:], lw=lw_act, color = 'blue')
     plt.grid()
       
     
 def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW, baseTwistW, des_baseAccW, wrenchW):
-    plot_var_log = None
+    plot_var_des_log = None
     if name == 'position':
         plot_var_log = basePoseW
-        plot_var_des_log = des_basePoseW
+        if   (des_basePoseW is not None):
+            plot_var_des_log = des_basePoseW
     elif name == 'velocity':
         plot_var_log = baseTwistW
-        plot_var_des_log  = des_baseTwistW
+        if   (des_baseTwistW is not None):
+            plot_var_des_log  = des_baseTwistW
     elif name == 'acceleration':
-        plot_var_des_log  = des_baseAccW    
+        if   (des_baseAccW is not None):
+            plot_var_des_log  = des_baseAccW    
     elif name == 'wrench':
         plot_var_des_log  = wrenchW                                    
     else:
        print("wrong choice")                                    
 
-    lw_des=7
-    lw_act=4          
+           
                 
     #neet to transpose the matrix other wise it cannot be plot with numpy array    
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)             
     plt.subplot(3,2,1)
     plt.ylabel("CoM X")    
-    plt.plot(time_log, plot_var_des_log[0,:], linestyle='-', lw=lw_des,color = 'red')
-    if   (plot_var_log is not None):                
-        plt.plot(time_log, plot_var_log[0,:],linestyle='-', lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[0,:],linestyle='-', marker="o",markersize=marker_size,lw=lw_act,color = 'blue')
+    if   (plot_var_des_log is not None):                
+        plt.plot(time_log, plot_var_des_log[0,:], linestyle='-',  marker="o",markersize=marker_size, lw=lw_des,color = 'red')
+   
     plt.grid()
                 
     plt.subplot(3,2,3)
     plt.ylabel("CoM Y")
-    plt.plot(time_log, plot_var_des_log[1,:], linestyle='-', lw=lw_des,color = 'red', label="q_des")
-    if   (plot_var_log is not None):    
-        plt.plot(time_log, plot_var_log[1,:],linestyle='-',lw=lw_act, color = 'blue', label="q")
+    plt.plot(time_log, plot_var_log[1,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act, color = 'blue', label="q")
+    if   (plot_var_des_log is not None):           
+        plt.plot(time_log, plot_var_des_log[1,:], linestyle='-', lw=lw_des,color = 'red', label="q_des")
     plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
     plt.grid()
     
     plt.subplot(3,2,5)
     plt.ylabel("CoM Z")    
-    plt.plot(time_log, plot_var_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
-    if   (plot_var_log is not None):    
-       plt.plot(time_log, plot_var_log[2,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[2,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')    
+    if   (plot_var_des_log is not None):    
+       plt.plot(time_log, plot_var_des_log[2,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()    
     
     plt.subplot(3,2,2)
     plt.ylabel("Roll")   
-    plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
-    if   (plot_var_log is not None):    
-        plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[3,:].T,linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
+    if   (plot_var_des_log is not None):    
+        plt.plot(time_log, plot_var_des_log[3,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()
     
     plt.subplot(3,2,4)
     plt.ylabel("Pitch")   
-    plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
-    if   (plot_var_log is not None):        
-        plt.plot(time_log, plot_var_log[4,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[4,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')    
+    if   (plot_var_des_log is not None):        
+        plt.plot(time_log, plot_var_des_log[4,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()
     
     plt.subplot(3,2,6)
     plt.ylabel("Yaw")
-    plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
-    if   (plot_var_log is not None):        
-        plt.plot(time_log, plot_var_log[5,:],linestyle='-',lw=lw_act,color = 'blue')
+    plt.plot(time_log, plot_var_log[5,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
+    if   (plot_var_des_log is not None):             
+        plt.plot(time_log, plot_var_des_log[5,:],linestyle='-',lw=lw_des,color = 'red')
     plt.grid()
                 
          
@@ -283,8 +296,7 @@ def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW,
         
 def plotGRFs(figure_id, time_log, des_forces, act_forces):
            
-    lw_act=4  
-    lw_des=7
+
     # %% Input plots
 
     fig = plt.figure(figure_id)

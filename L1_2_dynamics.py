@@ -15,7 +15,7 @@ from base_controller.utils.kin_dyn_utils import getg
 from base_controller.utils.kin_dyn_utils import getC
 
 
-import ex_1_conf as conf
+import L1_conf as conf
 
 #instantiate graphic utils
 os.system("killall rosmaster rviz")
