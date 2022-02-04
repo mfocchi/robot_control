@@ -1,0 +1,243 @@
+from __future__ import print_function
+
+import os
+
+import rospy as ros
+import sys
+import time
+import threading
+
+import numpy as np
+
+# utility functions
+from utils.utils import Utils
+from utils.math_tools import *
+from utils.common_functions import getRobotModel
+
+import params as conf
+
+# abstract base class
+import abc
+
+
+
+
+
+""" This class is parent of ExperimentController and of SimulationController. It implements methods that are necessari
+ to both the children"""
+
+class Controller(abc.ABC, threading.Thread):
+
+    def __init__(self, robot_name):
+        self.robot = getRobotModel(robot_name, generate_urdf = True)
+
+        threading.Thread.__init__(self)
+
+        # instantiating objects
+        self.joint_names = ""
+        self.u = Utils()
+        self.mathJet = Math()
+
+        self.q = np.empty(self.robot.na) * np.nan
+        self.qd = np.empty(self.robot.na) * np.nan
+        self.tau = np.empty(self.robot.na) * np.nan
+
+        self.q_des = conf.robot_params[robot_name]['q_0']
+        self.qd_des = np.empty(self.robot.na) * np.nan
+        self.tau_des = np.empty(self.robot.na) * np.nan         # tau_des = tau_ffwd + tau_fb
+        self.tau_fb = np.empty(self.robot.na) * np.nan
+        self.tau_ffwd = np.empty(self.robot.na) * np.nan
+        self.gravity_comp = np.empty(self.robot.na) * np.nan
+
+        self.basePoseW = np.empty(6) * np.nan
+        self.baseTwistW = np.empty(6) * np.nan
+
+        self.gen_config_neutral = pin.neutral(self.robot.model)
+
+        self.b_R_w = np.eye(3)
+
+        self.comPosW = np.empty(3) * np.nan
+        self.comVelW = np.empty(3) * np.nan
+
+        self.comPosW_des = np.empty(3) * np.nan
+        self.comVelW_des = np.empty(3) * np.nan
+
+        self.comPosB = np.empty(3) * np.nan
+        self.comVelB = np.empty(3) * np.nan
+
+
+        self.centroidalInertiaB = np.identity(3)
+        self.compositeRobotInertiaB = np.identity(3)
+
+        self.contacts_state = np.array([False] * 4)
+
+        self.grForcesW = np.empty(3*self.robot.nee) * np.nan
+        self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
+        self.wJ = [np.zeros((6, self.robot.nv))] * 4
+        self.bJ = [np.zeros((6, self.robot.nv))] * 4
+
+        self.W_contacts = [np.zeros((3))] * 4
+        self.B_contacts = [np.zeros((3))] * 4
+
+        # Attribute to be set by ALL children
+        self.dt = NotImplemented
+        self.ros_pub = NotImplemented
+
+
+
+    def _receive_jstate(self, msg):
+        self.joint_names = msg.name
+        q_ros = np.zeros(self.robot.na)
+        qd_ros = np.zeros(self.robot.na)
+        tau_ros = np.zeros(self.robot.na)
+        for i in range(len(self.joint_names)):
+            q_ros[i] = msg.position[i]
+            qd_ros[i] = msg.velocity[i]
+            tau_ros[i] = msg.effort[i]
+        # map from ROS (alphabetical) to our  LF RF LH RH convention
+        self.q = self.u.mapFromRos(q_ros)
+        self.qd = self.u.mapFromRos(qd_ros)
+        self.tau = self.u.mapFromRos(tau_ros)
+
+
+
+    def mapBaseToWorld(self, B_var):
+        W_var = self.b_R_w.transpose().dot(B_var) + self.u.linPart(self.basePoseW)
+        return W_var
+
+    def updateKinematics(self):
+        # q is continuously updated
+        # to compute in the base frame  you should put neutral base
+        q_ros = self.u.mapToRos(self.q)
+        qd_ros = self.u.mapToRos(self.qd)
+        tau_ros = self.u.mapToRos(self.tau)
+
+        neutral_fb_jointstate = np.hstack((self.gen_config_neutral[0:7], q_ros))
+        gen_velocities = np.hstack((self.baseTwistW, qd_ros))
+
+        pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate, gen_velocities)
+        pin.computeJointJacobians(self.robot.model, self.robot.data)
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
+
+        for leg in range(4):
+            self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate, self.robot.model.getFrameId(
+                conf.ee_frames[leg])).translation
+            self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
+
+            leg_joints = range(6 + self.u.mapIndexToRos(leg) * 3, 6 + self.u.mapIndexToRos(leg) * 3 + 3)
+            self.bJ[leg] = self.robot.frameJacobian(neutral_fb_jointstate,
+                                                   self.robot.model.getFrameId(conf.ee_frames[leg]),
+                                                   pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, leg_joints]
+            self.wJ[leg] = self.b_R_w.transpose().dot(self.bJ[leg])
+
+    def initVars(self):
+        self.comPosB_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.comVelB_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.comPosW_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.comVelW_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.comPosW_des_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.comVelW_des_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.basePoseW_log = np.empty((6, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.baseTwistW_log = np.empty((6, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.q_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.q_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.qd_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.qd_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.tau_fb_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.tau_ffwd_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.tau_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.tau_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.grForcesW_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.grForcesB_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.W_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.B_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.contacts_state_log = np.empty((self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.constr_viol_log = np.empty((4, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.time_log = np.empty((conf.robot_params[robot_name]['buffer_size'])) *np.nan
+
+        self.time = 0
+        self.log_counter = -1
+
+    def logData(self):
+        self.log_counter += 1
+        self.time += self.dt # TODO: modify with a more sofisticate update of time
+        # if log_counter exceed N*buffer_size, reshape all the log variables
+        if (self.log_counter % conf.robot_params[robot_name]['buffer_size']) == 0:
+            self.log_policy(self.comPosB_log)
+            self.log_policy(self.comVelB_log)
+            self.log_policy(self.comPosW_log)
+            self.log_policy(self.comVelW_log)
+            self.log_policy(self.comPosW_des_log)
+            self.log_policy(self.comVelW_des_log)
+            self.log_policy(self.basePoseW_log)
+            self.log_policy(self.baseTwistW_log)
+            self.log_policy(self.q_des_log)
+            self.log_policy(self.q_log )
+            self.log_policy(self.qd_des_log)
+            self.log_policy(self.qd_log)
+            self.log_policy(self.tau_fb_log)
+            self.log_policy(self.tau_ffwd_log)
+            self.log_policy(self.tau_des_log)
+            self.log_policy(self.tau_log)
+            self.log_policy(self.grForcesW_log)
+            self.log_policy(self.time_log)
+            self.log_policy(self.constr_viol_log)
+            self.log_policy(self.grForcesW_log)
+            self.log_policy(self.grForcesB_log)
+            self.log_policy(self.W_contacts_log)
+            self.log_policy(self.B_contacts_log)
+            self.log_policy(self.contacts_state_log)
+
+        # Fill with new values
+        self.comPosB_log[:, self.log_counter] = self.comPosB_log
+        self.comVelB_log[:, self.log_counter] = self.comVelB_log
+        self.comPosW_log[:, self.log_counter] = self.comPosW_log
+        self.comVelW_log[:, self.log_counter] = self.comVelW_log
+        self.comPosW_des_log[:, self.log_counter] = self.comPosW_des_log
+        self.comVelW_des_log[:, self.log_counter] = self.comVelW_des_log
+        self.basePoseW_log[:, self.log_counter] = self.basePoseW
+        self.baseTwistW_log[:, self.log_counter] = self.baseTwistW
+        self.q_des_log[:, self.log_counter] = self.q_des
+        self.q_log[:, self.log_counter] = self.q
+        self.qd_des_log[:, self.log_counter] = self.qd_des
+        self.qd_log[:, self.log_counter] = self.qd
+        self.tau_fb_log[:, self.log_counter] = self.tau_fb
+        self.tau_ffwd_log[:, self.log_counter] = self.tau_ffwd
+        self.tau_des_log[:, self.log_counter] = self.tau_des
+        self.tau_log[:, self.log_counter] = self.tau
+        self.grForcesW_log[:, self.log_counter] = self.grForcesW
+        self.time_log[self.log_counter] = self.time
+
+    @staticmethod
+    def log_policy(var):
+        tmp = np.empty((var.shape[0], var.shape[1]+conf.robot_params[robot_name]['buffer_size'])) * np.nan
+        tmp[:var.shape[0], :var.shape[1]] = var
+        var = tmp
+
+
+    # Abstract methods
+    @abc.abstractmethod
+    def _receive_pose(self, msg):
+        pass
+
+    @abc.abstractmethod
+    def estimateContacts(self):
+        pass
+
+    @abc.abstractmethod
+    def visualizeContacts(self):
+        pass
+
+    @abc.abstractmethod
+    def computeCOM(self):
+        pass
