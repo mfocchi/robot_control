@@ -405,7 +405,7 @@ class BaseController(threading.Thread):
 def talker(p):
             
     p.start()
-    p.register_node()
+    #p.register_node()
     p.initVars()        
    
     p.startupProcedure() 
