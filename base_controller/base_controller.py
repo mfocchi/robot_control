@@ -143,7 +143,7 @@ class BaseController(threading.Thread):
         self.verbose = conf.verbose
 																							
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
-        
+        print("Initialized basecontroller---------------------------------------------------------------")
                                  
     def _receive_contact(self, msg):
         # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention) TODO publish them in ros_impedance_controller
@@ -287,15 +287,15 @@ class BaseController(threading.Thread):
         pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate, gen_velocities)
         pin.computeJointJacobians(self.robot.model, self.robot.data)  
         pin.updateFramePlacements(self.robot.model, self.robot.data)
-  
+        ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         for leg in range(4):
-            self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]) ).translation 
+            self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]) ).translation 
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
     
- 
+      
         for leg in range(4):
             leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
-            self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(conf.ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
+            self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
 
        # Pinocchio Update the joint and frame placements
