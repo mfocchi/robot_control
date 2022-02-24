@@ -64,6 +64,10 @@ from controller_manager_msgs.srv import SwitchControllerRequest, SwitchControlle
 from controller_manager_msgs.srv import LoadControllerRequest, LoadController
 from std_msgs.msg import Float64MultiArray
 
+from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryGoal
+from trajectory_msgs.msg import JointTrajectoryPoint
+import actionlib
+
 class BaseController(threading.Thread):
     
     def __init__(self, robot_name="ur5",  launch_file=None):
@@ -131,13 +135,12 @@ class BaseController(threading.Thread):
         self.verbose = conf.verbose                                                                                           
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
         
-        # controller manager management
+        # controller manager management (only usable in non torque mode)
         self.switch_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/switch_controller", SwitchController)
         self.load_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/load_controller", LoadController)
         self.pub_reduced_des_jstate = ros.Publisher("/"+self.robot_name+"/joint_group_pos_controller/command", Float64MultiArray, queue_size=10)
-        self.available_controllers = ["/"+self.robot_name+"/ros_impedance_controller", 
-                                      "/"+self.robot_name+"/joint_group_pos_controller", 
-                                      "/"+self.robot_name+"/joint_traj_pos_controller"]        
+        self.available_controllers = ["joint_group_pos_controller", 
+                                      "pos_joint_traj_controller"]        
         self.active_controller = self.available_controllers[0]
         
 
@@ -233,33 +236,93 @@ class BaseController(threading.Thread):
     def switch_controller(self, target_controller):
         """Activates the desired controller and stops all others from the predefined list above"""
         print('Available controllers: ',self.available_controllers)
-        print('Controller manager: loading ',target_controller)
+  
         other_controllers = (self.available_controllers)
         other_controllers.remove(target_controller)
+        print('Controller manager:Switching off  :  ',other_controllers)
+        print('Controller manager: loading ',target_controller)
+        
         srv = LoadControllerRequest()
         srv.name = target_controller
-        self.load_controller_srv(srv)
+        self.load_controller_srv(srv)  
+        
         srv = SwitchControllerRequest()
-        srv.stop_controllers = other_controllers
+        srv.stop_controllers = other_controllers 
         srv.start_controllers = [target_controller]
         srv.strictness = SwitchControllerRequest.BEST_EFFORT
-        self.switch_controller_srv(srv)      
-           
+        self.switch_controller_srv(srv)           
+          
+       
     def send_reduced_des_jstate(self, q_des):     
         msg = Float64MultiArray()
         msg.data = q_des             
         self.pub_reduced_des_jstate.publish(msg) 
+
+    def send_joint_trajectory(self):
+        """Creates a trajectory and sends it using the selected action server"""
+ 
+        trajectory_client = actionlib.SimpleActionClient(
+            "{}/follow_joint_trajectory".format("/ur5/pos_joint_traj_controller"),
+            FollowJointTrajectoryAction,
+        )
+
+        # Create and fill trajectory goal
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory.joint_names = self.joint_names
+
+        # The following list are arbitrary positions
+        # Change to your own needs if desired
+        position_list = [[0, -1.57, -1.57, 0, 0, 0]]
+        position_list.append([0.2, -1.57, -1.57, 0, 0, 0])
+        position_list.append([-0.5, 0.5, -1.2, 0, 0, 0])
+        duration_list = [3.0, 7.0, 10.0]
+        for i, position in enumerate(position_list):
+            point = JointTrajectoryPoint()
+            point.positions = position
+            point.time_from_start = ros.Duration(duration_list[i])
+            goal.trajectory.points.append(point)
+
+        self.ask_confirmation(position_list)     
+        print("Executing trajectory using the {}".format("pos_joint_traj_controller"))
+        trajectory_client.send_goal(goal)
+        trajectory_client.wait_for_result()
+
+        result = trajectory_client.get_result()
+        print("Trajectory execution finished in state {}".format(result.error_code))
+        
+    def ask_confirmation(self, waypoint_list):
+        """Ask the user for confirmation. This function is obviously not necessary, but makes sense
+        in a testing script when you know nothing about the user's setup."""
+        ros.logwarn("The robot will move to the following waypoints: \n{}".format(waypoint_list))
+        confirmed = False
+        valid = False
+        while not valid:
+            input_str = raw_input(
+                "Please confirm that the robot path is clear of obstacles.\n"
+                "Keep the EM-Stop available at all times. You are executing\n"
+                "the motion at your own risk. Please type 'y' to proceed or 'n' to abort: "
+            )
+            valid = input_str in ["y", "n"]
+            if not valid:
+                ros.loginfo("Please confirm by entering 'y' or abort by entering 'n'")
+            else:
+                if (input_str == "y"):
+                    confirmed = True
+        if not confirmed:
+            ros.loginfo("Exiting as requested by user.")
+            sys.exit(0)
 
     
 def talker(p):
             
     p.start()
     #p.register_node()
-    p.initVars()        
-   
+    p.initVars()     
     p.startupProcedure() 
          
-    #p.switch_controller("/"+p.robot_name+"/joint_group_pos_controller")    
+    # to test the trajectory         
+    #p.switch_controller("pos_joint_traj_controller")    
+    #p.send_joint_trajectory()
 
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
@@ -276,7 +339,6 @@ def talker(p):
         p.tau_ffwd = np.zeros(p.robot.na)       
         # only torque loop                            
         #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd     
-
 
         if (p.use_torque_control):
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
