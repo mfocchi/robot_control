@@ -71,7 +71,10 @@ class BaseController(threading.Thread):
         self.robot_name = robot_name
         #clean up previous process
 
-        os.system("killall rosmaster rviz gzserver gzclient")                                
+        os.system("killall rosmaster rviz gzserver gzclient")      
+        # needed to be able to load a custom world file
+        os.system("export GAZEBO_MODEL_PATH="+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/:"+os.environ['GAZEBO_MODEL_PATH'])  
+                          
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
             print ('ROS MASTER is active')
             nodes = rosnode.get_node_names()
@@ -85,7 +88,7 @@ class BaseController(threading.Thread):
         roslaunch.configure_logging(uuid)
         if launch_file is None:
             launch_file = self.robot_name
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+launch_file+".launch"])
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [rospkg.RosPack().get_path('ros_impedance_controller')+"/launch/ros_impedance_controller_"+launch_file+".launch"])
         self.launch.start() 
         ros.sleep(1.0)
 
@@ -136,6 +139,8 @@ class BaseController(threading.Thread):
                                       "/"+self.robot_name+"/joint_group_pos_controller", 
                                       "/"+self.robot_name+"/joint_traj_pos_controller"]        
         self.active_controller = self.available_controllers[0]
+        
+
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
                              
