@@ -87,18 +87,21 @@ def startNode(node_name):
     process = launch.launch(node)
 
 
-def getRobotModel(robot_name="ur5", generate_urdf = False):    
+def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):    
 
     
     if (generate_urdf):  
-        try:          
-            xacro_path = rospkg.RosPack().get_path(robot_name+'_description')
+        try:       
+            #old way
+            if (xacro_path is None):
+                xacro_path = rospkg.RosPack().get_path(robot_name+'_description')+ '/robots/'+robot_name+'.urdf.xacro'
+            
             package = 'xacro'
             executable = 'xacro'
             name = 'xacro'
             namespace = '/'
-            args = xacro_path+'/robots/'+robot_name+'.urdf.xacro --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
-            
+            args = xacro_path+ ' --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
+     
             try:
                 flywheel = ros.get_param('/flywheel')
                 args+=' flywheel:='+flywheel
@@ -106,6 +109,7 @@ def getRobotModel(robot_name="ur5", generate_urdf = False):
                 pass          
             
             os.system("rosrun xacro xacro "+args)  
+            #os.system("rosparam get /robot_description > "+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf')  
             print ("URDF generated")
         except:
             print (robot_name+'_description not present')
