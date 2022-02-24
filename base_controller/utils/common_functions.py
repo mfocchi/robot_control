@@ -124,7 +124,7 @@ def getRobotModel(robot_name="ur5", generate_urdf = False):
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None):
+def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None, joint_names = None):
     if name == 'position':
         plot_var_log = q_log
         if   (q_des_log is not None):
@@ -153,8 +153,11 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
 
     #neet to transpose the matrix other wise it cannot be plot with numpy array    
     fig = plt.figure(figure_id)                
-    fig.suptitle(name, fontsize=20)             
-    labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
+    fig.suptitle(name, fontsize=20) 
+    if joint_names is None:            
+        labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
+    else:
+        labels_ur =joint_names
     labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
     labels_flywheel = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE", 
                   "back_wheel", "front_wheel", "left_wheel", "right_wheel"]
