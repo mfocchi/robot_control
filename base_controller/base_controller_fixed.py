@@ -59,7 +59,10 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress 
 import  params as conf
 robotName = "ur5"
 
-
+# controller manager management
+from controller_manager_msgs.srv import SwitchControllerRequest, SwitchController
+from controller_manager_msgs.srv import LoadControllerRequest, LoadController
+from std_msgs.msg import Float64MultiArray
 
 class BaseController(threading.Thread):
     
@@ -123,6 +126,15 @@ class BaseController(threading.Thread):
         #send data to param server
         self.verbose = conf.verbose                                                                                           
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
+        
+         # controller manager management
+        self.switch_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/switch_controller", SwitchController)
+        self.load_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/load_controller", LoadController)
+        self.pub_simple_des_jstate = ros.Publisher("/"+self.robot_name+"/joint_group_pos_controller/command", Float64MultiArray, queue_size=10)
+        self.available_controllers = ["/"+self.robot_name+"/ros_impedance_controller", 
+                                      "/"+self.robot_name+"/joint_group_pos_controller", 
+                                      "/"+self.robot_name+"/joint_traj_pos_controller"]        
+        self.active_controller = self.available_controllers[0]
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
                              
@@ -183,7 +195,7 @@ class BaseController(threading.Thread):
         ros.sleep(1.0)  # wait for callback to fill in jointmnames          
         self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
         # set joint pdi gains     
-        self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
+        #self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
         # only torque loop
         #self.pid.setPDs(0.0, 0.0, 0.0)          
 
@@ -210,6 +222,27 @@ class BaseController(threading.Thread):
             self.contactForceW_log[:,self.log_counter] =  self.contactForceW
             self.time_log[self.log_counter] = self.time
             self.log_counter+=1
+
+    def switch_controller(self, target_controller):
+        """Activates the desired controller and stops all others from the predefined list above"""
+        print('Available controllers: ',self.available_controllers)
+        print('Controller manager: loading ',target_controller)
+        other_controllers = (self.available_controllers)
+        other_controllers.remove(target_controller)
+        srv = LoadControllerRequest()
+        srv.name = target_controller
+        self.load_controller_srv(srv)
+        srv = SwitchControllerRequest()
+        srv.stop_controllers = other_controllers
+        srv.start_controllers = [target_controller]
+        srv.strictness = SwitchControllerRequest.BEST_EFFORT
+        self.switch_controller_srv(srv)      
+           
+    def send_simple_des_jstate(self, q_des):     
+        msg = Float64MultiArray()
+        msg.data = q_des             
+        self.pub_simple_des_jstate.publish(msg) 
+
     
 def talker(p):
             
@@ -218,6 +251,18 @@ def talker(p):
     p.initVars()        
    
     p.startupProcedure() 
+         
+    ros.sleep(5.0)         
+    rate = ros.Rate(1)         
+    #p.switch_controller("/"+p.robot_name+"/joint_group_pos_controller")    
+
+    while True:  
+        print("AAA")
+        rate.sleep() 
+        p.send_simple_des_jstate(p.q_des)         
+        if ros.is_shutdown():
+            print ("Shutting Down")                    
+            break;           
          
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
@@ -237,6 +282,9 @@ def talker(p):
 
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
           
+          
+          
+
         # log variables
         p.logData()    
         
