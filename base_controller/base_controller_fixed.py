@@ -116,21 +116,22 @@ class BaseController(threading.Thread):
         # freeze base  and pause simulation service 
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.set_physics_client = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
-        self.get_physics_client = ros.ServiceProxy('/gazebo/get_physics_properties', GetPhysicsProperties)
- 
+        self.get_physics_client = ros.ServiceProxy('/gazebo/get_physics_properties', GetPhysicsProperties) 
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
                
         self.broadcaster = tf.TransformBroadcaster()
         self.spawn_z = ros.get_param('/spawn_z')
+        self.use_torque_control = ros.get_param('/use_torque_control')
+        
         #send data to param server
         self.verbose = conf.verbose                                                                                           
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
         
-         # controller manager management
+        # controller manager management
         self.switch_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/switch_controller", SwitchController)
         self.load_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/load_controller", LoadController)
-        self.pub_simple_des_jstate = ros.Publisher("/"+self.robot_name+"/joint_group_pos_controller/command", Float64MultiArray, queue_size=10)
+        self.pub_reduced_des_jstate = ros.Publisher("/"+self.robot_name+"/joint_group_pos_controller/command", Float64MultiArray, queue_size=10)
         self.available_controllers = ["/"+self.robot_name+"/ros_impedance_controller", 
                                       "/"+self.robot_name+"/joint_group_pos_controller", 
                                       "/"+self.robot_name+"/joint_traj_pos_controller"]        
@@ -194,10 +195,11 @@ class BaseController(threading.Thread):
     def startupProcedure(self):
         ros.sleep(1.0)  # wait for callback to fill in jointmnames          
         self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
-        # set joint pdi gains     
-        #self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
-        # only torque loop
-        #self.pid.setPDs(0.0, 0.0, 0.0)          
+        if (self.use_torque_control):
+            #set joint pdi gains     
+            self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
+            #only torque loop
+            #self.pid.setPDs(0.0, 0.0, 0.0)          
 
     def initVars(self): 
         self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
@@ -238,10 +240,10 @@ class BaseController(threading.Thread):
         srv.strictness = SwitchControllerRequest.BEST_EFFORT
         self.switch_controller_srv(srv)      
            
-    def send_simple_des_jstate(self, q_des):     
+    def send_reduced_des_jstate(self, q_des):     
         msg = Float64MultiArray()
         msg.data = q_des             
-        self.pub_simple_des_jstate.publish(msg) 
+        self.pub_reduced_des_jstate.publish(msg) 
 
     
 def talker(p):
@@ -252,21 +254,11 @@ def talker(p):
    
     p.startupProcedure() 
          
-    ros.sleep(5.0)         
-    rate = ros.Rate(1)         
     #p.switch_controller("/"+p.robot_name+"/joint_group_pos_controller")    
 
-    while True:  
-        print("AAA")
-        rate.sleep() 
-        p.send_simple_des_jstate(p.q_des)         
-        if ros.is_shutdown():
-            print ("Shutting Down")                    
-            break;           
-         
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
-        
+                           
     #control loop
     while True:  
         #update the kinematics
@@ -280,15 +272,15 @@ def talker(p):
         # only torque loop                            
         #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd     
 
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-          
-          
-          
+
+        if (p.use_torque_control):
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            p.ros_pub.add_arrow(p.x_ee, p.contactForceW/(6*p.robot.robot_mass),"green") 
+        else:   
+            p.send_reduced_des_jstate(p.q_des) #no torque fb is present          
 
         # log variables
         p.logData()    
-        
-        p.ros_pub.add_arrow(p.x_ee, p.contactForceW/(6*p.robot.robot_mass),"green") 
         p.ros_pub.add_marker(p.x_ee)
         p.ros_pub.publishVisual()                      
   
@@ -313,8 +305,7 @@ if __name__ == '__main__':
     try:
         talker(p)
     except ros.ROSInterruptException:
-        from utils.common_functions import plotJoint       
-       
+        from utils.common_functions import plotJoint      
         plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
         plotJoint('torque',1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
       
