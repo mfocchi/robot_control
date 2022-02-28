@@ -7,7 +7,7 @@ Created on Thu Apr  2 18:07:44 2020
 import os
 import psutil
 #from pinocchio.visualize import GepettoVisualizer
-from custom_robot_wrapper import RobotWrapper
+from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
 import sys

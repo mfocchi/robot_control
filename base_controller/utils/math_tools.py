@@ -9,7 +9,7 @@ from __future__ import print_function
 import numpy as np
 import scipy as sp
 import math as math
-from utils import *
+from utils.utils import Utils
 
 class Math:
     def normalize(self, n):

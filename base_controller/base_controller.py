@@ -53,7 +53,7 @@ from numpy import nan
 
 
 import pinocchio as pin
-from utils.common_functions import getRobotModel
+from base_controllers.utils.common_functions import getRobotModel
 
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)

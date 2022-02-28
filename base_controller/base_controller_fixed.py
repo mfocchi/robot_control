@@ -56,6 +56,9 @@ from numpy import nan
 import pinocchio as pin
 from utils.common_functions import getRobotModel
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
+from six.moves import input # solves compatibility issue bw pyuthon 2.x and 3 for raw input that does exists in python 3
+from termcolor import colored
+
 import  params as conf
 robotName = "ur5"
 
@@ -75,7 +78,7 @@ class BaseController(threading.Thread):
         self.robot_name = robot_name
         #clean up previous process
 
-        os.system("killall rosmaster rviz gzserver gzclient")      
+        #os.system("killall rosmaster rviz gzserver gzclient")
         # needed to be able to load a custom world file
         if os.getenv("GAZEBO_MODEL_PATH") is not None:
     
@@ -90,15 +93,25 @@ class BaseController(threading.Thread):
                  print("Rviz active")
                  rvizflag=" rviz:=false"
             else:                                                         
-                 rvizflag=" rviz:=true" 
-        #start ros impedance controller
-        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-        roslaunch.configure_logging(uuid)
-        if launch_file is None:
-            launch_file = self.robot_name
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [rospkg.RosPack().get_path('ros_impedance_controller')+"/launch/ros_impedance_controller_"+launch_file+".launch"])
-        self.launch.start() 
-        ros.sleep(1.0)
+                 rvizflag=" rviz:=true"
+
+        if rosgraph.is_master_online():
+            nodes = rosnode.get_node_names()
+            if "/ur_hardware_interface"  in nodes:
+                self.real_robot = True
+                print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
+        else:
+            #start ros impedance controller
+            uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+            roslaunch.configure_logging(uuid)
+            if launch_file is None:
+                launch_file = self.robot_name
+            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [rospkg.RosPack().get_path('ros_impedance_controller')+"/launch/ros_impedance_controller_"+launch_file+".launch"])
+            self.launch.start()
+            ros.sleep(1.0)
+            self.real_robot = False
+            print(colored('SIMULATION', 'blue'))
+
 
         # Loading a robot model of robot (Pinocchio)
         xacro_path = rospkg.RosPack().get_path('ur_description')+'/urdf/ur5.xacro'
@@ -139,14 +152,32 @@ class BaseController(threading.Thread):
         
         #send data to param server
         self.verbose = conf.verbose                                                                                           
-        self.u.putIntoGlobalParamServer("verbose", self.verbose)   
-        
-        # controller manager management (only usable in non torque mode)
-        self.switch_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/switch_controller", SwitchController)
-        self.load_controller_srv = ros.ServiceProxy("/"+self.robot_name+"/controller_manager/load_controller", LoadController)
-        self.pub_reduced_des_jstate = ros.Publisher("/"+self.robot_name+"/joint_group_pos_controller/command", Float64MultiArray, queue_size=10)
-        self.available_controllers = ["joint_group_pos_controller", 
-                                      "pos_joint_traj_controller"]        
+        self.u.putIntoGlobalParamServer("verbose", self.verbose)
+
+        if (not self.real_robot):
+            self.use_torque_control = ros.get_param('/use_torque_control')
+            self.spawn_z = ros.get_param('/spawn_z')
+            self.switch_controller_srv = ros.ServiceProxy(
+                "/" + self.robot_name + "/controller_manager/switch_controller", SwitchController)
+            self.load_controller_srv = ros.ServiceProxy("/" + self.robot_name + "/controller_manager/load_controller",
+                                                        LoadController)
+            self.pub_reduced_des_jstate = ros.Publisher("/" + self.robot_name + "/joint_group_pos_controller/command",
+                                                        Float64MultiArray, queue_size=10)
+        else:
+            # controller manager management (only usable in non torque mode)
+            self.switch_controller_srv = ros.ServiceProxy("/controller_manager/switch_controller", SwitchController)
+            self.load_controller_srv = ros.ServiceProxy("/controller_manager/load_controller", LoadController)
+            self.pub_reduced_des_jstate = ros.Publisher("/joint_group_pos_controller/command", Float64MultiArray, queue_size=10)
+
+        if self.real_robot:
+            self.available_controllers = [
+                "speed_scaling_state_controller",
+                "scaled_pos_joint_traj_controller"
+            ]
+        else:
+            self.available_controllers = ["joint_group_pos_controller",
+                                             "pos_joint_traj_controller"
+                                          ]
         self.active_controller = self.available_controllers[0]
         
 
@@ -242,12 +273,12 @@ class BaseController(threading.Thread):
     def switch_controller(self, target_controller):
         """Activates the desired controller and stops all others from the predefined list above"""
         print('Available controllers: ',self.available_controllers)
-  
+        print('Controller manager: loading ', target_controller)
+
         other_controllers = (self.available_controllers)
         other_controllers.remove(target_controller)
         print('Controller manager:Switching off  :  ',other_controllers)
-        print('Controller manager: loading ',target_controller)
-        
+
         srv = LoadControllerRequest()
         srv.name = target_controller
         self.load_controller_srv(srv)  
@@ -266,22 +297,27 @@ class BaseController(threading.Thread):
 
     def send_joint_trajectory(self):
         """Creates a trajectory and sends it using the selected action server"""
- 
-        trajectory_client = actionlib.SimpleActionClient(
-            "{}/follow_joint_trajectory".format("/ur5/pos_joint_traj_controller"),
-            FollowJointTrajectoryAction,
-        )
+        if not self.real_robot:
+            trajectory_client = actionlib.SimpleActionClient(
+                "{}/follow_joint_trajectory".format("/ur5/pos_joint_traj_controller"),
+                FollowJointTrajectoryAction,
+            )
+        else:
+            trajectory_client = actionlib.SimpleActionClient(
+                "{}/follow_joint_trajectory".format("/scaled_pos_joint_traj_controller"),
+                FollowJointTrajectoryAction,
+            )
 
         # Create and fill trajectory goal
         goal = FollowJointTrajectoryGoal()
         goal.trajectory.joint_names = self.joint_names
 
         # The following list are arbitrary positions
-        # Change to your own needs if desired
-        position_list = [[0, -1.57, -1.57, 0, 0, 0]]
-        position_list.append([0.2, -1.57, -1.57, 0, 0, 0])
-        position_list.append([-0.5, 0.5, -1.2, 0, 0, 0])
-        duration_list = [3.0, 7.0, 10.0]
+        # Change to your own needs if desired q0 [ 0.5, -0.7, 1.0, -1.57, -1.57, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
+        position_list = [[0.5, -0.7 , 1.0, -1.57, -1.57, 0.5]] #limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
+        position_list.append([0.5, -0.7-0.2, 1.0-0.1, -1.57, -1.57, 0.5])
+        position_list.append([0.5+0.5, -0.7-0.3, 1.0-0.1, -1.57, -1.57, 0.5])
+        duration_list = [10.0, 20.0, 30.0]
         for i, position in enumerate(position_list):
             point = JointTrajectoryPoint()
             point.positions = position
@@ -303,7 +339,7 @@ class BaseController(threading.Thread):
         confirmed = False
         valid = False
         while not valid:
-            input_str = raw_input(
+            input_str = input(
                 "Please confirm that the robot path is clear of obstacles.\n"
                 "Keep the EM-Stop available at all times. You are executing\n"
                 "the motion at your own risk. Please type 'y' to proceed or 'n' to abort: "
@@ -326,9 +362,12 @@ def talker(p):
     p.initVars()     
     p.startupProcedure() 
          
-    # to test the trajectory         
-    #p.switch_controller("pos_joint_traj_controller")    
-    #p.send_joint_trajectory()
+    # to test the trajectory
+    if (p.real_robot):
+        p.switch_controller("scaled_pos_joint_traj_controller")
+    else:
+        p.switch_controller("pos_joint_traj_controller")
+    p.send_joint_trajectory()
 
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
@@ -339,7 +378,7 @@ def talker(p):
         p.updateKinematicsDynamics()    
     
         # set reference            
-        p.q_des  = conf.robot_params[p.robot_name]['q_0']  + 0.05*np.sin(p.time)
+        p.q_des  = conf.robot_params[p.robot_name]['q_0']  + 0.1*np.sin(p.time)
 
         # controller 
         p.tau_ffwd = np.zeros(p.robot.na)       
