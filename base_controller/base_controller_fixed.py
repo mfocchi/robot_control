@@ -77,7 +77,11 @@ class BaseController(threading.Thread):
 
         os.system("killall rosmaster rviz gzserver gzclient")      
         # needed to be able to load a custom world file
-        os.system("export GAZEBO_MODEL_PATH="+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/:"+os.environ['GAZEBO_MODEL_PATH'])  
+        if os.getenv("GAZEBO_MODEL_PATH") is not None:
+    
+            os.system("export GAZEBO_MODEL_PATH="+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/:"+os.environ["GAZEBO_MODEL_PATH"])  
+        else:
+            os.system("export GAZEBO_MODEL_PATH="+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/")
                           
         if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
             print ('ROS MASTER is active')
@@ -128,6 +132,8 @@ class BaseController(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
                
         self.broadcaster = tf.TransformBroadcaster()
+        self.spawn_x = ros.get_param('/spawn_x')        
+        self.spawn_y = ros.get_param('/spawn_y')
         self.spawn_z = ros.get_param('/spawn_z')
         self.use_torque_control = ros.get_param('/use_torque_control')
         
@@ -185,7 +191,7 @@ class BaseController(threading.Thread):
         self.g = self.robot.gravity(self.q)        
         #compute ee position  in the world frame  
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
-        self.x_ee = np.array([0.0, 0.0, self.spawn_z]) + self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation 
+        self.x_ee = np.array([self.spawn_x, self.spawn_y, self.spawn_z]) + self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation 
         # compute jacobian of the end effector in the world frame  
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
@@ -193,7 +199,7 @@ class BaseController(threading.Thread):
         #compute contact forces                        
         self.estimateContactForces() 
         # broadcast base world TF if they are different        
-        self.broadcaster.sendTransform((0.0, 0.0, self.spawn_z), (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')  
+        self.broadcaster.sendTransform((self.spawn_x, self.spawn_y, self.spawn_z), (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')  
         
 
     def estimateContactForces(self):  
@@ -333,7 +339,7 @@ def talker(p):
         p.updateKinematicsDynamics()    
     
         # set reference            
-        p.q_des  = conf.robot_params[p.robot_name]['q_0']  + 0.1*np.sin(p.time)
+        p.q_des  = conf.robot_params[p.robot_name]['q_0']  + 0.05*np.sin(p.time)
 
         # controller 
         p.tau_ffwd = np.zeros(p.robot.na)       
