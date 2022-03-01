@@ -58,6 +58,7 @@ from utils.common_functions import getRobotModel
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from six.moves import input # solves compatibility issue bw pyuthon 2.x and 3 for raw input that does exists in python 3
 from termcolor import colored
+import matplotlib.pyplot as plt
 
 import  params as conf
 robotName = "ur5"
@@ -420,6 +421,6 @@ if __name__ == '__main__':
         from utils.common_functions import plotJoint      
         plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
         plotJoint('torque',1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
-      
+        plt.show(block=True)
     
         
