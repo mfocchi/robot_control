@@ -16,28 +16,14 @@ import time
 import threading
 
 from sensor_msgs.msg import JointState
-from gazebo_msgs.msg import ContactsState
-from sensor_msgs.msg import JointState
-from nav_msgs.msg import Odometry
-#from ros_impedance_controller.msg import BaseState # no longer used
-
-from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty, EmptyRequest
 from termcolor import colored
 
 #gazebo messages
 from gazebo_msgs.srv import SetModelState
-from gazebo_msgs.srv import SetModelStateRequest
-from gazebo_msgs.msg import ModelState
 #gazebo services
 from gazebo_msgs.srv import SetPhysicsProperties
-from gazebo_msgs.srv import SetPhysicsPropertiesRequest
 from gazebo_msgs.srv import GetPhysicsProperties
-from gazebo_msgs.srv import GetPhysicsPropertiesRequest
-from geometry_msgs.msg import Vector3
-from gazebo_msgs.msg import ODEPhysics
-from std_msgs.msg import Float64
-from geometry_msgs.msg import Pose
 
 # ros utils
 import roslaunch
@@ -62,6 +48,7 @@ import matplotlib.pyplot as plt
 
 import  params as conf
 robotName = "ur5"
+real_robot = False
 
 # controller manager management
 from controller_manager_msgs.srv import SwitchControllerRequest, SwitchController
@@ -74,50 +61,56 @@ import actionlib
 
 class BaseController(threading.Thread):
     
-    def __init__(self, robot_name="ur5",  launch_file=None):
-        
+    def __init__(self, robot_name="ur5", real_robot = False):
+        threading.Thread.__init__(self)
         self.robot_name = robot_name
-        #clean up previous process
+        self.real_robot = real_robot
+        self.spawn_x = 0.5
+        self.spawn_y = 0.35
+        self.spawn_z = 1.8
+        self.use_torque_control = 0
 
-        #os.system("killall rosmaster rviz gzserver gzclient")
         # needed to be able to load a custom world file
-        if os.getenv("GAZEBO_MODEL_PATH") is not None:
-    
-            os.system("export GAZEBO_MODEL_PATH="+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/:"+os.environ["GAZEBO_MODEL_PATH"])  
-        else:
-            os.system("export GAZEBO_MODEL_PATH="+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/")
-                          
-        if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
-            print ('ROS MASTER is active')
-            nodes = rosnode.get_node_names()
-            if "/rviz" in nodes:
-                 print("Rviz active")
-                 rvizflag=" rviz:=false"
-            else:                                                         
-                 rvizflag=" rviz:=true"
+        print(colored('Adding gazebo model path!', 'blue'))
+        os.environ["GAZEBO_MODEL_PATH"] +=":"+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
 
-        if rosgraph.is_master_online():
-            nodes = rosnode.get_node_names()
-            if "/ur_hardware_interface"  in nodes:
-                self.real_robot = True
-                print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
+        if self.real_robot:
+            os.system("killall rviz gzserver gzclient")
+            print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
+            if (not rosgraph.is_master_online()) or ("/ur_hardware_interface"  not in rosnode.get_node_names()):
+                print(colored('Error: you need to launch the ur driver!', 'red'))
+                sys.exit()
+            else:
+                package = 'rviz'
+                executable = 'rviz'
+                args= '-d ' + rospkg.RosPack().get_path('ros_impedance_controller') + '/config/operator.rviz'
+                node = roslaunch.core.Node(package, executable, args=args)
+                launch = roslaunch.scriptapi.ROSLaunch()
+                launch.start()
+                process = launch.launch(node)
         else:
+            # clean up previous process
+            os.system("killall rosmaster rviz gzserver gzclient")
             #start ros impedance controller
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
             roslaunch.configure_logging(uuid)
-            if launch_file is None:
-                launch_file = self.robot_name
-            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [rospkg.RosPack().get_path('ros_impedance_controller')+"/launch/ros_impedance_controller_"+launch_file+".launch"])
-            self.launch.start()
-            ros.sleep(1.0)
-            self.real_robot = False
-            print(colored('SIMULATION', 'blue'))
 
+            cli_args = [rospkg.RosPack().get_path('ros_impedance_controller')+'/launch/ros_impedance_controller_ur5.launch',
+                        'spawn_x:='+str(self.spawn_x),
+                        'spawn_y:='+ str(self.spawn_y),
+                        'spawn_z:='+ str(self.spawn_z),
+                        'use_torque_control:=' + str(self.use_torque_control)]
+            roslaunch_args = cli_args[1:]
+            roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
+            parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
+            parent.start()
+            ros.sleep(1.0)
+            print(colored('-----------------------------------------------SIMULATION', 'blue'))
 
         # Loading a robot model of robot (Pinocchio)
         xacro_path = rospkg.RosPack().get_path('ur_description')+'/urdf/ur5.xacro'
         self.robot = getRobotModel(self.robot_name, generate_urdf = True, xacro_path = xacro_path)
-        threading.Thread.__init__(self)
+
                                
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual = True)                    
@@ -135,7 +128,6 @@ class BaseController(threading.Thread):
         self.contactForceW = np.zeros(3)
       
         self.joint_names = conf.robot_params[self.robot_name]['joint_names']
-        self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)                  
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
 
         # freeze base  and pause simulation service 
@@ -146,18 +138,16 @@ class BaseController(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
                
         self.broadcaster = tf.TransformBroadcaster()
-        self.spawn_x = ros.get_param('/spawn_x')        
-        self.spawn_y = ros.get_param('/spawn_y')
-        self.spawn_z = ros.get_param('/spawn_z')
-        self.use_torque_control = ros.get_param('/use_torque_control')
-        
+
+
         #send data to param server
         self.verbose = conf.verbose                                                                                           
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
 
         if (not self.real_robot):
-            self.use_torque_control = ros.get_param('/use_torque_control')
-            self.spawn_z = ros.get_param('/spawn_z')
+            self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
+                                             callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+
             self.switch_controller_srv = ros.ServiceProxy(
                 "/" + self.robot_name + "/controller_manager/switch_controller", SwitchController)
             self.load_controller_srv = ros.ServiceProxy("/" + self.robot_name + "/controller_manager/load_controller",
@@ -166,6 +156,9 @@ class BaseController(threading.Thread):
                                                         Float64MultiArray, queue_size=10)
         else:
             # controller manager management (only usable in non torque mode)
+            self.sub_jstate = ros.Subscriber("/joint_states", JointState,
+                                             callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+
             self.switch_controller_srv = ros.ServiceProxy("/controller_manager/switch_controller", SwitchController)
             self.load_controller_srv = ros.ServiceProxy("/controller_manager/load_controller", LoadController)
             self.pub_reduced_des_jstate = ros.Publisher("/joint_group_pos_controller/command", Float64MultiArray, queue_size=10)
@@ -192,7 +185,9 @@ class BaseController(threading.Thread):
                      self.q[joint_idx] = msg.position[msg_idx]
                      self.qd[joint_idx] = msg.velocity[msg_idx]
                      self.tau[joint_idx] = msg.effort[msg_idx]
-                
+         # broadcast base world TF if they are different
+         self.broadcaster.sendTransform((self.spawn_x, self.spawn_y, self.spawn_z), (0.0, 0.0, 0.0, 1.0),   Time.now(), '/base_link', '/world')
+
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
@@ -230,9 +225,7 @@ class BaseController(threading.Thread):
         self.J = self.J6[:3,:] 
         #compute contact forces                        
         self.estimateContactForces() 
-        # broadcast base world TF if they are different        
-        self.broadcaster.sendTransform((self.spawn_x, self.spawn_y, self.spawn_z), (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')  
-        
+
 
     def estimateContactForces(self):  
         # estimate ground reaxtion forces from tau 
@@ -315,10 +308,22 @@ class BaseController(threading.Thread):
 
         # The following list are arbitrary positions
         # Change to your own needs if desired q0 [ 0.5, -0.7, 1.0, -1.57, -1.57, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
-        position_list = [[0.5, -0.7 , 1.0, -1.57, -1.57, 0.5]] #limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
-        position_list.append([0.5, -0.7-0.2, 1.0-0.1, -1.57, -1.57, 0.5])
-        position_list.append([0.5+0.5, -0.7-0.3, 1.0-0.1, -1.57, -1.57, 0.5])
-        duration_list = [10.0, 20.0, 30.0]
+        print(colored("JOINTS ARE: ", 'blue'), self.q.transpose())
+        # position_list = [[0.5, -0.7, 1.0, -1.57, -1.57, 0.5]]  # limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
+        # position_list.append([0.5, -0.7 - 0.2, 1.0 - 0.1, -1.57, -1.57, 0.5])
+        # position_list.append([0.5 + 0.5, -0.7 - 0.3, 1.0 - 0.1, -1.57, -1.57, 0.5])
+
+        self.q0 = np.copy(self.q)
+        dq1 = np.array([0.2, 0,0,0,0,0])
+        dq2 = np.array([0.2, 0.4, 0, 0, 0, 0])
+        dq3 = np.array([0.2, 0.4, -0.4, 0, 0, 0])
+        position_list = [self.q0]  # limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
+        position_list.append(self.q0 + dq1)
+        position_list.append(self.q0 + dq2)
+        position_list.append(self.q0 + dq3)
+        print(colored(position_list,'blue'))
+
+        duration_list = [5.0, 10.0, 20.0, 30.0]
         for i, position in enumerate(position_list):
             point = JointTrajectoryPoint()
             point.positions = position
@@ -362,8 +367,9 @@ def talker(p):
     #p.register_node()
     p.initVars()     
     p.startupProcedure() 
-         
+    ros.sleep(1.0)
     # to test the trajectory
+
     if (p.real_robot):
         p.switch_controller("scaled_pos_joint_traj_controller")
     else:
@@ -414,12 +420,12 @@ def talker(p):
     
 if __name__ == '__main__':
 
-    p = BaseController(robotName)
+    p = BaseController(robotName, real_robot)
     try:
         talker(p)
     except ros.ROSInterruptException:
         from utils.common_functions import plotJoint      
-        plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
+        plotJoint('position',0, p.time_log, p.q_log, None, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
         plotJoint('torque',1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
         plt.show(block=True)
     
