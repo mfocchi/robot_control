@@ -95,7 +95,24 @@ class PidManager:
         self.joint_pid.i_value = ki
         self.joint_pid_log[joint_idx] = copy.deepcopy(self.joint_pid)
        
-        self.req_msg.data = self.joint_pid_log
+        self.req_msg.data =  copy.deepcopy(self.joint_pid_log)
+
+        # send request and get response (in this case none)
+        self.set_pd_service(self.req_msg)
+        
+    def setPDjoints(self, kp, kd, ki):
+        # create the message
+        self.req_msg.data = []
+        
+        for joint_idx in range(len(self.joint_names)):
+            # fill in the message with des values for kp kd
+            self.joint_pid.joint_name = self.joint_names[joint_idx]
+            self.joint_pid.p_value = kp[joint_idx]
+            self.joint_pid.d_value = kd[joint_idx]
+            self.joint_pid.i_value = ki[joint_idx]
+            self.joint_pid_log[joint_idx] = copy.deepcopy(self.joint_pid)
+       
+        self.req_msg.data =  copy.deepcopy(self.joint_pid_log)
 
         # send request and get response (in this case none)
         self.set_pd_service(self.req_msg)

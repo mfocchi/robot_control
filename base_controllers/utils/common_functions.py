@@ -7,7 +7,7 @@ Created on Thu Apr  2 18:07:44 2020
 import os
 import psutil
 #from pinocchio.visualize import GepettoVisualizer
-from custom_robot_wrapper import RobotWrapper
+from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -87,18 +87,21 @@ def startNode(node_name):
     process = launch.launch(node)
 
 
-def getRobotModel(robot_name="ur5", generate_urdf = False):    
+def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):    
 
     
     if (generate_urdf):  
-        try:          
-            xacro_path = rospkg.RosPack().get_path(robot_name+'_description')
+        try:       
+            #old way
+            if (xacro_path is None):
+                xacro_path = rospkg.RosPack().get_path(robot_name+'_description')+ '/robots/'+robot_name+'.urdf.xacro'
+            
             package = 'xacro'
             executable = 'xacro'
             name = 'xacro'
             namespace = '/'
-            args = xacro_path+'/robots/'+robot_name+'.urdf.xacro --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
-            
+            args = xacro_path+ ' --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
+     
             try:
                 flywheel = ros.get_param('/flywheel')
                 args+=' flywheel:='+flywheel
@@ -106,6 +109,7 @@ def getRobotModel(robot_name="ur5", generate_urdf = False):
                 pass          
             
             os.system("rosrun xacro xacro "+args)  
+            #os.system("rosparam get /robot_description > "+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf')  
             print ("URDF generated")
         except:
             print (robot_name+'_description not present')
@@ -124,7 +128,7 @@ def getRobotModel(robot_name="ur5", generate_urdf = False):
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None):
+def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None, joint_names = None):
     if name == 'position':
         plot_var_log = q_log
         if   (q_des_log is not None):
@@ -153,8 +157,11 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
 
     #neet to transpose the matrix other wise it cannot be plot with numpy array    
     fig = plt.figure(figure_id)                
-    fig.suptitle(name, fontsize=20)             
-    labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
+    fig.suptitle(name, fontsize=20) 
+    if joint_names is None:            
+        labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift","3 - Elbow","4 - Wrist 1","5 - Wrist 2","6 - Wrist 3"]
+    else:
+        labels_ur =joint_names
     labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
     labels_flywheel = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE", 
                   "back_wheel", "front_wheel", "left_wheel", "right_wheel"]

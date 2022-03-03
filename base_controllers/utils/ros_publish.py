@@ -46,7 +46,7 @@ class RosPub():
         self.broadcaster = tf.TransformBroadcaster()  
         self.fixedBaseRobot = False
         self.visual_frame = visual_frame
-        
+        print("Initialized ros pub---------------------------------------------------------------")
     def publish(self,robot, q, qd = None, tau = None):
     
         if (qd is None ):
