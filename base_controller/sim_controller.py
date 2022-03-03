@@ -1,15 +1,45 @@
 from controller import Controller
 
 import numpy as np
-
+import pinocchio as pin
 import rospy as ros
+# ros utils
+import roslaunch
+import rosnode
+import rosgraph
 
 from utils.ros_publish import RosPub
+from utils.pidManager import PidManager
+from utils.math_tools import *
 
 from sensor_msgs.msg import JointState
-from sensor_msgs.msg import Imu
+#from sensor_msgs.msg import Imu
+from nav_msgs.msg import Odometry
+
+
+#gazebo messages
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.srv import SetModelStateRequest
+from gazebo_msgs.msg import ModelState
+#gazebo services
+from gazebo_msgs.srv import SetPhysicsProperties
+from gazebo_msgs.srv import SetPhysicsPropertiesRequest
+from gazebo_msgs.srv import GetPhysicsProperties
+from gazebo_msgs.srv import GetPhysicsPropertiesRequest
+from geometry_msgs.msg import Vector3
+from gazebo_msgs.msg import ODEPhysics
+from std_msgs.msg import Float64
+from geometry_msgs.msg import Pose
+
+
+from tf.transformations import euler_from_quaternion
+from std_srvs.srv import Empty
 
 import params as conf
+
+import os
+
+from pysolo.controllers.simple_controllers import PD_joints
 
 
 class SimController(Controller):
@@ -25,23 +55,26 @@ class SimController(Controller):
             else:
                 rvizflag = " rviz:=true"
 
+        self.robot_name = robot_name
         # start ros impedance controller
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
         if launch_file is None:
-            launch_file = robot_name
+            launch_file = self.robot_name
         self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+launch_file+".launch"])
         self.launch.start()
         ros.sleep(1.0)
 
-        super().__init__(robot_name)
-        self.dt = conf.robot_params[robot_name]['dt_sim']
-        self.ros_pub = RosPub(robot_name, only_visual=True, visual_frame = "world")
+        super().__init__(self.robot_name)
+        self.dt = conf.robot_params[self.robot_name]['dt']
+        self.robot.q_home = conf.robot_params[self.robot_name]['q_0']
+        self.ros_pub = RosPub(self.robot_name, only_visual=True, visual_frame = "world")
+        self.rate = ros.Rate(1 / self.dt)
 
         # Subscribers
-        self.sub_pose = ros.Subscriber("/" + robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
+        self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
                                        queue_size=1, tcp_nodelay=True)
-        self.sub_jstate = ros.Subscriber("/" + robot_name + "/joint_states", JointState, callback=self._receive_jstate,
+        self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState, callback=self._receive_jstate,
                                          queue_size=1, tcp_nodelay=True)
         # Publisher
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
@@ -57,6 +90,7 @@ class SimController(Controller):
         # send data to param server
         self.verbose = conf.verbose
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
+        self.initVars()
 
     def _receive_pose(self, msg):
         self.quaternion = (
@@ -84,20 +118,56 @@ class SimController(Controller):
         self.b_R_w = self.mathJet.rpyToRot(euler)
 
 
-    def send_des_jstate(self, q_des, qd_des, tau_ffwd):
+    def _send_des_jstate(self, q_des, qd_des, tau_des):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
          msg.position = q_des
          msg.velocity = qd_des
-         msg.effort = tau_ffwd
+         msg.effort = tau_des
          self.pub_des_jstate.publish(msg)
+
+    def send_command(self, q_des=None, qd_des=None, tau_ffwd=None, tau_fb=None):
+        # q_des, qd_des, and tau_ffwd have dimension 12                                                         
+        # and are ordered as on the robot                                                                       
+
+        if (q_des is None) and (qd_des is None) and (tau_ffwd is None) and (tau_fb is None):
+            raise RuntimeError('Cannot have both states (q_des and qd_des) and controls (tau_ffwd) as None')
+
+        if q_des is not None:
+            self.q_des = q_des
+        else:
+            self.q_des = np.zeros(self.robot.na)
+
+        if qd_des is not None:
+            self.qd_des = qd_des
+        else:
+            self.qd_des = np.zeros(self.robot.na)
+
+        if tau_ffwd is not None:
+            self.tau_ffwd = tau_ffwd
+        else:
+            self.tau_ffwd = np.zeros(self.robot.na)
+
+        if tau_fb is not None:
+            self.tau_fb = tau_fb
+        else:
+            self.tau_fb = np.zeros(self.robot.na)
+
+        self.tau_des = self.tau_fb + self.tau_ffwd
+
+        self._send_des_jstate(self.q_des, self.qd_des, self.tau_des)
+
+        # log variables                                                                                         
+        self.logData()
+        self.rate.sleep()
+        self.time = self.time + conf.robot_params[self.robot_name]['dt']
 
     def register_node(self):
         ros.init_node('controller_python', disable_signals=False, anonymous=False)
 
     def deregister_node(self):
         print("deregistering nodes")
-        os.system(" rosnode kill /" + robot_name + "/ros_impedance_controller")
+        os.system(" rosnode kill /" + self.robot_name + "/ros_impedance_controller")
         os.system(" rosnode kill /gazebo")
 
     def get_contact(self):
@@ -133,7 +203,7 @@ class SimController(Controller):
         req_reset_world = SetModelStateRequest()
         # create model state
         model_state = ModelState()
-        model_state.model_name = robot_name
+        model_state.model_name = self.robot_name
         model_state.pose.position.x = 0.0
         model_state.pose.position.y = 0.0
         model_state.pose.position.z = 0.8
@@ -204,15 +274,14 @@ class SimController(Controller):
         self.centroidalInertiaB = self.robot.centroidalInertiaB(configuration, gen_velocities)
         self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(configuration)
 
-    def startupProcedure(self, robot_name):
+    def startupProcedure(self):
         ros.sleep(0.5)  # wait for callback to fill in jointmnames
-
-        self.pid = PidManager(
-            self.joint_names)  # I start after cause it needs joint names filled in by receive jstate callback
+        # self.pid = PidManager(self.joint_names)  # I start after cause it needs joint names filled in by receive jstate callback
         # set joint pdi gains
-        self.pid.setPDs(conf.robot_params[robot_name]['kp'], conf.robot_params[robot_name]['kd'], 0.0)
+        # self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0)
+        self.controller = PD_joints(self.robot, conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'])
 
-        if (robot_name == 'hyq'):
+        if (self.robot_name == 'hyq'):
             # these torques are to compensate the leg gravity
             self.gravity_comp = np.array(
                 [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
@@ -221,7 +290,7 @@ class SimController(Controller):
             self.freezeBase(1)
             start_t = ros.get_time()
             while ros.get_time() - start_t < 1.0:
-                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                self._send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                 ros.sleep(0.01)
             if self.verbose:
                 print("q err prima freeze base", (self.q - self.q_des))
@@ -234,7 +303,7 @@ class SimController(Controller):
 
             start_t = ros.get_time()
             while ros.get_time() - start_t < 1.0:
-                self.send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
+                self._send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
                 ros.sleep(0.01)
             if self.verbose:
                 print("q err post grav comp", (self.q - self.q_des))
@@ -242,12 +311,38 @@ class SimController(Controller):
             print("starting com controller (no joint PD)...")
             self.pid.setPDs(0.0, 0.0, 0.0)
 
-        if (robot_name == 'solo'):
+        if (self.robot_name == 'solo'):
             start_t = ros.get_time()
-            while ros.get_time() - start_t < 0.5:
-                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+            # fb_conf = np.hstack([pin.neutral(self.robot.model)[:7], self.q_des])
+            # self.gravity_comp = -self.robot.gravity(fb_conf)[6:]
+
+            self.q_des = self.robot.q_home
+            self.qd_des = np.zeros(self.robot.na)
+            # self.tau_ffwd = self.gravity_comp
+
+            while ros.get_time() - start_t < 0.3:
+                fb_conf = np.hstack([pin.neutral(self.robot.model)[:7], self.q])
+
+                self.tau_fb = np.zeros(12)#self.controller.feedback(self.q, self.q_des, self.qd, self.qd_des)
+                self.tau_ffwd = self.controller.feedforward(self.q, np.array(self.quaternion), True)
+                #self.tau_des = self.tau_fb+self.tau_ffwd
+                #self.tau_ffwd = np.zeros(12)
+
+                self.send_command(self.q_des, self.qd_des, self.tau_ffwd, self.tau_fb)
+
+                #self._send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd, self.tau_fb)
+                #self.logData()
                 ros.sleep(0.01)
-            self.pid.setPDs(0.0, 0.0, 0.0)
+
+            #self.pid.setPDs(0.0, 0.0, 0.0)
         print("finished startup")
 
+
+
+
+if __name__ == '__main__':
+    p = SimController('solo')
+
+    p.startupProcedure()
+    p.pause_physics_client()
 

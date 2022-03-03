@@ -8,7 +8,7 @@ import time
 import threading
 
 import numpy as np
-
+import pinocchio as pin
 # utility functions
 from utils.utils import Utils
 from utils.math_tools import *
@@ -16,9 +16,8 @@ from utils.common_functions import getRobotModel
 
 import params as conf
 
-# abstract base class
-import abc
-
+import rosbag
+import datetime
 
 
 
@@ -26,9 +25,10 @@ import abc
 """ This class is parent of ExperimentController and of SimulationController. It implements methods that are necessari
  to both the children"""
 
-class Controller(abc.ABC, threading.Thread):
+class Controller(threading.Thread):
 
     def __init__(self, robot_name):
+        self.robot_name = robot_name
         self.robot = getRobotModel(robot_name, generate_urdf = True)
 
         threading.Thread.__init__(self)
@@ -74,7 +74,7 @@ class Controller(abc.ABC, threading.Thread):
         self.grForcesW = np.empty(3*self.robot.nee) * np.nan
         self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
         self.wJ = [np.zeros((6, self.robot.nv))] * 4
-        self.bJ = [np.zeros((6, self.robot.nv))] * 4
+        self.bJ = [np.eye(3)] * 4
 
         self.W_contacts = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
@@ -82,6 +82,12 @@ class Controller(abc.ABC, threading.Thread):
         # Attribute to be set by ALL children
         self.dt = NotImplemented
         self.ros_pub = NotImplemented
+        self.rate = NotImplemented
+
+        now = datetime.datetime.now()
+        date_string = now.strftime("%Y%m%d%H%M")
+
+        self.sensors_bag = rosbag.Bag(os.environ['PYSOLO_FROSCIA'] + '/bags/' + date_string + '.bag', 'w')
 
 
 
@@ -131,39 +137,39 @@ class Controller(abc.ABC, threading.Thread):
             self.wJ[leg] = self.b_R_w.transpose().dot(self.bJ[leg])
 
     def initVars(self):
-        self.comPosB_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.comVelB_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.comPosB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.comVelB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.comPosW_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.comVelW_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.comPosW_des_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.comVelW_des_log = np.empry((3, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.comPosW_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.comVelW_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.comPosW_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.comVelW_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.basePoseW_log = np.empty((6, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.baseTwistW_log = np.empty((6, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.baseTwistW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.q_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.q_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.q_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.qd_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.qd_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.qd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.qd_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.tau_fb_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.tau_ffwd_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.tau_des_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.tau_log = np.empty((self.robot.na, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.tau_fb_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.tau_ffwd_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.tau_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.tau_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.grForcesW_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.grForcesB_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.grForcesW_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.grForcesB_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.W_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
-        self.B_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.W_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.B_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.contacts_state_log = np.empty((self.robot.nee, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.contacts_state_log = np.empty((self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.constr_viol_log = np.empty((4, conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.constr_viol_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
-        self.time_log = np.empty((conf.robot_params[robot_name]['buffer_size'])) *np.nan
+        self.time_log = np.empty((1, (conf.robot_params[self.robot_name]['buffer_size']))) *np.nan
 
         self.time = 0
         self.log_counter = -1
@@ -172,39 +178,39 @@ class Controller(abc.ABC, threading.Thread):
         self.log_counter += 1
         self.time += self.dt # TODO: modify with a more sofisticate update of time
         # if log_counter exceed N*buffer_size, reshape all the log variables
-        if (self.log_counter % conf.robot_params[robot_name]['buffer_size']) == 0:
-            self.log_policy(self.comPosB_log)
-            self.log_policy(self.comVelB_log)
-            self.log_policy(self.comPosW_log)
-            self.log_policy(self.comVelW_log)
-            self.log_policy(self.comPosW_des_log)
-            self.log_policy(self.comVelW_des_log)
-            self.log_policy(self.basePoseW_log)
-            self.log_policy(self.baseTwistW_log)
-            self.log_policy(self.q_des_log)
-            self.log_policy(self.q_log )
-            self.log_policy(self.qd_des_log)
-            self.log_policy(self.qd_log)
-            self.log_policy(self.tau_fb_log)
-            self.log_policy(self.tau_ffwd_log)
-            self.log_policy(self.tau_des_log)
-            self.log_policy(self.tau_log)
-            self.log_policy(self.grForcesW_log)
-            self.log_policy(self.time_log)
-            self.log_policy(self.constr_viol_log)
-            self.log_policy(self.grForcesW_log)
-            self.log_policy(self.grForcesB_log)
-            self.log_policy(self.W_contacts_log)
-            self.log_policy(self.B_contacts_log)
-            self.log_policy(self.contacts_state_log)
+        if (self.log_counter % conf.robot_params[self.robot_name]['buffer_size']) == 0:
+            self.comPosB_log       = self.log_policy(self.comPosB_log)
+            self.comVelB_log       = self.log_policy(self.comVelB_log)
+            self.comPosW_log       = self.log_policy(self.comPosW_log)
+            self.comVelW_log       = self.log_policy(self.comVelW_log)
+            self.comPosW_des_log   = self.log_policy(self.comPosW_des_log)
+            self.comVelW_des_log   = self.log_policy(self.comVelW_des_log)
+            self.basePoseW_log     = self.log_policy(self.basePoseW_log)
+            self.baseTwistW_log    = self.log_policy(self.baseTwistW_log)
+            self.q_des_log         = self.log_policy(self.q_des_log)
+            self.q_log             = self.log_policy(self.q_log)
+            self.qd_des_log        = self.log_policy(self.qd_des_log)
+            self.qd_log            = self.log_policy(self.qd_log)
+            self.tau_fb_log        = self.log_policy(self.tau_fb_log)
+            self.tau_ffwd_log      = self.log_policy(self.tau_ffwd_log)
+            self.tau_des_log       = self.log_policy(self.tau_des_log)
+            self.tau_log           = self.log_policy(self.tau_log)
+            self.grForcesW_log     = self.log_policy(self.grForcesW_log)
+            self.time_log          = self.log_policy(self.time_log)
+            self.constr_viol_log   = self.log_policy(self.constr_viol_log)
+            self.grForcesW_log     = self.log_policy(self.grForcesW_log)
+            self.grForcesB_log     = self.log_policy(self.grForcesB_log)
+            self.W_contacts_log    = self.log_policy(self.W_contacts_log)
+            self.B_contacts_log    = self.log_policy(self.B_contacts_log)
+            self.contacts_state_log= self.log_policy(self.contacts_state_log)
 
         # Fill with new values
-        self.comPosB_log[:, self.log_counter] = self.comPosB_log
-        self.comVelB_log[:, self.log_counter] = self.comVelB_log
-        self.comPosW_log[:, self.log_counter] = self.comPosW_log
-        self.comVelW_log[:, self.log_counter] = self.comVelW_log
-        self.comPosW_des_log[:, self.log_counter] = self.comPosW_des_log
-        self.comVelW_des_log[:, self.log_counter] = self.comVelW_des_log
+        self.comPosB_log[:, self.log_counter] = self.comPosB
+        self.comVelB_log[:, self.log_counter] = self.comVelB
+        self.comPosW_log[:, self.log_counter] = self.comPosW
+        self.comVelW_log[:, self.log_counter] = self.comVelW
+        self.comPosW_des_log[:, self.log_counter] = self.comPosW_des
+        self.comVelW_des_log[:, self.log_counter] = self.comVelW_des
         self.basePoseW_log[:, self.log_counter] = self.basePoseW
         self.baseTwistW_log[:, self.log_counter] = self.baseTwistW
         self.q_des_log[:, self.log_counter] = self.q_des
@@ -216,28 +222,11 @@ class Controller(abc.ABC, threading.Thread):
         self.tau_des_log[:, self.log_counter] = self.tau_des
         self.tau_log[:, self.log_counter] = self.tau
         self.grForcesW_log[:, self.log_counter] = self.grForcesW
-        self.time_log[self.log_counter] = self.time
+        self.time_log[:, self.log_counter] = self.time
 
-    @staticmethod
-    def log_policy(var):
-        tmp = np.empty((var.shape[0], var.shape[1]+conf.robot_params[robot_name]['buffer_size'])) * np.nan
+
+    def log_policy(self, var):
+        tmp = np.empty((var.shape[0], var.shape[1]+conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         tmp[:var.shape[0], :var.shape[1]] = var
-        var = tmp
+        return tmp
 
-
-    # Abstract methods
-    @abc.abstractmethod
-    def _receive_pose(self, msg):
-        pass
-
-    @abc.abstractmethod
-    def estimateContacts(self):
-        pass
-
-    @abc.abstractmethod
-    def visualizeContacts(self):
-        pass
-
-    @abc.abstractmethod
-    def computeCOM(self):
-        pass
