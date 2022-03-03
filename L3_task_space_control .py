@@ -7,10 +7,10 @@ import math
 import time as tm
 import eigenpy
 import os
-from base_controller.utils.common_functions import *
-from base_controller.utils.optimTools import quadprog_solve_qp
-from base_controller.utils.ros_publish import RosPub
-from base_controller.utils.math_tools import Math
+from base_controllers.utils.common_functions import *
+from base_controllers.utils.optimTools import quadprog_solve_qp
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.math_tools import Math
 import L3_conf as conf
 
 #instantiate graphic utils

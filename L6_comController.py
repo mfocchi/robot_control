@@ -8,7 +8,7 @@ Created on Fri Nov  2 16:52:08 2018
 #!/usr/bin/env python
 
 #inherit from base controller
-from base_controller.base_controller import BaseController
+from base_controllers.base_controller import BaseController
 import rospy as ros 
 import numpy as np
 from numpy import nan

@@ -8,9 +8,8 @@ import time as tm
 import eigenpy
 eigenpy.switchToNumpyMatrix()
 import os
-from base_controller.utils.common_functions import *
-from base_controller.utils.optimTools import quadprog_solve_qp
-from base_controller.utils.ros_publish import RosPub
+from base_controllers.utils.common_functions import *
+from base_controllers.utils.ros_publish import RosPub
 
 import L3_conf as conf
 

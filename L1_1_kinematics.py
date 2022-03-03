@@ -6,14 +6,14 @@ from numpy import nan
 import math
 import time as tm
 
-from base_controller.utils.common_functions import *
-from base_controller.utils.ros_publish import RosPub
-from base_controller.utils.kin_dyn_utils import directKinematics as dk
-from base_controller.utils.kin_dyn_utils import computeEndEffectorJacobian as eeJ
-from base_controller.utils.kin_dyn_utils import numericalInverseKinematics as ik
-from base_controller.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
-from base_controller.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
-from base_controller.utils.math_tools import Math
+from base_controllers.utils.common_functions import *
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.kin_dyn_utils import directKinematics as dk
+from base_controllers.utils.kin_dyn_utils import computeEndEffectorJacobian as eeJ
+from base_controllers.utils.kin_dyn_utils import numericalInverseKinematics as ik
+from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
+from base_controllers.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
+from base_controllers.utils.math_tools import Math
 
 import L1_conf as conf
 

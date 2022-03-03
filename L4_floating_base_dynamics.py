@@ -3,7 +3,7 @@ import pinocchio as pin
 import numpy as np
 import example_robot_data
 from pinocchio.utils import * #rand
-from base_controller.utils.common_functions import getRobotModel
+from base_controllers.utils.common_functions import getRobotModel
 
 
 # console print options to see matrix nicely
