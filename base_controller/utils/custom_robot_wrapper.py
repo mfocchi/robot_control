@@ -289,6 +289,22 @@ class RobotWrapper(PinocchioRobotWrapper):
         elif component == 'angular':
             res = frame_acc.angular
         return res
+
+    def frictionRegressor(self, v):
+        # Fv: stack of viscous friction coefficients
+        # Fc: stack of Coulomb friction coefficients
+        # Fo: stack of friction offsets
+        #                                                 [Fv]
+        # tau_friction[i] = frictionRegressor(qd)[i, :] * [Fc]
+        #                                                 [Fo]
+
+        Y_v = np.diag(v[6:])
+        Y_c = np.diag(np.sign(v[6:]))
+        Y_o = np.eye(self.na)
+
+        Y_f = np.hstack([Y_v, Y_c, Y_o])
+
+        return Y_f
 __all__ = ['RobotWrapper']
 
 
