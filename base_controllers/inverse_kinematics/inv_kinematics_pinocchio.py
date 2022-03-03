@@ -14,7 +14,7 @@ import math
 
 import sys
 sys.path.append('../utils')#allows to incude stuff on the same level
-from utils import Utils
+from base_controllers.utils.utils import Utils
 
 class robotKinematics():
     def __init__(self, robot, ee_frames):
@@ -63,7 +63,7 @@ class robotKinematics():
      
         return J[:3, 6 + blockIdx : 6 + blockIdx + 3]
         
-    def footInverseKinematicsFixedBaseLineSearch(self, foot_pos_des, frame_name, q0_leg = np.zeros(3),  verbose = False):    
+    def footInverseKinematicsFixedBaseLineSearch(self, foot_pos_des, frame_name, q0_leg = np.zeros(3),  verbose = False):
 
       
         # Error initialization
@@ -102,11 +102,12 @@ class robotKinematics():
                     print(("\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ", np.linalg.norm(e_bar)))
                 IKsuccess = False
                 break
-             
+
+
             #compute newton step
-            dq = J_leg.T.dot(np.linalg.solve(J_leg.dot(J_leg.T) + lambda_ * np.identity(J_leg.shape[1]), e_bar))
-         
-        
+            Jpinv = J_leg.T.dot(np.linalg.inv(J_leg.dot(J_leg.T)  + lambda_ * np.identity(J_leg.shape[0])))
+            dq = Jpinv.dot(e_bar)
+
             while True:
                 # Update
                 q1_leg = q0_leg + dq*alpha
@@ -138,9 +139,84 @@ class robotKinematics():
 #                q0_leg[i] += 2 * math.pi      
 
         return q0_leg, IKsuccess
-        
-   
-    def fixedBaseInverseKinematics(self, feetPosDes, q0, verbose = False):
+
+    def endeffectorInverseKinematicsLineSearch(self, ee_pos_des, frame_name, q0=np.zeros(6), verbose=False):
+
+        # Error initialization
+        e_bar = 1
+        iter = 0
+        # Recursion parameters
+        epsilon = 0.0001  # Tolerance
+        # alpha = 0.1
+        alpha = 1  # Step size
+        lambda_ = 0.0001  # Damping coefficient for pseudo-inverse
+        max_iter = 1000 # Maximum number of iterations
+
+        # For line search only
+        gamma = 0.5
+        beta = 0.5
+
+        # Inverse kinematics with line search
+        while True:
+            # compute foot position
+            self.robot.computeAllTerms(q0, np.zeros(6))
+            ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
+            # get the square matrix jacobian that is smaller
+            J_ee = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True, pinocchio.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
+
+            # computed error wrt the des cartesian position
+            e_bar = ee_pos_des - ee_pos0
+
+            if np.linalg.norm(e_bar) < epsilon:
+                IKsuccess = True
+                if verbose:
+                    print("IK Convergence achieved!, norm(error) :", np.linalg.norm(e_bar))
+                    print("Inverse kinematics solved in {} iterations".format(iter))
+                break
+            if iter >= max_iter:
+                if verbose:
+                    print("\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ",
+                          np.linalg.norm(e_bar))
+                IKsuccess = False
+                break
+
+            # compute newton step
+            Jpinv = J_ee.T.dot(np.linalg.inv(  J_ee.dot(J_ee.T)  + lambda_ * np.identity(J_ee.shape[0]) ))
+            dq = Jpinv.dot(e_bar)
+
+            while True:
+                # Update
+                q1 = q0 + dq * alpha
+                self.robot.computeAllTerms(q0, np.zeros(6))
+                ee_pos1 =  self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).translation
+
+                # Compute error of next step
+                e_bar_new = ee_pos_des - ee_pos1
+                # print "e_bar_new", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
+
+                error_reduction = np.linalg.norm(e_bar) - np.linalg.norm(e_bar_new)
+                threshold = 0.0  # even more strict: gamma*alpha*np.linalg.norm(e_bar)
+
+                if error_reduction < threshold:
+                    alpha = beta * alpha
+                    if verbose:
+                        print(" line search: alpha: ", alpha)
+                else:
+                    q0 = q1
+                    alpha = 1
+                    break
+            iter += 1
+
+        # unwrapping prevents from outputs larger than 2pi
+        #        for i in range(len(q0_leg)):
+        #            while q0_leg[i] >= 2 * math.pi:
+        #                q0_leg[i] -= 2 * math.pi
+        #            while q0_leg[i] < -2 * math.pi:
+        #                q0_leg[i] += 2 * math.pi
+
+        return q0, IKsuccess
+
+    def leggedRobotInverseKinematics(self, feetPosDes, q0, verbose = False):
 
         no_of_feet = len(self.urdf_feet_names)
         print("Number of feet is :", no_of_feet)
