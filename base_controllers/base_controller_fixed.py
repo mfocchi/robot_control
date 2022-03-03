@@ -15,6 +15,8 @@ import sys
 import time
 import threading
 
+# messages for topic subscribers
+from geometry_msgs.msg import WrenchStamped
 from sensor_msgs.msg import JointState
 from std_srvs.srv import Empty, EmptyRequest
 from termcolor import colored
@@ -128,7 +130,8 @@ class BaseController(threading.Thread):
         self.qd_des = np.zeros(self.robot.na)
         self.tau_ffwd =np.zeros(self.robot.na)                                         
         self.contactForceW = np.zeros(3)
-      
+        self.contactMomentW = np.zeros(3)
+
         self.joint_names = conf.robot_params[self.robot_name]['joint_names']
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
 
@@ -148,6 +151,9 @@ class BaseController(threading.Thread):
 
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
                                          callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+
+        self.sub_ftsensor = ros.Subscriber("/" + self.robot_name + "/wrench", WrenchStamped,
+                                         callback=self._receive_ftsensor, queue_size=1, tcp_nodelay=True)
 
         self.switch_controller_srv = ros.ServiceProxy(
             "/" + self.robot_name + "/controller_manager/switch_controller", SwitchController)
@@ -182,6 +188,18 @@ class BaseController(threading.Thread):
          # broadcast base world TF if they are different
          self.broadcaster.sendTransform((self.spawn_x, self.spawn_y, self.spawn_z), (0.0, 0.0, 0.0, 1.0),   Time.now(), '/base_link', '/world')
 
+    def _receive_ftsensor(self, msg):
+        contactForceTool0 = np.zeros(3)
+        contactMomentTool0 = np.zeros(3)
+        contactForceTool0[0] = msg.wrench.force.x
+        contactForceTool0[1] = msg.wrench.force.y
+        contactForceTool0[2] = msg.wrench.force.z
+        contactMomentTool0[0] = msg.wrench.torque.x
+        contactMomentTool0[1] = msg.wrench.torque.y
+        contactMomentTool0[2] = msg.wrench.torque.z
+        self.contactForceW = self.w_R_tool0.dot(contactForceTool0)
+        self.contactMomentW = self.w_R_tool0.dot(contactMomentTool0)
+
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
@@ -213,7 +231,10 @@ class BaseController(threading.Thread):
         self.g = self.robot.gravity(self.q)        
         #compute ee position  in the world frame  
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
-        self.x_ee = np.array([self.spawn_x, self.spawn_y, self.spawn_z]) + self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation 
+        self.x_ee = np.array([self.spawn_x, self.spawn_y, self.spawn_z]) + self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
+        self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).rotation
+
+
         # compute jacobian of the end effector in the world frame  
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
@@ -221,10 +242,10 @@ class BaseController(threading.Thread):
         #compute contact forces                        
         self.estimateContactForces() 
 
-
     def estimateContactForces(self):  
-        # estimate ground reaxtion forces from tau 
-        self.contactForceW = np.linalg.inv(self.J6.T).dot(self.h-self.tau)[:3]                   
+        # estimate ground reaxtion forces from tau
+        if self.use_torque_control:
+            self.contactForceW = np.linalg.inv(self.J6.T).dot(self.h-self.tau)[:3]
                                  
     def startupProcedure(self):
         ros.sleep(1.0)  # wait for callback to fill in jointmnames          
