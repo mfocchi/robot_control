@@ -60,6 +60,12 @@ from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryG
 from trajectory_msgs.msg import JointTrajectoryPoint
 import actionlib
 
+class AdmittanceModel():
+    def __init__(self):
+        delta_q_old = np.zeros(6)
+        delta_q = np.zeros(6)
+
+
 class BaseController(threading.Thread):
     
     def __init__(self, robot_name="ur5"):
@@ -143,7 +149,7 @@ class BaseController(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
                
         self.broadcaster = tf.TransformBroadcaster()
-
+        self.q_des_old = np.zeros(self.robot.model.nq)
 
         #send data to param server
         self.verbose = conf.verbose                                                                                           
@@ -375,7 +381,9 @@ class BaseController(threading.Thread):
         if not confirmed:
             ros.loginfo("Exiting as requested by user.")
             sys.exit(0)
-
+    def computeAdmittanceReference(self):
+        #q, ik_success = kin.endeffectorInverseKinematicsLineSearch(ee_pos_des, ee_frame, self.q_des_old, verbose=True)
+        pass
     
 def talker(p):
             
