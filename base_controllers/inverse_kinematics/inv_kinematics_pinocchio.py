@@ -140,7 +140,11 @@ class robotKinematics():
 
         return q0_leg, IKsuccess
 
-    def endeffectorInverseKinematicsLineSearch(self, ee_pos_des, frame_name, q0=np.zeros(6), verbose=False, use_error_as_termination_criteria = False):
+    def endeffectorInverseKinematicsLineSearch(self, ee_pos_des, frame_name, q0=np.zeros(6), verbose=False, 
+                                               use_error_as_termination_criteria = False, 
+                                               postural_task = True, 
+                                               w_postural = 0.001, 
+                                               q_postural = np.zeros(6)):
 
         # Error initialization
         e_bar = 1
@@ -155,25 +159,33 @@ class robotKinematics():
         # For line search only
         gamma = 0.5
         beta = 0.5
+        out_of_workspace  = False
 
         # Inverse kinematics with line search
         while True:
             # compute foot position
             self.robot.computeAllTerms(q0, np.zeros(6))
             ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
-            print(ee_pos0)
+        
             # get the square matrix jacobian that is smaller
             J_ee = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True, pinocchio.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
-
-            # computed error wrt the des cartesian position
-            e_bar = ee_pos_des - ee_pos0
-
-
-            # compute newton step
-            Jpinv = J_ee.T.dot(np.linalg.inv(  J_ee.dot(J_ee.T)  + lambda_ * np.identity(J_ee.shape[0]) ))
-            grad = J_ee.T.dot(e_bar)
-            dq = Jpinv.dot(e_bar)
-            
+           
+            # compute newton step              
+            if not postural_task:
+                # computed error wrt the des cartesian position               
+                e_bar = ee_pos_des - ee_pos0
+                Jpinv = (np.linalg.inv(  J_ee.T.dot(J_ee)  + lambda_ * np.identity(J_ee.shape[1]) )).dot(J_ee.T)
+                grad = J_ee.T.dot(e_bar)
+                dq = Jpinv.dot(e_bar)
+                
+            else:
+                # computed error wrt the des cartesian position
+                e_bar = np.hstack((ee_pos_des - ee_pos0, w_postural*(q_postural - q0) ))               
+                Je = np.vstack((J_ee, w_postural*np.identity(6)))                                
+                grad = Je.T.dot(e_bar)
+                
+                dq = (np.linalg.inv(  J_ee.T.dot(J_ee)  + pow(w_postural,2)* np.identity(6) )).dot(grad)
+                
             if (use_error_as_termination_criteria):
                 print("ERROR",np.linalg.norm(e_bar))
                 if np.linalg.norm(e_bar) < epsilon:
@@ -188,7 +200,12 @@ class robotKinematics():
                     if verbose:
                         print("IK Convergence achieved!, norm(grad) :", np.linalg.norm(grad))
                         print("Inverse kinematics solved in {} iterations".format(niter))
+                        if np.linalg.norm(e_bar)> 0.1:
+                            print("THE END EFFECTOR POSITION IS OUT OF THE WORKSPACE, norm(error) :", np.linalg.norm(e_bar))
+                            out_of_workspace  = True
                     break
+                
+                
                 
             if niter >= max_iter:
                 if verbose:
@@ -197,16 +214,21 @@ class robotKinematics():
                 IKsuccess = False
                 break
                 
+            #q0 += dq 
+            #while False:
             
-
             while True:
                 # Update
                 q1 = q0 + dq * alpha
                 self.robot.computeAllTerms(q1, np.zeros(6))
                 ee_pos1 =  self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).translation
 
-                # Compute error of next step
-                e_bar_new = ee_pos_des - ee_pos1
+                if not postural_task:
+                    # Compute error of next step
+                    e_bar_new = ee_pos_des - ee_pos1
+                else: 
+                    e_bar_new = np.hstack((ee_pos_des - ee_pos1,w_postural*( q_postural - q1) ))
+               
                 # print "e_bar_new", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
 
                 error_reduction = np.linalg.norm(e_bar) - np.linalg.norm(e_bar_new)
@@ -223,13 +245,13 @@ class robotKinematics():
             niter += 1
 
         # unwrapping prevents from outputs larger than 2pi
-        #        for i in range(len(q0_leg)):
-        #            while q0_leg[i] >= 2 * math.pi:
-        #                q0_leg[i] -= 2 * math.pi
-        #            while q0_leg[i] < -2 * math.pi:
-        #                q0_leg[i] += 2 * math.pi
+        for i in range(len(q0)):
+            while q0[i] >= 2 * math.pi:
+                q0[i] -= 2 * math.pi
+            while q0[i] < -2 * math.pi:
+                q0[i] += 2 * math.pi
 
-        return q0, IKsuccess
+        return q0, IKsuccess, out_of_workspace
 
     def leggedRobotInverseKinematics(self, feetPosDes, q0, verbose = False):
 
