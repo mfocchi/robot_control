@@ -22,7 +22,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'q_0':  np.array([ 0.5, -0.7, 1.0, -1.57, -1.57, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
                        'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
                        'ee_frame': 'tool0',
-                       'control_mode': 'trajectory', # 'trajectory','point'
+                       'control_mode': 'point', # 'trajectory','point'
                        'control_type': 'position', # 'position', 'torque'
                        'real_robot': True,
                        'buffer_size': 30001} # note the frames are all aligned with base for joints = 0

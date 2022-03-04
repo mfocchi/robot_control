@@ -165,7 +165,7 @@ class BaseController(threading.Thread):
 
         if self.real_robot:
             self.available_controllers = [
-                "speed_scaling_state_controller",
+                "joint_group_pos_controller",
                 "scaled_pos_joint_traj_controller"
             ]
         else:
@@ -385,6 +385,11 @@ def talker(p):
     p.startupProcedure() 
     ros.sleep(1.0)
 
+    if not p.real_robot:
+        p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
+    else:
+        p.q_des_q0 = p.q
+
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
@@ -396,13 +401,14 @@ def talker(p):
             p.switch_controller("pos_joint_traj_controller")
         p.send_joint_trajectory()
     else:
+        p.switch_controller("joint_group_pos_controller")
         #control loop
         while True:
             #update the kinematics
             p.updateKinematicsDynamics()
 
             # set reference
-            p.q_des  = conf.robot_params[p.robot_name]['q_0']  + 0.1*np.sin(p.time)
+            p.q_des  = p.q_des_q0  + 0.1*np.sin(0.4*p.time) #0.00003*np.sin(0.4*p.time)
 
             # controller
             p.tau_ffwd = np.zeros(p.robot.na)
@@ -411,10 +417,9 @@ def talker(p):
 
             if (p.use_torque_control):
                 p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-                p.ros_pub.add_arrow(p.x_ee, p.contactForceW/(6*p.robot.robot_mass),"green")
             else:
                 p.send_reduced_des_jstate(p.q_des) #no torque fb is present
-
+            p.ros_pub.add_arrow(p.x_ee, p.contactForceW / (6 * p.robot.robot_mass), "green")
             # log variables
             p.logData()
             p.ros_pub.add_marker(p.x_ee)
@@ -427,23 +432,32 @@ def talker(p):
            # stops the while loop if  you prematurely hit CTRL+C
             if ros.is_shutdown():
                 print ("Shutting Down")
-                break;
-                             
-    ros.sleep(1.0)                
-    print ("Shutting Down")                 
-    ros.signal_shutdown("killed")           
-    p.deregister_node()     
+                break
 
-    
+    print("Shutting Down")
+    ros.signal_shutdown("killed")
+    p.deregister_node()
+    # this is to plot on real robot that is running a different rosnode (TODO SOLVE)
+    from utils.common_functions import plotJoint
+    plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+              p.tau_ffwd_log, p.joint_names)
+    plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+              p.tau_ffwd_log, p.joint_names)
+    plt.show(block=True)
+
+
 if __name__ == '__main__':
 
     p = BaseController(robotName)
     try:
         talker(p)
     except ros.ROSInterruptException:
-        from utils.common_functions import plotJoint      
-        plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
-        plotJoint('torque',1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
+
+        from utils.common_functions import plotJoint
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                  p.tau_ffwd_log, p.joint_names)
+        plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                  p.tau_ffwd_log, p.joint_names)
         plt.show(block=True)
     
         
