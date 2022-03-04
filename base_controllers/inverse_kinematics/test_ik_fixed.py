@@ -9,7 +9,7 @@ sys.path.append('../utils')#allows to incude stuff on the same level
 from common_functions import getRobotModel
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 
-ee_pos_des = np.array([-0.06745,  0.85615 , 1.66109])
+ee_pos_des = np.array([-0.56745,  0.50615, -0.1389 ])
 #use a reasonable guess
 q0 = np.array([0.5, -0.7, 1.0, -1.57, -1.57, 0.5])
 
@@ -27,8 +27,10 @@ qtest = np.array([ 0.54593 ,-0.6541 ,  1.04593 ,-1.52407 ,-1.52407 , 0.54593])
 
 kin = robotKinematics(robot, ee_frame)
 start_time = time.time()
-q, ik_success = kin.endeffectorInverseKinematicsLineSearch(ee_pos_des,ee_frame, qtest, verbose = True)
+q, ik_success = kin.endeffectorInverseKinematicsLineSearch(ee_pos_des,ee_frame, q0, verbose = True)
 print('total time is ',time.time()-start_time)
 #print('q is:\n', q)
 print('\n flatten result is: \n' , q)
+#last joint does not affect end effector position (only orientation) so I will discard from test
+assert np.allclose(q[:-1], qtest[:-1], 0.1)
 
