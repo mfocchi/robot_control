@@ -88,7 +88,9 @@ def startNode(node_name):
 
 
 def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):    
-
+    ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
+    path  = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
+    srdf      = path + "/robot_urdf/" + robot_name + ".srdf"  
     
     if (generate_urdf):  
         try:       
@@ -100,8 +102,10 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             executable = 'xacro'
             name = 'xacro'
             namespace = '/'
-            args = xacro_path+ ' --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
+            args = xacro_path+ ' --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/generated_urdf/'+robot_name+'.urdf'
      
+     
+       
             try:
                 flywheel = ros.get_param('/flywheel')
                 args+=' flywheel:='+flywheel
@@ -110,21 +114,17 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             
             os.system("rosrun xacro xacro "+args)  
             #os.system("rosparam get /robot_description > "+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf')  
+            #urdf = URDF.from_parameter_server()
             print ("URDF generated")
+            urdf      = path + "/robot_urdf/generated_urdf/" + robot_name+ ".urdf"  
+            robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])       
+            
         except:
             print (robot_name+'_description not present')
-            
-        
+    else:        
+        urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"              
     
-    # Import the model
-    ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
-    path      = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
-    urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"
-    srdf      = path + "/robot_urdf/" + robot_name + ".srdf"
-    robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
-                                     
-    #get urdf from ros just in case you need
-    #robot_urdf_ros = URDF.from_parameter_server()                                                                                                                                                                                                                                                                                                              
+    robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])                                
     
     return robot                    
 

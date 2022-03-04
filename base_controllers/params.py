@@ -11,6 +11,7 @@ robot_params = {}
 robot_params['hyq'] = {'dt': 0.004, 'kp': 400, 'kd': 6, 'q_0':  np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4]), 
                         'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'], 'buffer_size': 30001}
 robot_params['solo'] ={'dt': 0.002, 'kp': 5., 'kd': 0.1, 'q_0':  np.array([0.,  np.pi/4, -np.pi/2, -0.,  np.pi/4, -np.pi/2, 0., -np.pi/4,  np.pi/2, 0., -np.pi/4,  np.pi/2]), 
+                        'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'],
                         'buffer_size': 1501} # note the frames are all aligned with base for joints = 0
 
 robot_params['aliengo'] ={'dt': 0.002, 'kp': 25, 'kd': 2, 'q_0':  np.array([-0.2, 0.75, -1.5, -0.2, 0.75, -1.5, -0.2, 0.75, -1.5, -0.2, 0.75, -1.5]),
