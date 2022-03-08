@@ -60,11 +60,29 @@ from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryG
 from trajectory_msgs.msg import JointTrajectoryPoint
 import actionlib
 
-class AdmittanceModel():
-    def __init__(self):
-        delta_q_old = np.zeros(6)
-        delta_q = np.zeros(6)
+from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
 
+class AdmittanceControl():
+    
+    def __init__(self, ikin, Kp, Kd, dt):
+        self.ikin = ikin
+        self.q_des_old = np.zeros(6)
+
+        self.dx = np.zeros(3)
+        self.dx_1_old = np.zeros(3)
+        self.dx_2_old = np.zeros(3)
+        self.dt = dt
+        self.Kp = Kp
+        self.Kd = Kd
+
+    def computeAdmittanceReference(self, Fext, x_des):
+        self.dx = np.linalg.inv(self.Kp + self.dt*self.Kd).dot(Fext + 1/self.dt*dot(Kd).dot(dx_1))        
+        self.dx_2_old = self.dx_1_old
+        self.dx_1_old = self.dx        
+        x_des  += self.dx
+        q_des, ik_success = kin.endeffectorInverseKinematicsLineSearch(x_des, conf.robot_params[self.robot_name]['ee_frame'], self.q_des_old)  
+        self.q_des_old = q_des 
+        return q_des
 
 class BaseController(threading.Thread):
     
@@ -180,6 +198,8 @@ class BaseController(threading.Thread):
                                           ]
         self.active_controller = self.available_controllers[0]
         
+        ikin = robotKinematics(robot, conf.robot_params[self.robot_name]['ee_frame'])
+        admit = AdmittanceControl(ikin)
 
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
@@ -381,9 +401,7 @@ class BaseController(threading.Thread):
         if not confirmed:
             ros.loginfo("Exiting as requested by user.")
             sys.exit(0)
-    def computeAdmittanceReference(self):
-        #q, ik_success = kin.endeffectorInverseKinematicsLineSearch(ee_pos_des, ee_frame, self.q_des_old, verbose=True)
-        pass
+ 
     
 def talker(p):
             
@@ -409,11 +427,17 @@ def talker(p):
             p.switch_controller("pos_joint_traj_controller")
         p.send_joint_trajectory()
     else:
-        p.switch_controller("joint_group_pos_controller")
+        if not p.use_torque_control:            
+            p.switch_controller("joint_group_pos_controller")
+        # reset to actual
+        x_des = p.x_ee
+         
         #control loop
         while True:
             #update the kinematics
             p.updateKinematicsDynamics()
+
+            q_des = p.admit.computeAdmittanceReference(Fext, x_des)    
 
             # set reference
             p.q_des  = p.q_des_q0  + 0.1*np.sin(0.4*p.time) #0.00003*np.sin(0.4*p.time)
@@ -457,6 +481,8 @@ def talker(p):
 if __name__ == '__main__':
 
     p = BaseController(robotName)
+    
+    
     try:
         talker(p)
     except ros.ROSInterruptException:
