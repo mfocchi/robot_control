@@ -484,22 +484,21 @@ def talker(p):
             #update the kinematics
             p.updateKinematicsDynamics()
 
-
             # set reference
-            #p.q_des = p.q_des_q0
-            p.q_des  = p.q_des_q0  - 0.05*np.sin(2*p.time) #0.00003*np.sin(0.4*p.time)
+            p.q_des = p.q_des_q0
+            #p.q_des  = p.q_des_q0  - 0.05*np.sin(2*p.time) #0.00003*np.sin(0.4*p.time)
 
             # admittance control
             p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
             p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des)
 
-            # controller with gravity comp
-            p.tau_ffwd = p.g + np.zeros(p.robot.na)
+            # controller with gravity coriolis comp
+            p.tau_ffwd = p.h + np.zeros(p.robot.na)
             # only torque loop
             #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd
 
             if (p.use_torque_control):
-                if (p.time > 20.5):#activate only after a few seconds to allow initialization
+                if (p.time > 1.5):#activate admittance control only after a few seconds to allow initialization
                     p.send_des_jstate(p.q_des_adm, p.qd_des, p.tau_ffwd)
                 else:
                     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -507,8 +506,12 @@ def talker(p):
                 p.send_reduced_des_jstate(p.q_des) #no torque fb is present
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
             # log variables
-            if (p.time > 0.5):
+            if (p.time > 1.0):
                 p.logData()
+            # disturbance force
+            # if (p.time > 3.0):
+            #     p.applyForce()
+
             p.ros_pub.add_marker(p.x_ee + p.base_offset)
             p.ros_pub.publishVisual()
 
