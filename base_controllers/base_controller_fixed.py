@@ -47,6 +47,7 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress 
 from six.moves import input # solves compatibility issue bw pyuthon 2.x and 3 for raw input that does exists in python 3
 from termcolor import colored
 import matplotlib.pyplot as plt
+from utils.common_functions import plotJoint, plotAdmittanceTracking, plotEndeff
 
 import  params as conf
 robotName = "ur5"
@@ -67,29 +68,31 @@ class AdmittanceControl():
     def __init__(self, ikin, Kp, Kd, conf):
         self.ikin = ikin
         self.conf = conf
-        self.q_des_old =np.zeros(6)
+
         self.dx = np.zeros(3)
         self.dx_1_old = np.zeros(3)
         self.dx_2_old = np.zeros(3)
         self.Kp = Kp
         self.Kd = Kd
+        self.q_postural =   self.conf['q_0']
 
-    def computeAdmittanceReference(self, Fext, x_des):
+    def setPosturalTask(self, q_postural):
+        self.q_postural = q_postural
+
+    def computeAdmittanceReference(self, Fext, x_des, q_guess):
         # only Kp, Kd
         self.dx = np.linalg.inv(self.Kp + 1/self.conf['dt'] * self.Kd).dot(Fext + 1/self.conf['dt']*self.Kd.dot(self.dx_1_old))
-        #only Kp
+        #only Kp (unstable)
         #self.dx = np.linalg.inv(self.Kp).dot(Fext)
         self.dx_2_old = self.dx_1_old
         self.dx_1_old = self.dx
         # you need to remember to remove the base offset! because pinocchio us unawre of that!
         q_des, ik_success, out_of_workspace = self.ikin.endeffectorInverseKinematicsLineSearch(x_des   + self.dx,
                                                                                                self.conf['ee_frame'],
-                                                                                               self.q_des_old , False, False,
+                                                                                               q_guess, False, False,
                                                                                                postural_task=True,
                                                                                                w_postural=0.00001,
-                                                                                               q_postural= self.conf['q_0'] )
-        self.q_des_old = q_des
-
+                                                                                               q_postural= self.q_postural)
 
         return q_des, x_des + self.dx
 
@@ -213,10 +216,9 @@ class BaseController(threading.Thread):
         self.active_controller = self.available_controllers[0]
         
         self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
-        self.admit = AdmittanceControl(self.ikin, 800*np.identity(3), 80*np.identity(3), conf.robot_params[self.robot_name])
+        self.admit = AdmittanceControl(self.ikin, 600*np.identity(3), 300*np.identity(3), conf.robot_params[self.robot_name])
 
         from gazebo_msgs.srv import ApplyBodyWrench
-        ros.wait_for_service('/gazebo/apply_body_wrench')
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
@@ -461,7 +463,8 @@ def talker(p):
     if not p.real_robot:
         p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     else:
-        p.q_des_q0 = p.q
+        p.q_des_q0 = np.copy(p.q)
+        p.admit.setPosturalTask(np.copy(p.q))
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
@@ -485,12 +488,12 @@ def talker(p):
             p.updateKinematicsDynamics()
 
             # set reference
-            p.q_des = p.q_des_q0
-            #p.q_des  = p.q_des_q0  - 0.05*np.sin(2*p.time) #0.00003*np.sin(0.4*p.time)
+            p.q_des = np.copy(p.q_des_q0)
+            #p.q_des  = p.q_des_q0  +0.0003*np.sin(0.4*p.time)
 
             # admittance control
             p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
-            p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des)
+            p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
 
             # controller with gravity coriolis comp
             p.tau_ffwd = p.h + np.zeros(p.robot.na)
@@ -503,7 +506,10 @@ def talker(p):
                 else:
                     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             else:
-                p.send_reduced_des_jstate(p.q_des) #no torque fb is present
+                if (p.time > 1.5):#activate admittance control only after a few seconds to allow initialization
+                    p.send_reduced_des_jstate(p.q_des_adm)
+                else:
+                    p.send_reduced_des_jstate(p.q_des) #no torque fb is present
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
             # log variables
             if (p.time > 1.0):
@@ -528,11 +534,12 @@ def talker(p):
     ros.signal_shutdown("killed")
     p.deregister_node()
     # this is to plot on real robot that is running a different rosnode (TODO SOLVE)
-    from utils.common_functions import plotJoint
     plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-              p.tau_ffwd_log, p.joint_names)
-    plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-              p.tau_ffwd_log, p.joint_names)
+              p.tau_ffwd_log, p.joint_names,p.q_des_adm_log)
+    # plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+    #           p.tau_ffwd_log, p.joint_names)
+    plotEndeff('force', 1, p.time_log, p.xee_log,  f_log=p.contactForceW_log)
+    plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
     plt.show(block=True)
 
 
@@ -545,7 +552,7 @@ if __name__ == '__main__':
         talker(p)
     except ros.ROSInterruptException:
         # these plots are for simulated robot
-        from utils.common_functions import plotJoint, plotAdmittanceTracking
+
         plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
                   p.tau_ffwd_log, p.joint_names, p.q_des_adm_log)
         plotAdmittanceTracking(1, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)

@@ -144,7 +144,8 @@ class robotKinematics():
                                                use_error_as_termination_criteria = False, 
                                                postural_task = True, 
                                                w_postural = 0.001, 
-                                               q_postural = np.zeros(6)):
+                                               q_postural = np.zeros(6),
+                                               unwrap = False):
 
         # Error initialization
         e_bar = 1
@@ -245,11 +246,12 @@ class robotKinematics():
             niter += 1
 
         # unwrapping prevents from outputs larger than 2pi
-        for i in range(len(q0)):
-            while q0[i] >= 2 * math.pi:
-                q0[i] -= 2 * math.pi
-            while q0[i] < -2 * math.pi:
-                q0[i] += 2 * math.pi
+        if (unwrap):
+            for i in range(len(q0)):
+                while q0[i] >= 2 * math.pi:
+                    q0[i] -= 2 * math.pi
+                while q0[i] < -2 * math.pi:
+                    q0[i] += 2 * math.pi
 
         return q0, IKsuccess, out_of_workspace
 
