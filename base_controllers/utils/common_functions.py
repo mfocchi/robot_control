@@ -128,7 +128,7 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None, joint_names = None):
+def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None, joint_names = None, q_adm = None):
     if name == 'position':
         plot_var_log = q_log
         if   (q_des_log is not None):
@@ -180,7 +180,8 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
         if   (plot_var_des_log is not None):
              plt.plot(time_log, plot_var_des_log[jidx,:], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
         plt.plot(time_log, plot_var_log[jidx,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
-        
+        plt.plot(time_log, q_adm[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+                 color='green')
         plt.grid()
                 
     
@@ -229,7 +230,41 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
         plt.plot(time_log, plot_var_des_log[2,:], lw=lw_des, color = 'red')                                        
     plt.plot(time_log, plot_var_log[2,:], lw=lw_act, color = 'blue')
     plt.grid()
-      
+
+
+def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm, f_log):
+
+    fig = plt.figure(figure_id)
+    fig.suptitle("admittance tracking", fontsize=20)
+    plt.subplot(4, 1, 1)
+    plt.ylabel("end-effector x")
+    plt.plot(time_log, x_log[0, :], lw=3, color='blue')
+    plt.plot(time_log, x_des_log[0, :], lw=2, color='red')
+    plt.plot(time_log, x_des_log_adm[0, :], lw=1, color='black')
+    plt.grid()
+
+    plt.subplot(4, 1, 2)
+    plt.ylabel("end-effector y")
+    plt.plot(time_log, x_log[1, :], lw=3, color='blue')
+    plt.plot(time_log, x_des_log[1, :], lw=2, color='red')
+    plt.plot(time_log, x_des_log_adm[1, :], lw=1, color='black')
+    plt.grid()
+
+    plt.subplot(4, 1, 3)
+    plt.ylabel("end-effector z")
+    plt.plot(time_log, x_log[2, :], lw=3, color='blue')
+    plt.plot(time_log, x_des_log[2, :], lw=2, color='red')
+    plt.plot(time_log, x_des_log_adm[2, :], lw=1, color='black')
+    plt.grid()
+
+    f_norm = []
+    for i in range(f_log.shape[1]):
+        f_norm.append(np.linalg.norm(f_log[:,i]))
+
+    plt.subplot(4, 1, 4)
+    plt.plot(time_log, f_norm, lw=2, color='blue')
+
+    plt.grid()
     
 def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW, baseTwistW, des_baseAccW, wrenchW):
     plot_var_des_log = None
