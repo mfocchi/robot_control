@@ -214,7 +214,29 @@ class BaseController(threading.Thread):
         
         self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
         self.admit = AdmittanceControl(self.ikin, 800*np.identity(3), 80*np.identity(3), conf.robot_params[self.robot_name])
+
+        from gazebo_msgs.srv import ApplyBodyWrench
+        ros.wait_for_service('/gazebo/apply_body_wrench')
+        self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
         print("Initialized fixed basecontroller---------------------------------------------------------------")
+
+    def applyForce(self):
+
+        from geometry_msgs.msg import Wrench, Point
+        wrench = Wrench()
+        wrench.force.x = 0
+        wrench.force.y = 0
+        wrench.force.z = 30
+        wrench.torque.x = 0
+        wrench.torque.y = 0
+        wrench.torque.z = 0
+        reference_frame = "world" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
+        reference_point = Point(x = 0, y = 0, z = 0)
+        try:
+            self.apply_body_wrench(body_name="ur5::wrist_3_link", reference_frame=reference_frame, reference_point=reference_point , wrench=wrench, duration=ros.Duration(10))
+        except:
+            pass
+
 
     def _receive_jstate(self, msg):
          for msg_idx in range(len(msg.name)):          
