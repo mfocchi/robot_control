@@ -105,7 +105,7 @@ class BaseController(threading.Thread):
         self.base_offset = np.array([ conf.robot_params[self.robot_name]['spawn_x'],
                                       conf.robot_params[self.robot_name]['spawn_y'],
                                      conf.robot_params[self.robot_name]['spawn_z']])
-        print(self.base_offset)
+
         if (conf.robot_params[self.robot_name]['control_type'] == "torque"):
             self.use_torque_control = 1
         else:
@@ -487,36 +487,50 @@ def talker(p):
             #update the kinematics
             p.updateKinematicsDynamics()
 
-            # set reference
+            # EXE L7-1: set constant joint reference
             p.q_des = np.copy(p.q_des_q0)
-            #p.q_des  = p.q_des_q0  +0.0003*np.sin(0.4*p.time)
 
-            # admittance control
-            p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
-            p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
+            # EXE L7-2  set constant ee reference
+            # p.x_ee_des = np.array([0.2, 0.6, -0.6])
+            # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des, conf.robot_params[p.robot_name]['ee_frame'], p.q, False, False, postural_task=True, w_postural=0.00001,q_postural=p.q_des_q0)
+
+            # EXE L7-3 - polynomial trajectory (TODO)
+
+            # EXE L7-4.3: set sinusoidal joint reference
+            #p.q_des  = p.q_des_q0  +0.2*np.sin(2*3.14*p.time)
+
+            # EXE 4 - admittance control
+            # p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
+            # p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
+
+            # EXE L7-5 - load estimation
+            Fload = np.linalg.pinv(p.J.T).dot(p.tau - p.g)
+            payload_weight = -Fload[2]/9.81
 
             # controller with gravity coriolis comp
             p.tau_ffwd = p.h + np.zeros(p.robot.na)
             # only torque loop
             #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd
 
-            if (p.use_torque_control):
-                if (p.time > 1.5):#activate admittance control only after a few seconds to allow initialization
-                    p.send_des_jstate(p.q_des_adm, p.qd_des, p.tau_ffwd)
-                else:
-                    p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            # override the position command if you use admittance controller
+            if (p.time > 1.5) and (conf.robot_params[p.robot_name]['control_type'] == "admittance"):  # activate admittance control only after a few seconds to allow initialization
+                q_to_send = p.q_des_adm
             else:
-                if (p.time > 1.5):#activate admittance control only after a few seconds to allow initialization
-                    p.send_reduced_des_jstate(p.q_des_adm)
-                else:
-                    p.send_reduced_des_jstate(p.q_des) #no torque fb is present
+                q_to_send = p.q_des
+
+            # send commands to gazebo
+            if (p.use_torque_control):
+                p.send_des_jstate(q_to_send, p.qd_des, p.tau_ffwd)
+            else:
+                p.send_reduced_des_jstate(q_to_send)
+
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
             # log variables
             if (p.time > 1.0):
                 p.logData()
             # disturbance force
-            # if (p.time > 3.0):
-            #     p.applyForce()
+            if (p.time > 3.0):
+                 p.applyForce()
 
             p.ros_pub.add_marker(p.x_ee + p.base_offset)
             p.ros_pub.publishVisual()
@@ -533,31 +547,39 @@ def talker(p):
     print("Shutting Down")
     ros.signal_shutdown("killed")
     p.deregister_node()
-    # this is to plot on real robot that is running a different rosnode (TODO SOLVE)
-    plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-              p.tau_ffwd_log, p.joint_names,p.q_des_adm_log)
-    # plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-    #           p.tau_ffwd_log, p.joint_names)
+    # this is to plot on REAL robot that is running a different rosnode (TODO SOLVE)
+    if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                  p.tau_ffwd_log, p.joint_names,p.q_des_adm_log)
+        plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
+    else:
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+              p.tau_ffwd_log, p.joint_names,p.q_des_log)
+    plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+               p.tau_ffwd_log, p.joint_names)
     plotEndeff('force', 1, p.time_log, p.xee_log,  f_log=p.contactForceW_log)
-    plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
     plt.show(block=True)
 
 
 if __name__ == '__main__':
 
     p = BaseController(robotName)
-    
-    
+
     try:
         talker(p)
     except ros.ROSInterruptException:
         # these plots are for simulated robot
 
-        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                  p.tau_ffwd_log, p.joint_names, p.q_des_adm_log)
-        plotAdmittanceTracking(1, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
-        # plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-        #           p.tau_ffwd_log, p.joint_names)
+        if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
+            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                      p.tau_ffwd_log, p.joint_names, p.q_des_adm_log)
+            plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
+        else:
+            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                      p.tau_ffwd_log, p.joint_names)
+        if (p.use_torque_control):
+            plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                   p.tau_ffwd_log, p.joint_names)
         plt.show(block=True)
     
         
