@@ -62,6 +62,7 @@ from trajectory_msgs.msg import JointTrajectoryPoint
 import actionlib
 
 from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
+from base_controllers.utils.math_tools import Math
 
 class AdmittanceControl():
     
@@ -159,7 +160,8 @@ class BaseController(threading.Thread):
                                
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual = True)                    
-        self.u = Utils()    
+        self.u = Utils()
+        self.math_utils = Math()
                                 
         self.contact_flag = False       
         self.q = np.zeros(self.robot.na)
@@ -338,7 +340,7 @@ class BaseController(threading.Thread):
 
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
-            self.q_des_adm_log[:, self.log_counter] =  self.q_des_adm
+
             self.q_des_log[:, self.log_counter] = self.q_des
             self.q_log[:,self.log_counter] =  self.q
 
@@ -350,9 +352,14 @@ class BaseController(threading.Thread):
 
             self.xee_log[:, self.log_counter] = self.x_ee
             self.xee_des_log[:, self.log_counter] = self.x_ee_des
-            self.xee_des_adm_log[:, self.log_counter] = self.x_ee_des_adm
+
             self.contactForceW_log[:,self.log_counter] =  self.contactForceW
             self.time_log[self.log_counter] = self.time
+
+            if (conf.robot_params[self.robot_name]['control_type'] == "admittance"):
+                self.q_des_adm_log[:, self.log_counter] = self.q_des_adm
+                self.xee_des_adm_log[:, self.log_counter] = self.x_ee_des_adm
+
             self.log_counter+=1
 
     def switch_controller(self, target_controller):
@@ -491,21 +498,30 @@ def talker(p):
             p.q_des = np.copy(p.q_des_q0)
 
             # EXE L7-2  set constant ee reference
-            # p.x_ee_des = np.array([0.2, 0.6, -0.6])
-            # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des, conf.robot_params[p.robot_name]['ee_frame'], p.q, False, False, postural_task=True, w_postural=0.00001,q_postural=p.q_des_q0)
+            # p.x_ee_des = np.array([-0.3, 0.5, -0.6])
+            # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des,
+            #                                                                     conf.robot_params[p.robot_name][
+            #                                                                         'ee_frame'], p.q, False, False,
+            #                                                                     postural_task=True, w_postural=0.00001,
+            #                                                                     q_postural=p.q_des_q0)
 
-            # EXE L7-3 - polynomial trajectory (TODO)
+            # EXE L7-3  set constant ee reference and desired orientation
+            # rpy_des = np.array([ -1.9, -0.5, -0.1])
+            # w_R_e_des = p.math_utils.eul2Rot(rpy_des) # compute rotation matrix representing the desired orientation from Euler Angles
+            # p.q_des, ok, out_ws = p.ikin.endeffectorFrameInverseKinematicsLineSearch(p.x_ee_des, w_R_e_des, conf.robot_params[p.robot_name]['ee_frame'], p.q)
 
-            # EXE L7-4.3: set sinusoidal joint reference
+            # EXE L7-4 - polynomial trajectory (TODO)
+
+            # EXE L7-5.3: set sinusoidal joint reference
             #p.q_des  = p.q_des_q0  +0.2*np.sin(2*3.14*p.time)
 
-            # EXE 4 - admittance control
+            # EXE 5 - admittance control
             # p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
             # p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
 
-            # EXE L7-5 - load estimation
-            Fload = np.linalg.pinv(p.J.T).dot(p.tau - p.g)
-            payload_weight = -Fload[2]/9.81
+            # EXE L7-6 - load estimation
+            # Fload = np.linalg.pinv(p.J.T).dot(p.tau - p.g)
+            # payload_weight = -Fload[2]/9.81
 
             # controller with gravity coriolis comp
             p.tau_ffwd = p.h + np.zeros(p.robot.na)

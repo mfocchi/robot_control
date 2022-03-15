@@ -255,6 +255,97 @@ class robotKinematics():
 
         return q0, IKsuccess, out_of_workspace
 
+    def errorInSO3(self, R_e, R_e_des):
+        error = pinocchio.log3(R_e.T.dot(R_e_des))
+        return error
+
+    def endeffectorFrameInverseKinematicsLineSearch(self, ee_pos_des, w_R_e_des, frame_name, q0=np.zeros(6), verbose=False, unwrap = False):
+
+        # Error initialization
+        e_bar = 1
+        niter = 0
+        # Recursion parameters
+        epsilon = 1e-06  # Tolerance
+        # alpha = 0.1
+        alpha = 1  # Step size
+        lambda_ = 0.0000001  # Damping coefficient for pseudo-inverse
+        max_iter = 200  # Maximum number of iterations
+
+        # For line search only
+        gamma = 0.5
+        beta = 0.5
+        out_of_workspace = False
+
+        # Inverse kinematics with line search
+        while True:
+            # compute foot position
+            self.robot.computeAllTerms(q0, np.zeros(6))
+            ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
+            w_R_e0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).rotation
+
+            # get the square matrix jacobian that is smaller
+            J6 = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True,
+                                          pinocchio.ReferenceFrame.LOCAL_WORLD_ALIGNED)
+
+            # computed error
+            e_bar = np.hstack((ee_pos_des - ee_pos0, w_R_e0.dot(self.errorInSO3(w_R_e0, w_R_e_des)   )    ))
+            grad = J6.T.dot(e_bar)
+            dq = np.linalg.inv(J6).dot(e_bar)
+
+            if np.linalg.norm(grad) < epsilon:
+                IKsuccess = True
+                if verbose:
+                    print("IK Convergence achieved!, norm(grad) :", np.linalg.norm(grad))
+                    print("Inverse kinematics solved in {} iterations".format(niter))
+                    if np.linalg.norm(e_bar) > 0.1:
+                        print("THE END EFFECTOR POSITION IS OUT OF THE WORKSPACE, norm(error) :", np.linalg.norm(e_bar))
+                        out_of_workspace = True
+                break
+
+            if niter >= max_iter:
+                if verbose:
+                    print(
+                        "\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ",
+                        np.linalg.norm(e_bar))
+                IKsuccess = False
+                break
+
+            # q0 += dq
+            # while False:
+
+            while True:
+                # Update
+                q1 = q0 + dq * alpha
+                self.robot.computeAllTerms(q1, np.zeros(6))
+                ee_pos1 = self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).translation
+                w_R_e1 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).rotation
+
+                e_bar_new = np.hstack((ee_pos_des - ee_pos1, w_R_e1.dot(self.errorInSO3(w_R_e1, w_R_e_des))))
+                # print "e_bar_new", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
+
+                error_reduction = np.linalg.norm(e_bar) - np.linalg.norm(e_bar_new)
+                threshold = 0.0  # even more strict: gamma*alpha*np.linalg.norm(e_bar)
+
+                if error_reduction < threshold:
+                    alpha = beta * alpha
+                    if verbose:
+                        print(" line search: alpha: ", alpha)
+                else:
+                    q0 = q1
+                    alpha = 1
+                    break
+            niter += 1
+
+        # unwrapping prevents from outputs larger than 2pi
+        if (unwrap):
+            for i in range(len(q0)):
+                while q0[i] >= 2 * math.pi:
+                    q0[i] -= 2 * math.pi
+                while q0[i] < -2 * math.pi:
+                    q0[i] += 2 * math.pi
+
+        return q0, IKsuccess, out_of_workspace
+
     def leggedRobotInverseKinematics(self, feetPosDes, q0, verbose = False):
 
         no_of_feet = len(self.urdf_feet_names)
