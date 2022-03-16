@@ -225,34 +225,70 @@ class SimController(Controller):
         # send request and get response (in this case none)
         self.reset_world(req_reset_world)
 
-
     def estimateContacts(self):
         q_ros = self.u.mapToRos(self.q)
-        qd_ros = self.u.mapToRos(self.qd)
-        tau_ros = self.u.mapToRos(self.tau)
         # Pinocchio Update the joint and frame placements
-        configuration = np.hstack((self.basePoseW[0:3], self.quaternion, q_ros))
-        gen_velocities = np.hstack((self.baseTwistW, qd_ros))
+        configuration = np.hstack(([0,0,0], self.quaternion, q_ros))
+        neutral_configuration = np.hstack((pin.neutral(self.robot.model)[0:7], q_ros))
 
-        self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities)
-        self.h_joints = self.h[6:]
+        pin.forwardKinematics(self.robot.model, self.robot.data, neutral_configuration)
+        pin.computeJointJacobians(self.robot.model, self.robot.data)
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
 
-        # estimate ground reaction forces from tau
+        gravity_torques = self.robot.gravity(configuration)
+        joint_gravity_torques = gravity_torques[6:]
+
+        self.contacts_state[:] = False
+
         for leg in range(4):
-            grf = np.linalg.inv(self.wJ[leg].T).dot(
-                self.u.getLegJointState(leg, self.u.mapFromRos(self.h_joints) - self.tau))
-            self.u.setLegJointState(leg, grf, self.grForcesW)
+            self.B_contacts[leg] = self.robot.framePlacement(neutral_configuration,
+                                                     self.robot.model.getFrameId(self.ee_frames[leg])).translation
+            leg_joints = range(6 + self.u.mapIndexToRos(leg) * 3, 6 + self.u.mapIndexToRos(leg) * 3 + 3)
+            self.bJ[leg] = self.robot.frameJacobian(neutral_configuration,
+                                                       self.robot.model.getFrameId(self.ee_frames[leg]),
+                                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, leg_joints]
+            grf = np.linalg.inv(self.bJ[leg].T).dot(self.u.getLegJointState(leg, joint_gravity_torques - self.tau))
+
+            self.u.setLegJointState(leg, grf, self.grForcesB)
             self.contacts_state[leg] = grf[2] > self.force_th
 
     def visualizeContacts(self):
         for leg in range(4):
-            self.ros_pub.add_arrow(self.W_contacts[leg],
-                                   self.u.getLegJointState(leg, self.grForcesW / (6 * self.robot.robot_mass)), "green")
+            self.ros_pub.add_arrow(self.B_contacts[leg],
+                                   self.u.getLegJointState(leg, self.grForcesB/ self.robot.robotMass() ), "green")
             if self.contacts_state[leg]:
-                ros_pub.add_marker(self.W_contacts, radius=0.1)
+                self.ros_pub.add_marker(self.B_contacts[leg], radius=0.1)
             else:
-                ros_pub.add_marker(self.W_contacts, radius=0.001)
+                self.ros_pub.add_marker(self.B_contacts[leg], radius=0.001)
         self.ros_pub.publishVisual()
+
+    # def estimateContacts(self):
+    #     q_ros = self.u.mapToRos(self.q)
+    #     qd_ros = self.u.mapToRos(self.qd)
+    #     tau_ros = self.u.mapToRos(self.tau)
+    #     # Pinocchio Update the joint and frame placements
+    #     configuration = np.hstack((self.basePoseW[0:3], self.quaternion, q_ros))
+    #     gen_velocities = np.hstack((self.baseTwistW, qd_ros))
+    # 
+    #     self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities)
+    #     self.h_joints = self.h[6:]
+    # 
+    #     # estimate ground reaction forces from tau
+    #     for leg in range(4):
+    #         grf = np.linalg.inv(self.wJ[leg].T).dot(
+    #             self.u.getLegJointState(leg, self.u.mapFromRos(self.h_joints) - self.tau))
+    #         self.u.setLegJointState(leg, grf, self.grForcesW)
+    #         self.contacts_state[leg] = grf[2] > self.force_th
+
+    # def visualizeContacts(self):
+    #     for leg in range(4):
+    #         self.ros_pub.add_arrow(self.W_contacts[leg],
+    #                                self.u.getLegJointState(leg, self.grForcesW / (6 * self.robot.robot_mass)), "green")
+    #         if self.contacts_state[leg]:
+    #             ros_pub.add_marker(self.W_contacts, radius=0.1)
+    #         else:
+    #             ros_pub.add_marker(self.W_contacts, radius=0.001)
+    #     self.ros_pub.publishVisual()
 
     def computeCom(self):
         q_ros = self.u.mapToRos(self.q)
