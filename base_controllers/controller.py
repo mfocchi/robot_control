@@ -89,6 +89,24 @@ class Controller(threading.Thread):
 
         self.sensors_bag = rosbag.Bag(os.environ['PYSOLO_FROSCIA'] + '/bags/' + date_string + '.bag', 'w')
 
+        # These are for solo!
+        self.ee_frames = ['lf_foot', 'rf_foot', 'lh_foot', 'rh_foot']
+        self.ros_joints_name = ['universe',
+                                'floating_base_joint',
+                                'lf_haa_joint',
+                                'lf_hfe_joint',
+                                'lf_kfe_joint',
+                                'lh_haa_joint',
+                                'lh_hfe_joint',
+                                'lh_kfe_joint',
+                                'rf_haa_joint',
+                                'rf_hfe_joint',
+                                'rf_kfe_joint',
+                                'rh_haa_joint',
+                                'rh_hfe_joint',
+                                'rh_kfe_joint']  # ros convention
+        self.force_th = 2.0
+
 
 
     def _receive_jstate(self, msg):
@@ -222,6 +240,8 @@ class Controller(threading.Thread):
         self.tau_des_log[:, self.log_counter] = self.tau_des
         self.tau_log[:, self.log_counter] = self.tau
         self.grForcesW_log[:, self.log_counter] = self.grForcesW
+        self.contacts_state_log[:, self.log_counter] = self.contacts_state
+
         self.time_log[:, self.log_counter] = self.time
 
 
