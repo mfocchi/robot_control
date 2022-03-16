@@ -8,8 +8,8 @@ from geometry_msgs.msg import Point
 from reference_generator.srv import request_reference
 from reference_generator.srv import request_referenceResponse
 from reference_generator.srv import request_referenceRequest
-from base_controller.utils.utils import Utils
-from base_controller.utils.common_functions import startNode, checkRosMaster
+from base_controllers.utils.utils import Utils
+from base_controllers.utils.common_functions import startNode, checkRosMaster
 
 import matplotlib.pyplot as plt
 import matplotlib

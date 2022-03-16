@@ -9,7 +9,7 @@ from __future__ import print_function
 import numpy as np
 import scipy as sp
 import math as math
-from utils.utils import Utils
+from base_controllers.utils.utils import Utils
 
 class Math:
     def normalize(self, n):
@@ -83,7 +83,7 @@ class Math:
     
         return rpy;
                 
-    # from w_R_b returns the rpy angles into ZYX configuration
+    # dual of eul2Rot from w_R_b returns the rpy angles into ZYX configuration
     def rot2eul(self, R):
         phi = np.arctan2(R[1,0], R[0,0])
         theta = np.arctan2(-R[2,0], np.sqrt(pow(R[2,1],2) + pow(R[2,2],2) ))

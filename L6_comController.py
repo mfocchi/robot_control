@@ -8,18 +8,18 @@ Created on Fri Nov  2 16:52:08 2018
 #!/usr/bin/env python
 
 #inherit from base controller
-from base_controller.base_controller import BaseController
+from base_controllers.base_controller import BaseController
 import rospy as ros 
 import numpy as np
 from numpy import nan
 import copy
 
 # L5 Controller specific
-from base_controller.utils.controlRoutines import projectionBasedController, QPController
-from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+from base_controllers.utils.controlRoutines import projectionBasedController, QPController
+from base_controllers.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
 from scipy.linalg import block_diag
-from base_controller.utils.math_tools import motionVectorTransform
-from base_controller.utils.common_functions import State
+from base_controllers.utils.math_tools import motionVectorTransform
+from base_controllers.utils.common_functions import State
 
 import L6_conf as conf
 robotName = "hyq"
@@ -70,7 +70,6 @@ class AdvancedController(BaseController):
 def talker(p):
     
     p.start()
-    p.register_node()
     p.initVars()          
     p.startupProcedure() 
     rate = ros.Rate(1/conf.dt) # 10hz

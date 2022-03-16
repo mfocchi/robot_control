@@ -45,10 +45,10 @@ import rosnode
 import rosgraph
 
 #other utils
-from utils.ros_publish import RosPub
-from utils.pidManager import PidManager
-from utils.utils import Utils
-from utils.math_tools import *
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.pidManager import PidManager
+from base_controllers.utils.utils import Utils
+from base_controllers.utils.math_tools import *
 from numpy import nan
 
 
@@ -58,7 +58,7 @@ from base_controllers.utils.common_functions import getRobotModel
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  params as conf
-robotName = "hyq"
+robotName = "solo"
 
 class BaseController(threading.Thread):
     
@@ -211,8 +211,6 @@ class BaseController(threading.Thread):
          msg.effort = tau_ffwd                
          self.pub_des_jstate.publish(msg)     
 
-    def register_node(self):
-        ros.init_node('controller_python', disable_signals=False, anonymous=False)
 
     def deregister_node(self):
         print( "deregistering nodes"     )
@@ -405,7 +403,6 @@ class BaseController(threading.Thread):
 def talker(p):
             
     p.start()
-    #p.register_node()
     p.initVars()        
    
     p.startupProcedure() 

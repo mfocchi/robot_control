@@ -7,12 +7,12 @@ import math
 import time as tm
 
 import os
-from base_controller.utils.common_functions import *
-from base_controller.utils.ros_publish import RosPub
-from base_controller.utils.kin_dyn_utils import RNEA 
-from base_controller.utils.kin_dyn_utils import getM
-from base_controller.utils.kin_dyn_utils import getg
-from base_controller.utils.kin_dyn_utils import getC
+from base_controllers.utils.common_functions import *
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.kin_dyn_utils import RNEA
+from base_controllers.utils.kin_dyn_utils import getM
+from base_controllers.utils.kin_dyn_utils import getg
+from base_controllers.utils.kin_dyn_utils import getC
 
 
 import L1_conf as conf

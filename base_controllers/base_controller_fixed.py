@@ -15,6 +15,8 @@ import sys
 import time
 import threading
 
+# messages for topic subscribers
+from geometry_msgs.msg import WrenchStamped
 from sensor_msgs.msg import JointState
 from std_srvs.srv import Empty, EmptyRequest
 from termcolor import colored
@@ -45,6 +47,7 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress 
 from six.moves import input # solves compatibility issue bw pyuthon 2.x and 3 for raw input that does exists in python 3
 from termcolor import colored
 import matplotlib.pyplot as plt
+from utils.common_functions import plotJoint, plotAdmittanceTracking, plotEndeff
 
 import  params as conf
 robotName = "ur5"
@@ -58,15 +61,52 @@ from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryG
 from trajectory_msgs.msg import JointTrajectoryPoint
 import actionlib
 
+from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
+from base_controllers.utils.math_tools import Math
+
+class AdmittanceControl():
+    
+    def __init__(self, ikin, Kp, Kd, conf):
+        self.ikin = ikin
+        self.conf = conf
+
+        self.dx = np.zeros(3)
+        self.dx_1_old = np.zeros(3)
+        self.dx_2_old = np.zeros(3)
+        self.Kp = Kp
+        self.Kd = Kd
+        self.q_postural =   self.conf['q_0']
+
+    def setPosturalTask(self, q_postural):
+        self.q_postural = q_postural
+
+    def computeAdmittanceReference(self, Fext, x_des, q_guess):
+        # only Kp, Kd
+        self.dx = np.linalg.inv(self.Kp + 1/self.conf['dt'] * self.Kd).dot(Fext + 1/self.conf['dt']*self.Kd.dot(self.dx_1_old))
+        #only Kp (unstable)
+        #self.dx = np.linalg.inv(self.Kp).dot(Fext)
+        self.dx_2_old = self.dx_1_old
+        self.dx_1_old = self.dx
+        # you need to remember to remove the base offset! because pinocchio us unawre of that!
+        q_des, ik_success, out_of_workspace = self.ikin.endeffectorInverseKinematicsLineSearch(x_des   + self.dx,
+                                                                                               self.conf['ee_frame'],
+                                                                                               q_guess, False, False,
+                                                                                               postural_task=True,
+                                                                                               w_postural=0.00001,
+                                                                                               q_postural= self.q_postural)
+
+        return q_des, x_des + self.dx
+
 class BaseController(threading.Thread):
     
     def __init__(self, robot_name="ur5"):
         threading.Thread.__init__(self)
         self.robot_name = robot_name
         self.real_robot = conf.robot_params[self.robot_name]['real_robot']
-        self.spawn_x = 0.5
-        self.spawn_y = 0.35
-        self.spawn_z = 1.8
+        self.base_offset = np.array([ conf.robot_params[self.robot_name]['spawn_x'],
+                                      conf.robot_params[self.robot_name]['spawn_y'],
+                                     conf.robot_params[self.robot_name]['spawn_z']])
+
         if (conf.robot_params[self.robot_name]['control_type'] == "torque"):
             self.use_torque_control = 1
         else:
@@ -74,7 +114,11 @@ class BaseController(threading.Thread):
 
         # needed to be able to load a custom world file
         print(colored('Adding gazebo model path!', 'blue'))
-        os.environ["GAZEBO_MODEL_PATH"] +=":"+rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
+        custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
+        if os.getenv("GAZEBO_MODEL_PATH") is not None:
+            os.environ["GAZEBO_MODEL_PATH"] +=":"+custom_models_path
+        else:
+            os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
 
         if self.real_robot:
             os.system("killall rviz gzserver gzclient")
@@ -98,9 +142,9 @@ class BaseController(threading.Thread):
             roslaunch.configure_logging(uuid)
 
             cli_args = [rospkg.RosPack().get_path('ros_impedance_controller')+'/launch/ros_impedance_controller_ur5.launch',
-                        'spawn_x:='+str(self.spawn_x),
-                        'spawn_y:='+ str(self.spawn_y),
-                        'spawn_z:='+ str(self.spawn_z),
+                        'spawn_x:='+str(conf.robot_params[self.robot_name]['spawn_x']),
+                        'spawn_y:='+ str(conf.robot_params[self.robot_name]['spawn_y']),
+                        'spawn_z:='+ str(conf.robot_params[self.robot_name]['spawn_z']),
                         'use_torque_control:=' + str(self.use_torque_control)]
             roslaunch_args = cli_args[1:]
             roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
@@ -116,7 +160,8 @@ class BaseController(threading.Thread):
                                
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual = True)                    
-        self.u = Utils()    
+        self.u = Utils()
+        self.math_utils = Math()
                                 
         self.contact_flag = False       
         self.q = np.zeros(self.robot.na)
@@ -128,7 +173,8 @@ class BaseController(threading.Thread):
         self.qd_des = np.zeros(self.robot.na)
         self.tau_ffwd =np.zeros(self.robot.na)                                         
         self.contactForceW = np.zeros(3)
-      
+        self.contactMomentW = np.zeros(3)
+
         self.joint_names = conf.robot_params[self.robot_name]['joint_names']
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
 
@@ -140,7 +186,7 @@ class BaseController(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
                
         self.broadcaster = tf.TransformBroadcaster()
-
+        self.q_des_old = np.zeros(self.robot.model.nq)
 
         #send data to param server
         self.verbose = conf.verbose                                                                                           
@@ -148,6 +194,9 @@ class BaseController(threading.Thread):
 
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
                                          callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+
+        self.sub_ftsensor = ros.Subscriber("/" + self.robot_name + "/wrench", WrenchStamped,
+                                         callback=self._receive_ftsensor, queue_size=1, tcp_nodelay=True)
 
         self.switch_controller_srv = ros.ServiceProxy(
             "/" + self.robot_name + "/controller_manager/switch_controller", SwitchController)
@@ -159,7 +208,7 @@ class BaseController(threading.Thread):
 
         if self.real_robot:
             self.available_controllers = [
-                "speed_scaling_state_controller",
+                "joint_group_pos_controller",
                 "scaled_pos_joint_traj_controller"
             ]
         else:
@@ -168,10 +217,31 @@ class BaseController(threading.Thread):
                                           ]
         self.active_controller = self.available_controllers[0]
         
+        self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
+        self.admit = AdmittanceControl(self.ikin, 600*np.identity(3), 300*np.identity(3), conf.robot_params[self.robot_name])
 
-
+        from gazebo_msgs.srv import ApplyBodyWrench
+        self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
         print("Initialized fixed basecontroller---------------------------------------------------------------")
-                             
+
+    def applyForce(self):
+
+        from geometry_msgs.msg import Wrench, Point
+        wrench = Wrench()
+        wrench.force.x = 0
+        wrench.force.y = 0
+        wrench.force.z = 30
+        wrench.torque.x = 0
+        wrench.torque.y = 0
+        wrench.torque.z = 0
+        reference_frame = "world" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
+        reference_point = Point(x = 0, y = 0, z = 0)
+        try:
+            self.apply_body_wrench(body_name="ur5::wrist_3_link", reference_frame=reference_frame, reference_point=reference_point , wrench=wrench, duration=ros.Duration(10))
+        except:
+            pass
+
+
     def _receive_jstate(self, msg):
          for msg_idx in range(len(msg.name)):          
              for joint_idx in range(len(self.joint_names)):
@@ -180,7 +250,19 @@ class BaseController(threading.Thread):
                      self.qd[joint_idx] = msg.velocity[msg_idx]
                      self.tau[joint_idx] = msg.effort[msg_idx]
          # broadcast base world TF if they are different
-         self.broadcaster.sendTransform((self.spawn_x, self.spawn_y, self.spawn_z), (0.0, 0.0, 0.0, 1.0),   Time.now(), '/base_link', '/world')
+         self.broadcaster.sendTransform(self.base_offset, (0.0, 0.0, 0.0, 1.0),   Time.now(), '/base_link', '/world')
+
+    def _receive_ftsensor(self, msg):
+        contactForceTool0 = np.zeros(3)
+        contactMomentTool0 = np.zeros(3)
+        contactForceTool0[0] = msg.wrench.force.x
+        contactForceTool0[1] = msg.wrench.force.y
+        contactForceTool0[2] = msg.wrench.force.z
+        contactMomentTool0[0] = msg.wrench.torque.x
+        contactMomentTool0[1] = msg.wrench.torque.y
+        contactMomentTool0[2] = msg.wrench.torque.z
+        self.contactForceW = self.w_R_tool0.dot(contactForceTool0)
+        self.contactMomentW = self.w_R_tool0.dot(contactMomentTool0)
 
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
@@ -213,18 +295,20 @@ class BaseController(threading.Thread):
         self.g = self.robot.gravity(self.q)        
         #compute ee position  in the world frame  
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
-        self.x_ee = np.array([self.spawn_x, self.spawn_y, self.spawn_z]) + self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation 
-        # compute jacobian of the end effector in the world frame  
+        # this is expressed in a workdframe with the origin attached to the base frame origin
+        self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
+        self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).rotation
+        # compute jacobian of the end effector in the world frame
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
         self.J = self.J6[:3,:] 
         #compute contact forces                        
         self.estimateContactForces() 
 
-
     def estimateContactForces(self):  
-        # estimate ground reaxtion forces from tau 
-        self.contactForceW = np.linalg.inv(self.J6.T).dot(self.h-self.tau)[:3]                   
+        # estimate ground reaxtion forces from tau
+        if self.use_torque_control:
+            self.contactForceW = np.linalg.inv(self.J6.T).dot(self.h-self.tau)[:3]
                                  
     def startupProcedure(self):
         ros.sleep(1.0)  # wait for callback to fill in jointmnames          
@@ -236,27 +320,46 @@ class BaseController(threading.Thread):
             #self.pid.setPDs(0.0, 0.0, 0.0)          
 
     def initVars(self): 
-        self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
-        self.q_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan   
+        self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.q_des_adm_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
+        self.q_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan
         self.qd_des_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
         self.qd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan                                  
         self.tau_ffwd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
-        self.tau_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan                                  
-        self.contactForceW_log = np.empty((3,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan 
+        self.tau_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+
+        self.xee_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.xee_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.xee_des_adm_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
+        self.contactForceW_log = np.empty((3,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan
         self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.time = 0.0
         self.log_counter = 0
 
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
-            self.q_des_log[:, self.log_counter] =  self.q_des
-            self.q_log[:,self.log_counter] =  self.q  
+
+            self.q_des_log[:, self.log_counter] = self.q_des
+            self.q_log[:,self.log_counter] =  self.q
+
             self.qd_des_log[:,self.log_counter] =  self.qd_des
-            self.qd_log[:,self.log_counter] = self.qd                       
+            self.qd_log[:,self.log_counter] = self.qd
+
             self.tau_ffwd_log[:,self.log_counter] = self.tau_ffwd                    
-            self.tau_log[:,self.log_counter] = self.tau                     
+            self.tau_log[:,self.log_counter] = self.tau
+
+            self.xee_log[:, self.log_counter] = self.x_ee
+            self.xee_des_log[:, self.log_counter] = self.x_ee_des
+
             self.contactForceW_log[:,self.log_counter] =  self.contactForceW
             self.time_log[self.log_counter] = self.time
+
+            if (conf.robot_params[self.robot_name]['control_type'] == "admittance"):
+                self.q_des_adm_log[:, self.log_counter] = self.q_des_adm
+                self.xee_des_adm_log[:, self.log_counter] = self.x_ee_des_adm
+
             self.log_counter+=1
 
     def switch_controller(self, target_controller):
@@ -354,7 +457,7 @@ class BaseController(threading.Thread):
         if not confirmed:
             ros.loginfo("Exiting as requested by user.")
             sys.exit(0)
-
+ 
     
 def talker(p):
             
@@ -363,6 +466,12 @@ def talker(p):
     p.initVars()     
     p.startupProcedure() 
     ros.sleep(1.0)
+
+    if not p.real_robot:
+        p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
+    else:
+        p.q_des_q0 = np.copy(p.q)
+        p.admit.setPosturalTask(np.copy(p.q))
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
@@ -375,28 +484,71 @@ def talker(p):
             p.switch_controller("pos_joint_traj_controller")
         p.send_joint_trajectory()
     else:
+        if not p.use_torque_control:            
+            p.switch_controller("joint_group_pos_controller")
+        # reset to actual
+        p.updateKinematicsDynamics()
+
         #control loop
         while True:
             #update the kinematics
             p.updateKinematicsDynamics()
 
-            # set reference
-            p.q_des  = conf.robot_params[p.robot_name]['q_0']  + 0.1*np.sin(p.time)
+            # EXE L7-1: set constant joint reference
+            p.q_des = np.copy(p.q_des_q0)
 
-            # controller
-            p.tau_ffwd = np.zeros(p.robot.na)
+            # EXE L7-2  set constant ee reference
+            # p.x_ee_des = np.array([-0.3, 0.5, -0.6])
+            # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des,
+            #                                                                     conf.robot_params[p.robot_name][
+            #                                                                         'ee_frame'], p.q, False, False,
+            #                                                                     postural_task=True, w_postural=0.00001,
+            #                                                                     q_postural=p.q_des_q0)
+
+            # EXE L7-3  set constant ee reference and desired orientation
+            # rpy_des = np.array([ -1.9, -0.5, -0.1])
+            # w_R_e_des = p.math_utils.eul2Rot(rpy_des) # compute rotation matrix representing the desired orientation from Euler Angles
+            # p.q_des, ok, out_ws = p.ikin.endeffectorFrameInverseKinematicsLineSearch(p.x_ee_des, w_R_e_des, conf.robot_params[p.robot_name]['ee_frame'], p.q)
+
+            # EXE L7-4 - polynomial trajectory (TODO)
+
+            # EXE L7-5.3: set sinusoidal joint reference
+            #p.q_des  = p.q_des_q0  +0.2*np.sin(2*3.14*p.time)
+
+            # EXE 5 - admittance control
+            # p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
+            # p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
+
+            # EXE L7-6 - load estimation
+            # Fload = np.linalg.pinv(p.J.T).dot(p.tau - p.g)
+            # payload_weight = -Fload[2]/9.81
+
+            # controller with gravity coriolis comp
+            p.tau_ffwd = p.h + np.zeros(p.robot.na)
             # only torque loop
             #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd
 
-            if (p.use_torque_control):
-                p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-                p.ros_pub.add_arrow(p.x_ee, p.contactForceW/(6*p.robot.robot_mass),"green")
+            # override the position command if you use admittance controller
+            if (p.time > 1.5) and (conf.robot_params[p.robot_name]['control_type'] == "admittance"):  # activate admittance control only after a few seconds to allow initialization
+                q_to_send = p.q_des_adm
             else:
-                p.send_reduced_des_jstate(p.q_des) #no torque fb is present
+                q_to_send = p.q_des
 
+            # send commands to gazebo
+            if (p.use_torque_control):
+                p.send_des_jstate(q_to_send, p.qd_des, p.tau_ffwd)
+            else:
+                p.send_reduced_des_jstate(q_to_send)
+
+            p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
             # log variables
-            p.logData()
-            p.ros_pub.add_marker(p.x_ee)
+            if (p.time > 1.0):
+                p.logData()
+            # disturbance force
+            if (p.time > 3.0):
+                 p.applyForce()
+
+            p.ros_pub.add_marker(p.x_ee + p.base_offset)
             p.ros_pub.publishVisual()
 
             #wait for synconization of the control loop
@@ -406,23 +558,44 @@ def talker(p):
            # stops the while loop if  you prematurely hit CTRL+C
             if ros.is_shutdown():
                 print ("Shutting Down")
-                break;
-                             
-    ros.sleep(1.0)                
-    print ("Shutting Down")                 
-    ros.signal_shutdown("killed")           
-    p.deregister_node()     
+                break
 
-    
+    print("Shutting Down")
+    ros.signal_shutdown("killed")
+    p.deregister_node()
+    # this is to plot on REAL robot that is running a different rosnode (TODO SOLVE)
+    if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                  p.tau_ffwd_log, p.joint_names,p.q_des_adm_log)
+        plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
+    else:
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+              p.tau_ffwd_log, p.joint_names,p.q_des_log)
+    plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+               p.tau_ffwd_log, p.joint_names)
+    plotEndeff('force', 1, p.time_log, p.xee_log,  f_log=p.contactForceW_log)
+    plt.show(block=True)
+
+
 if __name__ == '__main__':
 
     p = BaseController(robotName)
+
     try:
         talker(p)
     except ros.ROSInterruptException:
-        from utils.common_functions import plotJoint      
-        plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
-        plotJoint('torque',1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
+        # these plots are for simulated robot
+
+        if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
+            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                      p.tau_ffwd_log, p.joint_names, p.q_des_adm_log)
+            plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
+        else:
+            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                      p.tau_ffwd_log, p.joint_names)
+        if (p.use_torque_control):
+            plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                   p.tau_ffwd_log, p.joint_names)
         plt.show(block=True)
     
         

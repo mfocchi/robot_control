@@ -8,18 +8,18 @@ Created on Fri Nov  2 16:52:08 2018
 #!/usr/bin/env python
 
 #inherit from base controller
-from base_controller.base_controller import BaseController
+from base_controllers.base_controller import BaseController
 import rospy as ros 
 import numpy as np
 from numpy import nan
 import copy
 
 # L5 Controller specific
-from base_controller.utils.controlRoutines import projectionBasedController, QPController
-from base_controller.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+from base_controllers.utils.controlRoutines import projectionBasedController, QPController
+from base_controllers.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
 from scipy.linalg import block_diag
-from base_controller.utils.math_tools import motionVectorTransform
-from base_controller.utils.common_functions import State
+from base_controllers.utils.math_tools import motionVectorTransform
+from base_controllers.utils.common_functions import State
 from optimization.ref_generation import ReferenceGenerator
 
 # config file
@@ -71,7 +71,6 @@ class AdvancedController(BaseController):
 def talker(p):
     
     p.start()
-    p.register_node()
     p.initVars()          
     p.startupProcedure() 
     rate = ros.Rate(1/conf.dt) # 10hz
@@ -83,7 +82,7 @@ def talker(p):
     p.des_twist = np.zeros(6)
     p.des_acc = np.zeros(6)  
      
-    initial_state.set(act_state)
+    #initial_state.set(act_state)
 #    p.refclass.getReferenceData(initial_state, conf.desired_velocity,  p.W_contacts,  np.logical_not(p.stance_legs), conf.robot_height)
 #    print(conf.desired_velocity.lin_x)
 #    import time
@@ -106,7 +105,7 @@ def talker(p):
         conf.params.robotInertiaB = p.compositeRobotInertiaB        
      
         #QP controller
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, conf.params)
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, conf.params)
 
         # map desired contact forces into torques                                     
         p.jacsT = block_diag(np.transpose(p.wJ[p.u.leg_map["LF"]]), 
@@ -143,7 +142,8 @@ def talker(p):
     active_plots.com = True
     active_plots.orientation = False
     active_plots.grforces = False   
-    p.refclass.plotReference(active_plots)
+    #TODO    
+    #p.refclass.plotReference(active_plots)
     
     ros.sleep(1.0)                
     print ("Shutting Down")                 

@@ -8,15 +8,14 @@ import time as tm
 import eigenpy
 eigenpy.switchToNumpyMatrix()
 import os
-from base_controller.utils.common_functions import *
-from base_controller.utils.optimTools import quadprog_solve_qp
-from base_controller.utils.ros_publish import RosPub
+from base_controllers.utils.common_functions import *
+from base_controllers.utils.ros_publish import RosPub
 
 import L3_conf as conf
 
 #instantiate graphic utils
-ros_pub = RosPub()
-robot = importDisplayModel(False, False)
+ros_pub = RosPub("ur5")
+robot = getRobotModel("ur5")
 
 
 # Init variables
@@ -106,7 +105,7 @@ while True:
     
      # ---------------------- DISTURBANCES ---------------------- 
    
-   if time > 1.0:
+    if time > 1.0:
        
         #Torque disturbance        
 #        tauExt = np.multiply(conf.ampJS, np.sin(two_pi_f_JS*time + conf.phiJS)) #Sine
@@ -130,46 +129,46 @@ while True:
      
     # ---------------------- SIMULATION -----------------------
      
-    #SIMULATION of the forward dynamics    
-    M_inv = np.linalg.inv(M)  
-    qdd = M_inv*(tau+tauExt-h)    
-    
-    # Forward Euler Integration    
-    qd = qd + qdd*conf.dt
-    q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
-    
-    # Log Data into a vector
-    time_log = np.hstack((time_log, time))				
-    q_log = np.hstack((q_log, q ))
-    q_des_log= np.hstack((q_des_log, q_des))
-    qd_log= np.hstack((qd_log, qd))
-    qd_des_log= np.hstack((qd_des_log, qd_des))
-    qdd_log= np.hstack((qdd_log, qdd))
-    qdd_des_log= np.hstack((qdd_des_log, qdd_des))
-    tau_log = np.hstack((tau_log, tau))
-#    tauCtrl_log = np.hstack((tauCtrl_log, tauCtrl))
-    tauExt_log = np.hstack((tauExt_log, tauExt))
-    f_log = np.hstack((f_log, extForce))
-    x_log = np.hstack((x_log, x))
-    x_des_log= np.hstack((x_des_log, x_des))
-    xd_log= np.hstack((xd_log, xd))
-    xd_des_log= np.hstack((xd_des_log, xd_des))
-    xdd_log= np.hstack((xdd_log, xdd))
-    xdd_des_log= np.hstack((xdd_des_log, xdd_des))
-    euler_log= np.hstack((euler_log, euler.reshape(3,-1)))
-    euler_des_log= np.hstack((euler_des_log, euler_des.reshape(3,-1)))             
- 
-    # update time
-    time = time + conf.dt                  
-                
-    #publish joint variables
-    ros_pub.publish(robot, q, qd, tau)                   
-    tm.sleep(conf.dt*conf.SLOW_FACTOR)
-    
-    # stops the while loop if  you prematurely hit CTRL+C                    
-    if ros_pub.isShuttingDown():
-        print ("Shutting Down")                    
-        break;
+        #SIMULATION of the forward dynamics    
+        M_inv = np.linalg.inv(M)  
+        qdd = M_inv*(tau+tauExt-h)    
+        
+        # Forward Euler Integration    
+        qd = qd + qdd*conf.dt
+        q = q + qd*conf.dt + 0.5*conf.dt*conf.dt*qdd
+        
+        # Log Data into a vector
+        time_log = np.hstack((time_log, time))                
+        q_log = np.hstack((q_log, q ))
+        q_des_log= np.hstack((q_des_log, q_des))
+        qd_log= np.hstack((qd_log, qd))
+        qd_des_log= np.hstack((qd_des_log, qd_des))
+        qdd_log= np.hstack((qdd_log, qdd))
+        qdd_des_log= np.hstack((qdd_des_log, qdd_des))
+        tau_log = np.hstack((tau_log, tau))
+    #    tauCtrl_log = np.hstack((tauCtrl_log, tauCtrl))
+        tauExt_log = np.hstack((tauExt_log, tauExt))
+        f_log = np.hstack((f_log, extForce))
+        x_log = np.hstack((x_log, x))
+        x_des_log= np.hstack((x_des_log, x_des))
+        xd_log= np.hstack((xd_log, xd))
+        xd_des_log= np.hstack((xd_des_log, xd_des))
+        xdd_log= np.hstack((xdd_log, xdd))
+        xdd_des_log= np.hstack((xdd_des_log, xdd_des))
+        euler_log= np.hstack((euler_log, euler.reshape(3,-1)))
+        euler_des_log= np.hstack((euler_des_log, euler_des.reshape(3,-1)))             
+     
+        # update time
+        time = time + conf.dt                  
+                    
+        #publish joint variables
+        ros_pub.publish(robot, q, qd, tau)                   
+        tm.sleep(conf.dt*conf.SLOW_FACTOR)
+        
+        # stops the while loop if  you prematurely hit CTRL+C                    
+        if ros_pub.isShuttingDown():
+            print ("Shutting Down")                    
+            break;
             
 ros_pub.deregister_node()
         

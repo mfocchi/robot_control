@@ -10,7 +10,7 @@ import os
 import math
 import pinocchio as pin
 from pinocchio.utils import *
-from base_controller.utils.math_tools import Math
+from base_controllers.utils.math_tools import Math
 import time as tm 
 
 def setRobotParameters():

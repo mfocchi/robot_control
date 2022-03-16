@@ -88,7 +88,9 @@ def startNode(node_name):
 
 
 def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):    
-
+    ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
+    path  = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
+    srdf      = path + "/robot_urdf/" + robot_name + ".srdf"  
     
     if (generate_urdf):  
         try:       
@@ -100,8 +102,10 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             executable = 'xacro'
             name = 'xacro'
             namespace = '/'
-            args = xacro_path+ ' --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf'
+            args = xacro_path+ ' --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/generated_urdf/'+robot_name+'.urdf'
      
+     
+       
             try:
                 flywheel = ros.get_param('/flywheel')
                 args+=' flywheel:='+flywheel
@@ -110,25 +114,21 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             
             os.system("rosrun xacro xacro "+args)  
             #os.system("rosparam get /robot_description > "+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf')  
+            #urdf = URDF.from_parameter_server()
             print ("URDF generated")
+            urdf      = path + "/robot_urdf/generated_urdf/" + robot_name+ ".urdf"  
+            robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])       
+            
         except:
             print (robot_name+'_description not present')
-            
-        
+    else:        
+        urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"              
     
-    # Import the model
-    ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
-    path      = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
-    urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"
-    srdf      = path + "/robot_urdf/" + robot_name + ".srdf"
-    robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
-                                     
-    #get urdf from ros just in case you need
-    #robot_urdf_ros = URDF.from_parameter_server()                                                                                                                                                                                                                                                                                                              
+    robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])                                
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None, joint_names = None):
+def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None, joint_names = None, q_adm = None):
     if name == 'position':
         plot_var_log = q_log
         if   (q_des_log is not None):
@@ -180,7 +180,8 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
         if   (plot_var_des_log is not None):
              plt.plot(time_log, plot_var_des_log[jidx,:], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
         plt.plot(time_log, plot_var_log[jidx,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
-        
+        if (q_adm is not None):
+            plt.plot(time_log, q_adm[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
         plt.grid()
                 
     
@@ -229,7 +230,41 @@ def plotEndeff(name, figure_id, time_log, x_log, x_des_log=None, xd_log=None, xd
         plt.plot(time_log, plot_var_des_log[2,:], lw=lw_des, color = 'red')                                        
     plt.plot(time_log, plot_var_log[2,:], lw=lw_act, color = 'blue')
     plt.grid()
-      
+
+
+def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm, f_log):
+
+    fig = plt.figure(figure_id)
+    fig.suptitle("admittance tracking", fontsize=20)
+    plt.subplot(4, 1, 1)
+    plt.ylabel("end-effector x")
+    plt.plot(time_log, x_log[0, :], lw=3, color='blue')
+    plt.plot(time_log, x_des_log[0, :], lw=2, color='red')
+    plt.plot(time_log, x_des_log_adm[0, :], lw=2, color='black')
+    plt.grid()
+
+    plt.subplot(4, 1, 2)
+    plt.ylabel("end-effector y")
+    plt.plot(time_log, x_log[1, :], lw=3, color='blue')
+    plt.plot(time_log, x_des_log[1, :], lw=2, color='red')
+    plt.plot(time_log, x_des_log_adm[1, :], lw=2, color='black')
+    plt.grid()
+
+    plt.subplot(4, 1, 3)
+    plt.ylabel("end-effector z")
+    plt.plot(time_log, x_log[2, :], lw=3, color='blue')
+    plt.plot(time_log, x_des_log[2, :], lw=2, color='red')
+    plt.plot(time_log, x_des_log_adm[2, :], lw=2, color='black')
+    plt.grid()
+
+    f_norm = []
+    for i in range(f_log.shape[1]):
+        f_norm.append(np.linalg.norm(f_log[:,i]))
+
+    plt.subplot(4, 1, 4)
+    plt.plot(time_log, f_norm, lw=2, color='blue')
+
+    plt.grid()
     
 def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW, baseTwistW, des_baseAccW, wrenchW):
     plot_var_des_log = None
