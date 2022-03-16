@@ -16,7 +16,6 @@ from common_functions import checkRosMaster
 
 import params as conf
 
-force_th = 2.0
 
 class ExpController(Controller):
     def __init__(self, robot_name):
@@ -54,21 +53,6 @@ class ExpController(Controller):
 
         self.pub_baseTwist = ros.Publisher("/base_twist", Twist, queue_size=1, tcp_nodelay=True)
 
-        self.ee_frames = ['lf_foot', 'rf_foot', 'lh_foot', 'rh_foot']
-        self.ros_joints_name = ['universe',
-                               'floating_base_joint',
-                               'lf_haa_joint',
-                               'lf_hfe_joint',
-                               'lf_kfe_joint',
-                               'lh_haa_joint',
-                               'lh_hfe_joint',
-                               'lh_kfe_joint',
-                               'rf_haa_joint',
-                               'rf_hfe_joint',
-                               'rf_kfe_joint',
-                               'rh_haa_joint',
-                               'rh_hfe_joint',
-                               'rh_kfe_joint']  # ros convention
 
         self.broadcaster = tf.TransformBroadcaster()
 
