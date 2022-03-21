@@ -314,10 +314,6 @@ class SimController(Controller):
 
     def startupProcedure(self):
         ros.sleep(0.5)  # wait for callback to fill in jointmnames
-        # self.pid = PidManager(self.joint_names)  # I start after cause it needs joint names filled in by receive jstate callback
-        # set joint pdi gains
-        # self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0)
-        self.controller = PD_joints(self.robot, conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'])
 
         if (self.robot_name == 'hyq'):
             # these torques are to compensate the leg gravity
@@ -360,16 +356,6 @@ class SimController(Controller):
 
             while ros.get_time() - start_t < 0.3:
                 fb_conf = np.hstack([pin.neutral(self.robot.model)[:7], self.q])
-
-                self.tau_fb = np.zeros(12)#self.controller.feedback(self.q, self.q_des, self.qd, self.qd_des)
-                self.tau_ffwd = self.controller.feedforward(self.q, np.array(self.quaternion), True)
-                #self.tau_des = self.tau_fb+self.tau_ffwd
-                #self.tau_ffwd = np.zeros(12)
-
-                self.send_command(self.q_des, self.qd_des, self.tau_ffwd, self.tau_fb)
-
-                #self._send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd, self.tau_fb)
-                #self.logData()
                 ros.sleep(0.01)
 
             #self.pid.setPDs(0.0, 0.0, 0.0)
