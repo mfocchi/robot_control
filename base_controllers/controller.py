@@ -52,7 +52,11 @@ class Controller(threading.Thread):
         self.basePoseW = np.empty(6) * np.nan
         self.baseTwistW = np.empty(6) * np.nan
 
+        self.quaternion = np.empty(4) * np.nan
+
         self.gen_config_neutral = pin.neutral(self.robot.model)
+        self.qPin_base_oriented = pin.neutral(self.robot.model)
+        self.vPin_base_oriented = np.zeros(self.robot.na)
 
         self.b_R_w = np.eye(3)
 
@@ -70,6 +74,10 @@ class Controller(threading.Thread):
         self.compositeRobotInertiaB = np.identity(3)
 
         self.contacts_state = np.array([False] * 4)
+
+        self.contact_matrix = np.hstack( [np.vstack( [np.eye(3),np.empty((3,3))] )]*self.robot.nee )
+        self.gravityW = -self.robot.robot_mass*self.robot.model.gravity.vector
+        self.gravityB = self.gravityW.copy()
 
         self.grForcesW = np.empty(3*self.robot.nee) * np.nan
         self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
@@ -249,4 +257,48 @@ class Controller(threading.Thread):
         tmp = np.empty((var.shape[0], var.shape[1]+conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         tmp[:var.shape[0], :var.shape[1]] = var
         return tmp
+
+    # feedforward controllers
+
+    def gravityCompensation(self):
+        self.qPin_base_oriented[3:7] = self.quaternion
+        self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
+        gravity_torques = self.u.mapToRos(self.robot.gravity(self.qPin_base_oriented))[6:]
+        return -gravity_torques
+
+    def contactCompensation(self):
+        # to simplyfy, all the feet are assumed to be in contact
+        self.qPin_base_oriented[3:7] = self.quaternion
+        self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
+
+        com_B = self.robot.com(self.qPin_base_oriented)
+
+        self.robot.forwardKinematics(self.qPin_base_oriented)
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
+
+        for i, index in enumerate(self.robot.getEndEffectorsFrameId):
+            foot_pos_B = self.robot.data.oMf[index].translation
+            S = pin.skew(foot_pos_B-com_B)
+            self.contact_matrix[3:, 3 * i:3 * (i + 1)] = S
+
+        C_pinv = np.linalg.pinv(self.contact_matrix)
+        self.gravityB[0:3] = pin.Quaternion(self.quaternion).toRotationMatrix().T @ self.gravityW[0:3]
+        feet_forces_gravity = C_pinv @ self.gravityB
+        J = self.robot.getEEStackJacobians(self.qPin_base_oriented, 'linear')[:, 6:]
+        contact_torques = self.u.mapToRos(J.T @ feet_forces_gravity)
+        return -contact_torques
+
+    def comBFeedforward(self, a_com_B):
+        self.qPin_base_oriented[3:7] = self.quaternion
+        self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
+
+        pin.jacobianCenterOfMass(self.robot.model, self.robot.data, self.qPin_base_oriented)
+        J_com = self.robot.data.Jcom
+        J_com_pinv = np.linalg.pinv(J_com)
+
+        M = self.robot.mass(self.qPin_base_oriented)
+
+        com_torques =  self.u.mapToRos(M @ J_com_pinv @ a_com_B)[6:]
+
+        return -com_torques
 
