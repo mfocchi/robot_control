@@ -189,14 +189,14 @@ class Controller(threading.Thread):
 
         self.time_log = np.empty((1, (conf.robot_params[self.robot_name]['buffer_size']))) *np.nan
 
-        self.time = 0
-        self.log_counter = -1
+        self.time = 0.0
+        self.log_counter = 0
 
     def logData(self):
         self.log_counter += 1
         self.time += self.dt # TODO: modify with a more sofisticate update of time
         # if log_counter exceed N*buffer_size, reshape all the log variables
-        if (self.log_counter % conf.robot_params[self.robot_name]['buffer_size']) == 0:
+        if self.log_counter != 0 and (self.log_counter % conf.robot_params[self.robot_name]['buffer_size']) == 0:
             self.comPosB_log       = self.log_policy(self.comPosB_log)
             self.comVelB_log       = self.log_policy(self.comVelB_log)
             self.comPosW_log       = self.log_policy(self.comPosW_log)
