@@ -179,7 +179,7 @@ class SimController(Controller):
     def get_jstate(self):
         return self.q
 
-    def resetGravity(self, flag):
+    def resetGravity(self, g_mag=None):
         # get actual configs
         physics_props = self.get_physics_client()
 
@@ -190,15 +190,17 @@ class SimController(Controller):
         req_reset_gravity.ode_config = physics_props.ode_config
         req_reset_gravity.gravity = physics_props.gravity
 
-        if (flag):
-            req_reset_gravity.gravity.z = -0.2
+        if not g_mag is None:
+            self.robot.model.gravity.linear[2] = -g_mag
+            req_reset_gravity.gravity.z = -g_mag
         else:
+            self.robot.model.gravity.linear[2] = -9.81
             req_reset_gravity.gravity.z = -9.81
         self.set_physics_client(req_reset_gravity)
 
-    def freezeBase(self, flag):
+    def freezeBase(self, g_mag = None):
 
-        self.resetGravity(flag)
+        self.resetGravity(g_mag)
         # create the message
         req_reset_world = SetModelStateRequest()
         # create model state
@@ -373,24 +375,7 @@ class SimController(Controller):
             #self.pid.setPDs(0.0, 0.0, 0.0)
         print("finished startup")
 
-    def resetGravity(self, g_mag=None):
-        # get actual configs
-        physics_props = self.get_physics_client()
 
-        req_reset_gravity = SetPhysicsPropertiesRequest()
-        # ode config
-        req_reset_gravity.time_step = physics_props.time_step
-        req_reset_gravity.max_update_rate = physics_props.max_update_rate
-        req_reset_gravity.ode_config = physics_props.ode_config
-        req_reset_gravity.gravity = physics_props.gravity
-
-        if not g_mag is None:
-            self.robot.model.gravity.linear[2] = -g_mag
-            req_reset_gravity.gravity.z = -g_mag
-        else:
-            self.robot.model.gravity.linear[2] = -9.81
-            req_reset_gravity.gravity.z = -9.81
-        self.set_physics_client(req_reset_gravity)
 
 
 
