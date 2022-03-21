@@ -92,12 +92,14 @@ class SimController(Controller):
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
         self.initVars()
 
+        self.pid = PidManager(self.joint_names)
+        self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0)
+
     def _receive_pose(self, msg):
-        self.quaternion = (
-            msg.pose.pose.orientation.x,
-            msg.pose.pose.orientation.y,
-            msg.pose.pose.orientation.z,
-            msg.pose.pose.orientation.w)
+        self.quaternion[0] = msg.pose.pose.orientation.x
+        self.quaternion[1] = msg.pose.pose.orientation.y
+        self.quaternion[2] = msg.pose.pose.orientation.z
+        self.quaternion[3] = msg.pose.pose.orientation.w
         euler = euler_from_quaternion(self.quaternion)
 
         self.basePoseW[0] = msg.pose.pose.position.x
@@ -126,11 +128,11 @@ class SimController(Controller):
          msg.effort = tau_des
          self.pub_des_jstate.publish(msg)
 
-    def send_command(self, q_des=None, qd_des=None, tau_ffwd=None, tau_fb=None):
+    def send_command(self, q_des=None, qd_des=None, tau_ffwd=None):
         # q_des, qd_des, and tau_ffwd have dimension 12                                                         
         # and are ordered as on the robot                                                                       
 
-        if (q_des is None) and (qd_des is None) and (tau_ffwd is None) and (tau_fb is None):
+        if (q_des is None) and (qd_des is None) and (tau_ffwd is None):
             raise RuntimeError('Cannot have both states (q_des and qd_des) and controls (tau_ffwd) as None')
 
         if q_des is not None:
@@ -148,19 +150,12 @@ class SimController(Controller):
         else:
             self.tau_ffwd = np.zeros(self.robot.na)
 
-        if tau_fb is not None:
-            self.tau_fb = tau_fb
-        else:
-            self.tau_fb = np.zeros(self.robot.na)
+        self._send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
 
-        self.tau_des = self.tau_fb + self.tau_ffwd
-
-        self._send_des_jstate(self.q_des, self.qd_des, self.tau_des)
-
-        # log variables                                                                                         
-        self.logData()
+        # log variables
         self.rate.sleep()
-        self.time = self.time + conf.robot_params[self.robot_name]['dt']
+        self.logData()
+
 
     def register_node(self):
         ros.init_node('controller_python', disable_signals=False, anonymous=False)
@@ -356,6 +351,8 @@ class SimController(Controller):
 
             while ros.get_time() - start_t < 0.3:
                 fb_conf = np.hstack([pin.neutral(self.robot.model)[:7], self.q])
+                self.tau_ffwd = self.gravityCompensation()+self.contactCompensation()
+                self._send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                 ros.sleep(0.01)
 
             #self.pid.setPDs(0.0, 0.0, 0.0)
