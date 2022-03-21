@@ -128,7 +128,7 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log, tau_ffwd_log = None, joint_names = None, q_adm = None):
+def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, joint_names = None, q_adm = None):
     if name == 'position':
         plot_var_log = q_log
         if   (q_des_log is not None):
@@ -266,7 +266,7 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
 
     plt.grid()
     
-def plotCoM(name, figure_id, time_log, des_basePoseW, basePoseW, des_baseTwistW, baseTwistW, des_baseAccW, wrenchW):
+def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, des_baseAccW=None, wrenchW=None):
     plot_var_des_log = None
     if name == 'position':
         plot_var_log = basePoseW
