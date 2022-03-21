@@ -175,7 +175,7 @@ def plotJoint(name, figure_id, time_log, q_log, q_des_log, qd_log, qd_des_log, q
         
     for jidx in range(njoints):
      
-        plt.subplot(njoints/2,2,jidx+1)
+        plt.subplot(int(njoints/2),2,jidx+1)
         plt.ylabel(labels[jidx])    
         if   (plot_var_des_log is not None):
              plt.plot(time_log, plot_var_des_log[jidx,:], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
