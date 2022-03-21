@@ -61,6 +61,9 @@ class ExpController(Controller):
         self.elapsed_time = 0
         self.time = 0
 
+        self.Kp = conf.robot_params[robot_name]['kp']
+        self.Kd = conf.robot_params[robot_name]['kd']
+
     def _recieve_ready(self, msg):
         self.isRobotReady = msg.data
 
@@ -228,3 +231,7 @@ class ExpController(Controller):
 
         self.sensors_bag.write('/imu', msg_imu)
 
+
+    def jointFeedback(self, q, q_des, qd, qd_des):
+        tau_fb = self.Kp @ (q_des-q) + self.Kd @ (qd_des-qd)
+        return tau_fb
