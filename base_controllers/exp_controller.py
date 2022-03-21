@@ -26,8 +26,8 @@ class ExpController(Controller):
         self.ros_pub = RosPub(robot_name, only_visual=False, visual_frame = "base_link")
         self.rate = ros.Rate(1 / self.dt)
 
-        # Additional variables
-        self.IMU_quat = np.empty(4)*np.nan
+        # Additself.quaternion = np.empty(4)*np.nanional variables
+
         self.IMU_ang_vel = np.empty(3)*np.nan
         self.IMU_lin_accel = np.empty(3)*np.nan
 
@@ -85,10 +85,10 @@ class ExpController(Controller):
 
 
     def _receive_imu(self, msg):
-        self.IMU_quat[0] = msg.orientation.x
-        self.IMU_quat[1] = msg.orientation.y
-        self.IMU_quat[2] = msg.orientation.z
-        self.IMU_quat[3] = msg.orientation.w
+        self.quaternion[0] = msg.orientation.x
+        self.quaternion[1] = msg.orientation.y
+        self.quaternion[2] = msg.orientation.z
+        self.quaternion[3] = msg.orientation.w
 
         self.IMU_ang_vel[0] = msg.angular_velocity.x
         self.IMU_ang_vel[1] = msg.angular_velocity.y
@@ -98,7 +98,7 @@ class ExpController(Controller):
         self.IMU_lin_accel[1] = msg.linear_acceleration.y
         self.IMU_lin_accel[2] = msg.linear_acceleration.z
         # # TODO: update base pose and twist
-        # euler = euler_from_quaternion(self.IMU_quat)
+        # euler = euler_from_quaternion(self.quaternion)
         # self.basePoseW[0] = 0
         # self.basePoseW[1] = 0
         # self.basePoseW[2] = 0
@@ -132,7 +132,7 @@ class ExpController(Controller):
     def estimateContacts(self):
         q_ros = self.u.mapToRos(self.q)
         # Pinocchio Update the joint and frame placements
-        configuration = np.hstack(([0,0,0], self.IMU_quat, q_ros))
+        configuration = np.hstack(([0,0,0], self.quaternion, q_ros))
         neutral_configuration = np.hstack((pin.neutral(self.robot.model)[0:7], q_ros))
 
         pin.forwardKinematics(self.robot.model, self.robot.data, neutral_configuration)
@@ -178,7 +178,7 @@ class ExpController(Controller):
         #print('base velocity in world: ', self.w_vl_b)
         #self.w_p_b += self.w_vl_b * self.dt
 
-        self.broadcaster.sendTransform( (0,0,0), self.IMU_quat, ros.Time.now(), '/base_link', '/world')
+        self.broadcaster.sendTransform( (0,0,0), self.quaternion, ros.Time.now(), '/base_link', '/world')
 
         if w_vl_b_old[2] >= 0 and self.w_vl_b[2] < 0:
             print('APEX DETECTED: ', w_vl_b_old[2], self.w_vl_b[2])
@@ -189,7 +189,7 @@ class ExpController(Controller):
 
     def computeCOM(self):
         pass
-        #self.com, self.v_com = self.leg_odom.estimate_com(self.IMU_quat, self.IMU_ang_vel, self.q, self.qd, self.contacts_state, self.bJ)
+        #self.com, self.v_com = self.leg_odom.estimate_com(self.quaternion, self.IMU_ang_vel, self.q, self.qd, self.contacts_state, self.bJ)
 
     def testApex(self):
         pass
@@ -213,10 +213,10 @@ class ExpController(Controller):
 
         msg_imu = Imu()
         msg_imu.header.stamp = stamp
-        msg_imu.orientation.x = self.IMU_quat[0]
-        msg_imu.orientation.y = self.IMU_quat[1]
-        msg_imu.orientation.z = self.IMU_quat[2]
-        msg_imu.orientation.w = self.IMU_quat[3]
+        msg_imu.orientation.x = self.quaternion[0]
+        msg_imu.orientation.y = self.quaternion[1]
+        msg_imu.orientation.z = self.quaternion[2]
+        msg_imu.orientation.w = self.quaternion[3]
 
         msg_imu.angular_velocity.x = self.IMU_ang_vel[0]
         msg_imu.angular_velocity.y = self.IMU_ang_vel[1]
