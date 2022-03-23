@@ -288,17 +288,15 @@ class Controller(threading.Thread):
         contact_torques = self.u.mapToRos(J.T @ feet_forces_gravity)
         return -contact_torques
 
-    def comBFeedforward(self, a_com_B):
+    def comFeedforward(self, a_com):
         self.qPin_base_oriented[3:7] = self.quaternion
         self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
 
         pin.jacobianCenterOfMass(self.robot.model, self.robot.data, self.qPin_base_oriented)
         J_com = self.robot.data.Jcom
-        J_com_pinv = np.linalg.pinv(J_com)
 
-        M = self.robot.mass(self.qPin_base_oriented)
-
-        com_torques =  self.u.mapToRos(M @ J_com_pinv @ a_com_B)[6:]
+        wrench = self.robot.robot_mass * a_com
+        com_torques = self.u.mapToRos(J_com[:, 6:].T @ wrench)
 
         return -com_torques
 
