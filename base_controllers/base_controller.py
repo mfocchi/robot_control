@@ -57,8 +57,8 @@ from base_controllers.utils.common_functions import getRobotModel
 
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
-import  params as conf
 robotName = "solo"
+import  base_controllers.params as conf
 
 class BaseController(threading.Thread):
     
@@ -109,6 +109,9 @@ class BaseController(threading.Thread):
         self.qd = np.zeros(self.robot.na)
         self.tau = np.zeros(self.robot.na)                                
         self.q_des =np.zeros(self.robot.na)
+        
+        self.mathJet = Math()
+        self.quaternion = np.array([0.,0.,0.,1.])
         # GOZERO Keep the fixed configuration for the joints at the start of simulation
         self.q_des[:12] = conf.robot_params[self.robot_name]['q_0']   
         self.qd_des = np.zeros(self.robot.na)
@@ -163,12 +166,11 @@ class BaseController(threading.Thread):
                                                 
     def _receive_pose(self, msg):
         
-        self.quaternion = (
-            msg.pose.pose.orientation.x,
-            msg.pose.pose.orientation.y,
-            msg.pose.pose.orientation.z,
-            msg.pose.pose.orientation.w)
-        euler = euler_from_quaternion(self.quaternion)
+        self.quaternion[0]=    msg.pose.pose.orientation.x
+        self.quaternion[1]=    msg.pose.pose.orientation.y
+        self.quaternion[2]=    msg.pose.pose.orientation.z
+        self.quaternion[3]=    msg.pose.pose.orientation.w
+        self.euler = euler_from_quaternion(self.quaternion)
 
         self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
         self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
@@ -184,9 +186,9 @@ class BaseController(threading.Thread):
         self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
         self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
         
-        mathJet = Math()
+      
         # compute orientation matrix                                
-        self.b_R_w = mathJet.rpyToRot(euler)
+        self.b_R_w = self.mathJet.rpyToRot(euler)
    
     def _receive_jstate(self, msg):
           #need to map to robcogen only the arrays coming from gazebo because of ROS convention is different
@@ -383,6 +385,7 @@ class BaseController(threading.Thread):
         self.grForcesW_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan 
         self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.constr_viol_log = np.empty((4,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        
         self.time = 0.0
         self.log_counter = 0
 
@@ -425,7 +428,12 @@ def talker(p):
     while True:  
         #update the kinematics
         p.updateKinematics()    
-          
+        
+        import pinocchio            
+        
+        print("A",pinocchio.Quaternion(p.quaternion).toRotationMatrix())
+        print("B",p.mathJet.rpyToRot(p.euler))        
+        
         # controller                             
         p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp  
         #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:] 

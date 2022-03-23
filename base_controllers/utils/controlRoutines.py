@@ -8,12 +8,11 @@ import scipy.io
 import scipy.sparse as sparse
 import numpy as np
 import yaml
-from math_tools import *
+from base_controllers.utils.math_tools import *
 # User defined packages
-from math_tools import Math
-from utils import Utils
+from base_controllers.utils.utils import Utils
 
-from optimTools import quadprog_solve_qp
+from base_controllers.utils.optimTools import quadprog_solve_qp
 from scipy.linalg import block_diag
 
 def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance_legs, params):
