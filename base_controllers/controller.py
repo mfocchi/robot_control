@@ -10,11 +10,11 @@ import threading
 import numpy as np
 import pinocchio as pin
 # utility functions
-from utils.utils import Utils
-from utils.math_tools import *
-from utils.common_functions import getRobotModel
+from base_controllers.utils.utils import Utils
+from base_controllers.utils.math_tools import *
+from base_controllers.utils.common_functions import getRobotModel
 
-import params as conf
+import base_controllers.params as conf
 
 import rosbag
 import datetime

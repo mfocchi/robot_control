@@ -1,4 +1,4 @@
-from controller import Controller
+from base_controllers.controller import Controller
 
 import numpy as np
 import pinocchio as pin
@@ -8,9 +8,9 @@ import roslaunch
 import rosnode
 import rosgraph
 
-from utils.ros_publish import RosPub
-from utils.pidManager import PidManager
-from utils.math_tools import *
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.pidManager import PidManager
+from base_controllers.utils.math_tools import *
 
 from sensor_msgs.msg import JointState
 #from sensor_msgs.msg import Imu
@@ -35,7 +35,7 @@ from geometry_msgs.msg import Pose
 from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
 
-import params as conf
+import base_controllers.params as conf
 
 import os
 
@@ -63,7 +63,7 @@ class SimController(Controller):
             launch_file = self.robot_name
         self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+launch_file+".launch"])
         self.launch.start()
-        ros.sleep(1.0)
+        ros.sleep(1.5)
 
         super().__init__(self.robot_name)
         self.dt = conf.robot_params[self.robot_name]['dt']

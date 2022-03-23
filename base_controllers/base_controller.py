@@ -57,8 +57,8 @@ from base_controllers.utils.common_functions import getRobotModel
 
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
-robotName = "solo"
 import  base_controllers.params as conf
+robotName = "solo"
 
 class BaseController(threading.Thread):
     
@@ -428,12 +428,7 @@ def talker(p):
     while True:  
         #update the kinematics
         p.updateKinematics()    
-        
-        import pinocchio            
-        
-        print("A",pinocchio.Quaternion(p.quaternion).toRotationMatrix())
-        print("B",p.mathJet.rpyToRot(p.euler))        
-        
+
         # controller                             
         p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp  
         #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:] 
