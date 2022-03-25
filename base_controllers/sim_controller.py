@@ -1,4 +1,4 @@
-from base_controllers.controller import Controller
+from base_controllers.controller import Controller, conf
 
 import numpy as np
 import pinocchio as pin
@@ -35,7 +35,9 @@ from geometry_msgs.msg import Pose
 from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
 
-import base_controllers.params as conf
+from gazebo_msgs.srv import ApplyBodyWrench
+
+
 
 import os
 
@@ -95,6 +97,9 @@ class SimController(Controller):
         self.pid = PidManager(self.joint_names)
         self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0)
 
+        self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
+        self.APPLY_EXTERNAL_WRENCH = False
+
     def _receive_pose(self, msg):
         self.quaternion[0] = msg.pose.pose.orientation.x
         self.quaternion[1] = msg.pose.pose.orientation.y
@@ -128,6 +133,24 @@ class SimController(Controller):
          msg.effort = tau_des
          self.pub_des_jstate.publish(msg)
 
+    def applyForce(self, Fx, Fy, Fz, Mx,My,Mz, duration):
+        from geometry_msgs.msg import Wrench, Point
+        wrench = Wrench()
+        wrench.force.x = Fx
+        wrench.force.y = Fy
+        wrench.force.z = Fz
+        wrench.torque.x = Mx
+        wrench.torque.y = My
+        wrench.torque.z = Mz
+        reference_frame = "world"  # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
+        reference_point = Point(x=0, y=0, z=0)
+        try:
+            self.apply_body_wrench(body_name="solo::base_link", reference_frame=reference_frame,
+                                   reference_point=reference_point, wrench=wrench, duration=ros.Duration(duration))
+        except:
+            pass
+
+
     def send_command(self, q_des=None, qd_des=None, tau_ffwd=None):
         # q_des, qd_des, and tau_ffwd have dimension 12                                                         
         # and are ordered as on the robot                                                                       
@@ -151,6 +174,11 @@ class SimController(Controller):
             self.tau_ffwd = np.zeros(self.robot.na)
 
         self._send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+
+        if (self.APPLY_EXTERNAL_WRENCH and self.time > 1.5):
+            print("START APPLYING EXTERNAL WRENCH")
+            self.applyForce(0.0,0.0,0.0,0.0, 1.0,0.0, 0.05)
+            self.APPLY_EXTERNAL_WRENCH = False
 
         # log variables
         self.rate.sleep()
