@@ -88,7 +88,7 @@ class RosPub():
             self.markerArray_arrows.markers = []
             self.id_arrow = 0
                                 
-    def add_marker(self, pos, radius = 0.1):
+    def add_marker(self, pos, radius = 0.1, color = "red"):
        marker = Marker()
        marker.header.frame_id = self.visual_frame
        marker.type = marker.SPHERE
@@ -97,9 +97,18 @@ class RosPub():
        marker.scale.y = radius
        marker.scale.z = radius
        marker.color.a = 0.5
-       marker.color.r = 1.0
-       marker.color.g = 0.0
-       marker.color.b = 0.0                        
+       if (color == "red"):
+           marker.color.r = 1.0
+           marker.color.g = 0.0
+           marker.color.b = 0.0
+       if (color == "blue"):
+           marker.color.r = 0.0
+           marker.color.g = 0.0
+           marker.color.b = 1.0
+       if (color == "green"):
+           marker.color.r = 0.0
+           marker.color.g = 1.0
+           marker.color.b = 0.0
                                
        marker.pose.orientation.w = 1.0
        marker.pose.position.x = pos[0]
@@ -113,14 +122,20 @@ class RosPub():
                             
     def add_arrow(self, start, vector, color = "green"):
        marker = Marker()
-       if (color == "green"):                    
+
+
+       if (color == "green"):
            marker.color.r = 0.0
            marker.color.g = 1.0
-           marker.color.b = 0.0                    
-       if (color == "blue"):                    
+           marker.color.b = 0.0
+       if (color == "blue"):
            marker.color.r = 0.0
            marker.color.g = 0.0
-           marker.color.b = 1.0                                                
+           marker.color.b = 1.0
+       if (color == "red"):
+           marker.color.r = 1.0
+           marker.color.g = 0.0
+           marker.color.b = 0.0
 
        marker.header.frame_id = self.visual_frame
        marker.type = marker.ARROW
