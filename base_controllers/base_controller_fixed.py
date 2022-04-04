@@ -168,10 +168,10 @@ class BaseController(threading.Thread):
         self.qd = np.zeros(self.robot.na)
         self.tau = np.zeros(self.robot.na)                                
         self.q_des =np.zeros(self.robot.na)
-        # GOZERO Keep the fixed configuration for the joints at the start of simulation
-        self.q_des[:self.robot.na] = conf.robot_params[self.robot_name]['q_0']   
         self.qd_des = np.zeros(self.robot.na)
-        self.tau_ffwd =np.zeros(self.robot.na)                                         
+        self.tau_ffwd =np.zeros(self.robot.na)
+
+        self.x_ee_des = np.zeros(3)
         self.contactForceW = np.zeros(3)
         self.contactMomentW = np.zeros(3)
 
