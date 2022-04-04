@@ -63,6 +63,7 @@ import actionlib
 
 from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
 from base_controllers.utils.math_tools import Math
+from obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
 
 class AdmittanceControl():
     
@@ -339,6 +340,11 @@ class BaseController(threading.Thread):
         self.time = 0.0
         self.log_counter = 0
 
+        self.obs_avoidance = ObstacleAvoidance()
+        # position of the center is in WF
+        self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
+        self.obs_avoidance.setCylinderParameters(0.125, 0.3, np.array([0.6, 0.25, 1.0]))
+
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
 
@@ -537,7 +543,24 @@ def talker(p):
 
             # send commands to gazebo
             if (p.use_torque_control):
+                if  (p.time > 1.5):
+                    p.pid.setPDs(0.0, 10.2, 0.0)
+                    # since the obstacles are defined in the WF I need to add the offset
+                    d_cyl, cyl_closest_point = p.obs_avoidance.getCylinderDistance(p.x_ee + p.base_offset)
+                    p.ros_pub.add_marker(cyl_closest_point, radius=0.05, color="blue")
+                    d_cube, cube_closest_point = p.obs_avoidance.getCubeDistance(p.x_ee + p.base_offset)
+                    p.ros_pub.add_marker(cube_closest_point, radius=0.05, color="blue")
+                    goal = np.array([0.7, 0.8, 1.1])
+                    tau_field, f_repulsive_cube, f_repulsive_cyl, f_attractive = p.obs_avoidance.evaluatePotentials(goal,                                                                                                                   p.base_offset,
+                                                                                                                    p.robot,
+                                                                                                                    p.q)
+                    p.ros_pub.add_marker(goal, radius=0.15, color="green")
+                    p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_repulsive_cube[0], "red")
+                    p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_repulsive_cyl[0], "red")
+                    p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_attractive, "green")
+                    p.tau_ffwd =  p.h + np.copy(tau_field)
                 p.send_des_jstate(q_to_send, p.qd_des, p.tau_ffwd)
+
             else:
                 p.send_reduced_des_jstate(q_to_send)
 
