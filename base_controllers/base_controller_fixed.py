@@ -222,6 +222,7 @@ class BaseController(threading.Thread):
 
         from gazebo_msgs.srv import ApplyBodyWrench
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
+        self.EXTERNAL_FORCE = False
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
     def applyForce(self):
@@ -545,9 +546,13 @@ def talker(p):
             if (p.time > 1.0):
                 p.logData()
             # disturbance force
-            if (p.time > 3.0):
-                 p.applyForce()
+            if (p.time > 3.0 and p.EXTERNAL_FORCE):
+                p.applyForce()
+                p.EXTERNAL_FORCE = False
 
+
+
+            # plot end-effector
             p.ros_pub.add_marker(p.x_ee + p.base_offset)
             p.ros_pub.publishVisual()
 
