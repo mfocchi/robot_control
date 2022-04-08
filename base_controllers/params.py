@@ -28,6 +28,15 @@ robot_params['ur5'] ={'dt': 0.001,
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
                        'spawn_z' : 1.8,
+robot_params['jumpleg'] ={'dt': 0.001,
+                       'kp': np.array([300, 300, 300, 10, 10, 10 ]),
+                       'kd':  np.array([20,20,20, 1,1,1]),
+                       'q_0':  np.array([ 0.0, 0.0, 0.3, 0.0, 0.75, -1.5]),
+                       'joint_names': ['base_x_joint', 'base_y_joint', 'base_z_joint', 'lf_haa_joint', 'lf_hfe_joint', 'lf_kfe_joint'],
+                       'foot_frame': 'lf_foot',
+                       'spawn_x' : 0.0,
+                       'spawn_y' : 0.0,
+                       'spawn_z' : 0.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
                          
 verbose = False
