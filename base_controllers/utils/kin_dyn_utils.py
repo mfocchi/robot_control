@@ -188,44 +188,23 @@ def geometric2analyticJacobian(J,T_0e):
 
     return J_r[0]
 
-def numericalInverseKinematics(p_d,q0):
+def numericalInverseKinematics(p_d,q0, line_search = False):
     math_utils = Math()
     # Error initialization
-    e_bar = 1
     iter = 0
 
     # Recursion parameters
-    epsilon = 0.000001  # Tolerance
+    epsilon = 1e-06  # Tolerance
     # alpha = 0.1
     alpha = 1  # Step size
-    lambda_ = 0.0000001  # Damping coefficient for pseudo-inverse
-    max_iter = 10000  # Maximum number of iterations
-
+    lambda_ = 1e-1  # Damping coefficient for pseudo-inverse
+    max_iter = 4  # Maximum number of iterations
     # For line search only
     gamma = 0.5
     beta = 0.5
 
-    # Inverse kinematics without line search
-#    while np.linalg.norm(e_bar) >= epsilon and iter < max_iter:
-#        J, _, _, _, _ = computeEndEffectorJacobian(q0)
-#        _, _, _, _, T_0e = directKinematics(q0)
-#        p_e = T_0e[:3, 3]
-#        R = T_0e[:3, :3]
-#        rpy = math_utils.rot2eul(R)
-#        roll = rpy[0]
-#        p_e = np.append(p_e, roll)
-#        e_bar = p_d - p_e 
-#
-#        J_bar = geometric2analyticJacobian(J, T_0e)
-#        J_bar = J_bar[:4, :]
-#        JtJ = np.dot(J_bar.T, J_bar) + np.identity(J_bar.shape[1]) * lambda_
-#        JtJ_inv = np.linalg.inv(JtJ)
-#        P = JtJ_inv.dot(J_bar.T)
-#        dq = P.dot(e_bar)
-#        q1 = q0 + dq * alpha
-#        q0 = q1
-#        iter += 1
-
+    log_grad = []
+    log_err = []
     # Inverse kinematics with line search
     while True:
         J,_,_,_,_ = computeEndEffectorJacobian(q0)
@@ -237,49 +216,57 @@ def numericalInverseKinematics(p_d,q0):
         rpy = math_utils.rot2eul(R)
         roll = rpy[0]
         p_e = np.append(p_e,roll)
-        e_bar = p_d - p_e 
-         
-        if np.linalg.norm(e_bar) < epsilon:
-            print("IK Convergence achieved!, norm(error) :", np.linalg.norm(e_bar) )
+        e_bar = p_e - p_d
+        J_bar = geometric2analyticJacobian(J,T_0e)
+        J_bar = J_bar[:4,:]
+        grad = J_bar.T.dot(e_bar)
+
+        log_grad.append(np.linalg.norm(grad))
+        log_err.append(np.linalg.norm(e_bar))
+
+        if np.linalg.norm(grad) < epsilon:
+            print("IK Convergence achieved!, norm(grad) :", np.linalg.norm(grad) )
             print("Inverse kinematics solved in {} iterations".format(iter))     
             break
         if iter >= max_iter:                
             print(("\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ", np.linalg.norm(e_bar)))
             break         
-         
-        J_bar = geometric2analyticJacobian(J,T_0e)
-        J_bar = J_bar[:4,:]
+
         JtJ= np.dot(J_bar.T,J_bar) + np.identity(J_bar.shape[1])*lambda_
         JtJ_inv = np.linalg.inv(JtJ)
         P = JtJ_inv.dot(J_bar.T)
-        dq = P.dot(e_bar)
+        dq = - P.dot(e_bar)
 
-      
-        # line search loop
-        while True:            
-            #update
-            q1 = q0 + dq*alpha
-            #Compute error of next step
-            _, _, _, _, T_0e1 = directKinematics(q1)
-            p_e1 = T_0e1[:3,3]
-            R1 = T_0e1[:3,:3]
-            rpy1 = math_utils.rot2eul(R1)
-            roll1 = rpy1[0]
-            p_e1 = np.append(p_e1,roll1)
-            e_bar_new = p_d - p_e1
-            #print "e_bar1", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
+        if not line_search:
+            q1 = q0 + dq * alpha
+            q0 = q1
+        else:
+            # line search loop
+            while True:
+                #update
+                q1 = q0 + dq*alpha
+                #Compute error of next step
+                _, _, _, _, T_0e1 = directKinematics(q1)
+                p_e1 = T_0e1[:3,3]
+                R1 = T_0e1[:3,:3]
+                rpy1 = math_utils.rot2eul(R1)
+                roll1 = rpy1[0]
+                p_e1 = np.append(p_e1,roll1)
+                e_bar_new = p_e1 - p_d
+                #print "e_bar1", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
 
-            error_reduction = np.linalg.norm(e_bar) - np.linalg.norm(e_bar_new)
-            threshold = 0.0 # more restrictive gamma*alpha*np.linalg.norm(e_bar)
-      
-            if error_reduction < threshold:
-                alpha = beta*alpha
-                print (" line search: alpha: ", alpha) 
-            else:
-                q0 = q1
-                alpha = 1
-                break                    
-        iter += 1    
+                error_reduction = np.linalg.norm(e_bar) - np.linalg.norm(e_bar_new)
+                threshold = 0.0 # more restrictive gamma*alpha*np.linalg.norm(e_bar)
+
+                if error_reduction < threshold:
+                    alpha = beta*alpha
+                    print (" line search: alpha: ", alpha)
+                else:
+                    q0 = q1
+                    alpha = 1
+                    break
+
+        iter += 1
            
 
  
@@ -290,7 +277,7 @@ def numericalInverseKinematics(p_d,q0):
         while q0[i] < -2 * math.pi:
             q0[i] += 2 * math.pi
 
-    return q0
+    return q0, log_err, log_grad
 
 
 def fifthOrderPolynomialTrajectory(tf,q0,qf):

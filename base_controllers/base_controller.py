@@ -50,7 +50,7 @@ from base_controllers.utils.pidManager import PidManager
 from base_controllers.utils.utils import Utils
 from base_controllers.utils.math_tools import *
 from numpy import nan
-
+import matplotlib.pyplot as plt
 
 import pinocchio as pin
 from base_controllers.utils.common_functions import getRobotModel
@@ -486,6 +486,6 @@ if __name__ == '__main__':
        
         plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
         plotCoM('position', 1, p.time_log, None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
-    
+        plt.show(block=True)
     
         

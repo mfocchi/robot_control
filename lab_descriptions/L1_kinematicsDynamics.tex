@@ -54,6 +54,11 @@
 \newcommand{\preposm}[3]{{}_{\mathbf{#2}}{\mathbf{#1}}_{#3}}
 
 
+
+\newcommand{\Rnum}{\mathbb{R}} % Symbol fo the real numbers set
+\newcommand{\mat}[1]{\ensuremath{\begin{bmatrix}#1\end{bmatrix}}}	% matrix
+\newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
+
 %Dummy text
 \usepackage{lipsum}
 
@@ -168,7 +173,10 @@ Let's start by inspecting a file that describe a robot made of regular geometrie
 \end{verbatim}
 
 As mentioned, a robot is described in robot using a URDF file, which is scripted using the metalanguage \codeword{xml}, and specific \codeword{xml} macros (i.e., \codeword{xacro}). We can both use the extension \codeword{*.urdf} or \codeword{*.xacro}, however, when dealing with large models a combination of both might be required since \codeword{xacro} files allowed for modularity, but some CAD software outputs directly a \codeword{urdf} file. In general, you use \codeword{xacro}  to assemble  parametrized \codeword{urdf}  of the subparts of a robot. For instance in the case of a legged robot, you can define the  \codeword{urdf} for a generic leg and parametrize it with its location along the trunk, without copying and pasting code. However, in this class, we will not use this feature and you will find only \codeword{urdf} files in the folder. 
-Inspect the \textit{simple\_geometry} file and try to understand what each line describes. How are links describe? Which parameters need to be described per link? How are joints defined? Is there a "special" link?
+Inspect the \textit{simple\_geometry} file and try to understand what each line describes. How are links describe? Which parameters need to be described per link? How are joints defined? Is there a "special" link?\\
+
+
+
 
 \textbf{1.2 Use an stl mesh file to describe a link.} We can use .stl files to specify the geometry of the link instead of using basic geometries such as a cilinder or a block. The .stl format is a common extension used in CAD softwares such as SolidWorks to store rigid parts of a mechanical design. However, when using stl files, one needs to be careful to not use an excessive number of polygons to describe the part, since this might cause the simulation to slow down significantly. The file \codeword{ur4_2links.urdf} contains to links associated to a mesh stl file. Inspect the \codeword{ur4_2links.urdf} by typing in the terminal (you can either open a new terminal or kill the process in the previous one by hitting \codeword{Ctrl + C})
 %
@@ -176,7 +184,10 @@ Inspect the \textit{simple\_geometry} file and try to understand what each line 
 	gedit ur4_2links.urdf
 \end{verbatim}
 %
-You will notice that the file contains more details and parameters per link and joint. What can they represent? Where are these values obtained from? Are they referred to a specific reference frame?
+You will notice that the file contains more details and parameters per link and joint. What can they represent? Where are these values obtained from? Are they referred to a specific reference frame?\\
+
+
+
 
 \textbf{1.3 Visualizing a model described by a URDF in RVIZ.} The basic unit of development in ROS is the node. A node is nothing else than a process that performs computations. It can be created in multiple languages and interfaces such as Python and C++. Nodes communicate through messages by either using a publisher-subscriber (asynchronous)\footnote{http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber(python)} or a request-reply (synchronous)\footnote{http://wiki.ros.org/ROS/Tutorials/WritingServiceClient(python)} scheme. In this lab session we will use the former one, and locosim already provides a dedicated function to publish the state of the joints during runtime and make them available to the visualizer node running RVIZ. One can run each node separately using the terminal command \codeword{rosrun}\footnote{http://wiki.ros.org/rosbash\#rosrun}, however, a more convenient way is to setup a launch file and run multiple nodes with only with terminal command (namely, \codeword{roslaunch}\footnote{http://wiki.ros.org/roslaunch}). Let us inspect the launch file to visualize our examples of URDF files. In a terminal type:
 %
@@ -213,7 +224,7 @@ Again, you will visualize the described model and you can modify the value of th
 	roslaunch ros_impedance_controller visualize.launch robot_name:=ur4_robot test_joints:=true
 \end{verbatim} 
 \normalsize
-Note that we did not have to specify the robot since \codeword{ur4_robot} is the default value of the argument \codeword{robot_name}. This will launch RVIZ and it will allow us to move around all four joints of our manipulator.
+Note that we did not have to specify the robot since \codeword{ur4_robot} is the default value of the argument \codeword{robot_name}. This will launch RVIZ and it will allow us to move around all four joints of our manipulator.\\
 
 \textbf{1.4 ROS topics.} So far we have only mentioned that a node can publish a message, but where is this message "published to"? Messages are published to \textit{topics}, and this makes them available to other nodes that can \textit{subscribe} to a specific topic. In our case, our launch file (\codeword{visualize_ur4.launch}), runs a node called \codeword{joint_state_publisher}, which is in charge, as its name indicates, to publish the joint values on to the topic \codeword{joint_state}. Let's verify this, run again (in case you have stopped it) the command from the previous step and in a separate terminal run the following command:
 \begin{verbatim}
@@ -222,7 +233,11 @@ Note that we did not have to specify the robot since \codeword{ur4_robot} is the
 This will give a series of information about the \codeword{joint_states} topic, including the name and value for each of the joints of our manipulator. Change the values using the GUI and verify that the values of the joints are changing. In essence, the \codeword{joint_state_publisher} node is publishing the value of the joints on to the \codeword{joint_states} topic and the node running RVIZ subscribes to this topic to display it in the visualizer.
 
 \section{Robot kinematics}
-Once the model visualization is finished, we now proceed to derive and analyze the robot kinematics. In this part, we will manually compute the direct and inverse kinematics computations and verify their correctness using the built-in Pinocchio functions. We will perform this computations using the Python interface of Locosim. 
+Once the model visualization is finished, we now proceed to derive and analyze the robot kinematics. In this part, we will manually compute the direct and inverse kinematics computations and verify their correctness using the built-in Pinocchio functions. We will perform this computations using the Python interface of Locosim. \\
+
+
+
+
 
 \textbf{2.0 Setting up PyCharm and main files.} Open PyCharm from a terminal\footnote{It is very important to run it from a terminal, since the environment variables defined in the \textasciitilde/.bashrc file need to be loaded in order for ROS to find the location of the packages} by running the following command:
 %
@@ -241,9 +256,17 @@ For this part of the assignment, we will use these three main files:
 	\item \codeword{LOCOSIM/robot_control/ex_1_conf.py} (Initializations of variables and simulaion parameters)
 	\item \codeword{LOCOSIM/robot_control/base_controller/utils/kin_dyn_utils.py} (Kinematics and dynamics functions)
 \end{itemize}
-Inspect these files in detail. In this assignment you will try to write your own kinematics and dynamics functions of the file \codeword{kin_dyn_utils.py}.
+Inspect these files in detail. In this assignment you will try to write your own kinematics and dynamics functions of the file \codeword{kin_dyn_utils.py}.\\
 
-\textbf{2.1 Direct kinematics (lecture E1).} The first step is to obtain the homogeneous transformation matrix from the world frame to the end-effector \prepos{T}{W}{e}. To do so, you will need to obtain the homogeneous transformation matrices from one link to the other (i.e., the local transformations \prepos{T}{W}{1}, \prepos{T}{1}{2}, \prepos{T}{2}{3}, \prepos{T}{3}{4} and \prepos{T}{4}{e}) and perform the composition of matrices. Modify the function \codeword{directKinematics} inside \codeword{kin_dyn_utils.py} to perform this computation. Hint: you can use the previously shown visualization tool to understand the changes in position and orientation of the different frames. You can call the function inside the package kin\_dyn\_utils.py from the main in the L3\_kinematics.py file. To verify the correctness of your direct kinematics function, compare it with the built-in functions from Pinocchio for the position vector (\codeword{robot.framePlacement(q, frame_ee).translation}) and the rotation matrix (\codeword{robot.framePlacement(q, frame_ee).rotation}) (as seen in the file \codeword{L3_kinematics.py}) using different values for the positions of the joints (changing \codeword{q0} in \codeword{L3_conf.py}).
+
+
+
+
+
+
+\textbf{2.1 Direct kinematics (lecture E1).} The first step is to obtain the homogeneous transformation matrix from the world frame to the end-effector \prepos{T}{W}{e}. To do so, you will need to obtain the homogeneous transformation matrices from one link to the other (i.e., the local transformations \prepos{T}{W}{1}, \prepos{T}{1}{2}, \prepos{T}{2}{3}, \prepos{T}{3}{4} and \prepos{T}{4}{e}) and perform the composition of matrices. Modify the function \codeword{directKinematics} inside \codeword{kin_dyn_utils.py} to perform this computation. Hint: you can use the previously shown visualization tool to understand the changes in position and orientation of the different frames. You can call the function inside the package kin\_dyn\_utils.py from the main in the L3\_kinematics.py file. To verify the correctness of your direct kinematics function, compare it with the built-in functions from Pinocchio for the position vector (\codeword{robot.framePlacement(q, frame_ee).translation}) and the rotation matrix (\codeword{robot.framePlacement(q, frame_ee).rotation}) (as seen in the file \codeword{L3_kinematics.py}) using different values for the positions of the joints (changing \codeword{q0} in \codeword{L3_conf.py}).\\
+
+
 
 
 \textbf{2.2 Geometric Jacobian (lecture E3).} Now that you have devised a function to compute the direct kinematics, proceed to to compute the end-effector Jacobian of the manipulator by modifying the function \codeword{computeEndEffectorJacobian} in \codeword{kin_dyn_utils.py}. Recall that the expression to compute the geometric Jacobian is:
@@ -293,14 +316,17 @@ where $\mathbf{T}_{RPY}$ is the transformation matrix from angular velocity $\bo
 	\boldsymbol{\omega} = \mathbf{T}_{RPY} \dot{\mathbf{\Phi}}
 \end{equation*}
 
-and implement it in the function \codeword{geometric2analyticJacobian}.
+and implement it in the function \codeword{geometric2analyticJacobian}.\\
+
+
+
 
 \textbf{2.4 Numerical inverse kinematics (lecture E4).} Now you have all the necessary ingredients to compute the manipulator's inverse kinematics. Since we have 4-DoF, the analytical solution of the inverse kinematics problems is not straightforward, so we suggest to take the iterative approach given by the algorithm described in Fig.~\ref{fig:CLIK}. 
 %
 \begin{figure}[bht]
 	\centering
-	\includegraphics[width=8cm]{icik}
-	\caption{TODO fix sign to be consistent with lecutre, use graqdient a stoping criteria, Numerical inverse kinematics algorithm or closed-loop inverse kinematics (CLIK)}
+	\includegraphics[width=8cm]{pics/flow_chart.png}
+	\caption{Numerical inverse kinematics algorithm or closed-loop inverse kinematics (CLIK)}
 	\label{fig:CLIK}
 \end{figure}
 %
@@ -315,8 +341,10 @@ Check that the algorithm converges to different joint configurations depending o
 Set your parameters for the iteration as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$, $\gamma = 0.5$ and $\beta = 0.5$. Try to ask to reach a position of the end-effector outside of the workspace, for example, $p = \begin{bmatrix}	2.5 & -0.2 & 0.5 & \frac{\pi}{3}\end{bmatrix}$ is the error going to zero? verify that the algorithm never converges (the maximum number of iterations is reached). Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles from the inverse kinematics. You might notice that the values of the joint variables $q$ are very large. Why is this the case? You will have to implement an "unwrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
 
 Also, compare the output of the numerical inverse kinematics function with and without using the line search algorithm, what is the difference between them? 
-Is one of them closer to the position that was asked to reach? You can compute the norm of the error between the position that was ask and the final position reached. Why is one closer than the other? (in this case the line search is closer to the final point) Try now increasing the maximum number of iterations to 15000 to see that the larger the number of iterations, the closer you get to $p$. Figure~\ref{fig:ik} shows the position of the robot after 10k and 15k iterations.
-\begin{figure}
+Is one of them closer to the position that was asked to reach? You can compute the norm of the error between the position that was ask and the final position reached. Why is one closer than the other? (in this case the line search is closer to the final point). Try now increasing the maximum number of iterations to 15000 to see that the larger the number of iterations, the closer you get to $p$. 
+
+Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations. As you can see is almost there. \\
+\begin{figure}[H]
 	\centering
 	\begin{subfigure}[b]{0.4\textwidth}
 		\centering
@@ -335,7 +363,31 @@ Is one of them closer to the position that was asked to reach? You can compute t
 	\label{fig:ik}
 \end{figure}
 
-\textbf{2.5 Fifth order joint polynomial trajectory.} Now that we have a function that computes the inverse kinematics, we can use our initial joint position $\mathbf{q}_0$(defined in the file \codeword{L3_conf.py}) and the final joint position vector $\mathbf{q}_f$ (computed with our numerical inverse kinematics function) to compute a trajectory and move from one point to the other. An easy way to do so is by using a fifth order polynomial parameterized by time to compute the position and its derivatives (i.e., velocity and acceleration) of a given joint with respect to time, i.e.,
+
+\textbf{2.5 Dealing with the redundancy: the postural task.} 
+
+Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set only the position of the end-effector. The robot (6 DoFs) is clearly redundant for the task (3 variables) therefore we have infinite  solution for the inverse kinematics problem and the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution close to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range. Therefore,  can implement a ``postural task'' at the kinematic level to solve the redundancy.
+This will  selects among the infinite solutions the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
+To obtain this, we setup the following optimization problem:
+
+\begin{align*}
+\tilde{q}^\star = \argmin_q \frac{1}{2} \left|\left| \mat{p(q) \\ w q } - \mat{p^d \\ w q^p }   \right|\right|^2 = \frac{1}{2} \left|\left| \mat{ e_x \\ e_q }   \right|\right|^2
+\end{align*}
+
+where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a 6D vector) and the way the newton step $\Delta q$ is computed:
+
+
+\begin{align*}
+\Delta q &= -\left( \mat { J^T &  wI_{3 \times 3} } \underbrace{ \mat{J  \\ wI_{3 \times 3}}}_{\bar{J}} \right)^{-1} \left(J^T e_x + w^2e_q \right) \\
+&= -\left( J^TJ + w^2I_{3 \times 3}\right)^{-1} \underbrace{ \left(J^T e_x + w^2 e_q \right) }_{\bar{J}^T\bar{e}}
+\end{align*}
+
+%old: note that we have a minus sign just because we defined differently $e_p$ (in Exe2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$).
+
+So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.\\
+
+
+\textbf{2.6 Fifth order joint polynomial trajectory.} Now that we have a function that computes the inverse kinematics, we can use our initial joint position $\mathbf{q}_0$(defined in the file \codeword{L3_conf.py}) and the final joint position vector $\mathbf{q}_f$ (computed with our numerical inverse kinematics function) to compute a trajectory and move from one point to the other. An easy way to do so is by using a fifth order polynomial parameterized by time to compute the position and its derivatives (i.e., velocity and acceleration) of a given joint with respect to time, i.e.,
 \begin{align*}
 	q_i(t) &= a_0  + a_1 t +  a_2 t^2 + a_3 t^3 + a_4 t^4 + a_5 t^5\\
 	\dot{q}_i(t) &= a_1 + 2 a_2 t + 3a_3 t^2 + 4 a_4 t^3 + 5 a_5 t^4\\
@@ -380,7 +432,7 @@ which can be rewritten in matrix form as
 Then we can pre-multiply both sides of the equation by the inverse of the square matrix on the right-hand side of the equation and obtain the values for the coefficients of the polynomials.
 Implement this trajectory by modifying the function \codeword{fifthOrderPolynomialTrajectory}. Plot the trajectories by un-commenting the final lines of the file \codeword{L3_kinematics.py} and see if you notice any problem. Are they violating any joint kinematic limit? How can this be prevented? 
 
-\textbf{Extra question for lode:} The previous trajectory is simple to implement and fast to compute, however, it does not allow to set the position of the end-effector \textit{along} the trajectory. Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths. To avoid this, one can design a trajectory directly in Cartesian via parametric curves. Design a trajectory of a line in 3D Cartesian space parameterized by time and implement this on the robot. Consider that for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). Compare the results of the trajectory with respect to the one designed in 2.5.
+\textbf{Extra question for lode:} The previous trajectory is simple to implement and fast to compute, however, it does not allow to set the position of the end-effector \textit{along} the trajectory. Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths. To avoid this, one can design a trajectory directly in Cartesian via parametric curves. Design a trajectory of a line in 3D Cartesian space parameterized by time and implement this on the robot. Consider that for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). Compare the results of the trajectory with respect to the one designed in 2.5.\\
 
 \section{Robot dynamics}
 
@@ -408,7 +460,8 @@ Remember that all quantities are expressed with respect to the world, so you wil
 \end{bmatrix}^{\top}$), the vector of current joint positions $\mathbf{q}$, the vector of current joint velocities $\dot{\mathbf{q}}$ and the vector of current joint accelerations $\ddot{\mathbf{q}}$, i.e.,
 \codeword{RNEA(g0,q,qd,qdd)}. 
 
-\textbf{3.2 Compute each of the terms of the dynamics equation (lecture F1.2). } Create functions to compute the joint space inertia matrix $\mathbf{M}$, the vector of Coriolis and centrifugal terms $\mathbf{C}$ and the vector of gravitational force $\mathbf{g}$. Remember that the RNEA function previously written can be used to obtain all of these terms by setting some quantities to 0. In essence, compute the gravity vector through the previous function by setting its arguments as \codeword{RNEA(g0,q,0,0)}, the vector of Coriolis and centrifugal forces with \codeword{RNEA(0,q,qd,0)} and each of the columns of the joint space inertia matrix with \codeword{RNEA(0,q,0,ei)}, where \codeword{ei} is a vector to select the i-th column of $\mathbf{M}$.
+\textbf{3.2 Compute each of the terms of the dynamics equation (lecture F1.2). } Create functions to compute the joint space inertia matrix $\mathbf{M}$, the vector of Coriolis and centrifugal terms $\mathbf{C}$ and the vector of gravitational force $\mathbf{g}$. Remember that the RNEA function previously written can be used to obtain all of these terms by setting some quantities to 0. In essence, compute the gravity vector through the previous function by setting its arguments as \codeword{RNEA(g0,q,0,0)}, the vector of Coriolis and centrifugal forces with \codeword{RNEA(0,q,qd,0)} and each of the columns of the joint space inertia matrix with \codeword{RNEA(0,q,0,ei)}, where \codeword{ei} is a vector to select the i-th column of $\mathbf{M}$.\\
+
 
 \textbf{3.3 Compute the robot forward dynamics (lecture F1.2).} Now that the equations of motion can be computed, simulate the robot dynamics under zero joint torque. To do this, you need to obtain the joint acceleration based on the equations of motion, namely:
 %
@@ -416,7 +469,10 @@ Remember that all quantities are expressed with respect to the world, so you wil
 	\ddot{\mathbf{q}} = \mathbf{M}^{-1} (\boldsymbol{\tau} - \mathbf{g} - \mathbf{C})
 \end{equation*}
 
-with $\boldsymbol{\tau} = 0$ (for the time being). 
+with $\boldsymbol{\tau} = 0$ (for the time being). \\
+
+
+
 
 \textbf{3.4 Simulate the robot dynamics using a forward Euler scheme (lecture F1.2).} With the previously computed joint acceleration, we can integrate once to obtain joint velocity and twice for position. Implement an improved forward/explicit Euler integration scheme in the included \codeword{while} loop in the provided main file to run your visualization \codeword{LOCOSIM/robot_control/L1_2_dynamics.py} by using the following equations:
 \begin{align*}
@@ -429,7 +485,8 @@ with $\boldsymbol{\tau} = 0$ (for the time being).
 \begin{equation*}
 	\boldsymbol{\tau} = -b\dot{\mathbf{q}}
 \end{equation*} 
-where $b$ is the damping coefficient of the joints. For now we keep $b$ as a scalar, however, you can set different damping coefficients for each of the joints. Try different values of $b$ and visualize the behavior of the robot changing.
+where $b$ is the damping coefficient of the joints. For now we keep $b$ as a scalar, however, you can set different damping coefficients for each of the joints. Try different values of $b$ and visualize the behavior of the robot changing.\\
+
 
 \textbf{3.5 Compare results against Pinocchio.} Compute the terms of the dynamics equation $\mathbf{M}$, $\mathbf{C}$ and $\mathbf{g}$ using the built in functions from Pinocchio. To compute $\mathbf{g}$ use the following function: \codeword{robot.gravity(q)}, which takes as only argument the vector of joint positions. To compute $\mathbf{M}$ use: \codeword{robot.mass(q, False)}\footnote{For the functions of the mass and nonlinear terms the second argument is a boolean related to the update of the joint variables, in our case we are keeping it as false since we are updating the joint states manually}. In the case of vector $\mathbf{C}$, Pinocchio only provides the sum $\mathbf{h} = \mathbf{C} +  \mathbf{g}$ through the function: \codeword{robot.nle(q, qd, False)}. Run again the simulation using Pinocchio and verify that the outputs of the function that you wrote coincides with those of the built-in functions. Now remove entirely the implementation with your functions and visualize the robot falling. You will notice that the robot is moving slightly faster that with your own implementation. Why is this the case? (Ans. This is mainly due to the fact that Pinocchio is implemented in C++ but used in Python through bindings and because our implementation is done with respect to the world frame, whereas in Pinocchio it is implemented with respect to the link frame, and this results in "sparser" matrix multiplications).
 

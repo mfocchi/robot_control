@@ -210,24 +210,7 @@ where (k)and (k-1) refer to the actual and previous samples of the variables.
 
 \noindent
 \textbf{5.2 - Inverse Kinematics}\\
-Now that we wrote a function to implement the admittance model, we still miss to implement the inverse kinematics function. To be able to convert the modified reference $\tilde{p_e}^d(k) = p_e^d(k) +  \Delta p_e(k)$  at each loop $k$ into a joint reference $q^d$. Note that, since our admittance model (composed of linear spring and damper)  involves only 3D vectors, and we have 6 DoFs in our robot, we will have redundancy, hence  infinite solutions to the inverse kinematics problem. 
-To solve this issue we can implement a ``postural task'' at the kinematic level to solve the redundancy.
-This will  selects among the infinite solutions the one (joint configuration $\tilde{q}^d$) that is closer (in an Euclidean sense) to a desired configuration (e.g. the initial one). In this manner we avoid that the robot jumps randomly from a configuration to another.) 
-To obtain this, we setup the following optimization problem:
-
-\begin{align*}
-\tilde{q}^d = \argmin_q \frac{1}{2} \left|\left| \mat{p(q) \\ w q } - \mat{p^d \\ w q^p }   \right|\right|^2 = \frac{1}{2} \left|\left| \mat{ e_x \\ e_q }   \right|\right|^2
-\end{align*}
-
-where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a 6D vector) and the way the newton step $\Delta q$ is computed:
-
-
-\begin{align*}
-\Delta q &= -\left( \mat { J^T &  wI_{3 \times 3} } \underbrace{ \mat{J  \\ wI_{3 \times 3}}}_{\bar{J}} \right)^{-1} \left(J^T e_x + w^2e_q \right) \\
-	    &= -\left( J^TJ + w^2I_{3 \times 3}\right)^{-1} \underbrace{ \left(J^T e_x + w^2 e_q \right) }_{\bar{J}^T\bar{e}}
-\end{align*}
-
-note that we have a minus sign just because we defined differently $e_p$ (in L1 -2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$). So, with respect to the L1 -2.4: 1) we use $w^2$ instead of $\lambda $ to regularize, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm by checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.
+Now that we wrote a function to implement the admittance model, we still miss to implement the inverse kinematics function. To be able to convert the modified reference $\tilde{p_e}^d(k) = p_e^d(k) +  \Delta p_e(k)$  at each loop $k$ into a joint reference $q^d$. Note that, since our admittance model (composed of linear spring and damper)  involves only 3D vectors, and we have 6 DoFs in our robot, we will have redundancy, hence  infinite solutions to the inverse kinematics problem. To solve this we will reuse the postural task implementation described in LAB L1-2.4.
 
 
 \quad
@@ -267,3 +250,55 @@ m_p = -F_z / g
 Finally, apply some filtering to take out the noise. 
 
 \end{document}
+
+
+\section{Potential fields for obstacle avoidance}
+In this assignment you will be developing code to guide a robot from one location to another in a
+2 dimensional configuration space using artificial potential fields. The figure below depicts a plot of
+the energy surface associated with our sample environment and the state of the robot is modeled by
+the red sphere which we can think of as rolling down the energy surface towards the goal location.
+Create a GradientBasedPlanner to control the motion of the robot (i.e. velocity set-point).
+The signature of the function is given below:
+
+\codeword{function route = GradientBasedPlanner (f, start coords, end coords, max its)}
+start coords : An array specifying the coordinates of the start location the first entry is
+the x coordinate and the second the y
+end coords : An array specifying the coordinates of the goal the first entry is the x coordinate
+and the second the y
+max its : The maximum number of iterations that should be tried by the planner
+
+
+We have two obstacles to avoid, we can exploit the additive property of potential field to cumulate their influences. 
+
+Additionally we want to keep also the joints (not only the end effector) away from the obstacles. We can therefore introduce contrel oints checking which is the closest point to the obstacle for each link. 
+
+To avoid the chance of our local planner to get stuck in local minima consider to produce some highe level goals (via points)
+
+
+In a cluttered environment, local minima can
+
+occur in the resultant potential field. This can lead to
+
+a stable positioning of the robot before reaching its
+
+goal. While local procedures can be designed to exit
+
+from such configurations, limitations for complex
+
+tasks will remain. This is because the approach has a
+
+local perspective of the robot environment
+
+Note that the potential field approach can be combined with any other the task space formulation  considering a inverse dynamics 
+ that tracks the force generated from the field at each of the control points 
+ 
+ or at the velocity level.
+
+
+
+
+1. On every iteration the planner should update the position of the robot based on the gradient
+values contained in the arrays gx and gy. Note that the gradient is only giving informations on the direction (in the joint space) is up to you to limit the speed according to some heuristics.  Make sure you normalize the gradient vectors.
+Update the route by adding the new position of the robot to the end of the route array.
+Continue the same procedure until the distance between the robot’s current position and the
+goal is less than 2.0 or the number of iterations exceeds the value contained in max its.

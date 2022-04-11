@@ -90,8 +90,8 @@ def startNode(node_name):
 def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):    
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
     path  = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
-    srdf      = path + "/robot_urdf/" + robot_name + ".srdf"  
-    
+    srdf      = path + "/robot_urdf/" + robot_name + ".srdf"
+
     if (generate_urdf):  
         try:       
             #old way
@@ -123,10 +123,10 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             
         except:
             print (robot_name+'_description not present')
-    else:        
-        urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"              
-    
-    robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])                                
+    else:
+
+        urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"
+        robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
     
     return robot                    
 

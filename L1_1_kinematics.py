@@ -1,4 +1,5 @@
 #common stuff 
+from __future__ import print_function
 import pinocchio as pin
 from pinocchio.utils import *
 import numpy as np
@@ -8,19 +9,22 @@ import time as tm
 
 from base_controllers.utils.common_functions import *
 from base_controllers.utils.ros_publish import RosPub
-from base_controllers.utils.kin_dyn_utils import directKinematics as dk
+from base_controllers.utils.kin_dyn_utils import directKinematics as fk
 from base_controllers.utils.kin_dyn_utils import computeEndEffectorJacobian as eeJ
 from base_controllers.utils.kin_dyn_utils import numericalInverseKinematics as ik
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 from base_controllers.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
 from base_controllers.utils.math_tools import Math
+import matplotlib.pyplot as plt
 
 import L1_conf as conf
 
 #instantiate graphic utils
 os.system("killall rosmaster rviz")
+
 ros_pub = RosPub("ur4")
 robot = getRobotModel("ur4")
+
 
 # Init variables
 zero = np.array([0.0, 0.0, 0.0, 0.0])
@@ -55,15 +59,15 @@ frame_ee = robot.model.getFrameId(conf.frame_name)
 # exercise 2.1
 #################
 # direct kinematics function
-T_01, T_02, T_03, T_04, T_0e = dk(q)
+T_01, T_02, T_03, T_04, T_0e = fk(q)
 # compare with Pinocchio built-in functions 
 robot.computeAllTerms(q, qd)
 x = robot.framePlacement(q, frame_ee).translation
 o = robot.framePlacement(q, frame_ee).rotation
 position_diff = x - T_0e[:3,3]
 rotation_diff = o - T_0e[:3,:3]
-print position_diff
-print rotation_diff
+print(position_diff)
+print(rotation_diff)
 
 
 #################
@@ -86,29 +90,24 @@ J_r = g2a(J, T_0e)
 # desired task space position
 p = np.array([-0.5, -0.2, 0.5, math.pi/3])
 # outside of workspace, gets the solution with minumum error
-# p = np.array([-2.5, -0.2, 0.5, math.pi/3])
-#p = np.array([2.5, -0.2, -0.5, math.pi]) # not solvable, outside of workspace
+#p = np.array([-1.5, -0.2, 0.5, math.pi/3])
 
 # initial value for numerical ik
 q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi]) # good initialization
 #q_i  = np.array([ -5, 5.0, -0.8, -math.pi]) # bad initialization
 
 # solution of the numerical ik
-q_f = ik(p,q_i) 
+q_f, log_err, log_grad = ik(p, q_i, line_search = False)
 # compare solution with values obtained through direct kinematics
-T_01, T_02, T_03, T_04, T_0e = dk(q_f)
+T_01, T_02, T_03, T_04, T_0e = fk(q_f)
 rpy = math_utils.rot2eul(T_0e[:3,:3])
 task_diff = p - np.hstack((T_0e[:3,3],rpy[0]))
-print "Point selected"
-print p
-print "Point obtained with IK solution"
-print np.hstack((T_0e[:3, 3], rpy[0]))
-print "Error"
-print np.linalg.norm(task_diff)
+print("Desired End effector \n", p)
+print("Point obtained with IK solution \n", np.hstack((T_0e[:3, 3], rpy[0])))
+print("Error", np.linalg.norm(task_diff))
+print("Final joint positions\n", q_f)
 
-print "Final joint positions"
-print q_f
-    
+
 ###################
 # exercise 2.5
 ###################    
@@ -134,7 +133,8 @@ while np.count_nonzero(q - q_f) :
     # update time
     time = time + conf.dt                  
     #publish joint variables
-    ros_pub.publish(robot, q, qd)                   
+    ros_pub.publish(robot, q, qd)
+    ros_pub.add_marker(p)
     tm.sleep(conf.dt*conf.SLOW_FACTOR)
     
     # stops the while loop if  you prematurely hit CTRL+C                    
@@ -145,11 +145,16 @@ while np.count_nonzero(q - q_f) :
 
 ros_pub.deregister_node()  
                 
-# plot joint variables                                                                              
-# plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-# plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-# plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-
+plt.subplot(2, 1, 1)
+plt.ylabel("err")
+plt.semilogy(log_err, linestyle='-', color='blue')
+plt.grid()
+plt.subplot(2, 1, 2)
+plt.ylabel("grad")
+plt.xlabel("number of iterations")
+plt.semilogy(log_grad, linestyle='-', color='blue')
+plt.grid()
+plt.show(block=True)
 
 
 
