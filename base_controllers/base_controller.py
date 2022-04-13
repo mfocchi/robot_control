@@ -175,9 +175,9 @@ class BaseController(threading.Thread):
         self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
         self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
         self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
-        self.basePoseW[self.u.sp_crd["AX"]] = euler[0]
-        self.basePoseW[self.u.sp_crd["AY"]] = euler[1]
-        self.basePoseW[self.u.sp_crd["AZ"]] = euler[2]
+        self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
+        self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
+        self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
 
         self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
         self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
@@ -188,7 +188,7 @@ class BaseController(threading.Thread):
         
       
         # compute orientation matrix                                
-        self.b_R_w = self.mathJet.rpyToRot(euler)
+        self.b_R_w = self.mathJet.rpyToRot(self.euler)
    
     def _receive_jstate(self, msg):
           #need to map to robcogen only the arrays coming from gazebo because of ROS convention is different
