@@ -124,7 +124,7 @@ The goals of this assignment are:
 \noindent
 Tools that we are going to be using in this lab (all open-source):
 \begin{itemize}
-	\item Python programming (2.7)\footnote{https://docs.python.org/2.7/}
+	\item Python programming (2.7, 3.5)\footnote{https://docs.python.org/2.7/}
 	\item Robot Operating System (ROS)\footnote{https://www.ros.org/}
 	\item Pinocchio Library for Rigid Body Dynamics Algorithms\footnote{https://github.com/stack-of-tasks/pinocchio}
 	\item Locosim\footnote{https://github.com/mfocchi/locosim}
@@ -132,7 +132,7 @@ Tools that we are going to be using in this lab (all open-source):
 %
 %
 %\noindent
-In this assignment we will simulate the behavior of a 4-DoF anthropomorphic robot manipulator under zero-torque at the joints (i.e., free-falling under the effect of gravity which is the only force making work on the robot). Initially we will learn how to describe a robot using the URDF convention, such that ROS is able to "understand" and visualize our robot using the visualizer tool in RVIZ.\footnote{https://dl.acm.org/doi/abs/10.1007/s11235-015-0034-5} Secondly, we will proceed to develop code in Python to compute the direct and inverse kinematics functions of  our robot manipulator and we will design a simple trajectory for our robot to follow based on polynomials. Finally, we will write functions to compute both the forward (to simulate) and the inverse dynamics (to control) of our robot manipulator using the RNEA.  Based on RNEA, we will compute separately each of the terms of the dynamics equation ($\mathbf{M}$, $\mathbf{h}$ and $\mathbf{g}$) and perform analysis on them. For both the kinematics and dynamics parts, we will compare our results with the built-in functions of the Pinocchio library to verify the correctness of our computations.
+The goal of this assignment is to arrive to simulate the behavior of a 4-DoF anthropomorphic robot manipulator under zero-torque at the joints (i.e., free-falling under the effect of gravity which is the only force making work on the robot). Initially we will learn how to describe a robot using the URDF convention, such that ROS is able to "understand" and visualize our robot using the visualizer tool in RVIZ.\footnote{https://dl.acm.org/doi/abs/10.1007/s11235-015-0034-5} Secondly, we will proceed to develop code in Python to compute the direct and inverse kinematics functions of  our robot manipulator and we will design a simple trajectory for our robot to follow based on polynomials. Finally, we will write functions to compute both the forward (to simulate) and the inverse dynamics (to control) of our robot manipulator using the RNEA.  Based on RNEA, we will compute separately each of the terms of the dynamics equation ($\mathbf{M}$, $\mathbf{h}$ and $\mathbf{g}$) and perform analysis on them. For both the kinematics and dynamics parts, we will compare our results with the built-in functions of the Pinocchio library to verify the correctness of our computations.
 
 %
 \section{Preliminaries}
@@ -140,23 +140,18 @@ We are going to be using functions and interfaces written in the locosim package
 
 \begin{enumerate}
 	\item Open a new terminal inside of the VM (either by clicking on the icon of the launcher on the left or by hitting the keyboard shortcut \codeword{Ctrl + Alt + T})
-	\item In the terminal type the following commands
+	\item If you need to update the software in the terminal type the following commands
 	
 	\begin{verbatim}
 		cd ros_ws/src/locosim/
 		git fetch 
-		git checkout master
+		git checkout develop
 		git submodule update --init --recursive
 		cd ~/ros_ws
 		catkin_make install
 		source ~/.bashrc
 	\end{verbatim}
 
-	\item Additionally we have to install a tool to interactively change the values of the joints by typing the following commands:
-	\begin{verbatim}
-		sudo apt update
-		sudo apt install ros-kinetic-joint-state-publisher-gui
-	\end{verbatim}
 \end{enumerate}
 %
 \section{Robot URDF description file and visualization}
@@ -173,7 +168,7 @@ Let's start by inspecting a file that describe a robot made of regular geometrie
 \end{verbatim}
 
 As mentioned, a robot is described in robot using a URDF file, which is scripted using the metalanguage \codeword{xml}, and specific \codeword{xml} macros (i.e., \codeword{xacro}). We can both use the extension \codeword{*.urdf} or \codeword{*.xacro}, however, when dealing with large models a combination of both might be required since \codeword{xacro} files allowed for modularity, but some CAD software outputs directly a \codeword{urdf} file. In general, you use \codeword{xacro}  to assemble  parametrized \codeword{urdf}  of the subparts of a robot. For instance in the case of a legged robot, you can define the  \codeword{urdf} for a generic leg and parametrize it with its location along the trunk, without copying and pasting code. However, in this class, we will not use this feature and you will find only \codeword{urdf} files in the folder. 
-Inspect the \textit{simple\_geometry} file and try to understand what each line describes. How are links describe? Which parameters need to be described per link? How are joints defined? Is there a "special" link?\\
+Inspect the \textit{simple\_geometry} file and try to understand what each line describes. How are the links described? Which parameters need to be described per link? How are joints defined? \\
 
 
 
@@ -184,20 +179,20 @@ Inspect the \textit{simple\_geometry} file and try to understand what each line 
 	gedit ur4_2links.urdf
 \end{verbatim}
 %
-You will notice that the file contains more details and parameters per link and joint. What can they represent? Where are these values obtained from? Are they referred to a specific reference frame?\\
+You will notice that the file contains more details and parameters per link and joint. What can they represent? Where are these values obtained from? Are they referred to a specific reference frame? Inspect each line of the file and try to understand the function of each 
+of the tags. Check how the rigid (homogeneous) transform is set for the \textit{shoulder\_pan\_joint}  with respect to the supporting \textit{base\_link}. Check also how the dynamic parameters (mass, Center of Mass and inertia tensor) are defined for the link, with respect to the link frame.\\
 
 
 
 
-\textbf{1.3 Visualizing a model described by a URDF in RVIZ.} The basic unit of development in ROS is the node. A node is nothing else than a process that performs computations. It can be created in multiple languages and interfaces such as Python and C++. Nodes communicate through messages by either using a publisher-subscriber (asynchronous)\footnote{http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber(python)} or a request-reply (synchronous)\footnote{http://wiki.ros.org/ROS/Tutorials/WritingServiceClient(python)} scheme. In this lab session we will use the former one, and locosim already provides a dedicated function to publish the state of the joints during runtime and make them available to the visualizer node running RVIZ. One can run each node separately using the terminal command \codeword{rosrun}\footnote{http://wiki.ros.org/rosbash\#rosrun}, however, a more convenient way is to setup a launch file and run multiple nodes with only with terminal command (namely, \codeword{roslaunch}\footnote{http://wiki.ros.org/roslaunch}). Let us inspect the launch file to visualize our examples of URDF files. In a terminal type:
+\textbf{1.3 Visualizing a model described by a URDF in RVIZ.} The basic unit of development in ROS is the node. A node is nothing else than a process that performs computations. It can be created in multiple languages and interfaces such as Python and C++. Nodes communicate through messages by either using a publisher-subscriber (synchronous)\footnote{http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber(python)} or a request-reply (asynchronous)\footnote{http://wiki.ros.org/ROS/Tutorials/WritingServiceClient(python)} scheme. In this lab session we will use the former one, and locosim already provides a dedicated function to publish the state of the joints during runtime and make them available to the visualizer node running RVIZ. One can run each node separately using the terminal command \codeword{rosrun}\footnote{http://wiki.ros.org/rosbash\#rosrun}, however, a more convenient way is to setup a launch file and run multiple nodes with only with terminal command (namely, \codeword{roslaunch}\footnote{http://wiki.ros.org/roslaunch}). Let us inspect the launch file to visualize our examples of URDF files. In a terminal type:
 %
 \begin{verbatim}
 	cd ~/ros_ws/src/locosim/ros_impedance_controller/launch
 	gedit visualize.launch
 \end{verbatim}
 %
-Inspect each line of the file and try to understand the function of each 
-of the tags. Check how the rigid (homogeneous) transform is set for the \textit{shoulder\_pan\_joint}  with respect to the supporting \textit{base\_link}. Check also how the dynamic parameters (mass, Center of Mass and inertia tensor) are defined for the link, with respect to the link frame. Once the file has been inspected,  run the following command in the terminal:
+Once the file has been inspected,  run the following command in the terminal to load the URDF of the \codeword{simple_geometry} robot:
 
 \footnotesize
 \begin{verbatim}
@@ -221,7 +216,7 @@ Again, you will visualize the described model and you can modify the value of th
 %
 \footnotesize
 \begin{verbatim}
-	roslaunch ros_impedance_controller visualize.launch robot_name:=ur4_robot test_joints:=true
+	roslaunch ros_impedance_controller visualize_ur4.launch test_joints:=true
 \end{verbatim} 
 \normalsize
 Note that we did not have to specify the robot since \codeword{ur4_robot} is the default value of the argument \codeword{robot_name}. This will launch RVIZ and it will allow us to move around all four joints of our manipulator.\\
@@ -253,7 +248,7 @@ This file was just for testing and we will use that in  the next lab session.
 For this part of the assignment, we will use these three main files: 
 \begin{itemize}
 	\item \codeword{LOCOSIM/robot_control/L1_1_kinematics.py} (Main file to run the visualization)
-	\item \codeword{LOCOSIM/robot_control/ex_1_conf.py} (Initializations of variables and simulaion parameters)
+	\item \codeword{LOCOSIM/robot_control/L1_conf.py} (Initializations of variables and simulaion parameters)
 	\item \codeword{LOCOSIM/robot_control/base_controller/utils/kin_dyn_utils.py} (Kinematics and dynamics functions)
 \end{itemize}
 Inspect these files in detail. In this assignment you will try to write your own kinematics and dynamics functions of the file \codeword{kin_dyn_utils.py}.\\
@@ -297,7 +292,7 @@ where
 \end{equation*}
 
 In our case all of the joints are revolute. Recall as well that in this expression vector $\mathbf{z}_i$ represents the axis of joint $i$ that drives link $i$, expressed in the world frame. As in the previous case, compare your results with the built-in function of Pinocchio:
-\codeword{robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED) } for different values of \codeword{q}.
+\codeword{robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED) } for different values of \codeword{q}.\\
 
 \textbf{2.3 Analytical Jacobian (lecture E3).} Proceed to compute the analytical Jacobian $\mathbf{J}_r$ according to 
 \begin{equation*}
@@ -340,26 +335,33 @@ First, implement the algorithm without line search (i.e., with constant step siz
 Check that the algorithm converges to different joint configurations depending on how you initialize it.  Are the output values for the trajectory "safe"?  
 Set your parameters for the iteration as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$, $\gamma = 0.5$ and $\beta = 0.5$. Try to ask to reach a position of the end-effector outside of the workspace, for example, $p = \begin{bmatrix}	2.5 & -0.2 & 0.5 & \frac{\pi}{3}\end{bmatrix}$ is the error going to zero? verify that the algorithm never converges (the maximum number of iterations is reached). Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles from the inverse kinematics. You might notice that the values of the joint variables $q$ are very large. Why is this the case? You will have to implement an "unwrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
 
-Also, compare the output of the numerical inverse kinematics function with and without using the line search algorithm, what is the difference between them? 
-Is one of them closer to the position that was asked to reach? You can compute the norm of the error between the position that was ask and the final position reached. Why is one closer than the other? (in this case the line search is closer to the final point). Try now increasing the maximum number of iterations to 15000 to see that the larger the number of iterations, the closer you get to $p$. 
+Also, compare the output of the numerical inverse kinematics function with and without using the line search algorithm limiting the maximum number of iteration to 3, 4 and 5, what is the difference between them? 
+Is one of them closer to the position that was asked to reach? You can compute the norm of the error between the position that was ask and the final position reached.
 
-Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations. As you can see is almost there. \\
+% Why is one closer than the other? (in this case the line search is closer to the final point). Try now increasing the maximum number of iterations to 15000 to see that the larger the number of iterations, the closer you get to $p$. 
+
+Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations.  \\
 \begin{figure}[H]
 	\centering
-	\begin{subfigure}[b]{0.4\textwidth}
+	\begin{subfigure}[b]{0.3\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{10kit}
-		\caption{Position after 10k iterations}
-		\label{fig:10kit}
+		\includegraphics[height=\textwidth]{pics/3iters.png}
+		\caption{Position after 3 iterations}
+		\label{fig:3it}
 	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.4\textwidth}
+	\begin{subfigure}[b]{0.3\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{15kit}
-		\caption{Position after 15k iterations}
-		\label{fig:15kit}
+		\includegraphics[width=\textwidth]{pics/4iters.png}
+		\caption{Position after 4 iterations}
+		\label{fig:4it}
 	\end{subfigure}
-	\caption{Positions of the robot manipulator after 10k and 15k iterations of the numerical inverse kinematics}
+	\begin{subfigure}[b]{0.3\textwidth}
+		\centering
+		\includegraphics[height=\textwidth]{pics/5iters.png}
+		\caption{Position after 5 iterations}
+		\label{fig:5it}			
+	\end{subfigure}
+	\caption{Positions of the robot manipulator after 3,4, and 5 iterations of the numerical inverse kinematics}
 	\label{fig:ik}
 \end{figure}
 

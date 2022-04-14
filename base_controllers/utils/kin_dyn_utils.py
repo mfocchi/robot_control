@@ -197,7 +197,7 @@ def numericalInverseKinematics(p_d,q0, line_search = False):
     epsilon = 1e-06  # Tolerance
     # alpha = 0.1
     alpha = 1  # Step size
-    lambda_ = 1e-1  # Damping coefficient for pseudo-inverse
+    lambda_ = 1e-8  # Damping coefficient for pseudo-inverse
     max_iter = 4  # Maximum number of iterations
     # For line search only
     gamma = 0.5
