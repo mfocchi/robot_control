@@ -20,6 +20,7 @@ from base_controllers.utils.common_functions import plotCoM, plotGRFs, plotConst
 from scipy.linalg import block_diag
 from base_controllers.utils.math_tools import motionVectorTransform
 from base_controllers.utils.common_functions import State
+import matplotlib.pyplot as plt
 
 import L6_conf as conf
 robotName = "hyq"
@@ -212,7 +213,7 @@ def talker(p):
     #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
     #plotConstraitViolation(3,p.constr_viol_log)            
     #plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
-         
+    plt.show(block=True)
 if __name__ == '__main__':
     p = AdvancedController()
     try:
