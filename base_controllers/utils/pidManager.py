@@ -8,7 +8,9 @@ import copy
 class PidManager:
 
     def __init__(self, jnames):
+        print("Initializing PID Manager")
         self.joint_names = jnames
+        ros.wait_for_service('/set_pids')
         self.set_pd_service = ros.ServiceProxy("/set_pids", set_pids)
         self.joint_pid = pid()
         self.joint_pid_log = len(jnames)*[pid()]
