@@ -248,7 +248,7 @@ plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log
 #plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('torque', 3, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-
+plt.show(block=True)
 
 
 

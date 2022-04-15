@@ -19,11 +19,11 @@ robot_params['aliengo'] ={'dt': 0.002, 'kp': 25, 'kd': 2, 'q_0':  np.array([-0.2
 robot_params['ur5'] ={'dt': 0.001, 
                        'kp': np.array([300, 300, 300,30,30,1]), 
                        'kd':  np.array([20,20,20,1, 1,0.01]), 
-                       'q_0':  np.array([ 0.5, -1.5, 1.0, -0.7, 0.7, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
+                       'q_0':  np.array([ 0.0, -1.3, 1.0, -0.7, 0.7, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
                        'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
                        'ee_frame': 'tool0',
                        'control_mode': 'point', # 'trajectory','point'
-                       'control_type': 'position', # 'position', 'torque'
+                       'control_type': 'torque', # 'position', 'torque', 'admittance'
                        'real_robot': False,
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,

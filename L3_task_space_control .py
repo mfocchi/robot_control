@@ -326,10 +326,10 @@ ros_pub.deregister_node()
 #plot position
 plotEndeff('position', 1,time_log, p_log, p_des_log)
 #plotEndeff('velocity', 2, time_log, p_log, p_des_log, pd_log, pd_des_log, rpy_log, rpy_des_log)
-try: 
+try:
     ORIENTATION_CONTROL
     plotEndeff('orientation', 3,time_log, p_log, p_des_log, pd_log, pd_des_log, rpy_log, rpy_des_log)
     plotEndeff('orientation', 4,time_log, p_log, p_des_log, pd_log, pd_des_log, error_o_log)
 except: 
     pass   
-    
+plt.show(block=True)

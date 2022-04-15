@@ -88,7 +88,7 @@ def directKinematics(q):
                      [             0,               0, 1, l1],
                      [             0,               0, 0,  1]])
     
-    T_12_ = np.array([[ 0, 0, 1,  0],
+    T_12_r = np.array([[ 0, 0, 1,  0],
                       [ 0, 1, 0, l2],
                       [-1, 0, 0,  0],
                       [ 0, 0, 0,  1]])
@@ -104,7 +104,7 @@ def directKinematics(q):
                      [              0, 0,              0,   1]])
 
 
-    T_34_ = np.array([[ 0, 0, 1,  0],
+    T_34_r = np.array([[ 0, 0, 1,  0],
                       [ 0, 1, 0,  0],
                       [-1, 0, 0, l5],
                       [ 0, 0, 0,  1]])
@@ -120,10 +120,10 @@ def directKinematics(q):
                      [0,  0, 0,  1]])
 
     # global homogeneous transformation matrices
-    T_02_ = T_01.dot(T_12_) # rigid transform
+    T_02_ = T_01.dot(T_12_r) # rigid transform
     T_02 = T_02_.dot(T_12) # joint 2 transform
     T_03 = T_02.dot(T_23)  # joint 3 transform
-    T_04_ = T_03.dot(T_34_) # rigid transform
+    T_04_ = T_03.dot(T_34_r) # rigid transform
     T_04 = T_04_.dot(T_34) # joint 4 transform
     T_0e = T_04.dot(T_4e) # rigid transform
 

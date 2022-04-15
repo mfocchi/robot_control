@@ -143,7 +143,7 @@ while any(i >= 0.01 for i in np.abs(error)):
     # stops the while loop if  you prematurely hit CTRL+C                    
     if ros_pub.isShuttingDown():
         print ("Shutting Down")                    
-        break;
+        break
             
 #raw_input("Robot came to a stop. Press Enter to continue")
 ros_pub.deregister_node()
