@@ -13,8 +13,8 @@ from termcolor import colored
 #use a reasonable guess
 q_guess = np.array([0.55, -0.7, 1.0, -1.57, -1.57, 0.5])
 robot_name = "ur5"
-xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/ur5.xacro'
-robot = getRobotModel(robot_name, generate_urdf=True, xacro_path=xacro_path)
+#xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/ur5.xacro'
+#robot = getRobotModel(robot_name, generate_urdf=True, xacro_path=xacro_path)
 robot = getRobotModel(robot_name)
 ee_frame = 'tool0'
 use_postural_task = True # without the postural task the solution depends on the initial guess!!

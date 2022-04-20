@@ -149,28 +149,35 @@ We are going to be using functions and interfaces written in the locosim package
 		git submodule update --init --recursive
 		cd ~/ros_ws
 		catkin_make install
-		source ~/.bashrc
 	\end{verbatim}
 
 \end{enumerate}
+
+As you see, the last command is a compilation command. Indeed, despite all the labs are written in Python and located in the \codeword{robot_control} folder, there is a low level controller called \codeword{ros_impedance_controller} that receives joint commands from Python and sent them to Gazebo (in the labs where a Gazebo simulator is used). This node is written in C++ and needs to be compiled (and installed in the folder where ROS looks to find the nodes that is stored in the environment variable  \codeword{ROS_PACKAGE_PATH}). 
 %
 \section{Robot URDF description file and visualization}
 %
 In this part of the lab we are going to visualize our 4-DoF manipulator using the previously mentioned software tools.
 
 \textbf{1.1 Basic geometry description.} Go to the folder that contains the files corresponding the robot description by typing the following commands on the terminal:
+
+
 \begin{verbatim}
 	cd ~/ros_ws/src/locosim/robot_urdf
 \end{verbatim}
-Let's start by inspecting a file that describe a robot made of regular geometries (a cube and cilinder). Type on the terminal:
+
+ If you do not find \codeword{~} replace it with \codeword{/home/student}.
+Let's start by inspecting a file that describe a robot made of regular geometries (a box and a cylinder). Type on the terminal:
+
 \begin{verbatim}
 	gedit simple_geometry.urdf
 \end{verbatim}
 
 As mentioned, a robot is described in robot using a URDF file, which is scripted using the metalanguage \codeword{xml}, and specific \codeword{xml} macros (i.e., \codeword{xacro}). We can both use the extension \codeword{*.urdf} or \codeword{*.xacro}, however, when dealing with large models a combination of both might be required since \codeword{xacro} files allowed for modularity, but some CAD software outputs directly a \codeword{urdf} file. In general, you use \codeword{xacro}  to assemble  parametrized \codeword{urdf}  of the subparts of a robot. For instance in the case of a legged robot, you can define the  \codeword{urdf} for a generic leg and parametrize it with its location along the trunk, without copying and pasting code. However, in this class, we will not use this feature and you will find only \codeword{urdf} files in the folder. 
-Inspect the \textit{simple\_geometry} file and try to understand what each line describes. How are the links described? Which parameters need to be described per link? How are joints defined? \footnote{For an in-depth explanation on how ROS works and check this useful book: Mastering ROS for Robotics
-	Programming, Lentin Joseph, pag 61.}. The link tag represents a single link of a robot. Using this tag, we
-	can model a robot link and its dynamic properties. The syntax is as follows:
+Inspect the \textit{simple\_geometry} file and try to understand what each line describes. How are the links described? Which parameters need to be described per link? How are joints defined? \footnote{For an in-depth explanation on how ROS works and check this useful book: Mastering ROS for Robotics	Programming, Lentin Joseph, pag. 61.}. 
+
+The link tag represents a single link of a robot. Using this tag, we
+can model a robot link and its dynamic properties. The syntax is as follows:
 	
 \begin{Verbatim}	
 <link name="<name of the link>">
@@ -182,7 +189,7 @@ Inspect the \textit{simple\_geometry} file and try to understand what each line 
 
 The \textit{Visual} section represents the real link of the robot, and the area surrounding the real link
 is the \textit{Collision} section. The Collision section encapsulates the real link to
-detect collision before hitting the real link.
+detect collision before hitting the real link. The inertial tag defines the mass, the location of the center of mass and the inertia tensor of the link (about the CoM). These parameters are usually obtained by CAD.
 
 \begin{figure}[H]
 	\centering
@@ -191,13 +198,12 @@ detect collision before hitting the real link.
 	\label{fig:link}
 \end{figure}
 
-The joint tag represents a robot joint. We can specify the kinematics
-and dynamics of the joint and also set the limits of the joint movement and
-its velocity. The joint tag supports the different types of joints such as
-revolute, continuous, prismatic. The syntax is as follows:
+The joint tag represents a robot joint. e should specify the type of joint (revolute, prismatic, floating, fixed, continuous).  
+A  joint is formed between two links; the first is called the Parent link
+and the second is the Child link. The syntax is as follows:
 
 \begin{Verbatim}	
-<joint name="<name of the joint>">
+<joint name="<name of the joint>" type"<type of the joint>"
 	<parent link="link1"/>
 	<child link="link2"/>
 	<origin  xyz="..." rpy="..."/>
@@ -206,8 +212,10 @@ revolute, continuous, prismatic. The syntax is as follows:
 </joint>
 \end{Verbatim}
 
-A URDF joint is formed between two links; the first is called the Parent link
-and the second is the Child link. The following is an illustration of a joint and
+We can specify the kinematics of the robot setting the location of the joint frame with respect to the supporting link with the tag \codeword{origin} that represents the \textit{rigid transform} with respect to the supporting link frame. To summarize: from a link frame $i$ with a rigid transform we find the frame of the next joint ($i+1$). Then if the joint variable  is \textit{zero}, the joint $i+1$ frame is coincident with the link frame $i+1$ that the joint is moving. If the joint moves  then the link $i+1$ frame and the joint $i+1$ frame no longer coincide and are linked by an additional transformation (e.g. a pure elementary rotation about the joint axis in the  case of a revolute joint \footnote{In the case of a revolute joint the origin of the joint and link frame always coincide.}) due to the joint motion. Note that the joint axis is defined with respect to the parent link (e.g. $i$) not with respect to the world frame!
+We can also set the limits of the joint movement and
+its velocity and the effort (i.e. force or torque).
+ The following is an illustration of a joint and
 its link:
 
 \begin{figure}[H]
@@ -217,12 +225,14 @@ its link:
 	\label{fig:link}
 \end{figure}
 
-The frame supporting the \textit{child} link is coincident with the joint frame if the joint variable is 0.
-Its position / orientation is expressed via a rigid transform (with the tag origin) with  respect to the \textit{parent} link frame. The axis of the joint is also defined with respect to the parent link frame (not the inertial frame!). \\
+In this picture the frame supporting the \textit{child} link is coincident with the joint frame so it means that the joint variable is 0.
+Its position / orientation is expressed via a rigid transform (with the tag origin) with  respect to the \textit{parent} link frame. 
+%The axis of the joint is also defined with respect to the parent link frame (not the %inertial frame!). 
+\\
 
 
 
-\textbf{1.2 Use an stl mesh file to describe a link.} We can use .stl files to specify the geometry of the link instead of using basic geometries such as a cilinder or a block. The .stl format is a common extension used in CAD softwares such as SolidWorks to store rigid parts of a mechanical design. However, when using stl files, one needs to be careful to not use an excessive number of polygons to describe the part, since this might cause the simulation to slow down significantly. The file \codeword{ur4_2links.urdf} contains to links associated to a mesh stl file. Inspect the \codeword{ur4_2links.urdf} by typing in the terminal (you can either open a new terminal or kill the process in the previous one by hitting \codeword{Ctrl + C})
+\textbf{1.2 Use an stl mesh file to describe a link.} We can use .stl files to specify the geometry of the link instead of using basic geometries such as a cilinder or a block. The .stl format is a common extension used in CAD softwares such as SolidWorks to store rigid parts of a mechanical design. However, when using stl files, one needs to be careful to not use an excessive number of polygons to describe the part \footnote{People use Meshlab to reduce mesh complexity from a detailed CAD}, since this might cause the simulation to slow down significantly. The file \codeword{ur4_2links.urdf} contains to links associated to a mesh stl file. Inspect the \codeword{ur4_2links.urdf} by typing in the terminal (you can either open a new terminal or kill the process in the previous one by hitting \codeword{Ctrl + C})
 %
 \begin{verbatim}
 	gedit ur4_2links.urdf
@@ -247,10 +257,9 @@ Once the file has been inspected,  run the following command in the terminal to 
 \begin{verbatim}
 	roslaunch ros_impedance_controller visualize.launch robot_name:=simple_geometry 
 \end{verbatim}
+\normalsize
 
-\
  You can play around with the value of the only joint (shoulder\_pan\_joint) present in the model, using the slider input in the GUI. It is possible to visualize the link frames, adding the TF plugin in RVIZ. Stop the process by hitting \codeword{Ctrl + C} in the terminal in which you ran the previous launch file. 
-Note that until now we were only \textit{visualizing} a predefined joint motion, note that we would need to add a \textit{trasmission} to the joint if we want to be able to control it in a simulator (i.e. sending torques to it).
 Now let's visualize a one-joint two-link manipulator by typing the following command:
 %
 %
@@ -258,9 +267,8 @@ Now let's visualize a one-joint two-link manipulator by typing the following com
 \begin{verbatim}
 	roslaunch ros_impedance_controller visualize.launch robot_name:=ur4_2links  
 \end{verbatim} 
-%
 \normalsize
-Again, you will visualize the described model and you can modify the value of the only joint to make the shoulder link move. To finalize this exercise, let's visualize the 4-DoF robot manipulator that we will use in the next two parts of this lab session and visualize its joint motions. Stop the process in the terminal and then run the following command:
+Again, you will visualize the described model and you can modify the value of the only joint to make the shoulder link move. Note that until now we were only \textit{visualizing} a predefined joint motion, note that we would need to add a \textit{trasmission} to the joint if we want to be able to control it in a simulator (i.e. sending torques to it). To finalize this exercise, let's visualize the 4-DoF robot manipulator that we will use in the next two parts of this lab session and visualize its joint motions. Stop the process in the terminal and then run the following command:
 %
 %
 \footnotesize
@@ -270,7 +278,7 @@ Again, you will visualize the described model and you can modify the value of th
 \normalsize
 Note that we did not have to specify the robot since \codeword{ur4_robot} is the default value of the argument \codeword{robot_name}. This will launch RVIZ and it will allow us to move around all four joints of our manipulator.\\
 
-\textbf{1.4 ROS topics.} So far we have only mentioned that a node can publish a message, but where is this message "published to"? Messages are published to \textit{topics}, and this makes them available to other nodes that can \textit{subscribe} to a specific topic. In our case, our launch file (\codeword{visualize.launch}), runs a node called \codeword{joint_state_publisher}, which is in charge, as its name indicates, to publish the joint values on to the topic \codeword{joint_states}. With the publisher, it also launches a gui that allows us to manually set the \codeword{joint_states} topic. Pay attention that usually this  will come directly from the robot or the simulator. Now let's check the content of the \codeword{joint_states} topic. Run again (in case you have stopped it) the command from the previous step and in a separate terminal run the following command:
+\textbf{1.4 ROS topics.} So far we have only mentioned that a node can publish a message, but where is this message "published to"? Messages are published to \textit{topics}, and this makes them available to other nodes that can \textit{subscribe} to a specific topic. In our case, our launch file (\codeword{visualize.launch}), runs a node called \codeword{joint_state_publisher_gui}, which is in charge, as its name indicates, to publish the joint values on to the topic \codeword{joint_states}. With the publisher, it also launches a gui that allows us to manually set the \codeword{joint_states} topic. Pay attention that usually this  will come directly from the robot or the simulator. Now let's check the content of the \codeword{joint_states} topic. Run again (in case you have stopped it) the command from the previous step and in a separate terminal run the following command:
 %
 \begin{verbatim}
 	rostopic echo /joint_states
@@ -304,24 +312,24 @@ Inspect these files in detail. In this assignment you will try to write your own
 \begin{figure}[bht]
 	\centering
 	\includegraphics[width=10cm]{pics/ur4_Robot.pdf}
-	\caption{(a) Sketch of the UR4 robot kinematics}
+	\caption{Sketch of the UR4 robot kinematics}
 	\label{fig:ur4_robot_kinematics}
 \end{figure} 
 
 
-\textbf{2.1 Direct kinematics (lecture E1).} The first step is to obtain the homogeneous transformation matrix from the world frame to the end-effector \prepos{T}{W}{e}. To do so, you will need to obtain the homogeneous transformation matrices from one link to the other (i.e., the local transformations \prepos{T}{W}{1}, \prepos{T}{1}{2}, \prepos{T}{2}{3}, \prepos{T}{3}{4} and \prepos{T}{4}{e}) and perform the composition of matrices. Modify the function \codeword{directKinematics} inside \codeword{kin_dyn_utils.py} to perform this computation. Hint: you can use the previously shown visualization tool to understand the changes in position and orientation of the different frames. 
+\textbf{2.1 Direct kinematics (lecture E1).} The first step is to obtain the homogeneous transformation matrix from the world frame to the end-effector \prepos{T}{W}{e}. To do so, you will need to obtain the homogeneous transformation matrices from one link to the other (i.e., the local transformations \prepos{T}{W}{1}, \prepos{T}{1}{2}, \prepos{T}{2}{3}, \prepos{T}{3}{4} and \prepos{T}{4}{e}) and perform the composition of matrices. Modify the function \codeword{directKinematics} inside \codeword{kin_dyn_utils.py} to perform this computation. Hint: you can use the previously shown visualization tool to understand the  position and orientation of the different frames (remember to set joint positions to zero). 
 You can alternative refer to Fig. \ref{fig:ur4_robot_kinematics} for a sketch of the kinematics and to Fig.  \ref{fig:ur4_tf} to check the locations of the  link frames.
 
 
 \begin{figure}[bht]
 	\centering
 	\includegraphics[width=10cm]{pics/ur4TF.png}
-	\caption{UR4 Robot: location of the link frames}
+	\caption{UR4 Robot:  link frames locations}
 	\label{fig:ur4_tf}
 \end{figure} 
 
 
-You can call the function inside the package kin\_dyn\_utils.py from the main in the \codeword{L1_1_kinematics.py} file. To verify the correctness of your direct kinematics function, compare it with the built-in functions from Pinocchio for the position vector (\codeword{robot.framePlacement(q, frame_ee).translation}) and the rotation matrix (\codeword{robot.framePlacement(q, frame_ee).rotation}) (as seen in the file \codeword{L1_1_kinematics.py}) using different values for the positions of the joints (changing \codeword{q0} in \codeword{L1_conf.py}).\\
+You can call the function inside the package kin\_dyn\_utils.py from the main in the \codeword{L1_1_kinematics.py} file. To verify the correctness of your direct kinematics function, compare the outputs with the ones from the built-in functions from Pinocchio for the position vector (\codeword{robot.framePlacement(q, frame_ee).translation}) and the rotation matrix (\codeword{robot.framePlacement(q, frame_ee).rotation}) (as seen in the file \codeword{L1_1_kinematics.py}) using different values for the positions of the joints (changing \codeword{q0} in \codeword{L1_conf.py}).\\
 
 
 
@@ -354,12 +362,13 @@ where
 	\end{cases}
 \end{equation*}
 
-In our case all of the joints are revolute. Recall as well that in this expression vector $\mathbf{z}_i$ represents the axis of joint $i$ that drives link $i$, expressed in the world frame. As in the previous case, compare your results with the built-in function of Pinocchio:
+In our case all of the joints are revolute. Recall as well that in this expression vector $\mathbf{z}_i$ represents the moving axis of joint $i$ that drives link $i$, expressed in the world frame. As in the previous case, compare your results with the built-in function of Pinocchio:
 \codeword{robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED) } for different values of \codeword{q}.\\
 
-\textbf{2.3 Analytical Jacobian (lecture E3).} Proceed to compute the analytical Jacobian $\mathbf{J}_r$ according to 
+\textbf{2.3 Analytical Jacobian (lecture E3).} In the case we decide to parametrize our task variables representing the orientation with Euler Angles, we can obtain the Analytic Jacobian directly from the Geometric Jacobian via a simple transformation. Proceed to compute the analytical Jacobian $\mathbf{J}_a$ according to:
+%
 \begin{equation*}
-	\mathbf{J}_r = \mathbf{T}_a \mathbf{J}
+	\mathbf{J}_a = \mathbf{T}_{RPY} \mathbf{J}
 \end{equation*}
 where $\mathbf{J}$ is the geometric Jacobian and $\mathbf{T}_a$ is the transformation matrix given by
 \begin{equation*}
@@ -369,7 +378,7 @@ where $\mathbf{J}$ is the geometric Jacobian and $\mathbf{T}_a$ is the transform
 	\end{bmatrix}
 \end{equation*}
 
-where $\mathbf{T}_{RPY}$ is the transformation matrix from angular velocity $\boldsymbol{\omega}$ to Euler angle rate $\dot{\mathbf{\Phi}}$, i.e.,
+where $\mathbf{T}_{RPY}^{-1}$ is the transformation matrix from angular velocity $\boldsymbol{\omega}$ to Euler angle rate $\dot{\mathbf{\Phi}}$, i.e.,
 \begin{equation*}
 	\boldsymbol{\omega} = \mathbf{T}_{RPY} \dot{\mathbf{\Phi}}
 \end{equation*}
@@ -379,7 +388,7 @@ and implement it in the function \codeword{geometric2analyticJacobian}.\\
 
 
 
-\textbf{2.4 Numerical inverse kinematics (lecture E4).} Now you have all the necessary ingredients to compute the manipulator's inverse kinematics. Since we have 4-DoF, the analytical solution of the inverse kinematics problems is not straightforward, so we suggest to take the iterative approach given by the algorithm described in Fig.~\ref{fig:CLIK}. 
+\textbf{2.4 Numerical inverse kinematics (lecture E4).} Now you have all the necessary ingredients to compute the manipulator's inverse kinematics. Since we have 4-DoF, the analytical solution of the inverse kinematics problems is not straightforward, so we suggest to take the iterative approach given by the algorithm described in Fig.~\ref{fig:CLIK}.  
 %
 \begin{figure}[bht]
 	\centering
@@ -388,22 +397,30 @@ and implement it in the function \codeword{geometric2analyticJacobian}.\\
 	\label{fig:CLIK}
 \end{figure}
 %
-Consider your task space variables to be the Cartesian space position (i.e., $x,y,z$) and the roll angle $\psi$ of the end-effector. 
-Why can't the full orientation be defined in the task?
+To start simple, consider your task space variables to be the Cartesian space position (i.e., $x,y,z$) and the roll angle $\psi$ of the end-effector. 
+Why can't the full orientation be defined in the task? (hint: check which row in the Jacobians goes to zero).
 %You will need to adequately choose the rows of interest of the analytical Jacobian $\mathbf{J}_r$. 
-Is $\mathbf{J}_r$ a square matrix? Is this a problem? And, can it be solved? After implementing your function, try to find the corresponding joint angles for $p = \begin{bmatrix}
-	-0.5 & -0.2 & 0.5 & \frac{\pi}{3}
-\end{bmatrix}$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to its roll angle $\psi$ of the end-effector.
-First, implement the algorithm without line search (i.e., with constant step size $\alpha$) and then compare it with the adjustable step size. Is there any difference in the number of iterations? What is the effect of changing parameter $\alpha$ on both implementations? (you should notice that the line search might take a larger number of iterations if the initial $\alpha$ is too large) What is the influence of the initial condition?
-Check that the algorithm converges to different joint configurations depending on how you initialize it.  Are the output values for the trajectory "safe"?  
-Set your parameters for the iteration as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$, $\gamma = 0.5$ and $\beta = 0.5$. Try to ask to reach a position of the end-effector outside of the workspace, for example, $p = \begin{bmatrix}	2.5 & -0.2 & 0.5 & \frac{\pi}{3}\end{bmatrix}$ is the error going to zero? verify that the algorithm never converges (the maximum number of iterations is reached). Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles from the inverse kinematics. You might notice that the values of the joint variables $q$ are very large. Why is this the case? You will have to implement an "unwrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
+Since we have 4 task variables and 4 DoFs then   $\mathbf{J}_a$ is a square matrix and we expect $\mathbf{J}_a^T\mathbf{J}_a$ to be always invertible (out of singularities).  After implementing your function, try to find the corresponding joint angles for $p = \mat{-0.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to the roll angle $\psi$ of the end-effector frame.
+First, implement the algorithm without line search (i.e., with constant step size $\alpha$) and then compare it with the adjustable step size. Is there any difference in the number of iterations?  (you should notice that the line search might take a smaller number of iterations). What is the influence of the initial condition? 
+Check that the algorithm converges to different joint configurations depending on how you initialize it. Try to set it in order to converge to the elbow up or elbow down configuration.  Are the output values for the trajectory "safe"? 
 
-Also, compare the output of the numerical inverse kinematics function with and without using the line search algorithm limiting the maximum number of iteration to 3, 4 and 5, what is the difference between them? 
-Is one of them closer to the position that was asked to reach? You can compute the norm of the error between the position that was ask and the final position reached.
+In case of a bad initialization, you might notice that the values of the joint variables $q$ are very large. Why is this the case? You will have to implement an "unwrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
+ 
+Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles from the inverse kinematics.  
+Then you  can compute the norm of the error between the position that was asked and the final position reached.
+ 
+ 
+Set your parameters for the iteration as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$, $\gamma = 0.5$ and $\beta = 0.5$. 
+
+Now, try to ask to reach a position of the end-effector outside of the workspace, for example, $p = \mat{	2.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$. Start without the line search, is the error going to zero? verify that the algorithm never converges (the maximum number of iterations is reached). If you enable the line search the robot tries to do "the best that he can" to reach the target. Increasing the regularization term $\lambda$ you can see that the gradient goes to zero before reaching the maximum value of iterations (and the error will be minimum).
+
+
+
+Now,  compare the output of the numerical inverse kinematics function  using the line search algorithm but limiting the maximum number of iteration to 3, 4 and 5, how much is the difference between the final position and the target? 
 
 % Why is one closer than the other? (in this case the line search is closer to the final point). Try now increasing the maximum number of iterations to 15000 to see that the larger the number of iterations, the closer you get to $p$. 
 
-Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations.  \\
+Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations.  
 \begin{figure}[H]
 	\centering
 	\begin{subfigure}[b]{0.3\textwidth}
@@ -428,18 +445,19 @@ Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations.
 	\label{fig:ik}
 \end{figure}
 
+A limitation of this approach is that joint limits can be considered only at the end. An improvement would be to set up a \textit{constrained} optimization problem where we enforce the end-stop limits during the optimization.\\
 
 \textbf{2.5 Dealing with the redundancy: the postural task.} 
 
-Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set only the position of the end-effector. The robot (6 DoFs) is clearly redundant for the task (3 variables) therefore we have infinite  solution for the inverse kinematics problem and the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution close to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range. Therefore,  can implement a ``postural task'' at the kinematic level to solve the redundancy.
-This will  selects among the infinite solutions the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
-To obtain this, we setup the following optimization problem:
+Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set only the \textit{position} of the end-effector. The robot (6 DoFs) is clearly redundant for the task (3 variables) therefore we have an  infinite number of solutions for the inverse kinematics problem and the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution the  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
+This will  select, among the infinite solutions, the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
+To i9implement this, we setup the following optimization problem:
 
 \begin{align*}
 \tilde{q}^\star = \argmin_q \frac{1}{2} \left|\left| \mat{p(q) \\ w q } - \mat{p^d \\ w q^p }   \right|\right|^2 = \frac{1}{2} \left|\left| \mat{ e_x \\ e_q }   \right|\right|^2
 \end{align*}
 
-where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a 6D vector) and the way the newton step $\Delta q$ is computed:
+where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is still non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a 3+n vector) and the way the newton step $\Delta q$ is computed:
 
 
 \begin{align*}
@@ -449,7 +467,7 @@ where $w$ is a scalar weight and $q^p$ the postural configuration. The solution 
 
 %old: note that we have a minus sign just because we defined differently $e_p$ (in Exe2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$).
 
-So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.\\
+So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.\\
 
 
 \textbf{2.6 Fifth order joint polynomial trajectory.} Now that we have a function that computes the inverse kinematics, we can use our initial joint position $\mathbf{q}_0$(defined in the file \codeword{L1_conf.py}) and the final joint position vector $\mathbf{q}_f$ (computed with our numerical inverse kinematics function) to compute a trajectory and move from one point to the other. An easy way to do so is by using a fifth order polynomial parameterized by time to compute the position and its derivatives (i.e., velocity and acceleration) of a given joint with respect to time, i.e.,

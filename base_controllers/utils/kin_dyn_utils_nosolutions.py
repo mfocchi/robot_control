@@ -74,92 +74,58 @@ def directKinematics(q):
 
     # define link lengths from urdf
     link_length,_,_,_ = setRobotParameters()
-    l1 = link_length[0]  # shoulder Z axis
-    l2 = link_length[1]  # upper-arm Y axis
-    l3 = link_length[2]  # forearm Z axis
-    l4 = link_length[3]  # forearm Y axis
-    l5 = link_length[4]  # wrist_1_link Z axis
-    l6 = link_length[5]  # ee Y axis
-    l7 = link_length[6]  # ee Z axis
+    l1 = link_length[0]
+    l2 = link_length[1]
+    l3 = link_length[2]
+    l4 = link_length[3]
+    l5 = link_length[4]
+    l6 = link_length[5]
+    l7 = link_length[6]
 
-    q1 = q[0] # shoulder_pan joint position
-    q2 = q[1] # shoulder_lift joint position
-    q3 = q[2] # elbow joint position
-    q4 = q[3] # wrist_1_joint joint position
-
-
-    # LOCAL homogeneous transformation matrices (base link is 0)
-
-    # shoulder link (1)
-    # rigid transform (translation along Z axis)
-    T_01r = np.array([[1, 0, 0, 0],
-                       [0, 1, 0, 0],
-                       [0, 0, 1, l1],
-                       [0, 0, 0, 1]])
-    # joint transform (rotation about Z axis)
-    T_1r1 = np.array([[math.cos(q1), -math.sin(q1), 0, 0],
-                      [math.sin(q1), math.cos(q1),  0, 0],
-                      [0,               0,              1, 0],
-                      [0,               0,              0, 1]])
-    T_01 = T_01r.dot(T_1r1)
-
-
-
-    # upper-arm link (2)
-    # rigid transform (90deg rotation about Y axis, translation l2 along Y axis)
-    T_12r = np.array([[ 0, 0, 1,  0],
-                       [ 0, 1, 0, l2],
-                       [-1, 0, 0,  0],
-                       [ 0, 0, 0,  1]])
-    # joint transform (rotation about Y axis)
-    T_2r2 = np.array([[ math.cos(q2), 0, math.sin(q2),        0],
-                     [              0, 1,            0,        0],
-                     [-math.sin(q2), 0, math.cos(q2), 0],
-                     [              0, 0,              0, 1]])
-    T_12 = T_12r.dot(T_2r2)
-
-
-    # forearm link (3)
-    # rigid transform (translation l3 along Zaxis, -l4 along Y axis)
-    T_23r = np.array([[1, 0, 0, 0],
-                       [0, 1, 0, -l4],
-                       [0, 0, 1, l3],
-                       [0, 0, 0, 1]])
-
-    # joint transform (rotation about Y axis)
-    T_3r3 = np.array([[ math.cos(q3) ,  0, math.sin(q3),   0],
-                       [            0,  1,            0,   0],
-                       [-math.sin(q3),  0, math.cos(q3),   0],
-                       [            0,  0,            0,   1]])
-    T_23 = T_23r.dot(T_3r3)
-
-
-
-    # wrist_1 link (4)
-    # rigid transform (90 deg about Y axis, l5 translation along Z axis)
-    T_34r = np.array([[ 0, 0, 1,  0],
-                      [ 0, 1, 0,  0],
-                      [ -1, 0, 0,  l5],
+    # local homogeneous transformation matrices
+    T_01 = np.array([[math.cos(q[0]), -math.sin(q[0]), 0,  0],
+                     [math.sin(q[0]),  math.cos(q[0]), 0,  0],
+                     [             0,               0, 1, l1],
+                     [             0,               0, 0,  1]])
+    
+    T_12_r = np.array([[ 0, 0, 1,  0],
+                      [ 0, 1, 0, l2],
+                      [-1, 0, 0,  0],
                       [ 0, 0, 0,  1]])
-    # joint transform  (rotation about Y axis)
-    T_4r4 = np.array([[ math.cos(q4), 0, math.sin(q4), 0],
+
+    T_12 = np.array([[ math.cos(q[1]), 0, math.sin(q[1]), 0],
                      [              0, 1,              0, 0],
-                     [-math.sin(q4), 0, math.cos(q4), 0],
+                     [-math.sin(q[1]), 0, math.cos(q[1]), 0],
                      [              0, 0,              0, 1]])
-    T_34 = T_34r.dot(T_4r4)
 
-    # end-effector
-    # only rigid transform (rotation X => Y , Y => -X, translation l6 along Y axis, l7 along Z axis)
-    T_4e = np.array([[0,  -1, 0,  0],
-                     [1,   0, 0, l6],
-                     [0,   0, 1, l7],
-                     [0,   0, 0,  1]])
+    T_23 = np.array([[ math.cos(q[2]), 0, math.sin(q[2]),   0],
+                     [              0, 1,              0, -l4],
+                     [-math.sin(q[2]), 0, math.cos(q[2]),  l3],
+                     [              0, 0,              0,   1]])
 
-    # GLOBAL homogeneous transformation matrices
-    T_02 = T_01.dot(T_12)
-    T_03 = T_02.dot(T_23)
-    T_04 = T_03.dot(T_34)
-    T_0e = T_04.dot(T_4e)
+
+    T_34_r = np.array([[ 0, 0, 1,  0],
+                      [ 0, 1, 0,  0],
+                      [-1, 0, 0, l5],
+                      [ 0, 0, 0,  1]])
+
+    T_34 = np.array([[ math.cos(q[3]), 0, math.sin(q[3]), 0],
+                     [              0, 1,              0, 0],
+                     [-math.sin(q[3]), 0, math.cos(q[3]), 0],
+                     [              0, 0,              0, 1]])
+
+    T_4e = np.array([[0, -1, 0,  0],
+                     [1,  0, 0, l6],
+                     [0,  0, 1, l7],
+                     [0,  0, 0,  1]])
+
+    # global homogeneous transformation matrices
+    T_02_ = T_01.dot(T_12_r) # rigid transform
+    T_02 = T_02_.dot(T_12) # joint 2 transform
+    T_03 = T_02.dot(T_23)  # joint 3 transform
+    T_04_ = T_03.dot(T_34_r) # rigid transform
+    T_04 = T_04_.dot(T_34) # joint 4 transform
+    T_0e = T_04.dot(T_4e) # rigid transform
 
     return T_01, T_02, T_03, T_04, T_0e 
 
@@ -168,6 +134,19 @@ def computeEndEffectorJacobian(q):
     # compute direct kinematics 
     T_01, T_02, T_03, T_04, T_0e = directKinematics(q)
 
+    # rigid 90 degrees rotation to have z axis corresponding to axis of rotation
+    R_90 = np.array([[1,  0, 0],
+                     [0,  0, 1],
+                     [0, -1, 0]])
+
+    # rotation matrix of z2 to w.r.t. the world frame 
+    R_z2 = T_01[:3,:3].dot(R_90)
+
+    # z vectors for rotations
+    z1 = np.array([0, 0, 1])
+    z2 = R_z2.dot(z1)
+    z3 = z2
+    z4 = z2
 
     # link position vectors
     p_01 = T_01[:3,3]
@@ -176,20 +155,6 @@ def computeEndEffectorJacobian(q):
     p_04 = T_04[:3,3]
     p_0e = T_0e[:3,3]
 
-    # rigid 90 degrees rotation to have z axis corresponding to axis of rotation
-    R_90 = np.array([[1,  0, 0],
-                     [0,  0, 1],
-                     [0, -1, 0]])
-
-    # rotation matrix of z2 to w.r.t. the world frame
-    R_z2 = T_01[:3,:3].dot(R_90)
-
-    # z vectors for rotations
-    z1 = T_01[:3,2] # Z axis
-    z2 = T_02[:3,1] # Y axis
-    z3 = T_02[:3,1] # Y axis
-    z4 = T_02[:3,1] # Y axis
-
     # vectors from link i to end-effector
     p_0_1e = p_0e - p_01
     p_0_2e = p_0e - p_02
@@ -197,70 +162,63 @@ def computeEndEffectorJacobian(q):
     p_0_4e = p_0e - p_04
 
     # linear and angular part of Jacobian matrix
-    J_p = np.hstack((np.cross(z1,p_0_1e).reshape(3,1) , np.cross(z2,p_0_2e).reshape(3,1) , np.cross(z3,p_0_3e).reshape(3,1) , np.cross(z4,p_0_4e).reshape(3,1)  ))
-    J_o = np.hstack((z1.reshape(3,1), z2.reshape(3,1), z3.reshape(3,1), z4.reshape(3,1)))
+    J_p = np.array([np.cross(z1,p_0_1e), np.cross(z2,p_0_2e), np.cross(z3,p_0_3e), np.cross(z4,p_0_4e)])
+    J_o = np.array([z1, z2, z3, z4])
 
     # Jacobian matrix and joint axes both expressed in the world frame) 
-    J = np.vstack(( J_p, J_o))
+    J = np.vstack((np.transpose(J_p),np.transpose(J_o)))
 
     return J,z1,z2,z3,z4
 
 
 def geometric2analyticJacobian(J,T_0e):
-    R_0e = T_0e[:3,:3]
+    R = T_0e[:3,:3]
     math_utils = Math()
-    rpy_ee = math_utils.rot2eul(R_0e)
-    roll = rpy_ee[0]
-    pitch = rpy_ee[1]
-    yaw = rpy_ee[2]
-
+    rpy = math_utils.rot2eul(R)
     # compute the mapping between euler rates and angular velocity
-    T_w = np.array([[math.cos(yaw)*math.cos(pitch),  -math.sin(yaw), 0],
-                    [math.sin(yaw)*math.cos(pitch),   math.cos(yaw), 0],
-                    [             -math.sin(pitch),               0, 1]])
+    T = np.array([[math.cos(rpy[1])*math.cos(rpy[2]), -math.sin(rpy[2]), 0],
+                  [math.cos(rpy[1])*math.sin(rpy[2]),  math.cos(rpy[2]), 0],
+                  [                 -math.sin(rpy[1]),                0, 1]])
 
     T_a = np.array([np.vstack((np.hstack((np.identity(3), np.zeros((3,3)))),
-                                          np.hstack((np.zeros((3,3)),np.linalg.inv(T_w)))))])
+                                          np.hstack((np.zeros((3,3)),T))))])
+    
 
+    J_r = np.dot(np.linalg.inv(T_a), J)
 
-    J_a = np.dot(T_a, J)
+    return J_r[0]
 
-    return J_a[0]
-
-def numericalInverseKinematics(p_d, q0, line_search = False, unwrap = False):
+def numericalInverseKinematics(p_d,q0, line_search = False):
     math_utils = Math()
+    # Error initialization
+    iter = 0
 
-    # hyper-parameters
-    epsilon = 1e-06 # Tolerance for stropping criterion
-    lambda_ = 1e-8  # Regularization or damping factor
+    # Recursion parameters
+    epsilon = 1e-06  # Tolerance
+    # alpha = 0.1
+    alpha = 1  # Step size
+    lambda_ = 1e-8  # Damping coefficient for pseudo-inverse
     max_iter = 200  # Maximum number of iterations
     # For line search only
     gamma = 0.5
-    beta = 0.5 # Step size reduction
+    beta = 0.5
 
-    # initialization of variables
-    iter = 0
-    alpha = 1  # Step size
     log_grad = []
     log_err = []
-
     # Inverse kinematics with line search
     while True:
-        # evaluate  the kinematics for q0
         J,_,_,_,_ = computeEndEffectorJacobian(q0)
         _, _, _, _, T_0e = directKinematics(q0)
-
+        # Compute Newton step
         p_e = T_0e[:3,3]
         R = T_0e[:3,:3]
+        math_utils = Math()
         rpy = math_utils.rot2eul(R)
         roll = rpy[0]
         p_e = np.append(p_e,roll)
-
-        # error
         e_bar = p_e - p_d
         J_bar = geometric2analyticJacobian(J,T_0e)
         J_bar = J_bar[:4,:]
-        # evaluate the gradient
         grad = J_bar.T.dot(e_bar)
 
         log_grad.append(np.linalg.norm(grad))
@@ -271,9 +229,9 @@ def numericalInverseKinematics(p_d, q0, line_search = False, unwrap = False):
             print("Inverse kinematics solved in {} iterations".format(iter))     
             break
         if iter >= max_iter:                
-            print("Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is:\n ", np.linalg.norm(e_bar))
-            break
-        # Compute the error
+            print(("\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ", np.linalg.norm(e_bar)))
+            break         
+
         JtJ= np.dot(J_bar.T,J_bar) + np.identity(J_bar.shape[1])*lambda_
         JtJ_inv = np.linalg.inv(JtJ)
         P = JtJ_inv.dot(J_bar.T)
@@ -287,7 +245,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, unwrap = False):
             while True:
                 #update
                 q1 = q0 + dq*alpha
-                # evaluate  the kinematics for q1
+                #Compute error of next step
                 _, _, _, _, T_0e1 = directKinematics(q1)
                 p_e1 = T_0e1[:3,3]
                 R1 = T_0e1[:3,:3]
@@ -313,12 +271,11 @@ def numericalInverseKinematics(p_d, q0, line_search = False, unwrap = False):
 
  
     # unwrapping prevents from outputs larger than 2pi
-    if unwrap:
-        for i in range(len(q0)):
-            while q0[i] >= 2 * math.pi:
-                q0[i] -= 2 * math.pi
-            while q0[i] < -2 * math.pi:
-                q0[i] += 2 * math.pi
+    for i in range(len(q0)):
+        while q0[i] >= 2 * math.pi:
+            q0[i] -= 2 * math.pi
+        while q0[i] < -2 * math.pi:
+            q0[i] += 2 * math.pi
 
     return q0, log_err, log_grad
 

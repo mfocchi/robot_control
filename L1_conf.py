@@ -10,7 +10,7 @@ import os
 import math
 
 dt = 0.001                   # controller time step
-SLOW_FACTOR = 1              #to slow down simulation
+SLOW_FACTOR = 1              # to slow down simulation
 frame_name = 'ee_link'       # name of the frame to control (end-effector) in the URDF
 
 # Initial Conditions
