@@ -447,30 +447,10 @@ Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations.
 
 A limitation of this approach is that joint limits can be considered only at the end. An improvement would be to set up a \textit{constrained} optimization problem where we enforce the end-stop limits during the optimization.\\
 
-\textbf{2.5 Dealing with the redundancy: the postural task.} 
-
-Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set only the \textit{position} of the end-effector. The robot (6 DoFs) is clearly redundant for the task (3 variables) therefore we have an  infinite number of solutions for the inverse kinematics problem and the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution the  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
-This will  select, among the infinite solutions, the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
-To i9implement this, we setup the following optimization problem:
-
-\begin{align*}
-\tilde{q}^\star = \argmin_q \frac{1}{2} \left|\left| \mat{p(q) \\ w q } - \mat{p^d \\ w q^p }   \right|\right|^2 = \frac{1}{2} \left|\left| \mat{ e_x \\ e_q }   \right|\right|^2
-\end{align*}
-
-where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is still non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a 3+n vector) and the way the newton step $\Delta q$ is computed:
 
 
-\begin{align*}
-\Delta q &= -\left( \mat { J^T &  wI_{3 \times 3} } \underbrace{ \mat{J  \\ wI_{3 \times 3}}}_{\bar{J}} \right)^{-1} \left(J^T e_x + w^2e_q \right) \\
-&= -\left( J^TJ + w^2I_{3 \times 3}\right)^{-1} \underbrace{ \left(J^T e_x + w^2 e_q \right) }_{\bar{J}^T\bar{e}}
-\end{align*}
 
-%old: note that we have a minus sign just because we defined differently $e_p$ (in Exe2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$).
-
-So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.\\
-
-
-\textbf{2.6 Fifth order joint polynomial trajectory.} Now that we have a function that computes the inverse kinematics, we can use our initial joint position $\mathbf{q}_0$(defined in the file \codeword{L1_conf.py}) and the final joint position vector $\mathbf{q}_f$ (computed with our numerical inverse kinematics function) to compute a trajectory and move from one point to the other. An easy way to do so is by using a fifth order polynomial parameterized by time to compute the position and its derivatives (i.e., velocity and acceleration) of a given joint with respect to time, i.e.,
+\textbf{2.5 Fifth order joint polynomial trajectory.} Now that we have a function that computes the inverse kinematics, we can use our initial joint position $\mathbf{q}_0$(defined in the file \codeword{L1_conf.py}) and the final joint position vector $\mathbf{q}_f$ (computed with our numerical inverse kinematics function) to compute a trajectory and move from one point to the other. An easy way to do so is by using a fifth order polynomial parameterized by time to compute the position and its derivatives (i.e., velocity and acceleration) of a given joint with respect to time, i.e.,
 \begin{align*}
 	q_i(t) &= a_0  + a_1 t +  a_2 t^2 + a_3 t^3 + a_4 t^4 + a_5 t^5\\
 	\dot{q}_i(t) &= a_1 + 2 a_2 t + 3a_3 t^2 + 4 a_4 t^3 + 5 a_5 t^4\\
@@ -515,7 +495,29 @@ which can be rewritten in matrix form as
 Then we can pre-multiply both sides of the equation by the inverse of the square matrix on the right-hand side of the equation and obtain the values for the coefficients of the polynomials.
 Implement this trajectory by modifying the function \codeword{fifthOrderPolynomialTrajectory}. Plot the trajectories by un-commenting the final lines of the file \codeword{L1_1_kinematics.py} and see if you notice any problem. Are they violating any joint kinematic limit? How can this be prevented? 
 
-\textbf{Extra question for lode:} The previous trajectory is simple to implement and fast to compute, however, it does not allow to set the position of the end-effector \textit{along} the trajectory. Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths. To avoid this, one can design a trajectory directly in Cartesian via parametric curves. Design a trajectory of a line in 3D Cartesian space parameterized by time and implement this on the robot. Consider that for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). Compare the results of the trajectory with respect to the one designed in 2.5.\\
+\textbf{Cartesian trajectory:} The previous trajectory is simple to implement and fast to compute, however, it does not allow to set the position of the end-effector \textit{along} the trajectory. Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths. To avoid this, one can design a trajectory directly in Cartesian via parametric curves. Design a trajectory of a line in 3D Cartesian space parameterized by time and implement this on the robot. Consider that for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). Compare the results of the trajectory with respect to the one designed in 2.5.\\
+
+\textbf{2.5 Dealing with the redundancy: the postural task.} 
+
+Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set only the \textit{position} of the end-effector. The robot (6 DoFs) is clearly redundant for the task (3 variables) therefore we have an  infinite number of solutions for the inverse kinematics problem and the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution the  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
+This will  select, among the infinite solutions, the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
+To i9implement this, we setup the following optimization problem:
+
+\begin{align*}
+\tilde{q}^\star = \argmin_q \frac{1}{2} \left|\left| \mat{p(q) \\ w q } - \mat{p^d \\ w q^p }   \right|\right|^2 = \frac{1}{2} \left|\left| \mat{ e_x \\ e_q }   \right|\right|^2
+\end{align*}
+
+where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is still non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a 3+n vector) and the way the newton step $\Delta q$ is computed:
+
+
+\begin{align*}
+\Delta q &= -\left( \mat { J^T &  wI_{3 \times 3} } \underbrace{ \mat{J  \\ wI_{3 \times 3}}}_{\bar{J}} \right)^{-1} \left(J^T e_x + w^2e_q \right) \\
+&= -\left( J^TJ + w^2I_{3 \times 3}\right)^{-1} \underbrace{ \left(J^T e_x + w^2 e_q \right) }_{\bar{J}^T\bar{e}}
+\end{align*}
+
+%old: note that we have a minus sign just because we defined differently $e_p$ (in Exe2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$).
+
+So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.\\
 
 \section{Robot dynamics}
 

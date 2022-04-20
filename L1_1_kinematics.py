@@ -129,24 +129,10 @@ ros_pub.publish(robot, q_i)
 ros.sleep(5.0)
 ros_pub.publish(robot, q_f)
 
-#############################
-##exercise 2.6: postural task
-############################
-robot = getRobotModel("ur5")
-q_guess = np.array([0.55, -0.7, 1.0, -1.57, -1.57, 0.5])
-q_postural = np.array([0.8, -0.8, 0.8, -0.8, -0.8, 0.8])
-kin = robotKinematics(robot, conf.frame_name)
-q, _, _ = kin.endeffectorInverseKinematicsLineSearch(p,ee_frame,
-                                                                             q_guess,
-                                                                               verbose = True,
-                                                                               use_error_as_termination_criteria = False,
-                                                                               postural_task = use_postural_task,
-                                                                               w_postural = 0.0001,
-                                                                               q_postural = q_postural)
-sys.exit(0)
+
 
 #######################################
-##exercise 2.6: polynomial trajectory
+##exercise 2.5: polynomial trajectory
 #########################################
 # while np.count_nonzero(q - q_f) :
 #
