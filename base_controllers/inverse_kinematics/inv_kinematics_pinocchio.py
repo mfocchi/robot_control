@@ -7,7 +7,6 @@ import os
 
 
 import pinocchio
-from pinocchio.robot_wrapper import RobotWrapper
 from pinocchio.utils import *
 import yaml
 import math
@@ -62,10 +61,12 @@ class robotKinematics():
         J = pinocchio.computeFrameJacobian(self.robot.model, self.robot.data, q_floating, frame_id, pinocchio.ReferenceFrame.LOCAL_WORLD_ALIGNED)
      
         return J[:3, 6 + blockIdx : 6 + blockIdx + 3]
-        
+
+    '''
+    This function is specific for a 3 DoFs leg of a quadruped robot
+    '''
     def footInverseKinematicsFixedBaseLineSearch(self, foot_pos_des, frame_name, q0_leg = np.zeros(3),  verbose = False):
 
-      
         # Error initialization
         e_bar = 1
         iter = 0     
@@ -131,7 +132,7 @@ class robotKinematics():
                     break                    
             iter += 1
             
-        # unwrapping prevents from outputs larger than 2pi
+        # wrapping prevents from outputs larger than 2pi
 #        for i in range(len(q0_leg)):
 #            while q0_leg[i] >= 2 * math.pi:
 #                q0_leg[i] -= 2 * math.pi
@@ -140,12 +141,15 @@ class robotKinematics():
 
         return q0_leg, IKsuccess
 
+    '''
+    This function is a 6 DoFs manipulator, the input is the endeffector position
+    '''
     def endeffectorInverseKinematicsLineSearch(self, ee_pos_des, frame_name, q0=np.zeros(6), verbose=False, 
                                                use_error_as_termination_criteria = False, 
                                                postural_task = True, 
                                                w_postural = 0.001, 
                                                q_postural = np.zeros(6),
-                                               unwrap = False):
+                                               wrap = False):
 
         # Error initialization
         e_bar = 1
@@ -168,7 +172,7 @@ class robotKinematics():
             self.robot.computeAllTerms(q0, np.zeros(6))
             ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
         
-            # get the square matrix jacobian that is smaller
+            # get the square matrix jacobian that is smaller (3x6)
             J_ee = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True, pinocchio.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
            
             # compute newton step              
@@ -178,13 +182,11 @@ class robotKinematics():
                 Jpinv = (np.linalg.inv(  J_ee.T.dot(J_ee)  + lambda_ * np.identity(J_ee.shape[1]) )).dot(J_ee.T)
                 grad = J_ee.T.dot(e_bar)
                 dq = Jpinv.dot(e_bar)
-                
             else:
                 # computed error wrt the des cartesian position
                 e_bar = np.hstack((ee_pos_des - ee_pos0, w_postural*(q_postural - q0) ))               
                 Je = np.vstack((J_ee, w_postural*np.identity(6)))                                
                 grad = Je.T.dot(e_bar)
-                
                 dq = (np.linalg.inv(  J_ee.T.dot(J_ee)  + pow(w_postural,2)* np.identity(6) )).dot(grad)
                 
             if (use_error_as_termination_criteria):
@@ -205,20 +207,18 @@ class robotKinematics():
                             print("THE END EFFECTOR POSITION IS OUT OF THE WORKSPACE, norm(error) :", np.linalg.norm(e_bar))
                             out_of_workspace  = True
                     break
-                
-                
-                
+
             if niter >= max_iter:
                 if verbose:
                     print("\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ",
                           np.linalg.norm(e_bar))
                 IKsuccess = False
                 break
-                
-            #q0 += dq 
-            #while False:
-            
+
+            #line search
             while True:
+                if verbose:
+                    print("Iter #:", niter)
                 # Update
                 q1 = q0 + dq * alpha
                 self.robot.computeAllTerms(q1, np.zeros(6))
@@ -231,10 +231,9 @@ class robotKinematics():
                     e_bar_new = np.hstack((ee_pos_des - ee_pos1,w_postural*( q_postural - q1) ))
                
                 # print "e_bar_new", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
-
                 error_reduction = np.linalg.norm(e_bar) - np.linalg.norm(e_bar_new)
-                threshold = 0.0  # even more strict: gamma*alpha*np.linalg.norm(e_bar)
 
+                threshold = 0.0  # even more strict: gamma*alpha*np.linalg.norm(e_bar)
                 if error_reduction < threshold:
                     alpha = beta * alpha
                     if verbose:
@@ -245,8 +244,8 @@ class robotKinematics():
                     break
             niter += 1
 
-        # unwrapping prevents from outputs larger than 2pi
-        if (unwrap):
+        # wrapping prevents from outputs larger than 2pi
+        if (wrap):
             for i in range(len(q0)):
                 while q0[i] >= 2 * math.pi:
                     q0[i] -= 2 * math.pi
@@ -259,7 +258,10 @@ class robotKinematics():
         error = pinocchio.log3(R_e.T.dot(R_e_des))
         return error
 
-    def endeffectorFrameInverseKinematicsLineSearch(self, ee_pos_des, w_R_e_des, frame_name, q0=np.zeros(6), verbose=False, unwrap = False):
+    '''
+      This function is a 6 DoFs manipulator, the input is the endeffector position AND orientation
+    '''
+    def endeffectorFrameInverseKinematicsLineSearch(self, ee_pos_des, w_R_e_des, frame_name, q0=np.zeros(6), verbose=False, wrap = False):
 
         # Error initialization
         e_bar = 1
@@ -314,6 +316,8 @@ class robotKinematics():
             # while False:
 
             while True:
+                if verbose:
+                    print("Iter #:", niter)
                 # Update
                 q1 = q0 + dq * alpha
                 self.robot.computeAllTerms(q1, np.zeros(6))
@@ -336,8 +340,8 @@ class robotKinematics():
                     break
             niter += 1
 
-        # unwrapping prevents from outputs larger than 2pi
-        if (unwrap):
+        # wrapping prevents from outputs larger than 2pi
+        if (wrap):
             for i in range(len(q0)):
                 while q0[i] >= 2 * math.pi:
                     q0[i] -= 2 * math.pi

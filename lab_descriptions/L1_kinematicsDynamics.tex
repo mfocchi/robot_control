@@ -300,9 +300,10 @@ Verify that the interpreter is set Python 2.7 (File/Settings/Project Interpreter
 This file was just for testing and we will use that in  the next lab session.
 %
 %
-For this part of the assignment, we will use these three main files: 
+For this part of the assignment, we will use these four main files: 
 \begin{itemize}
-	\item \codeword{LOCOSIM/robot_control/L1_1_kinematics.py} (Main file to run the visualization)
+	\item \codeword{LOCOSIM/robot_control/L1_1_kinematics.py} (Main file to run the visualization and all exercises up to 2.5)
+	\item \codeword{LOCOSIM/robot_control/L1_1_kinematics_ur5.py} (Main file to run the exercise 2.6)
 	\item \codeword{LOCOSIM/robot_control/L1_conf.py} (Initializations of variables and simulaion parameters)
 	\item \codeword{LOCOSIM/robot_control/base_controller/utils/kin_dyn_utils.py} (Kinematics and dynamics functions)
 \end{itemize}
@@ -497,11 +498,11 @@ Implement this trajectory by modifying the function \codeword{fifthOrderPolynomi
 
 \textbf{Cartesian trajectory:} The previous trajectory is simple to implement and fast to compute, however, it does not allow to set the position of the end-effector \textit{along} the trajectory. Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths. To avoid this, one can design a trajectory directly in Cartesian via parametric curves. Design a trajectory of a line in 3D Cartesian space parameterized by time and implement this on the robot. Consider that for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). Compare the results of the trajectory with respect to the one designed in 2.5.\\
 
-\textbf{2.5 Dealing with the redundancy: the postural task.} 
+\textbf{2.6 Dealing with the redundancy: the postural task.} 
 
-Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set only the \textit{position} of the end-effector. The robot (6 DoFs) is clearly redundant for the task (3 variables) therefore we have an  infinite number of solutions for the inverse kinematics problem and the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution the  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
+Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set \textit{only} the \textit{position} of the end-effector to be at $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$. Hence, the robot (6 DoFs) becomes redundant for the task (3 variables) and we expect to have an  infinite number of solutions for the inverse kinematics problem. In particular the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution the  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
 This will  select, among the infinite solutions, the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
-To i9implement this, we setup the following optimization problem:
+To implement this, we setup the following optimization problem:
 
 \begin{align*}
 \tilde{q}^\star = \argmin_q \frac{1}{2} \left|\left| \mat{p(q) \\ w q } - \mat{p^d \\ w q^p }   \right|\right|^2 = \frac{1}{2} \left|\left| \mat{ e_x \\ e_q }   \right|\right|^2
@@ -517,11 +518,22 @@ where $w$ is a scalar weight and $q^p$ the postural configuration. The solution 
 
 %old: note that we have a minus sign just because we defined differently $e_p$ (in Exe2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$).
 
-So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.\\
+So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.
+Set different postural configurations and observe that the optimal configuration is the one that places the end-effector in the desired position and is close to the postural  configuration selected.
+\\
 
 \section{Robot dynamics}
 
 In this last part of the assignment we will use the Recursive Newton-Euler Algorithm (RNEA) to compute the robot dynamics without any joint torque. We will then proceed to compute each of the terms in the dynamics equation as shown during lecture F1.2. We will start by writing our own function for the forward and backward passes of the RNEA and compute each of the terms of the dynamics equation. Then we will use the previously computed terms to obtain the forward dynamics (i.e., joint accelerations) and integrate them once to obtain velocity and twice  for position, using a forward/explicit Euler scheme. We will then compare our results with the built in functions of Pinocchio.
+
+
+For this part of the assignment, we will use these three main files: 
+\begin{itemize}
+	\item \codeword{LOCOSIM/robot_control/L1_2_dynamics.py} (Main file to run the visualization and the exercises)
+	\item \codeword{LOCOSIM/robot_control/L1_conf.py} (Initializations of variables and simulaion parameters)
+	\item \codeword{LOCOSIM/robot_control/base_controller/utils/kin_dyn_utils.py} (Kinematics and dynamics functions)
+\end{itemize}
+
 
 \textbf{3.1 Build the function for the RNEA (lecture F1.2).} Write a function that computes the forward and backward passes of the RNEA in the case of revolute joints, \codeword{RNEA}. We will use the following equations from lecture F1.2. So, for the forward pass we have\footnote{all quantities in both the forward and backward passes are expressed with respect to the world frame}:
 \begin{align*}

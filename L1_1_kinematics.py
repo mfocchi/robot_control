@@ -14,7 +14,6 @@ from base_controllers.utils.kin_dyn_utils import computeEndEffectorJacobian
 from base_controllers.utils.kin_dyn_utils import numericalInverseKinematics as ik
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 from base_controllers.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
-from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics
 from base_controllers.utils.math_tools import Math
 import matplotlib.pyplot as plt
 
@@ -53,7 +52,7 @@ math_utils = Math()
 
 # get the ID corresponding to the frame we want to control
 assert(robot.model.existFrame(conf.frame_name))
-frame_ee = robot.model.getFrameId(conf.frame_name)
+frame_id = robot.model.getFrameId(conf.frame_name)
 
 #################
 # exercise 2.1 - Direct kinematics
@@ -62,8 +61,8 @@ frame_ee = robot.model.getFrameId(conf.frame_name)
 T_01, T_02, T_03, T_04, T_0e = directKinematics(q)
 # compare with Pinocchio built-in functions 
 robot.computeAllTerms(q, qd)
-x = robot.framePlacement(q, frame_ee).translation
-o = robot.framePlacement(q, frame_ee).rotation
+x = robot.framePlacement(q, frame_id).translation
+o = robot.framePlacement(q, frame_id).rotation
 position_diff = x - T_0e[:3,3]
 rotation_diff = o - T_0e[:3,:3]
 print("Direct Kinematics - ee position, differece with Pinocchio library:", position_diff)
@@ -74,7 +73,7 @@ print("Direct Kinematics - ee orientation, differece with Pinocchio library:\n",
 #################
 J,z1,z2,z3,z4 = computeEndEffectorJacobian(q)
 # compare with Pinocchio
-Jee = robot.frameJacobian(q, frame_ee, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
+Jee = robot.frameJacobian(q, frame_id, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
 jacobian_diff = J - Jee
 print("Direct Kinematics - ee Gometric Jacobian (6X4 matrix), differece with Pinocchio library:\n", jacobian_diff)
 
@@ -82,7 +81,7 @@ print("Direct Kinematics - ee Gometric Jacobian (6X4 matrix), differece with Pin
 # exercise 2.3
 ##################
 J_a = g2a(J, T_0e)
-print("Analytic Jacobian:\n", J_a)
+#print("Analytic Jacobian:\n", J_a)
 
 ##################
 ##exercise 2.4
@@ -90,7 +89,7 @@ print("Analytic Jacobian:\n", J_a)
 ## desired task space position
 p = np.array([-0.5, -0.2, 0.5, math.pi/3])
 # outside of workspace, gets the solution with minumum error
-p = np.array([-1.0, -0.2, 0.5, math.pi/3])
+#p = np.array([-1.0, -0.2, 0.5, math.pi/3])
 
 # initial guess (elbow up)
 q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi])
@@ -100,12 +99,11 @@ q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi])
 #q_i  = np.array([ -5.0, 5.0, -0.8, -math.pi])
 
 # solution of the numerical ik
-q_f, log_err, log_grad = ik(p, q_i, line_search = True)
+q_f, log_err, log_grad = ik(p, q_i, line_search = False, wrap = True)
 # compare solution with values obtained through direct kinematics
 T_01, T_02, T_03, T_04, T_0e = directKinematics(q_f)
 rpy = math_utils.rot2eul(T_0e[:3,:3])
 task_diff = p - np.hstack((T_0e[:3,3],rpy[0]))
-
 
 print("Desired End effector \n", p)
 print("Point obtained with IK solution \n", np.hstack((T_0e[:3, 3], rpy[0])))
@@ -123,10 +121,11 @@ plt.xlabel("number of iterations")
 plt.semilogy(log_grad, linestyle='-', color='blue')
 plt.grid()
 
-
-ros_pub.add_marker(p)
+tm.sleep(2.)
+ros_pub.add_marker(p[:3])
 ros_pub.publish(robot, q_i)
-ros.sleep(5.0)
+tm.sleep(2.)
+ros_pub.add_marker(p[:3])
 ros_pub.publish(robot, q_f)
 
 
@@ -134,36 +133,35 @@ ros_pub.publish(robot, q_f)
 #######################################
 ##exercise 2.5: polynomial trajectory
 #########################################
-# while np.count_nonzero(q - q_f) :
-#
-#     # Polynomial trajectory
-#     for i in range(4):
-#         a = coeffTraj(3,conf.q0[i],q_f[i])
-#         qdd[i] = 2*a[2] + 6*a[3]*time + 12*a[4]*time**2 + 20*a[5]*time**3
-#         qd[i] = a[1] + 2*a[2]*time + 3*a[3]*time**2 + 4*a[4]*time**3 + 5*a[5]*time**4
-#         q[i] = a[0] + a[1]*time + a[2]*time**2 + a[3]*time**3 + a[4]*time**4 + a[5]*time**5
-#
-#     # Log Data into a vector
-#     time_log = np.append(time_log, time)
-#     q_log = np.vstack((q_log, q ))
-#     q_des_log= np.vstack((q_des_log, q_des))
-#     qd_log= np.vstack((qd_log, qd))
-#     qd_des_log= np.vstack((qd_des_log, qd_des))
-#     qdd_log= np.vstack((qdd_log, qdd))
-#     qdd_des_log= np.vstack((qdd_des_log, qdd_des))
-#     # tau_log = np.vstack((tau_log, tau))
-#
-#     # update time
-#     time = time + conf.dt
-#     #publish joint variables
-#     ros_pub.publish(robot, q, qd)
-#     ros_pub.add_marker(p)
-#     ros.sleep(conf.dt*conf.SLOW_FACTOR)
-#
-#     # stops the while loop if  you prematurely hit CTRL+C
-#     if ros_pub.isShuttingDown():
-#         print ("Shutting Down")
-#         break
+while np.count_nonzero(q - q_f) :
+    # Polynomial trajectory
+    for i in range(4):
+        a = coeffTraj(3,conf.q0[i],q_f[i])
+        qdd[i] = 2*a[2] + 6*a[3]*time + 12*a[4]*time**2 + 20*a[5]*time**3
+        qd[i] = a[1] + 2*a[2]*time + 3*a[3]*time**2 + 4*a[4]*time**3 + 5*a[5]*time**4
+        q[i] = a[0] + a[1]*time + a[2]*time**2 + a[3]*time**3 + a[4]*time**4 + a[5]*time**5
+
+    # Log Data into a vector
+    time_log = np.append(time_log, time)
+    q_log = np.vstack((q_log, q ))
+    q_des_log= np.vstack((q_des_log, q_des))
+    qd_log= np.vstack((qd_log, qd))
+    qd_des_log= np.vstack((qd_des_log, qd_des))
+    qdd_log= np.vstack((qdd_log, qdd))
+    qdd_des_log= np.vstack((qdd_des_log, qdd_des))
+    # tau_log = np.vstack((tau_log, tau))
+
+    # update time
+    time = time + conf.dt
+    #publish joint variables
+    ros_pub.publish(robot, q, qd)
+    ros_pub.add_marker(p)
+    ros.sleep(conf.dt*conf.SLOW_FACTOR)
+
+    # stops the while loop if  you prematurely hit CTRL+C
+    if ros_pub.isShuttingDown():
+        print ("Shutting Down")
+        break
 
 
 ros_pub.deregister_node()  

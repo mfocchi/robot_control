@@ -4,7 +4,7 @@ Created on May 4 2021
 
 @author: ovillarreal
 """
-
+from __future__ import print_function
 import numpy as np
 import os
 import math
@@ -176,14 +176,6 @@ def computeEndEffectorJacobian(q):
     p_04 = T_04[:3,3]
     p_0e = T_0e[:3,3]
 
-    # rigid 90 degrees rotation to have z axis corresponding to axis of rotation
-    R_90 = np.array([[1,  0, 0],
-                     [0,  0, 1],
-                     [0, -1, 0]])
-
-    # rotation matrix of z2 to w.r.t. the world frame
-    R_z2 = T_01[:3,:3].dot(R_90)
-
     # z vectors for rotations
     z1 = T_01[:3,2] # Z axis
     z2 = T_02[:3,1] # Y axis
@@ -227,7 +219,7 @@ def geometric2analyticJacobian(J,T_0e):
 
     return J_a[0]
 
-def numericalInverseKinematics(p_d, q0, line_search = False, unwrap = False):
+def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
     math_utils = Math()
 
     # hyper-parameters
@@ -283,6 +275,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, unwrap = False):
             q1 = q0 + dq * alpha
             q0 = q1
         else:
+            print("Itern # :", iter)
             # line search loop
             while True:
                 #update
@@ -312,8 +305,8 @@ def numericalInverseKinematics(p_d, q0, line_search = False, unwrap = False):
            
 
  
-    # unwrapping prevents from outputs larger than 2pi
-    if unwrap:
+    # wrapping prevents from outputs outside the range -2pi, 2pi
+    if wrap:
         for i in range(len(q0)):
             while q0[i] >= 2 * math.pi:
                 q0[i] -= 2 * math.pi
