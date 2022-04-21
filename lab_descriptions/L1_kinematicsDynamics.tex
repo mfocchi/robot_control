@@ -451,37 +451,44 @@ A limitation of this approach is that joint limits can be considered only at the
 
 
 
-\textbf{2.5 Fifth order joint polynomial trajectory.} Now that we have a function that computes the inverse kinematics, we can use our initial joint position $\mathbf{q}_0$(defined in the file \codeword{L1_conf.py}) and the final joint position vector $\mathbf{q}_f$ (computed with our numerical inverse kinematics function) to compute a trajectory and move from one point to the other. An easy way to do so is by using a fifth order polynomial parameterized by time to compute the position and its derivatives (i.e., velocity and acceleration) of a given joint with respect to time, i.e.,
+\textbf{2.5 Fifth order joint polynomial trajectory.} Now that we have a function that computes the inverse kinematics, we can use our initial joint position $\mathbf{q}_0$(defined in the file \codeword{L1_conf.py}) and the final joint position vector $\mathbf{q}_f$ (computed with our numerical inverse kinematics function) to compute a trajectory and move from one point to the other. An easy way to do so is by using a fifth order \textit{polynomials} parameterized by time to represent the position and its derivatives (i.e., velocity and acceleration) of a given joint with respect to time, i.e.:
+%
 \begin{align*}
 	q_i(t) &= a_0  + a_1 t +  a_2 t^2 + a_3 t^3 + a_4 t^4 + a_5 t^5\\
 	\dot{q}_i(t) &= a_1 + 2 a_2 t + 3a_3 t^2 + 4 a_4 t^3 + 5 a_5 t^4\\
 	\ddot{q}_i(t) &= 2 a_2 + 6 a_3 t + 12 a_4 t^2 + 20 a_5 t^3
 \end{align*} 
-we can then define a set of initial and final conditions for the joint variables $q_i$, $\dot{q}_i(t)$ and $\ddot{q}_i(t)$ and the time to define the behavior of the trajectory. Using this information we can obtain the values of the coefficients $a_i$ by solving a $6\times 6$ linear system of equations. For the initial conditions we use the $\mathbf{q}_0$ and assume that the arm starts from a no-motion condition (i.e., $\dot{\mathbf{q}}_0 = \mathbf{0}$ and $\ddot{\mathbf{q}}_0 = \mathbf{0}$). For the final conditions we can use the joint values obtained by the inverse kinematics $\mathbf{q}_f$ and again assume that the robot will come to a full stop at the end of the motion (i.e., $\dot{\mathbf{q}}_f = \mathbf{0}$ and $\ddot{\mathbf{q}}_f = \mathbf{0}$). We initialize time $t_0 = 0$ and the final time we are free to choose (the shorter the time, the faster the robot will move). With these considerations, the equations for final and initial conditions become (per joint):
+%
+we can then define a set of \textit{initial} and \textit{final} conditions for the joint variables $q_i$, $\dot{q}_i(t)$ and $\ddot{q}_i(t)$  to define the behavior of the trajectory. 
+Using this \textit{boundary conditions} we can obtain the values of the coefficients $a_i$ by solving a $6\times 6$ linear system of equations (we have 6 equations and six unknowns). 
+For the initial conditions we use the $\mathbf{q}_0$ and assume that the arm starts from a no-motion condition (i.e., $\dot{\mathbf{q}}_0 = \mathbf{0}$ and $\ddot{\mathbf{q}}_0 = \mathbf{0}$). 
+For the final conditions we can use the joint values obtained by the inverse kinematics $\mathbf{q}_f$ and again assume that the robot will come to a full stop at the end of the motion (i.e., $\dot{\mathbf{q}}_f = \mathbf{0}$ and $\ddot{\mathbf{q}}_f = \mathbf{0}$). We initialize time $t_0 = 0$ and the final time we are free to choose (the shorter the time, the faster the robot will move). With these considerations, replacing $t = 0$ and $t = t_f$ the equations for initial and final conditions become (per joint):
+%
 \begin{align*}
 	q_0 &= a_0  \\
-	q_f &= a_0  + a_1 t_f +  a_2 t_f^2 + a_3 t_f^3 + a_4 t_f^4 + a_5 t_f^5\\
 	0 &= a_1 \\
-	0 &= a_1 + 2 a_2 t_f + 3a_3 t_f^2 + 4 a_4 t_f^3 + 5 a_5 t_f^4\\
 	0 &= 2 a_2 \\
+	q_f &= a_0  + a_1 t_f +  a_2 t_f^2 + a_3 t_f^3 + a_4 t_f^4 + a_5 t_f^5\\
+	0 &= a_1 + 2 a_2 t_f + 3a_3 t_f^2 + 4 a_4 t_f^3 + 5 a_5 t_f^4\\
 	0 &= 2 a_2 + 6 a_3 t_f + 12 a_4 t_f^2 + 20 a_5 t_f^3
 \end{align*}
-which can be rewritten in matrix form as
+%
+which can be rewritten in matrix form as: 
 \begin{equation*}
 	\begin{bmatrix}
 		q_0 \\
+		0 \\
+		0 \\
 		q_f \\
-		0 \\
-		0 \\
 		0 \\
 		0
 	\end{bmatrix} =
 	\begin{bmatrix}
 		1 & 0   & 0     &       0 &        0 &     0 \\
-		1 & t_f & t_f^2 &   t_f^3 &    t_f^4 & t_f^5 \\
 		0 &   1 &     0 &       0 &        0 &     0 \\
-		0 &   1 & 2 t_f & 3 t_f^2 &  4 t_f^3 & 5 t_f^4 \\
 		0 &   0 &     2 &       0 &        0 &     0 \\
+		1 & t_f & t_f^2 &   t_f^3 &    t_f^4 & t_f^5 \\
+		0 &   1 & 2 t_f & 3 t_f^2 &  4 t_f^3 & 5 t_f^4 \\
 		0 &   0 &     2 &   6 t_f & 12 t_f^2 & 20 t_f^3
 	\end{bmatrix}
 	\begin{bmatrix}
@@ -494,9 +501,15 @@ which can be rewritten in matrix form as
 	\end{bmatrix}
 \end{equation*}
 Then we can pre-multiply both sides of the equation by the inverse of the square matrix on the right-hand side of the equation and obtain the values for the coefficients of the polynomials.
-Implement this trajectory by modifying the function \codeword{fifthOrderPolynomialTrajectory}. Plot the trajectories by un-commenting the final lines of the file \codeword{L1_1_kinematics.py} and see if you notice any problem. Are they violating any joint kinematic limit? How can this be prevented? 
+With the coefficients of the polynomials we can generate the whole trajectory $q(t)$ starting for a time $t=0$ where $q = q_0$ up to $t=t_f$ where  $q = q_f$.
 
-\textbf{Cartesian trajectory:} The previous trajectory is simple to implement and fast to compute, however, it does not allow to set the position of the end-effector \textit{along} the trajectory. Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths. To avoid this, one can design a trajectory directly in Cartesian via parametric curves. Design a trajectory of a line in 3D Cartesian space parameterized by time and implement this on the robot. Consider that for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). Compare the results of the trajectory with respect to the one designed in 2.5.\\
+Implement this trajectory by modifying the function \codeword{fifthOrderPolynomialTrajectory}. Plot the trajectories by un-commenting the final lines of the file \codeword{L1_1_kinematics.py} and see if you notice any problem. Hint: you can set a \codeword{SLOW_FACTOR} of 50 to better see the motion. You will see that the robot is doing very strange loops. If you remove the \textit{wrapping} feature you will get something even worse. This is because of the initialization that has a strong influence. Try to initialize the ik with $q_0$ instead  than with $q_i$ and you will see that the trajectory improves significantly. However, if you set a target that is more far away (e.g.  $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$) you will still see loops. 
+Using this approach to generate the trajectory is simple, but has no guarantee on what is happening (e.g. where the end-effector will be) in between the initial and the final configurations.
+Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths.
+
+
+
+\textbf{Cartesian trajectory:} The solution is  to  design a trajectory directly in Cartesian space via parametric curves. For instance you can design a trajectory of a line in 3D Cartesian space parameterized by time and, for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). As initial guess at each time instant you can set the configuration at the previous sample. Compare the results of the trajectory with respect to the one designed in 2.5.\\
 
 \textbf{2.6 Dealing with the redundancy: the postural task.} 
 

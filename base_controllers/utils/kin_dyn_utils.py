@@ -320,13 +320,13 @@ def fifthOrderPolynomialTrajectory(tf,q0,qf):
 
     # Matrix used to solve the linear system of equations for the polynomial trajectory
     polyMatrix = np.array([[1,  0,              0,               0,                  0,                0],
-                           [1, tf, np.power(tf,2),  np.power(tf,3),     np.power(tf,4),   np.power(tf,5)],
                            [0,  1,              0,               0,                  0,                0],
-                           [0,  1,           2*tf, 3*np.power(tf,2),  4*np.power(tf,3), 5*np.power(tf,4)],
-                           [0,  0,              2,                0,                 0,                0],
-                           [0,  0,              2,             6*tf, 12*np.power(tf,2), 20*np.power(tf,3)]])
+                           [0,  0,              2,               0,                  0,                0],
+                           [1, tf,np.power(tf, 2), np.power(tf, 3),    np.power(tf, 4),  np.power(tf, 5)],
+                           [0,  1,           2*tf,3*np.power(tf,2),   4*np.power(tf,3), 5*np.power(tf,4)],
+                           [0,  0,              2,             6*tf, 12*np.power(tf,2),20*np.power(tf,3)]])
     
-    polyVector = np.array([q0, qf, 0, 0, 0, 0])
+    polyVector = np.array([q0, 0, 0, qf, 0, 0])
     matrix_inv = np.linalg.inv(polyMatrix)
     polyCoeff = matrix_inv.dot(polyVector)
 
