@@ -135,14 +135,20 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
         plot_var_log = q_log
         if   (q_des_log is not None):
             plot_var_des_log = q_des_log
+        else:
+            plot_var_des_log = None
     elif name == 'velocity':
         plot_var_log = qd_log
         if   (qd_des_log is not None):
             plot_var_des_log  = qd_des_log
+        else:
+            plot_var_des_log = None
     elif name == 'acceleration':
         plot_var_log = qdd_log
         if   (qdd_des_log is not None):
             plot_var_des_log  = qdd_des_log
+        else:
+            plot_var_des_log = None
     elif name == 'torque':
         plot_var_log = tau_log
         if   (tau_ffwd_log is not None):                                    
