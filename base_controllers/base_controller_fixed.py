@@ -7,12 +7,9 @@ Created on Fri Nov  2 16:52:08 2018
 
 from __future__ import print_function
 
-import copy
-import os
 
+import os
 import rospy as ros
-import sys
-import time
 import threading
 
 # messages for topic subscribers
@@ -28,11 +25,8 @@ from gazebo_msgs.srv import GetPhysicsProperties
 
 # ros utils
 import roslaunch
-import rosnode
-import rosgraph
 import rospkg
 import tf
-from rospy import Time
 
 #other utils
 from utils.ros_publish import RosPub
@@ -40,13 +34,11 @@ from utils.pidManager import PidManager
 from utils.utils import Utils
 from utils.math_tools import *
 from numpy import nan
-import pinocchio as pin
 from utils.common_functions import getRobotModel
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
-from six.moves import input # solves compatibility issue bw pyuthon 2.x and 3 for raw input that does exists in python 3
 from termcolor import colored
 import matplotlib.pyplot as plt
-from utils.common_functions import plotJoint, plotAdmittanceTracking, plotEndeff
+
 
 import  params as conf
 robotName = "jumpleg"
@@ -106,7 +98,7 @@ class BaseControllerFixed(threading.Thread):
 
         # Loading a robot model of robot (Pinocchio)
         if xacro_path is None:
-            xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/'+self.robot_name+'.xacro'
+            xacro_path = rospkg.RosPack().get_path(self.robot_name+'_description') + '/urdf/'+self.robot_name+'.xacro'
         else:
             print("loading custom xacro path: ", xacro_path)
         self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path)
