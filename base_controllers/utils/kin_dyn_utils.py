@@ -224,7 +224,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
 
     # hyper-parameters
     epsilon = 1e-06 # Tolerance for stropping criterion
-    lambda_ = 1e-8  # Regularization or damping factor
+    lambda_ = 1e-08  # Regularization or damping factor (1e-08->0.01)
     max_iter = 200  # Maximum number of iterations
     # For line search only
     gamma = 0.5
@@ -263,7 +263,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
             print("Inverse kinematics solved in {} iterations".format(iter))     
             break
         if iter >= max_iter:                
-            print("Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is:\n ", np.linalg.norm(e_bar))
+            print("Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is:  ", np.linalg.norm(e_bar))
             break
         # Compute the error
         JtJ= np.dot(J_bar.T,J_bar) + np.identity(J_bar.shape[1])*lambda_

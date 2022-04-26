@@ -401,23 +401,16 @@ and implement it in the function \codeword{geometric2analyticJacobian}.\\
 To start simple, consider your task space variables to be the Cartesian space position (i.e., $x,y,z$) and the roll angle $\psi$ of the end-effector. 
 Why can't the full orientation be defined in the task? (hint: check which row in the Jacobians goes to zero).
 %You will need to adequately choose the rows of interest of the analytical Jacobian $\mathbf{J}_r$. 
-Since we have 4 task variables and 4 DoFs then   $\mathbf{J}_a$ is a square matrix and we expect $\mathbf{J}_a^T\mathbf{J}_a$ to be always invertible (out of singularities).  After implementing your function, try to find the corresponding joint angles for $p = \mat{-0.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to the roll angle $\psi$ of the end-effector frame.
-First, implement the algorithm without line search (i.e., with constant step size $\alpha$) and then compare it with the adjustable step size. Is there any difference in the number of iterations?  (you should notice that the line search might take a smaller number of iterations). What is the influence of the initial condition? 
+Since we have 4 task variables and 4 DoFs then   $\mathbf{J}_a$ is a square matrix and we expect $\mathbf{J}_a^T\mathbf{J}_a$ to be always invertible (out of singularities).  After implementing your function, try to find the corresponding joint angles for $p = \mat{-0.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to the roll angle $\psi$ of the end-effector frame. Set your hyper-parameters for the algorithm as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$, $\gamma = 0.5$ and $\beta = 0.5$. 
+First, implement the algorithm without line search (i.e., with constant step size $\alpha$) and then compare it with the adjustable step size. Is there any difference in the number of iterations?  (you should notice that the line search might take a smaller number of iterations, 10 instead of 24). What is the influence of the initial condition? 
 Check that the algorithm converges to different joint configurations depending on how you initialize it. Try to set it in order to converge to the elbow up or elbow down configuration.  Are the output values for the trajectory "safe"? 
 
-In case of a bad initialization, you might notice that the values of the joint variables $q$ are very large. Why is this the case? You will have to implement an "unwrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
+In case of a bad initialization, you might notice that the values of the joint variables $q$ are very large. Is this the case? You will have to implement a "wrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
  
-Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles from the inverse kinematics.  
-Then you  can compute the norm of the error between the position that was asked and the final position reached.
+Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles obtained from the inverse kinematics and verify the error is close to zero.  
+%Then you  can compute the norm of the error between the position that was asked and the final position reached.
  
- 
-Set your parameters for the iteration as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$, $\gamma = 0.5$ and $\beta = 0.5$. 
-
-Now, try to ask to reach a position of the end-effector outside of the workspace, for example, $p = \mat{	2.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$. Start without the line search, is the error going to zero? verify that the algorithm never converges (the maximum number of iterations is reached). If you enable the line search the robot tries to do "the best that he can" to reach the target. Increasing the regularization term $\lambda$ you can see that the gradient goes to zero before reaching the maximum value of iterations (and the error will be minimum).
-
-
-
-Now,  compare the output of the numerical inverse kinematics function  using the line search algorithm but limiting the maximum number of iteration to 3, 4 and 5, how much is the difference between the final position and the target? 
+Now,  compare different outputs of the numerical inverse kinematics function  using the line search algorithm but limiting the maximum number of iteration to 3, 4 and 5, how much is the difference between the final position and the target? 
 
 % Why is one closer than the other? (in this case the line search is closer to the final point). Try now increasing the maximum number of iterations to 15000 to see that the larger the number of iterations, the closer you get to $p$. 
 
@@ -444,7 +437,15 @@ Figure~\ref{fig:ik} shows the position of the robot after 3, 4 and 5 iterations.
 	\end{subfigure}
 	\caption{Positions of the robot manipulator after 3,4, and 5 iterations of the numerical inverse kinematics}
 	\label{fig:ik}
-\end{figure}
+\end{figure} 
+ 
+You can notice that the algorithm is converging very fast (the rate of convergence of Gauss-Newton method approaches the quadratic) and the robot is very close to  the target already after 4 iterations. 
+ 
+Now, try to ask to reach a position of the end-effector \textit{outside} of the workspace, for example, $p = \mat{	-1.0 & -0.2 & 0.5 & \frac{\pi}{3}}^T$. Start without the line search, is the error going to zero? verify that the algorithm never converges (the maximum number of iterations is reached). If you enable the line search the robot tries to do "the best that he can" to reach the target, reducing the error, but still the maximum number of iteration is reached. Increasing the regularization term $\lambda$ (e.g. to 0.01) you can see that the gradient goes under the tolerance $\epsilon$ before reaching the maximum value of iterations (and the error will be minimum).
+
+
+
+
 
 A limitation of this approach is that joint limits can be considered only at the end. An improvement would be to set up a \textit{constrained} optimization problem where we enforce the end-stop limits during the optimization.\\
 
@@ -462,7 +463,7 @@ A limitation of this approach is that joint limits can be considered only at the
 we can then define a set of \textit{initial} and \textit{final} conditions for the joint variables $q_i$, $\dot{q}_i(t)$ and $\ddot{q}_i(t)$  to define the behavior of the trajectory. 
 Using this \textit{boundary conditions} we can obtain the values of the coefficients $a_i$ by solving a $6\times 6$ linear system of equations (we have 6 equations and six unknowns). 
 For the initial conditions we use the $\mathbf{q}_0$ and assume that the arm starts from a no-motion condition (i.e., $\dot{\mathbf{q}}_0 = \mathbf{0}$ and $\ddot{\mathbf{q}}_0 = \mathbf{0}$). 
-For the final conditions we can use the joint values obtained by the inverse kinematics $\mathbf{q}_f$ and again assume that the robot will come to a full stop at the end of the motion (i.e., $\dot{\mathbf{q}}_f = \mathbf{0}$ and $\ddot{\mathbf{q}}_f = \mathbf{0}$). We initialize time $t_0 = 0$ and the final time we are free to choose (the shorter the time, the faster the robot will move). With these considerations, replacing $t = 0$ and $t = t_f$ the equations for initial and final conditions become (per joint):
+For the final conditions we can use the joint values obtained by the inverse kinematics $\mathbf{q}_f$ and again assume that the robot will come to a full stop at the end of the motion (i.e., $\dot{\mathbf{q}}_f = \mathbf{0}$ and $\ddot{\mathbf{q}}_f = \mathbf{0}$). We initialize time $t_0 = 0$ and the final time $t_f$ we are free to choose (the shorter the time, the faster the robot will move). Let's select $t_f = 3s$. With these considerations, replacing $t = 0$ and $t = t_f$ the equations for initial and final conditions become (per joint):
 %
 \begin{align*}
 	q_0 &= a_0  \\
@@ -500,8 +501,8 @@ which can be rewritten in matrix form as:
 		a_5
 	\end{bmatrix}
 \end{equation*}
-Then we can pre-multiply both sides of the equation by the inverse of the square matrix on the right-hand side of the equation and obtain the values for the coefficients of the polynomials.
-With the coefficients of the polynomials we can generate the whole trajectory $q(t)$ starting for a time $t=0$ where $q = q_0$ up to $t=t_f$ where  $q = q_f$.
+Then we can pre-multiply both sides of the equation by the inverse of the square (6X6) matrix and on the right-hand side of the equation obtain the values for the coefficients of the polynomials.
+With these coefficients we can generate the whole trajectory $q(t)$ starting for a time $t=0$ (where $q = q_0$) up to $t=t_f$ (where  $q = q_f$).
 
 Implement this trajectory by modifying the function \codeword{fifthOrderPolynomialTrajectory}. Plot the trajectories by un-commenting the final lines of the file \codeword{L1_1_kinematics.py} and see if you notice any problem. Hint: you can set a \codeword{SLOW_FACTOR} of 50 to better see the motion. You will see that the robot is doing very strange loops. If you remove the \textit{wrapping} feature you will get something even worse. This is because of the initialization that has a strong influence. Try to initialize the ik with $q_0$ instead  than with $q_i$ and you will see that the trajectory improves significantly. However, if you set a target that is more far away (e.g.  $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$) you will still see loops. 
 Using this approach to generate the trajectory is simple, but has no guarantee on what is happening (e.g. where the end-effector will be) in between the initial and the final configurations.
@@ -513,7 +514,7 @@ Namely, you only now for sure where the end-effector is at the beginning and the
 
 \textbf{2.6 Dealing with the redundancy: the postural task.} 
 
-Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set \textit{only} the \textit{position} of the end-effector to be at $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$. Hence, the robot (6 DoFs) becomes redundant for the task (3 variables) and we expect to have an  infinite number of solutions for the inverse kinematics problem. In particular the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution the  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
+Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set \textit{only} the \textit{position} of the end-effector to be at $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$. Hence, the robot (6 DoFs) becomes redundant for the task (3 variables) and we expect to have an  infinite number of solutions for the inverse kinematics problem. In particular the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution that is as  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
 This will  select, among the infinite solutions, the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
 To implement this, we setup the following optimization problem:
 
@@ -521,7 +522,7 @@ To implement this, we setup the following optimization problem:
 \tilde{q}^\star = \argmin_q \frac{1}{2} \left|\left| \mat{p(q) \\ w q } - \mat{p^d \\ w q^p }   \right|\right|^2 = \frac{1}{2} \left|\left| \mat{ e_x \\ e_q }   \right|\right|^2
 \end{align*}
 
-where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is still non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a 3+n vector) and the way the newton step $\Delta q$ is computed:
+where $w$ is a scalar weight and $q^p$ the postural configuration. The solution of this optimization problem (which is still non convex do to the non linear dependency of $p_e$ from $q$) can be obtained through the Newton method, in a similar fashion to what we did in lab L1 - 2.4. The difference is the definition of the error $\bar{e} = \mat{e_x^T & e_q^T}^T$ (than now will be a $3+n$ vector) and the way the newton step $\Delta q$ is computed:
 
 
 \begin{align*}
@@ -531,7 +532,7 @@ where $w$ is a scalar weight and $q^p$ the postural configuration. The solution 
 
 %old: note that we have a minus sign just because we defined differently $e_p$ (in Exe2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$).
 
-So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian, 2) we added ad term $w^2 e_q $ to the gradient, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.
+So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian $\bar{J}^T\bar{J}$ and make it full rank and therefore invertible, 2) we added ad term $w^2 e_q $ in the computation of the Newton step, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.
 Set different postural configurations and observe that the optimal configuration is the one that places the end-effector in the desired position and is close to the postural  configuration selected.
 \\
 

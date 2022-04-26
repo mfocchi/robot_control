@@ -94,7 +94,8 @@ q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi])
 #q_i  = np.array([ -5.0, 5.0, -0.8, -math.pi])
 
 # solution of the numerical ik
-q_f, log_err, log_grad = ik(p, q_i, line_search = False, wrap = True)
+q_f, log_err, log_grad = ik(p, q_i, line_search = False, wrap = False)
+# EXE 2.5
 #q_f, log_err, log_grad = ik(p, conf.q0, line_search = False, wrap = True)
 # compare solution with values obtained through direct kinematics
 T_01, T_02, T_03, T_04, T_0e = directKinematics(q_f)
@@ -103,7 +104,7 @@ task_diff = p - np.hstack((T_0e[:3,3],rpy[0]))
 
 print("Desired End effector \n", p)
 print("Point obtained with IK solution \n", np.hstack((T_0e[:3, 3], rpy[0])))
-print("Error at the end-effector: \n", np.linalg.norm(task_diff))
+print("Norm of error at the end-effector position: \n", np.linalg.norm(task_diff))
 print("Final joint positions\n", q_f)
 
 # Plots
@@ -117,48 +118,49 @@ plt.xlabel("number of iterations")
 plt.semilogy(log_grad, linestyle='-', color='blue')
 plt.grid()
 
-tm.sleep(2.)
-ros_pub.add_marker(p[:3])
-ros_pub.publish(robot, q_i)
-tm.sleep(2.)
-ros_pub.add_marker(p[:3])
-ros_pub.publish(robot, q_f)
-tm.sleep(2.)
-ros_pub.add_marker(p[:3])
+# tm.sleep(2.)
+# ros_pub.add_marker(p[:3])
+# ros_pub.publish(robot, q_i)
+# tm.sleep(2.)
+# ros_pub.add_marker(p[:3])
+# ros_pub.publish(robot, q_f)
+# tm.sleep(2.)
+# ros_pub.add_marker(p[:3])
 
 
 #######################################
 ##exercise 2.5: polynomial trajectory
 #########################################
-# ros_pub.publish(robot, conf.q0)
-# tm.sleep(2.)
-# while np.count_nonzero(q - q_f) :
-#     # Polynomial trajectory
-#     for i in range(4):
-#         a = coeffTraj(3,conf.q0[i],q_f[i])
-#         q[i] = a[0] + a[1]*time + a[2]*time**2 + a[3]*time**3 + a[4]*time**4 + a[5]*time**5
-#         qd[i] = a[1] + 2 * a[2] * time + 3 * a[3] * time ** 2 + 4 * a[4] * time ** 3 + 5 * a[5] * time ** 4
-#         qdd[i] = 2 * a[2] + 6 * a[3] * time + 12 * a[4] * time ** 2 + 20 * a[5] * time ** 3
-#
-#     # update time
-#     time = time + conf.dt
-#
-#     # Log Data into a vector
-#     time_log = np.append(time_log, time)
-#     q_log = np.vstack((q_log, q ))
-#     qd_log= np.vstack((qd_log, qd))
-#     qdd_log= np.vstack((qdd_log, qdd))
-#
-#     #publish joint variables
-#     ros_pub.publish(robot, q, qd)
-#     ros_pub.add_marker(p)
-#     ros.sleep(conf.dt*conf.SLOW_FACTOR)
-#
-#     # stops the while loop if  you prematurely hit CTRL+C
-#     if ros_pub.isShuttingDown():
-#         print ("Shutting Down")
-#         break
-# plotJoint('position', 0 , time_log.T, q_log.T)
+tm.sleep(1.)
+ros_pub.publish(robot, conf.q0)
+tm.sleep(2.)
+while np.count_nonzero(q - q_f) :
+    # Polynomial trajectory
+    for i in range(4):
+        a = coeffTraj(3.0,conf.q0[i],q_f[i])
+        q[i] = a[0] + a[1]*time + a[2]*time**2 + a[3]*time**3 + a[4]*time**4 + a[5]*time**5
+        qd[i] = a[1] + 2 * a[2] * time + 3 * a[3] * time ** 2 + 4 * a[4] * time ** 3 + 5 * a[5] * time ** 4
+        qdd[i] = 2 * a[2] + 6 * a[3] * time + 12 * a[4] * time ** 2 + 20 * a[5] * time ** 3
+
+    # update time
+    time = time + conf.dt
+
+    # Log Data into a vector
+    time_log = np.append(time_log, time)
+    q_log = np.vstack((q_log, q ))
+    qd_log= np.vstack((qd_log, qd))
+    qdd_log= np.vstack((qdd_log, qdd))
+
+    #publish joint variables
+    ros_pub.publish(robot, q, qd)
+    ros_pub.add_marker(p)
+    ros.sleep(conf.dt*conf.SLOW_FACTOR)
+
+    # stops the while loop if  you prematurely hit CTRL+C
+    if ros_pub.isShuttingDown():
+        print ("Shutting Down")
+        break
+plotJoint('position', 0 , time_log.T, q_log.T)
 
 
 ros_pub.deregister_node()  
