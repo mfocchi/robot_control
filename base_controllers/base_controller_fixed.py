@@ -146,10 +146,7 @@ class BaseControllerFixed(threading.Thread):
     def deregister_node(self):
         print( "deregistering nodes"     )
         self.ros_pub.deregister_node()
-        if not self.real_robot:
-            os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
-            os.system(" rosnode kill /gzserver /gzclient")
-                                                                                                                                     
+
 
     def startupProcedure(self):
         self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
@@ -169,6 +166,8 @@ class BaseControllerFixed(threading.Thread):
 
         self.contactForceW = np.zeros(3)
         self.contactMomentW = np.zeros(3)
+
+        self.time  = 0.
 
         #log vars
         self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan

@@ -325,7 +325,12 @@ class LabAdmittanceController(BaseControllerFixed):
         if not confirmed:
             ros.loginfo("Exiting as requested by user.")
             sys.exit(0)
- 
+
+    def deregister_node(self):
+        super().deregister_node()
+        if not self.real_robot:
+            os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
+            os.system(" rosnode kill /gzserver /gzclient")
     
 def talker(p):
             
