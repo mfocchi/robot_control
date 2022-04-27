@@ -13,7 +13,7 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress 
 import matplotlib.pyplot as plt
 from numpy import nan
 from utils.common_functions import plotJoint, plotCoMLinear
-
+import os
 
 from base_controller_fixed import BaseControllerFixed
 import  params as conf
@@ -24,7 +24,7 @@ class JumpLegController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
 
-        self.freezeBase = True
+        self.freezeBaseFlag = False
         print("Initialized jump leg controller---------------------------------------------------------------")
 
     def applyForce(self):
@@ -110,6 +110,97 @@ class JumpLegController(BaseControllerFixed):
                 #self.comdd_log[:, self.log_counter] = self.comdd
             super().logData()
 
+    def freezeBase(self, flag):
+
+        if (self.freezeBaseFlag) and (not flag):
+            self.freezeBaseFlag = flag
+            print("releasing base")
+            p.tau_ffwd[2] = 0.
+            self.pid.setPDjoint(0, 0., 0., 0.)
+            self.pid.setPDjoint(1, 0., 0., 0.)
+            self.pid.setPDjoint(2, 0., 0., 0.)
+
+            # debug
+            #self.q_des[2] = 0.3
+
+        if (not self.freezeBaseFlag) and (flag):
+            self.freezeBaseFlag = flag
+            print("freezing base")
+            self.q_des = np.copy(p.q_des_q0)
+            self.tau_ffwd = np.zeros(self.robot.na)
+            self.tau_ffwd[2] = p.g[2]
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
+                                 np.zeros(self.robot.na))
+
+
+    def invKinFoot(self, ee_pos_des_BF, frame_name, q0_leg=np.zeros(3), verbose = False):
+        # Error initialization
+        niter = 0
+        # Recursion parameters
+        epsilon = 1e-06  # Tolerance
+        # alpha = 0.1
+        alpha = 1  # Step size
+        lambda_ = 0.0000001  # Damping coefficient for pseudo-inverse
+        max_iter = 200  # Maximum number of iterations
+        out_of_workspace = False
+
+        # Inverse kinematics with line search
+        while True:
+            # compute foot position
+            q0 = np.hstack((np.zeros(3), q0_leg))
+            self.robot.computeAllTerms(q0, np.zeros(6))
+            ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
+            # get the square matrix jacobian that is smaller (3x6)
+            J_ee = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True,
+                                            pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+
+            # computed error wrt the des cartesian position
+            e_bar = ee_pos_des_BF - ee_pos0
+            Jpinv = (np.linalg.inv(J_ee.T.dot(J_ee) + lambda_ * np.identity(J_ee.shape[1]))).dot(J_ee.T)
+            grad = J_ee.T.dot(e_bar)
+            dq = Jpinv.dot(e_bar)
+            if np.linalg.norm(grad) < epsilon:
+                IKsuccess = True
+                if verbose:
+                    print("IK Convergence achieved!, norm(grad) :", np.linalg.norm(grad))
+                    print("Inverse kinematics solved in {} iterations".format(niter))
+                    if np.linalg.norm(e_bar) > 0.1:
+                        print("THE END EFFECTOR POSITION IS OUT OF THE WORKSPACE, norm(error) :", np.linalg.norm(e_bar))
+                        out_of_workspace = True
+                break
+
+            if niter >= max_iter:
+                if verbose:
+                    print(
+                        "\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ",
+                        np.linalg.norm(e_bar))
+                IKsuccess = False
+                break
+
+            q0_leg += alpha*dq
+            niter += 1
+        return q0_leg, IKsuccess, out_of_workspace
+
+
+    def thirdOrderPolynomialTrajectory(self, tf, q0, qf):
+        # Matrix used to solve the linear system of equations for the polynomial trajectory
+        polyMatrix = np.array([[1, 0, 0, 0],
+                               [0, 1, 0, 0],
+                               [1, tf, np.power(tf, 2), np.power(tf, 3)],
+                               [0, 1, 2 * tf, 3 * np.power(tf, 2)]])
+
+        polyVector = np.array([q0, 0,  qf, 0])
+        matrix_inv = np.linalg.inv(polyMatrix)
+        polyCoeff = matrix_inv.dot(polyVector)
+
+        return polyCoeff
+
+    def deregister_node(self):
+        super().deregister_node()
+        os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
+        os.system(" rosnode kill /gzserver /gzclient")
+        os.system(" pkill rosmaster")
+
 def talker(p):
 
     p.start()
@@ -119,28 +210,51 @@ def talker(p):
     p.startupProcedure()
     ros.sleep(1.0)
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
+    p.q_des = np.copy(p.q_des_q0)
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
+    # compute coeff first time
+    # initial com posiiton
+    T_f = 0.3
+    com_0 = np.array([0., 0., 0.25])
+    com_f = np.array([0.1, 0., 0.25])
+    comd_f = np.array([0.1, 0., 0.5])
+
+    q_0_leg, ik_success, out_of_workspace = p.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
+    q_f_leg, ik_success, out_of_workspace = p.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
+    a = np.empty((3, 4))
+    for i in range(3):
+         a[i,:] = p.thirdOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i])
+
+
+    # here the RL loop...
+
+    p.time = 0
+    startTrust = 2.0
+    p.updateKinematicsDynamics()
+    p.freezeBase(True)
+    counter = 0
     #control loop
-    while True:
+    while p.time < (startTrust + 2.):
         #update the kinematics
         p.updateKinematicsDynamics()
-        p.q_des = np.copy(p.q_des_q0)
-        if ( p.time > 2.0):
-            pd  =  np.multiply( conf.robot_params[p.robot_name]['kp'][3:], np.subtract(p.q_des[3:],   p.q[3:]) ) \
-                          -np.multiply(conf.robot_params[p.robot_name]['kd'][3:], p.qd[3:])
-            p.tau_ffwd[3:] = pd -p.J.T.dot( p.g[:3])  # gravity compensation
-            # remove virtual joint gravity compensation previously set
-            p.tau_ffwd[2] = 0.
+        if (p.time > startTrust) and (p.time < startTrust + T_f):
+            t = p.time - startTrust
+            for i in range(3):
+                p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
+                p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
+            #     #qdd = 2 * a[2] + 6 * a[3] * time + 12 * a[4] * time ** 2 + 20 * a[5] * time ** 3
+
+        if (p.time > startTrust):
+            # pd  =  np.multiply( conf.robot_params[p.robot_name]['kp'][3:], np.subtract(p.q_des[3:],   p.q[3:]) ) \
+            #               +np.multiply(conf.robot_params[p.robot_name]['kd'][3:], np.subtract(p.qd_des[3:],   p.qd[3:]))
+            p.tau_ffwd[3:] = -p.J.T.dot( p.g[:3])  # gravity compensation
 
             # TODO fix this
             # p.qdd_ref = p.qdd_des[3:] + pd
             # p.tau_ffwd[3:] = np.linalg.pinv(p.N) @ p.N @ (p.M[3:, 3:] @ p.qdd_ref + p.h[3:])
-        else:
-            # trick to have zero error  on Z direction at startup
-            p.tau_ffwd[2] = p.g[2]
 
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -148,15 +262,8 @@ def talker(p):
         # log variables
         p.logData()
 
-        if (p.freezeBase and p.time > 2.0):
-            print("releasing base")
-            # p.pid.setPDjoint(0, 0.0,0.0,0.0)
-            # p.pid.setPDjoint(1, 0.0,0.0,0.0)
-            # p.pid.setPDjoint(2, 0.0,0.0,0.0)
-            # not using the ros impedance controller PD
-            p.pid.setPDs(0.,0.,0.)
-            p.freezeBase = False
-
+        if ( p.time > startTrust):
+            p.freezeBase(False)
 
         # disturbance force
         # if (p.time > 3.0 and p.EXTERNAL_FORCE):
@@ -181,15 +288,21 @@ def talker(p):
     ros.signal_shutdown("killed")
     p.deregister_node()
 
+    plotCoMLinear('position', 1, p.time_log, None, p.com_log, None, p.comd_log)
+    plotCoMLinear('position', 2, p.time_log, None, p.contactForceW_log)
+    plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log,  p.qd_log, p.qd_des_log,   joint_names=conf.robot_params[p.robot_name]['joint_names'])
+    plt.show(block=True)
+
+
+
 if __name__ == '__main__':
     p = JumpLegController(robotName)
 
     try:
         talker(p)
     except ros.ROSInterruptException:
-        #plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, None, None, p.joint_names)
-        plotCoMLinear('position',1, p.time_log, None, p.com_log, None, p.comd_log)
-        plotCoMLinear('position', 2,p.time_log, None, p.contactForceW_log)
-        plt.show(block=True)
-    
+        print("PLOTTING")
+        #
+
+
         
