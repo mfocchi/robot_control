@@ -62,66 +62,72 @@ error = np.array([1, 1, 1, 1])
 while any(i >= 0.01 for i in np.abs(error)):
        
     # initialize Pinocchio variables
-    robot.computeAllTerms(q, qd) 
-
     robot.computeAllTerms(q, qd)
     # vector of gravity acceleration
     g0 = np.array([0.0, 0.0, -9.81])
-    #######################
-    # # Exercise 3.1
-    #######################
-
-    # # compute RNEA with Pinocchio
-    # taup = pin.rnea(robot.model, robot.data, q, qd, qdd) 
+    ##############################
+    # Exercise 3.1: implement RNEA
+    ##############################
 
     # # compute RNEA with your function
-    tau = RNEA(g0,q,qd,qdd)
+    #tau = RNEA(g0,q,qd,qdd)
+    # compute RNEA with Pinocchio
+    #taup = pin.rnea(robot.model, robot.data, q, qd, qdd)
 
-    # print taup - tau_
+    # print(taup - tau)
 
-    # gravity terms               
+    ######################################
+    # Exercise 3.2: compute dynamic terms
+    ######################################
+    # gravity terms
+    g = getg(q, robot)
     # Pinocchio
-    #g = robot.gravity(q)      
-    g = getg(q,robot)
-       
+    gp = robot.gravity(q)
 
-    # Exercise 3.2
-    # compute joint space inertia matrix with Pinocchio                
-    #M = robot.mass(q, False)
+    # compute joint space inertia matrix with Pinocchio
     M = getM(q,robot)
-    
+
+    # joint space inertia with Pinocchio
+    # using native function
+    Mp = robot.mass(q, False)
+
     # compute joint space intertia matrix with built-in pinocchio rnea
-    M_new = np.zeros((4,4))
-    for i in range(4):
-        ei = np.array([0.0, 0.0, 0.0, 0.0])
-        ei[i] = 1
-        taup = pin.rnea(robot.model, robot.data, q,np.array([0,0,0,0]) ,ei)
-        M_new[:4,i] = taup - g 
-    
-    # Pinocchio bias terms                
-    #h = robot.nle(q, qd, False)    
-    C = getC(q,qd,robot)    
+    # Mp  = np.zeros((4,4))
+    # for i in range(4):
+    #     ei = np.array([0.0, 0.0, 0.0, 0.0])
+    #     ei[i] = 1
+    #     taup = pin.rnea(robot.model, robot.data, q, np.array([0,0,0,0]) ,ei)
+    #     Mp[:4,i] = taup - g
+
+    # Pinocchio bias terms
+    hp = robot.nle(q, qd, False)
+    c = getC(q,qd,robot)
+
+    #############################################
+    # Exercise 3.5: add a damping term
+    #############################################
     # viscous friction to stop the motion
-    damping =  - 20*qd
+    damping = zero
+    #damping =  - 20*qd
 
-    x = robot.framePlacement(q, frame_ee).translation 
-    # compute jacobian of the end effector (in the WF)        
-    J6 = robot.frameJacobian(q, frame_ee, False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
-    # take first 3 rows of J6 cause we have a point contact            
-    J = J6[:3,:]    
+    #############################################
+    # Exercise 3.3: compute joint accelerations
+    #############################################
 
-    #SIMULATION of the forward dynamics 
-    M_inv = np.linalg.inv(M)
+    # compute accelerations (torques are zero!)
     # Pinocchio
-    #qdd = M_inv.dot(damping-h)
-    qdd = M_inv.dot(damping -C -g) 
-       
-    # Forward Euler Integration    
-    qd = qd + qdd*conf.dt    
-    q = q + conf.dt*qd  + 0.5*conf.dt*conf.dt*qdd 
+    #qdd = np.linalg.inv(Mp).dot(damping-hp)
+    qdd = np.linalg.inv(M).dot(damping -c -g)
+
+    #############################################
+    # Exercise 3.4: Simulate the forward dynamics
+    #############################################
+    # Forward Euler Integration
+    qd = qd + qdd * conf.dt
+    q = q + conf.dt * qd  + 0.5 * pow(conf.dt,2) * qdd
 
     # Log Data into a vector
-    time_log = np.append(time_log, time)	
+    time_log = np.append(time_log, time)
     q_log = np.vstack((q_log, q ))
     q_des_log= np.vstack((q_des_log, q_des))
     qd_log= np.vstack((qd_log, qd))
@@ -129,18 +135,15 @@ while any(i >= 0.01 for i in np.abs(error)):
     qdd_log= np.vstack((qdd_log, qd))
     qdd_des_log= np.vstack((qdd_des_log, qdd_des))
 
-    # M_log = np.dstack((M_log, M))     
-    # C_log = np.dstack((C_log, C)) 
-    # g_log = np.dtack((g_log, g)) 
- 
-    # update time
-    time = time + conf.dt         
+    # M_log = np.dstack((M_log, M))
+    # C_log = np.dstack((C_log, C))
+    # g_log = np.dtack((g_log, g))
 
-   
+    # update time
+    time = time + conf.dt
                 
     #publish joint variables
-    ros_pub.publish(robot, q, qd,damping)    
-                   
+    ros_pub.publish(robot, q, qd)
     tm.sleep(conf.dt*conf.SLOW_FACTOR)
     
     # stops the while loop if  you prematurely hit CTRL+C                    
@@ -150,15 +153,12 @@ while any(i >= 0.01 for i in np.abs(error)):
             
 #raw_input("Robot came to a stop. Press Enter to continue")
 ros_pub.deregister_node()
-        
 
-                
-# # plot joint variables                                                                              
+# plot joint variables
 # plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-# # plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-# # plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-# #plotJoint('torque', 3, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-
+# plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+# plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+# plotJoint('torque', 3, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 # raw_input("Press Enter to continue")
 
 

@@ -34,12 +34,12 @@ def setRobotParameters():
     link_masses = np.array([m0, m1, m2, m3, m4])
     
     # com of the links expressed in the respective link frame
-    # com_link =  model.inertias[idx].lever		
+    # com_link =  model.inertias[idx].lever (Pinocchio)
     com0 = np.array([0., 0., 0.]) # base link
-    com1 = np.array([0., 0., 0.]) #shoulder link
+    com1 = np.array([0., 0., 0.]) # shoulder link
     com2 = np.array([0.  , 0.  , 0.28]) #upper_arm_link
     com3 = np.array([0.  , 0.  , 0.25]) #forearm_link
-    com4 = np.array([0., 0., 0.]) #wrist_1_link
+    com4 = np.array([0., 0., 0.]) # wrist_1_link
     #w_com_link = data.oMi[idx].rotation.dot(com_link) + data.oMi[idx].translation
 
     # inertia tensors of the links  w.r.t. to own CoM of each link expressed in the respective link frames
@@ -332,19 +332,19 @@ def fifthOrderPolynomialTrajectory(tf,q0,qf):
 
     return polyCoeff
     
-def RNEA(g0,q,qd,qdd, Fee = np.zeros((1,3)), Mee = np.zeros((1,3))):
+def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
 
     # setting values of inertia tensors w.r.t. to their CoMs from urdf and link masses
     _, tensors, m, coms = setRobotParameters()
 
-    # get inertia tensors about the com expressed in the respective link frame    
+    # get inertia tensors about the CoM expressed in the respective link frame
     c_I_0 = tensors[0]    
     c_I_1 = tensors[1]
     c_I_2 = tensors[2]
     c_I_3 = tensors[3]
     c_I_4 = tensors[4]
     
-    # get positions of the link com expressed in the respective link frame    
+    # get positions of the link CoM expressed in the respective link frame
     c_com_0 = coms[0]    
     c_com_1 = coms[1]    
     c_com_2 = coms[2]    
@@ -352,6 +352,8 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros((1,3)), Mee = np.zeros((1,3))):
     c_com_4 = coms[4]
 
     # initializing variables
+
+    # number of joints
     n = len(q)
     
     #pre-pend a fake joint for base link
@@ -360,54 +362,54 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros((1,3)), Mee = np.zeros((1,3))):
     qdd_link = np.insert(qdd, 0, 0.0, axis=0)
         
     
-    zeroV = np.zeros((1,3))
-    omega = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0], zeroV[0]])
-    v = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0], zeroV[0]])
-    omega_dot = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0],zeroV[0]])
-    a = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0], zeroV[0]])
-    vc = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0], zeroV[0]])
-    ac = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0],zeroV[0]])
+    zeroV = np.zeros(3)
+    omega = np.array([zeroV, zeroV, zeroV, zeroV, zeroV])
+    v = np.array([zeroV, zeroV, zeroV, zeroV, zeroV])
+    omega_dot = np.array([zeroV, zeroV, zeroV, zeroV,zeroV])
+    a = np.array([zeroV, zeroV, zeroV, zeroV, zeroV])
+    vc = np.array([zeroV, zeroV, zeroV, zeroV, zeroV])
+    ac = np.array([zeroV, zeroV, zeroV, zeroV,zeroV])
 
-    F = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0], zeroV[0], Fee[0]])
-    M = np.array([zeroV[0], zeroV[0], zeroV[0], zeroV[0], zeroV[0], Mee[0]])
+    F = np.array([zeroV, zeroV, zeroV, zeroV, zeroV, Fee])
+    M = np.array([zeroV, zeroV, zeroV, zeroV, zeroV, Mee])
 
     tau = np.array([0.0, 0.0, 0.0, 0.0])
 
     # obtaining joint axes vectors required in the computation of the velocities and accelerations (expressed in the world frame)
     _,z1,z2,z3,z4 = computeEndEffectorJacobian(q)
-    
-    
-    z = np.array([np.zeros((1,3)), z1,z2,z3,z4])
-   
+
+    z = np.array([np.zeros(3), z1,z2,z3,z4])
+
     # global homogeneous transformation matrices
     T_01, T_02, T_03, T_04, T_0e = directKinematics(q)
 
-    # link positions w.r.t. the world
+    # link positions w.r.t. the world frame
     p_00 = np.array([0.0,0.0,0.0])
     p_01 = T_01[:3,3]
     p_02 = T_02[:3,3]
     p_03 = T_03[:3,3]
     p_04 = T_04[:3,3]
     p_0e = T_0e[:3,3]
-     
+    # array used in the recursion
+    p = np.array([p_00, p_01, p_02, p_03, p_04, p_0e])
+
     # rotation matrices w.r.t. to the world of each link
     R_00 = np.eye(3)    
     R_01 = T_01[:3,:3]
     R_02 = T_02[:3,:3]
     R_03 = T_03[:3,:3]
     R_04 = T_04[:3,:3]
+    R_0e = T_0e[:3, :3]
 
     # positions of the CoMs w.r.t. to the world frame
     pc_0 = p_00 + c_com_0
     pc_1 = p_01 + np.dot(R_01, c_com_1)
     pc_2 = p_02 + np.dot(R_02, c_com_2)
     pc_3 = p_03 + np.dot(R_03, c_com_3)
-    pc_4 = p_04 + np.dot(R_04, c_com_4) 
-    pc_e = p_0e
+    pc_4 = p_04 + np.dot(R_04, c_com_4)
 
     # array used in the recursion
-    p = np.array([p_00, p_01, p_02, p_03, p_04, p_0e])
-    pc = np.array([pc_0, pc_1, pc_2, pc_3, pc_4, pc_e])
+    pc = np.array([pc_0, pc_1, pc_2, pc_3, pc_4])
 
     # expressing tensors of inertia of the links (about the com) in the world frame (time consuming)
     I_0 = np.dot(np.dot(R_00,c_I_0),R_00.T)    
@@ -420,14 +422,14 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros((1,3)), Mee = np.zeros((1,3))):
     # forward pass: compute accelerations from 0 to ee
     for i in range(n+1):
         if i == 0: # we start from base link 0
-            p_ = p[0]            
+            p_ = p[0]
             #base frame is still (not true for a legged robot!)
-            omega[0] = 0
-            v[0] = 0 
-            omega_dot[0] = 0
-            a[0] = -g0 # acceleration of the base is just gravity so we remove it from Netwon equations
+            omega[0] = zeroV
+            v[0] = zeroV
+            omega_dot[0] = zeroV
+            a[0] = -g0 # if we consider gravity as  acceleration (need to move to right hand side of the Newton equation) we can remove it from all the Netwon equations
         else:
-            p_ = p[i] - p[i-1] #p_i-1,i
+            p_ = p[i] - p[i-1] # p_i-1,i
             omega[i] = omega[i-1] + qd_link[i]*z[i]
             omega_dot[i] = omega_dot[i-1] + qdd_link[i]*z[i] + qd_link[i]*np.cross(omega[i-1],z[i])
 
@@ -441,10 +443,10 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros((1,3)), Mee = np.zeros((1,3))):
         ac[i] = a[i] + np.cross(omega_dot[i],pc_) + np.cross(omega[i],np.cross(omega[i],pc_))
 
     
-    # backward pass: compute forces and moments from ee to 1 TODO CHECK FROM HERE
+    # backward pass: compute forces and moments from wrist link (4) to base link (0)
     for i in range(n,-1,-1):   
-
-        pc_ = p[i]- pc[i]  
+        # lever arms wrt to other link frames
+        pc_ = p[i] - pc[i]
         pc_1 = p[i+1] - pc[i] 
         
         F[i] = F[i+1] + m[i]*(ac[i])
@@ -456,8 +458,8 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros((1,3)), Mee = np.zeros((1,3))):
                np.cross(omega[i],np.dot(I[i],omega[i]))  
 
     # compute torque for all joints (revolute) by projection
-    for i in range(n):
-        tau[i] = np.dot(z[i+1],M[i+1]) 
+    for joint_idx in range(n):
+        tau[joint_idx] = np.dot(z[joint_idx+1],M[joint_idx+1])
 
     return tau
 
@@ -492,7 +494,7 @@ def getC(q,qd,robot):
     # Pinocchio
     # g = getg(q,robot)
     # C = pin.rnea(robot.model, robot.data,q,qd,qdd) - g    
-    C = RNEA(np.array([0.0, 0.0, 0.0]), q, qd, np.array([0.0, 0.0, 0.0, 0.0]))
+    C = RNEA(np.array([0.0, 0.0, 0.0]), q, qd, qdd)
     return C      
 
     
