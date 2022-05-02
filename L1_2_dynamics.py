@@ -64,6 +64,9 @@ while any(i >= 0.01 for i in np.abs(error)):
     # initialize Pinocchio variables
     robot.computeAllTerms(q, qd) 
 
+    robot.computeAllTerms(q, qd)
+    # vector of gravity acceleration
+    g0 = np.array([0.0, 0.0, -9.81])
     #######################
     # # Exercise 3.1
     #######################
@@ -72,7 +75,7 @@ while any(i >= 0.01 for i in np.abs(error)):
     # taup = pin.rnea(robot.model, robot.data, q, qd, qdd) 
 
     # # compute RNEA with your function
-    # tau_ = RNEA(9.81,q,qd,qdd)
+    tau = RNEA(g0,q,qd,qdd)
 
     # print taup - tau_
 
