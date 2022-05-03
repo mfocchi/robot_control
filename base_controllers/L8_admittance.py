@@ -20,14 +20,12 @@ import roslaunch
 import rosnode
 import rosgraph
 import rospkg
-import tf
 from rospy import Time
 
 #other utils
 from utils.math_tools import *
 from numpy import nan
 import pinocchio as pin
-from utils.common_functions import getRobotModel
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from six.moves import input # solves compatibility issue bw pyuthon 2.x and 3 for raw input that does exists in python 3
 from termcolor import colored
@@ -46,10 +44,8 @@ from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryG
 from trajectory_msgs.msg import JointTrajectoryPoint
 import actionlib
 
-#from motionplanner import MoveItCartesianPath
 from obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
 from base_controllers.base_controller_fixed import BaseControllerFixed
-
 
 class AdmittanceControl():
     
