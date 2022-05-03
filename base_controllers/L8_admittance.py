@@ -12,6 +12,8 @@ import rospy as ros
 import sys
 # messages for topic subscribers
 from geometry_msgs.msg import WrenchStamped
+from geometry_msgs.msg import Wrench, Point
+from std_srvs.srv import Trigger
 
 # ros utils
 import roslaunch
@@ -122,6 +124,7 @@ class LabAdmittanceController(BaseControllerFixed):
         self.pub_reduced_des_jstate = ros.Publisher("/" + self.robot_name + "/joint_group_pos_controller/command",
                                                     Float64MultiArray, queue_size=10)
 
+        self.zero_sensor = ros.ServiceProxy("/" + self.robot_name + "/ur_hardware_interface/zero_ftsensor", Trigger)
         if self.real_robot:
             self.available_controllers = [
                 "joint_group_pos_controller",
@@ -203,13 +206,13 @@ class LabAdmittanceController(BaseControllerFixed):
             self.contactForceW = np.linalg.inv(self.J6.T).dot(self.h-self.tau)[:3]
                                  
     def startupProcedure(self):
-
         if (self.use_torque_control):
-
             #set joint pdi gains
             self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
             #only torque loop
             #self.pid.setPDs(0.0, 0.0, 0.0)
+        if (p.real_robot):
+            self.zero_sensor()
 
     def initVars(self):
         super().initVars()
