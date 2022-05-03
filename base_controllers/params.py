@@ -24,12 +24,12 @@ robot_params['ur5'] ={'dt': 0.001,
                        'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
                        'ee_frame': 'tool0',
                        'control_mode': 'point', # 'trajectory','point'
-                       'control_type': 'torque', # 'position', 'torque', 'admittance'
                        'real_robot': False,
+                       'control_type': 'position', # 'position', 'torque'
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
                        'spawn_z' : 1.8,
-                       'buffer_size': 1000} # note the frames are all aligned with base for joints = 0
+                       'buffer_size': 6000} # note the frames are all aligned with base for joints = 0
 
 robot_params['jumpleg'] ={'dt': 0.001,
                        'kp': np.array([300, 300, 300, 30, 30, 30 ]),

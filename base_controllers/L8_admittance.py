@@ -90,9 +90,25 @@ class LabAdmittanceController(BaseControllerFixed):
             self.use_torque_control = 1
         else:
             self.use_torque_control = 0
+
+        self.obstacle_avoidance = False
+        self.admittance_control = False
+
+        if (self.obstacle_avoidance):
+            self.world_name = 'tavolo_obstacles.world'
+            if (not self.use_torque_control):
+                print(colored("ERRORS: you can use obstacle avoidance only on torque control mode", 'red'))
+                sys.exit()
+        else:
+            self.world_name = None
+
+        if (self.admittance_control and self.use_torque_control):
+            print(colored("ERRORS: you can use admittance control only on position control mode", 'red'))
+            sys.exit()
+
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
-    def startReadlRobot(self):
+    def startRealRobot(self):
         os.system("killall rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
         if (not rosgraph.is_master_online()) or (
@@ -108,37 +124,33 @@ class LabAdmittanceController(BaseControllerFixed):
             launch.start()
             process = launch.launch(node)
 
-    def loadModelAndPublishersSon(self, xacro_path):
+    def loadModelAndPublishers(self, xacro_path):
         super().loadModelAndPublishers(xacro_path)
+
         self.sub_ftsensor = ros.Subscriber("/" + self.robot_name + "/wrench", WrenchStamped,
                                            callback=self._receive_ftsensor, queue_size=1, tcp_nodelay=True)
-
         self.switch_controller_srv = ros.ServiceProxy(
             "/" + self.robot_name + "/controller_manager/switch_controller", SwitchController)
         self.load_controller_srv = ros.ServiceProxy("/" + self.robot_name + "/controller_manager/load_controller",
                                                     LoadController)
+        # specific publisher for joint_group_pos_controller that publishes only position
         self.pub_reduced_des_jstate = ros.Publisher("/" + self.robot_name + "/joint_group_pos_controller/command",
                                                     Float64MultiArray, queue_size=10)
 
         self.zero_sensor = ros.ServiceProxy("/" + self.robot_name + "/ur_hardware_interface/zero_ftsensor", Trigger)
+
+        #  different controllers are available from the real robot and in simulation
         if self.real_robot:
             self.available_controllers = [
                 "joint_group_pos_controller",
-                "scaled_pos_joint_traj_controller"
-            ]
+                "scaled_pos_joint_traj_controller" ]
         else:
             self.available_controllers = ["joint_group_pos_controller",
-                                          "pos_joint_traj_controller"
-                                          ]
+                                          "pos_joint_traj_controller" ]
         self.active_controller = self.available_controllers[0]
-
-        self.admit = AdmittanceControl(self.ikin, 600 * np.identity(3), 300 * np.identity(3),
-                                       conf.robot_params[self.robot_name])
-
+        self.admit = AdmittanceControl(self.ikin, 600 * np.identity(3), 300 * np.identity(3), conf.robot_params[self.robot_name])
 
     def applyForce(self):
-
-        from geometry_msgs.msg import Wrench, Point
         wrench = Wrench()
         wrench.force.x = 0
         wrench.force.y = 0
@@ -193,11 +205,11 @@ class LabAdmittanceController(BaseControllerFixed):
         self.J = self.J6[:3,:] 
         #compute contact forces                        
         self.estimateContactForces()
-        # broadcast base world TF if they are different
+        # broadcast base world TF
         self.broadcaster.sendTransform(self.base_offset, (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')
 
     def estimateContactForces(self):  
-        # estimate ground reaxtion forces from tau
+        # estimate ground reaction forces from torques tau
         if self.use_torque_control:
             self.contactForceW = np.linalg.inv(self.J6.T).dot(self.h-self.tau)[:3]
                                  
@@ -212,20 +224,20 @@ class LabAdmittanceController(BaseControllerFixed):
 
     def initVars(self):
         super().initVars()
+
         # log variables relative to admittance controller
-        self.q_des_old = np.zeros(self.robot.model.nq)
         self.q_des_adm_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.xee_des_adm_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.x_ee_des_adm_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.obs_avoidance = ObstacleAvoidance()
-        # position of the center is in WF
+        # position of the center of the objects is in WF
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
         self.obs_avoidance.setCylinderParameters(0.125, 0.3, np.array([0.6, 0.25, 1.0]))
 
     def logData(self):
         if (conf.robot_params[self.robot_name]['control_type'] == "admittance"):
             self.q_des_adm_log[:, self.log_counter] = self.q_des_adm
-            self.xee_des_adm_log[:, self.log_counter] = self.x_ee_des_adm
+            self.x_ee_des_adm_log[:, self.log_counter] = self.x_ee_des_adm
         # I neeed to do after because it updates log counter
         super().logData()
 
@@ -240,33 +252,25 @@ class LabAdmittanceController(BaseControllerFixed):
 
         srv = LoadControllerRequest()
         srv.name = target_controller
+
         self.load_controller_srv(srv)  
         
         srv = SwitchControllerRequest()
         srv.stop_controllers = other_controllers 
         srv.start_controllers = [target_controller]
         srv.strictness = SwitchControllerRequest.BEST_EFFORT
-        self.switch_controller_srv(srv)           
-          
-       
+        self.switch_controller_srv(srv)
+        self.active_controller = target_controller
+
     def send_reduced_des_jstate(self, q_des):     
         msg = Float64MultiArray()
         msg.data = q_des             
         self.pub_reduced_des_jstate.publish(msg) 
 
     def send_joint_trajectory(self):
-        """Creates a trajectory and sends it using the selected action server"""
-        if self.real_robot:
-            trajectory_client = actionlib.SimpleActionClient(
-                "{}/follow_joint_trajectory".format("/" + self.robot_name + "/scaled_pos_joint_traj_controller"),
-                FollowJointTrajectoryAction,
-            )
-        else:
-            trajectory_client = actionlib.SimpleActionClient(
-                "{}/follow_joint_trajectory".format("/" + self.robot_name + "/pos_joint_traj_controller"),
-                FollowJointTrajectoryAction,
-            )
 
+        # Creates a trajectory and sends it using the selected action server
+        trajectory_client = actionlib.SimpleActionClient("{}/follow_joint_trajectory".format("/" + self.robot_name + "/"+self.active_controller), FollowJointTrajectoryAction)
         # Create and fill trajectory goal
         goal = FollowJointTrajectoryGoal()
         goal.trajectory.joint_names = self.joint_names
@@ -336,13 +340,11 @@ class LabAdmittanceController(BaseControllerFixed):
             os.system(" rosnode kill /gzserver /gzclient")
     
 def talker(p):
-            
     p.start()
-
     if p.real_robot:
-        p.startReadlRobot()
+        p.startRealRobot()
     else:
-        p.startSimulator(p.use_torque_control)
+        p.startSimulator(p.world_name, p.use_torque_control)
 
     # specify xacro location
     xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -391,13 +393,18 @@ def talker(p):
             # EXE L7-1: set constant joint reference
             p.q_des = np.copy(p.q_des_q0)
 
+            # EXE L7-5.3: set sinusoidal joint reference
+            # p.q_des  = p.q_des_q0  + 0.15 * np.sin(0.5*3.14*p.time)
+
             # EXE L7-2  set constant ee reference
-            # p.x_ee_des = np.array([-0.3, 0.5, -0.6])
+            # p.x_ee_des = np.array([-0.3, 0.5, -0.5])
+            # p.ros_pub.add_marker(p.x_ee_des + p.base_offset, color='blue')
             # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des,
             #                                                                     conf.robot_params[p.robot_name][
             #                                                                         'ee_frame'], p.q, False, False,
             #                                                                     postural_task=True, w_postural=0.00001,
             #                                                                     q_postural=p.q_des_q0)
+
 
             # EXE L7-3  set constant ee reference and desired orientation
             # rpy_des = np.array([ -1.9, -0.5, -0.1])
@@ -406,12 +413,10 @@ def talker(p):
 
             # EXE L7-4 - polynomial trajectory (TODO)
 
-            # EXE L7-5.3: set sinusoidal joint reference
-            #p.q_des  = p.q_des_q0  +0.2*np.sin(2*3.14*p.time)
 
             # EXE 5 - admittance control
-            # p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
-            # p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
+            p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
+            p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
 
             # EXE L7-6 - load estimation
             # Fload = np.linalg.pinv(p.J.T).dot(p.tau - p.g)
@@ -423,44 +428,30 @@ def talker(p):
             #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd
 
             # override the position command if you use admittance controller
-            if (p.time > 1.5) and (conf.robot_params[p.robot_name]['control_type'] == "admittance"):  # activate admittance control only after a few seconds to allow initialization
+            if (p.time > 1.5) and (p.admittance_control):  # activate admittance control only after a few seconds to allow initialization
                 q_to_send = p.q_des_adm
             else:
                 q_to_send = p.q_des
 
             # send commands to gazebo
             if (p.use_torque_control):
-                if  (p.time > 1.5):
-                    p.pid.setPDs(0.0, 10.2, 0.0)
-                    # since the obstacles are defined in the WF I need to add the offset
-                    d_cyl, cyl_closest_point = p.obs_avoidance.getCylinderDistance(p.x_ee + p.base_offset)
-                    p.ros_pub.add_marker(cyl_closest_point, radius=0.05, color="blue")
-                    d_cube, cube_closest_point = p.obs_avoidance.getCubeDistance(p.x_ee + p.base_offset)
-                    p.ros_pub.add_marker(cube_closest_point, radius=0.05, color="blue")
-                    goal = np.array([0.7, 0.8, 1.1])
-                    tau_field, f_repulsive_cube, f_repulsive_cyl, f_attractive = p.obs_avoidance.evaluatePotentials(goal,                                                                                                                   p.base_offset,
-                                                                                                                    p.robot,
-                                                                                                                    p.q)
-                    p.ros_pub.add_marker(goal, radius=0.15, color="green")
-                    p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_repulsive_cube[0], "red")
-                    p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_repulsive_cyl[0], "red")
-                    p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_attractive, "green")
-                    p.tau_ffwd =  p.h + np.copy(tau_field)
+                if (p.obstacle_avoidance):
+                    p.tau_ffwd = p.obs_avoidance.computeTorques(p,  np.array([0.7, 0.8, 1.1]))
                 p.send_des_jstate(q_to_send, p.qd_des, p.tau_ffwd)
-
             else:
                 p.send_reduced_des_jstate(q_to_send)
 
-            #p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
+            if(not p.obstacle_avoidance):
+                p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
+
             # log variables
             if (p.time > 1.0):
                 p.logData()
+
             # disturbance force
             if (p.time > 3.0 and p.EXTERNAL_FORCE):
                 p.applyForce()
                 p.EXTERNAL_FORCE = False
-
-
 
             # plot end-effector
             p.ros_pub.add_marker(p.x_ee + p.base_offset)
@@ -478,19 +469,20 @@ def talker(p):
     print("Shutting Down")
     ros.signal_shutdown("killed")
     p.deregister_node()
-    # this is to plot on REAL robot that is running a different rosnode (TODO SOLVE)
-    if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
-        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                  p.tau_ffwd_log, p.joint_names,p.q_des_adm_log)
-        plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
-    else:
-        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-              p.tau_ffwd_log, p.joint_names,p.q_des_log)
-    plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-               p.tau_ffwd_log, p.joint_names)
-    plotEndeff('force', 1, p.time_log, p.xee_log,  f_log=p.contactForceW_log)
-    plt.show(block=True)
 
+    if not (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
+        # this is to plot on REAL robot that is running a different rosnode (TODO SOLVE)
+        if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
+            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                      p.tau_ffwd_log, p.joint_names,p.q_des_adm_log)
+            plotAdmittanceTracking(2, p.time_log, p.x_ee_log, p.x_ee_des_log, p.x_ee_des_adm_log, p.contactForceW_log)
+        else:
+            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                  p.tau_ffwd_log, p.joint_names,p.q_des_log)
+        plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                   p.tau_ffwd_log, p.joint_names)
+        plotEndeff('force', 1, p.time_log, p.x_ee_log,  f_log=p.contactForceW_log)
+        plt.show(block=True)
 
 if __name__ == '__main__':
 
@@ -500,17 +492,17 @@ if __name__ == '__main__':
         talker(p)
     except ros.ROSInterruptException:
         # these plots are for simulated robot
-
-        if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
-            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                      p.tau_ffwd_log, p.joint_names, p.q_des_adm_log)
-            plotAdmittanceTracking(2, p.time_log, p.xee_log, p.xee_des_log, p.xee_des_adm_log, p.contactForceW_log)
-        else:
-            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                      p.tau_ffwd_log, p.joint_names)
-        if (p.use_torque_control):
-            plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                   p.tau_ffwd_log, p.joint_names)
-        plt.show(block=True)
+        if not (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
+            if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
+                plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                          p.tau_ffwd_log, p.joint_names, p.q_des_adm_log)
+                plotAdmittanceTracking(2, p.time_log, p.x_ee_log, p.x_ee_des_log, p.x_ee_des_adm_log, p.contactForceW_log)
+            else:
+                plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                          p.tau_ffwd_log, p.joint_names)
+            if (p.use_torque_control):
+                plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                       p.tau_ffwd_log, p.joint_names)
+            plt.show(block=True)
     
         

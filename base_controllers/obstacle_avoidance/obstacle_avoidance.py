@@ -29,6 +29,7 @@ class ObstacleAvoidance():
         self.scale_attractive_forces = 8
         self.d0 = 0.3
         self.k = 10 #field strength
+
     def setCylinderParameters(self, cyl_radius, cyl_height, cyl_center_pos):
         self.cyl_radius = cyl_radius
         self.cyl_height = cyl_height
@@ -128,5 +129,24 @@ class ObstacleAvoidance():
 
         return tau_field, self.f_repulsive_cube, self.f_repulsive_cyl, self.f_attractive
 
+    def computeTorques(self, p, goal):
 
+        if  (p.time > 1.5):
+            # add some damping but remove P in position
+            p.pid.setPDs(0.0, 10, 0.0)
+            # since the obstacles are defined in the WF I need to add the offset
+            d_cyl, cyl_closest_point = p.obs_avoidance.getCylinderDistance(p.x_ee + p.base_offset)
+            d_cube, cube_closest_point = p.obs_avoidance.getCubeDistance(p.x_ee + p.base_offset)
+            tau_field, f_repulsive_cube, f_repulsive_cyl, f_attractive = p.obs_avoidance.evaluatePotentials(goal, p.base_offset, p.robot, p.q)
+
+            p.ros_pub.add_marker(cyl_closest_point, radius=0.05, color="blue")
+            p.ros_pub.add_marker(cube_closest_point, radius=0.05, color="blue")
+            p.ros_pub.add_marker(goal, radius=0.15, color="green")
+            p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_repulsive_cube[0], "red")
+            p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_repulsive_cyl[0], "red")
+            p.ros_pub.add_arrow(p.x_ee + p.base_offset, f_attractive, "green")
+            tau = p.h + np.copy(tau_field)
+        else:
+            tau = p.h + np.zeros(p.robot.na)
+        return tau
 

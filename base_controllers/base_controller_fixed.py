@@ -66,7 +66,7 @@ class BaseControllerFixed(threading.Thread):
         self.EXTERNAL_FORCE = False
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, use_torque_control = None):
+    def startSimulator(self, world_name = None, use_torque_control = None):
         # needed to be able to load a custom world file
         print(colored('Adding gazebo model path!', 'blue'))
         custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
@@ -87,6 +87,9 @@ class BaseControllerFixed(threading.Thread):
 
         if use_torque_control is not None:
             cli_args.append('use_torque_control:=' + str(self.use_torque_control))
+        if world_name is not None:
+            cli_args.append('world_name:=' + str(world_name))
+
         roslaunch_args = cli_args[1:]
         roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
         parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
