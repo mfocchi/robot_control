@@ -87,7 +87,7 @@ class LabAdmittanceController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
         self.real_robot = conf.robot_params[self.robot_name]['real_robot']
-
+        self.homing_flag = self.real_robot
         if (conf.robot_params[self.robot_name]['control_type'] == "torque"):
             self.use_torque_control = 1
         else:
@@ -278,16 +278,21 @@ class LabAdmittanceController(BaseControllerFixed):
         # position_list = [[0.5, -0.7, 1.0, -1.57, -1.57, 0.5]]  # limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
         # position_list.append([0.5, -0.7 - 0.2, 1.0 - 0.1, -1.57, -1.57, 0.5])
         # position_list.append([0.5 + 0.5, -0.7 - 0.3, 1.0 - 0.1, -1.57, -1.57, 0.5])
+        # position_list.append([0.5 + 0.5, -0.7 - 0.3, 1.0 , -1., -1.57, 0.5])
 
-        self.q0 = np.copy(self.q)
+        self.q0 = conf.robot_params[p.robot_name]['q_0']
         dq1 = np.array([0.2, 0,0,0,0,0])
-        dq2 = np.array([0.2, 0.4, 0, 0, 0, 0])
-        dq3 = np.array([0.2, 0.4, -0.4, 0, 0, 0])
+        dq2 = np.array([0.2, -0.2, 0, 0, 0, 0])
+        dq3 = np.array([0.2, -0.2, 0.4, 0, 0, 0])
         position_list = [self.q0]  # limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
         position_list.append(self.q0 + dq1)
         position_list.append(self.q0 + dq2)
         position_list.append(self.q0 + dq3)
-        print(colored(position_list,'blue'))
+        print(colored("List of targets for joints: ",'blue'))
+        print(position_list[0])
+        print(position_list[1])
+        print(position_list[2])
+        print(position_list[3])
 
         duration_list = [5.0, 10.0, 20.0, 30.0]
         for i, position in enumerate(position_list):
@@ -314,8 +319,7 @@ class LabAdmittanceController(BaseControllerFixed):
             input_str = input(
                 "Please confirm that the robot path is clear of obstacles.\n"
                 "Keep the EM-Stop available at all times. You are executing\n"
-                "the motion at your own risk. Please type 'y' to proceed or 'n' to abort: "
-            )
+                "the motion at your own risk. Please type 'y' to proceed or 'n' to abort: " )
             valid = input_str in ["y", "n"]
             if not valid:
                 ros.loginfo("Please confirm by entering 'y' or abort by entering 'n'")
@@ -348,12 +352,8 @@ def talker(p):
     p.startupProcedure()
     ros.sleep(1.0)
 
-    #MoveItCartesianPath()
-    if not p.real_robot:
-        p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
-    else:
-        p.q_des_q0 = np.copy(p.q)
-        p.admit.setPosturalTask(np.copy(p.q))
+    p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
+    p.admit.setPosturalTask(np.copy(p.q_des_q0))
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
@@ -373,6 +373,19 @@ def talker(p):
 
         #control loop
         while True:
+            # homing procedure
+            if p.homing_flag:
+                print(colored("STARTING HOMING PROCEDURE",'red'))
+                while True:
+                    joint_error = np.linalg.norm(p.q - conf.robot_params[p.robot_name]['q_0'])
+                    p.q_des = p.q*0.95 + 0.05*conf.robot_params[p.robot_name]['q_0']
+                    p.send_reduced_des_jstate(p.q_des)
+                    rate.sleep()
+                    if (joint_error<=0.001):
+                        p.homing_flag = False
+                        print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
+                        break
+
             #update the kinematics
             p.updateKinematicsDynamics()
 
