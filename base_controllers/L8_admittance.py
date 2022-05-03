@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Nov  2 16:52:08 2018
+Created on 3 May  2022
 
-@author: rorsolino
+@author: mfocchi
 """
 
 from __future__ import print_function
@@ -46,39 +46,7 @@ import actionlib
 
 from obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
 from base_controllers.base_controller_fixed import BaseControllerFixed
-
-class AdmittanceControl():
-    
-    def __init__(self, ikin, Kp, Kd, conf):
-        self.ikin = ikin
-        self.conf = conf
-
-        self.dx = np.zeros(3)
-        self.dx_1_old = np.zeros(3)
-        self.dx_2_old = np.zeros(3)
-        self.Kp = Kp
-        self.Kd = Kd
-        self.q_postural =   self.conf['q_0']
-
-    def setPosturalTask(self, q_postural):
-        self.q_postural = q_postural
-
-    def computeAdmittanceReference(self, Fext, x_des, q_guess):
-        # only Kp, Kd
-        self.dx = np.linalg.inv(self.Kp + 1/self.conf['dt'] * self.Kd).dot(Fext + 1/self.conf['dt']*self.Kd.dot(self.dx_1_old))
-        #only Kp (unstable)
-        #self.dx = np.linalg.inv(self.Kp).dot(Fext)
-        self.dx_2_old = self.dx_1_old
-        self.dx_1_old = self.dx
-        # you need to remember to remove the base offset! because pinocchio us unawre of that!
-        q_des, ik_success, out_of_workspace = self.ikin.endeffectorInverseKinematicsLineSearch(x_des   + self.dx,
-                                                                                               self.conf['ee_frame'],
-                                                                                               q_guess, False, False,
-                                                                                               postural_task=True,
-                                                                                               w_postural=0.00001,
-                                                                                               q_postural= self.q_postural)
-
-        return q_des, x_des + self.dx
+from admittance_controller import AdmittanceControl
 
 class LabAdmittanceController(BaseControllerFixed):
     
@@ -91,8 +59,11 @@ class LabAdmittanceController(BaseControllerFixed):
         else:
             self.use_torque_control = 0
 
-        self.obstacle_avoidance = False
+        # EXE L7-6 - admittance control
         self.admittance_control = False
+
+        # EXE L7-8 - obstacle avoidance
+        self.obstacle_avoidance = False
 
         if (self.obstacle_avoidance):
             self.world_name = 'tavolo_obstacles.world'
@@ -102,8 +73,14 @@ class LabAdmittanceController(BaseControllerFixed):
         else:
             self.world_name = None
 
-        if (self.admittance_control and self.use_torque_control):
-            print(colored("ERRORS: you can use admittance control only on position control mode", 'red'))
+        if self.admittance_control and ((not self.real_robot) and (not self.use_torque_control)):
+            print(colored("ERRORS: you can use admittance control only on torque control mode or in real robot (need contact force estimation or measurement)", 'red'))
+            sys.exit()
+
+        if self.use_torque_control and self.real_robot:
+            print(colored(
+                "ERRORS: unfortunately...you cannot use ur5 in torque control mode, talk with your course coordinator to buy a better robot...:))",
+                'red'))
             sys.exit()
 
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
@@ -219,7 +196,7 @@ class LabAdmittanceController(BaseControllerFixed):
             self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
             #only torque loop
             #self.pid.setPDs(0.0, 0.0, 0.0)
-        if (p.real_robot):
+        if (self.real_robot):
             self.zero_sensor()
 
     def initVars(self):
@@ -228,7 +205,8 @@ class LabAdmittanceController(BaseControllerFixed):
         # log variables relative to admittance controller
         self.q_des_adm_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.x_ee_des_adm_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-
+        self.EXTERNAL_FORCE = False
+        self.payload_weight_avg = 0.0
         self.obs_avoidance = ObstacleAvoidance()
         # position of the center of the objects is in WF
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
@@ -338,7 +316,21 @@ class LabAdmittanceController(BaseControllerFixed):
         if not self.real_robot:
             os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
             os.system(" rosnode kill /gzserver /gzclient")
-    
+
+    def plotStuff(self):
+        if not (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
+            if (self.admittance_control):
+                plotJoint('position', 0, self.time_log, self.q_log, self.q_des_log, self.qd_log, self.qd_des_log, None, None, self.tau_log,
+                          self.tau_ffwd_log, self.joint_names, self.q_des_adm_log)
+                plotAdmittanceTracking(3, self.time_log, self.x_ee_log, self.x_ee_des_log, self.x_ee_des_adm_log, self.contactForceW_log)
+            else:
+                plotJoint('position', 0, self.time_log, self.q_log, self.q_des_log, self.qd_log, self.qd_des_log, None, None, self.tau_log,
+                          self.tau_ffwd_log, self.joint_names, self.q_des_log)
+            plotJoint('torque', 2, self.time_log, self.q_log, self.q_des_log, self.qd_log, self.qd_des_log, None, None, self.tau_log,
+                      self.tau_ffwd_log, self.joint_names)
+            plotEndeff('force', 1, self.time_log, self.x_ee_log, f_log=self.contactForceW_log)
+            plt.show(block=True)
+
 def talker(p):
     p.start()
     if p.real_robot:
@@ -393,10 +385,10 @@ def talker(p):
             # EXE L7-1: set constant joint reference
             p.q_des = np.copy(p.q_des_q0)
 
-            # EXE L7-5.3: set sinusoidal joint reference
+            # EXE L7-2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + 0.15 * np.sin(0.5*3.14*p.time)
 
-            # EXE L7-2  set constant ee reference
+            # EXE L7-3  set constant ee reference
             # p.x_ee_des = np.array([-0.3, 0.5, -0.5])
             # p.ros_pub.add_marker(p.x_ee_des + p.base_offset, color='blue')
             # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des,
@@ -406,21 +398,24 @@ def talker(p):
             #                                                                     q_postural=p.q_des_q0)
 
 
-            # EXE L7-3  set constant ee reference and desired orientation
+            # EXE L7-4  set constant ee reference and desired orientation
             # rpy_des = np.array([ -1.9, -0.5, -0.1])
             # w_R_e_des = p.math_utils.eul2Rot(rpy_des) # compute rotation matrix representing the desired orientation from Euler Angles
             # p.q_des, ok, out_ws = p.ikin.endeffectorFrameInverseKinematicsLineSearch(p.x_ee_des, w_R_e_des, conf.robot_params[p.robot_name]['ee_frame'], p.q)
 
-            # EXE L7-4 - polynomial trajectory (TODO)
+            # EXE L7-5 - polynomial trajectory (TODO)
 
 
-            # EXE 5 - admittance control
-            p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
-            p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
+            # EXE L7-6 - admittance control
+            if (p.admittance_control):
+                p.EXTERNAL_FORCE = True
+                p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
+                p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
 
-            # EXE L7-6 - load estimation
-            # Fload = np.linalg.pinv(p.J.T).dot(p.tau - p.g)
-            # payload_weight = -Fload[2]/9.81
+            # EXE L7-7 - load estimation
+            # if (p.time > 10.0):
+            #     p.payload_weight_avg = 0.99 * p.payload_weight_avg + 0.01 * (-p.contactForceW[2] / 9.81)
+            #     print("estimated load: ", p.payload_weight_avg)
 
             # controller with gravity coriolis comp
             p.tau_ffwd = p.h + np.zeros(p.robot.na)
@@ -463,6 +458,7 @@ def talker(p):
             p.time = p.time + conf.robot_params[p.robot_name]['dt']
            # stops the while loop if  you prematurely hit CTRL+C
             if ros.is_shutdown():
+                p.plotStuff()
                 print ("Shutting Down")
                 break
 
@@ -470,19 +466,7 @@ def talker(p):
     ros.signal_shutdown("killed")
     p.deregister_node()
 
-    if not (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
-        # this is to plot on REAL robot that is running a different rosnode (TODO SOLVE)
-        if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
-            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                      p.tau_ffwd_log, p.joint_names,p.q_des_adm_log)
-            plotAdmittanceTracking(2, p.time_log, p.x_ee_log, p.x_ee_des_log, p.x_ee_des_adm_log, p.contactForceW_log)
-        else:
-            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                  p.tau_ffwd_log, p.joint_names,p.q_des_log)
-        plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                   p.tau_ffwd_log, p.joint_names)
-        plotEndeff('force', 1, p.time_log, p.x_ee_log,  f_log=p.contactForceW_log)
-        plt.show(block=True)
+
 
 if __name__ == '__main__':
 
@@ -492,17 +476,6 @@ if __name__ == '__main__':
         talker(p)
     except ros.ROSInterruptException:
         # these plots are for simulated robot
-        if not (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
-            if (conf.robot_params[p.robot_name]['control_type'] == "admittance"):
-                plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                          p.tau_ffwd_log, p.joint_names, p.q_des_adm_log)
-                plotAdmittanceTracking(2, p.time_log, p.x_ee_log, p.x_ee_des_log, p.x_ee_des_adm_log, p.contactForceW_log)
-            else:
-                plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                          p.tau_ffwd_log, p.joint_names)
-            if (p.use_torque_control):
-                plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                       p.tau_ffwd_log, p.joint_names)
-            plt.show(block=True)
+        p.plotStuff()
     
         

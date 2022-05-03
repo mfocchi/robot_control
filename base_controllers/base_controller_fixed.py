@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Nov  2 16:52:08 2018
+Created on 3 May  2022
 
-@author: rorsolino
+@author: mfocchi
 """
 
 from __future__ import print_function
@@ -63,7 +63,7 @@ class BaseControllerFixed(threading.Thread):
         self.broadcaster = tf.TransformBroadcaster()
         #send data to param server
         self.verbose = conf.verbose
-        self.EXTERNAL_FORCE = False
+
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
     def startSimulator(self, world_name = None, use_torque_control = None):

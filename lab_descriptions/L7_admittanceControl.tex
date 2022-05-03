@@ -136,19 +136,22 @@
 	sense the force. 
 	
 \section{Preliminaries}
-	The robot that we will use this time, is still the  Ur5 robot, but, differently from before, we will not integrate the dynamics ourself but this will be done by a simulator called Gazebo. An intermediate controller ( \codeword{ros_impedance_controller}) will receive the PD gains and the set-point of desired joint positions and velocities and feed-forward torques from our Python node, this controller will either interface to the simulator Gazebo or to the real robot. This has the big advantage of  allowing us to use the same code in both situations.
+	The robot that we will use this time, is still the  Ur5 robot, but, differently from before, we will not integrate the dynamics ourself but this will be done by a simulator called Gazebo. An intermediate controller ( \codeword{ros_impedance_controller}) will receive the PD gains and the set-point of desired joint positions and velocities and feed-forward torques from our Python node, this controller will either interface to the simulator Gazebo or to the real robot. This has the big advantage of  allowing us to use the same code in both situations.\\
 
-
-\section{Position Control - Constant Joint Reference}
+\textbf{1.1 Position Control - Constant Joint Reference}
 Since the real prototype of the UR5 robot it does not accept desired torque command but only position and velocity commands, 
 the first experience we are going to do is to create a constant set-point in position for our robot. 
 Therefore, in the \codeword{params.yaml} config file, set \codeword{real_robot: True},   \codeword{control_mode: point}, \codeword{control_type: position}.
 Then, to check that everything works set a constant joint position (expressed in the base frame, cf. the base frame axes) for the end-effector to $q^d=\mat{1.53, -1.33, 1.17, -0.6, 0.52, 0.5}$
 
-\section{Position Control - Constant Cartesian Reference}
-Now let's set a constant Cartesian position (expressed in the base frame, cf. the base frame axes) for the end-effector $p_e^d=\mat{0.2, 0.6, -0.7}   $
+\textbf{1.2 Position Control - Sinusoidal  Joint Reference.}
 
-\section{Position Control - Constant Cartesian Reference and Orientation}
+\textbf{1.3 Position Control - Constant Cartesian Reference}
+Now let's set a constant Cartesian position (expressed in the base frame, cf. 
+the base frame axes) for the end-effector $p_e^d=\mat{0.2, 0.6, -0.7}   $
+
+
+\textbf{1.4 Position Control - Constant Cartesian Reference and Orientation}
 In addition to the end-effector position, we want also to specify a desired orientation with ${}_WR_e^d = eul2rot(\mat{-1.9& -0.5& -0.1})$.
 In this case the task is 6D and there is no need of regularization or of a postural task, and the full Jacobian $J6 \in \Rnum^{6 \times 6}$ should we used. 
 Note that the now also the orientation error $e_o$ should be appended to $e_p$. This can be computed with the exponential maps or equivalent way as we did for the L3 lab: 
@@ -158,11 +161,11 @@ e_o = {}_wR_e \text{logm}({}_wR_e^T {}_wR_e^d)
 \end{align}
 
 
-\section{Position Control - Polynomial trajectory}
+\textbf{1.5 Position Control - Polynomial trajectory}
 Taking inspiration from L1-2.5, design two polynomial Cartesian trajectories (e.g. create a class for this) for the end-effector,namely: a cubic VS a quintic polynomial to go from position $p_e^d=\mat{0.2& 0.6& -0.6}$  to $p_e^d=\mat{0.4& 0.4& -0.6}$. Set zero initial /final velocity and accelerations. Note that only for the quintic it will be possible to enforce the accelerations. Compare the results.
 
 
-\section{Admittance Control}
+\textbf{2.0 Admittance Control}
 An admittance control framework requires two components: an \textit{admittance model} and an \textit{inverse kinematics} function.
 The philosophy behind admittance control is to change the end-effector position set-point in order to mimic a desired admittance at the end-effector. We recall that an admittance is a linear model that receives  as input a \textit{force} and outputs a displacement $\Delta p_e$ (or a velocity). Then, the displacement $\Delta p_e$ is added to the set-point creating a new reference for the end-effector $\tilde{p_e}^d = \Delta p_e + {p_e}^d$  that is mapped to joints references via an inverse kinematics function, as shown in figure \ref{fig:admittance}:
 

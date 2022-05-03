@@ -23,7 +23,7 @@ class JumpLegController(BaseControllerFixed):
     
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
-
+        self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
         print("Initialized jump leg controller---------------------------------------------------------------")
 

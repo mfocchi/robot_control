@@ -271,7 +271,7 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
 
     plt.subplot(4, 1, 4)
     plt.plot(time_log, f_norm, lw=2, color='blue')
-
+    plt.ylabel("norm of ee force")
     plt.grid()
     
 def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, des_baseAccW=None, wrenchW=None):
