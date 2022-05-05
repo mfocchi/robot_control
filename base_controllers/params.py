@@ -25,7 +25,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'ee_frame': 'tool0',
                        'control_mode': 'point', # 'trajectory','point'
                        'real_robot': False,
-                       'control_type': 'position', # 'position', 'torque'
+                       'control_type': 'torque', # 'position', 'torque'
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
                        'spawn_z' : 1.8,
@@ -43,6 +43,6 @@ robot_params['jumpleg'] ={'dt': 0.001,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
                          
 verbose = False
-
+plotting = False
 
 

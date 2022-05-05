@@ -33,6 +33,7 @@ import matplotlib.pyplot as plt
 from utils.common_functions import plotJoint, plotAdmittanceTracking, plotEndeff
 
 import  params as conf
+import L8_conf as lab_conf
 robotName = "ur5"
 
 # controller manager management
@@ -47,6 +48,7 @@ import actionlib
 from obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
 from base_controllers.base_controller_fixed import BaseControllerFixed
 from admittance_controller import AdmittanceControl
+from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 
 class LabAdmittanceController(BaseControllerFixed):
     
@@ -59,13 +61,9 @@ class LabAdmittanceController(BaseControllerFixed):
         else:
             self.use_torque_control = 0
 
-        # EXE L7-6 - admittance control
-        self.admittance_control = False
 
-        # EXE L7-8 - obstacle avoidance
-        self.obstacle_avoidance = False
 
-        if (self.obstacle_avoidance):
+        if (lab_conf.obstacle_avoidance):
             self.world_name = 'tavolo_obstacles.world'
             if (not self.use_torque_control):
                 print(colored("ERRORS: you can use obstacle avoidance only on torque control mode", 'red'))
@@ -73,7 +71,7 @@ class LabAdmittanceController(BaseControllerFixed):
         else:
             self.world_name = None
 
-        if self.admittance_control and ((not self.real_robot) and (not self.use_torque_control)):
+        if lab_conf.admittance_control and ((not self.real_robot) and (not self.use_torque_control)):
             print(colored("ERRORS: you can use admittance control only on torque control mode or in real robot (need contact force estimation or measurement)", 'red'))
             sys.exit()
 
@@ -207,6 +205,7 @@ class LabAdmittanceController(BaseControllerFixed):
         self.x_ee_des_adm_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.EXTERNAL_FORCE = False
         self.payload_weight_avg = 0.0
+        self.polynomial_flag = False
         self.obs_avoidance = ObstacleAvoidance()
         # position of the center of the objects is in WF
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
@@ -319,7 +318,7 @@ class LabAdmittanceController(BaseControllerFixed):
 
     def plotStuff(self):
         if not (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
-            if (self.admittance_control):
+            if (lab_conf.admittance_control):
                 plotJoint('position', 0, self.time_log, self.q_log, self.q_des_log, self.qd_log, self.qd_des_log, None, None, self.tau_log,
                           self.tau_ffwd_log, self.joint_names, self.q_des_adm_log)
                 plotAdmittanceTracking(3, self.time_log, self.x_ee_log, self.x_ee_des_log, self.x_ee_des_adm_log, self.contactForceW_log)
@@ -363,7 +362,7 @@ def talker(p):
             p.switch_controller("joint_group_pos_controller")
         # reset to actual
         p.updateKinematicsDynamics()
-
+        p.time_poly = None
         #control loop
         while True:
             # homing procedure
@@ -386,7 +385,8 @@ def talker(p):
             p.q_des = np.copy(p.q_des_q0)
 
             # EXE L7-2: set sinusoidal joint reference
-            # p.q_des  = p.q_des_q0  + 0.15 * np.sin(0.5*3.14*p.time)
+            #p.q_des  = p.q_des_q0  + 0.15 * np.sin(0.5*3.14*p.time)
+
 
             # EXE L7-3  set constant ee reference
             # p.x_ee_des = np.array([-0.3, 0.5, -0.5])
@@ -397,17 +397,37 @@ def talker(p):
             #                                                                     postural_task=True, w_postural=0.00001,
             #                                                                     q_postural=p.q_des_q0)
 
+            # EXE L7-5  set constant ee reference polynomial trajectory
+            # p.x_ee_des = np.array([-0.3, 0.5, -0.5])
+            # p.ros_pub.add_marker(p.x_ee_des + p.base_offset, color='blue')
+            # if not p.polynomial_flag and p.time > 3.0:
+            #     print(colored("STARTING POLYNOMIAL",'red'))
+            #     p.time_poly = p.time
+            #     p.x_intermediate = np.zeros(3)
+            #     a = np.empty((3, 6))
+            #     for i in range(3):
+            #         a[i, :] = coeffTraj( lab_conf.poly_duration, p.x_ee[i], p.x_ee_des[i])
+            #     p.polynomial_flag = True
+            # # Polynomial trajectory for x,y,z coordinates
+            # if  p.polynomial_flag and (p.time - p.time_poly) <  lab_conf.poly_duration:
+            #     t = p.time - p.time_poly
+            #     for i in range(3):
+            #         p.x_intermediate[i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3) + a[i,4]*pow(t, 4) + a[i,5]*pow(t, 5)
+            # if p.polynomial_flag:
+            #     p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_intermediate,  conf.robot_params[p.robot_name]['ee_frame'], p.q, False, False,
+            #                                                                     postural_task=True, w_postural=0.00001,
+            #                                                                     q_postural=p.q_des_q0)
 
             # EXE L7-4  set constant ee reference and desired orientation
             # rpy_des = np.array([ -1.9, -0.5, -0.1])
             # w_R_e_des = p.math_utils.eul2Rot(rpy_des) # compute rotation matrix representing the desired orientation from Euler Angles
             # p.q_des, ok, out_ws = p.ikin.endeffectorFrameInverseKinematicsLineSearch(p.x_ee_des, w_R_e_des, conf.robot_params[p.robot_name]['ee_frame'], p.q)
 
-            # EXE L7-5 - polynomial trajectory (TODO)
+
 
 
             # EXE L7-6 - admittance control
-            if (p.admittance_control):
+            if (lab_conf.admittance_control):
                 p.EXTERNAL_FORCE = True
                 p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
                 p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
@@ -423,20 +443,20 @@ def talker(p):
             #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd
 
             # override the position command if you use admittance controller
-            if (p.time > 1.5) and (p.admittance_control):  # activate admittance control only after a few seconds to allow initialization
+            if (p.time > 1.5) and (lab_conf.admittance_control):  # activate admittance control only after a few seconds to allow initialization
                 q_to_send = p.q_des_adm
             else:
                 q_to_send = p.q_des
 
             # send commands to gazebo
             if (p.use_torque_control):
-                if (p.obstacle_avoidance):
+                if (lab_conf.obstacle_avoidance):
                     p.tau_ffwd = p.obs_avoidance.computeTorques(p,  np.array([0.7, 0.8, 1.1]))
                 p.send_des_jstate(q_to_send, p.qd_des, p.tau_ffwd)
             else:
                 p.send_reduced_des_jstate(q_to_send)
 
-            if(not p.obstacle_avoidance):
+            if(not lab_conf.obstacle_avoidance):
                 p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
 
             # log variables
