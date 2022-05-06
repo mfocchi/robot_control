@@ -338,20 +338,19 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
     _, tensors, m, coms = setRobotParameters()
 
     # get inertia tensors about the CoM expressed in the respective link frame
-    c_I_0 = tensors[0]    
-    c_I_1 = tensors[1]
-    c_I_2 = tensors[2]
-    c_I_3 = tensors[3]
-    c_I_4 = tensors[4]
+    _0_I_0 = tensors[0]
+    _1_I_1 = tensors[1]
+    _2_I_2 = tensors[2]
+    _3_I_3 = tensors[3]
+    _4_I_4 = tensors[4]
     
     # get positions of the link CoM expressed in the respective link frame
-    c_com_0 = coms[0]    
-    c_com_1 = coms[1]    
-    c_com_2 = coms[2]    
-    c_com_3 = coms[3]    
-    c_com_4 = coms[4]
+    _0_com_0 = coms[0]
+    _1_com_1 = coms[1]
+    _2_com_2 = coms[2]
+    _3_com_3 = coms[3]
+    _4_com_4 = coms[4]
 
-    # initializing variables
 
     # number of joints
     n = len(q)
@@ -361,7 +360,7 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
     qd_link = np.insert(qd, 0, 0.0, axis=0)
     qdd_link = np.insert(qdd, 0, 0.0, axis=0)
         
-    
+    # initialation of variables
     zeroV = np.zeros(3)
     omega = np.array([zeroV, zeroV, zeroV, zeroV, zeroV])
     v = np.array([zeroV, zeroV, zeroV, zeroV, zeroV])
@@ -370,6 +369,7 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
     vc = np.array([zeroV, zeroV, zeroV, zeroV, zeroV])
     ac = np.array([zeroV, zeroV, zeroV, zeroV,zeroV])
 
+    # these arrays are 1 element longer than the others because in the back recursion we consider also the forces/moments coming from the ee
     F = np.array([zeroV, zeroV, zeroV, zeroV, zeroV, Fee])
     M = np.array([zeroV, zeroV, zeroV, zeroV, zeroV, Mee])
 
@@ -390,7 +390,8 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
     p_03 = T_03[:3,3]
     p_04 = T_04[:3,3]
     p_0e = T_0e[:3,3]
-    # array used in the recursion
+
+    # array used in the recursion (this array is 1 element longer than the others because in the back recursion we consider also the position of the ee)
     p = np.array([p_00, p_01, p_02, p_03, p_04, p_0e])
 
     # rotation matrices w.r.t. to the world of each link
@@ -399,27 +400,28 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
     R_02 = T_02[:3,:3]
     R_03 = T_03[:3,:3]
     R_04 = T_04[:3,:3]
-    R_0e = T_0e[:3, :3]
 
     # positions of the CoMs w.r.t. to the world frame
-    pc_0 = p_00 + c_com_0
-    pc_1 = p_01 + np.dot(R_01, c_com_1)
-    pc_2 = p_02 + np.dot(R_02, c_com_2)
-    pc_3 = p_03 + np.dot(R_03, c_com_3)
-    pc_4 = p_04 + np.dot(R_04, c_com_4)
+    pc_0 = p_00 + _0_com_0
+    pc_1 = p_01 + np.dot(R_01, _1_com_1)
+    pc_2 = p_02 + np.dot(R_02, _2_com_2)
+    pc_3 = p_03 + np.dot(R_03, _3_com_3)
+    pc_4 = p_04 + np.dot(R_04, _4_com_4)
 
     # array used in the recursion
     pc = np.array([pc_0, pc_1, pc_2, pc_3, pc_4])
 
     # expressing tensors of inertia of the links (about the com) in the world frame (time consuming)
-    I_0 = np.dot(np.dot(R_00,c_I_0),R_00.T)    
-    I_1 = np.dot(np.dot(R_01,c_I_1),R_01.T)
-    I_2 = np.dot(np.dot(R_02,c_I_2),R_02.T)
-    I_3 = np.dot(np.dot(R_03,c_I_3),R_03.T)
-    I_4 = np.dot(np.dot(R_04,c_I_4),R_04.T)
+    I_0 = np.dot(np.dot(R_00,_0_I_0),R_00.T)
+    I_1 = np.dot(np.dot(R_01,_1_I_1),R_01.T)
+    I_2 = np.dot(np.dot(R_02,_2_I_2),R_02.T)
+    I_3 = np.dot(np.dot(R_03,_3_I_3),R_03.T)
+    I_4 = np.dot(np.dot(R_04,_4_I_4),R_04.T)
+
+    # array used in the recursion
     I = np.array([I_0, I_1, I_2, I_3, I_4])
 
-    # forward pass: compute accelerations from 0 to ee
+    # forward pass: compute accelerations from link 0 to  link 4, range(n+1) = (0, 1, 2, 3, 4)
     for i in range(n+1):
         if i == 0: # we start from base link 0
             p_ = p[0]
