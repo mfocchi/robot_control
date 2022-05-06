@@ -388,8 +388,8 @@ def talker(p):
             #p.q_des  = p.q_des_q0  + 0.15 * np.sin(0.5*3.14*p.time)
 
 
-            # EXE L7-3  set constant ee reference
-            # p.x_ee_des = np.array([-0.3, 0.5, -0.5])
+            # EXE L7-3: set constant ee reference
+            # p.x_ee_des = lab_conf.ee_reference
             # p.ros_pub.add_marker(p.x_ee_des + p.base_offset, color='blue')
             # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des,
             #                                                                     conf.robot_params[p.robot_name][
@@ -397,8 +397,8 @@ def talker(p):
             #                                                                     postural_task=True, w_postural=0.00001,
             #                                                                     q_postural=p.q_des_q0)
 
-            # EXE L7-5  set constant ee reference polynomial trajectory
-            # p.x_ee_des = np.array([-0.3, 0.5, -0.5])
+            # EXE L7-5:  set constant ee reference and create polynomial trajectory to reach it
+            # p.x_ee_des = lab_conf.ee_reference
             # p.ros_pub.add_marker(p.x_ee_des + p.base_offset, color='blue')
             # if not p.polynomial_flag and p.time > 3.0:
             #     print(colored("STARTING POLYNOMIAL",'red'))
@@ -418,13 +418,10 @@ def talker(p):
             #                                                                     postural_task=True, w_postural=0.00001,
             #                                                                     q_postural=p.q_des_q0)
 
-            # EXE L7-4  set constant ee reference and desired orientation
+            # EXE L7-4:  set constant ee reference and desired orientation
             # rpy_des = np.array([ -1.9, -0.5, -0.1])
             # w_R_e_des = p.math_utils.eul2Rot(rpy_des) # compute rotation matrix representing the desired orientation from Euler Angles
             # p.q_des, ok, out_ws = p.ikin.endeffectorFrameInverseKinematicsLineSearch(p.x_ee_des, w_R_e_des, conf.robot_params[p.robot_name]['ee_frame'], p.q)
-
-
-
 
             # EXE L7-6 - admittance control
             if (lab_conf.admittance_control):
