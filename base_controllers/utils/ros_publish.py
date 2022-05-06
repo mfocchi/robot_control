@@ -18,7 +18,7 @@ from rospy import Time
 
 class RosPub():
     def __init__(self, robot_name="solo", only_visual = False, visual_frame = "world"):
-        
+
         print("Starting ros pub---------------------------------------------------------------")
         if (not only_visual):                           
             #launch rviz node if not yet done will start roscore too
@@ -27,7 +27,7 @@ class RosPub():
             self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/visualize_"+robot_name+".launch"])
             self.launch.start()                                                    
             ros.loginfo("RVIZ started")
-            tm.sleep(1.0)
+
                                
    
         #init ros node to publish joint states and vis topics

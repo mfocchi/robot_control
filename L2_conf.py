@@ -8,35 +8,33 @@ Created on Thu Apr 18 09:47:07 2019
 import numpy as np
 import os
 
-dt = 0.001                   # controller time step [s]
-exp_duration_sin = 4.0 #sine reference duration
-exp_duration = 5.0 #simulation duration
+dt = 0.001                                          # controller time step [s]
+exp_duration = 5.0                                  # simulation duration
 
-SLOW_FACTOR = 1#to slow down simulation
+SLOW_FACTOR = 1                                     # to slow down simulation
 
-frame_name = 'ee_link'    # name of the frame to control (end-effector)
+frame_name = 'ee_link'                              # name of the frame to control (end-effector)
 
-#PD controller
+# PD controller
 ## Matrix of gains
-kp = np.eye(6)*300  # proportional gains 
-kd = np.eye(6)*30 # derivative gains (critical damping)
+kp = np.eye(6)*300                                  # proportional gains
+kd = np.eye(6)*20                                   # derivative gains (critical damping)
 
-## PARAMETERS OF REFERENCE SINUSOIDAL TRAJECTORY (1, 2, 3, 4, 5, 6 joint)
-amp = np.array([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0])    # amplitude
-phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])      # phase
+## Parameters of the reference sinusoidal trajectory (1, 2, 3, 4, 5, 6)
+exp_duration_sin = exp_duration - 1.0               # sine reference duration
+amp = np.array([ 0.0, 0.2, 0.0, 0.0, 0.4, 0.0])     # amplitude
+phi = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])     # phase
 freq = np.array([ 0.0, 1.0, 0.0, 0.0, 1.5, 0.0])    # frequency
 
-## bigger inertia variation on joint 2
+## EXERCISE 1.4: Bigger inertia variation on joint 2
 #amp = np.array([ 0.0, 0.4, 0.8, 0.0, 0.4, 0.0])    # amplitude
-#phi = np.array([ 0.0, 0.0, 3.14, 0.0, 0.0, 0.0])      # phase
-#freq = np.array([ 0.0, 1.0, 1.0, 0.0, 1.5, 0.0])    # frequency
+#phi = np.array([ 0.0, 0.0, 3.14, 0.0, 0.0, 0.0])   # phase
+#freq = np.array([ 0.0, 1.0, 1.0, 0.0, 1.5, 0.0])   # frequency
 
-
-# Initial configuration / velocity / Acceleration
-q0  = np.array([ 0.0, -0.3, 0.5, -1.57, -1.57, 0.5]) 
-qd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
-
+# Initial state
+q0 = np.array([ 0.0, -0.3, 0.5, -1.57, -1.57, 0.5]) # joint configuration
+qd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])     # joint velocity
+qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])    # joint acceleration
 
 #EXERCISE 1.4: high gains
 #Kp = np.eye(6)*600
@@ -45,12 +43,11 @@ qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 # EXERCISE 2.4: Add external force at T =2.0s
 # Value of linear external force
 extForce = np.array([0.0, 0.0, 50.0])
-# FLAGS
 EXTERNAL_FORCE = False
 
-# EXERCISE 2.7: Add  unilateral compliant contact
-n = np.array([0.0,0.0,1.0]) # contact normal
-p0 = np.array([0.0,0.0,0.0]) # contact position     
-K_env = np.eye(3)*10000 # contact stiffness 
-D_env = np.eye(3)*1000   # contact damping
-mu =1.0
+# EXERCISE 2.7: Add (unilateral) compliant contact
+n = np.array([0.0,0.0,1.0])                     # contact normal
+p0 = np.array([0.0,0.0,0.0])                    # contact position
+K_env = np.eye(3)*10000                         # contact stiffness
+D_env = np.eye(3)*1000                          # contact damping
+mu = 1.0                                        # friction coefficient (0.05)

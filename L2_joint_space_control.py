@@ -37,10 +37,9 @@ qdd_log = np.empty((6, buffer_size))*nan
 qdd_des_log = np.empty((6, buffer_size))*nan
 tau_log = np.empty((6, buffer_size))*nan
 f_log = np.empty((3,buffer_size))*nan
-x_log = np.empty((3, buffer_size))*nan
+p_log = np.empty((3, buffer_size))*nan
 time_log =  np.empty((buffer_size))*nan
 log_counter = 0
-
 
 # EXERCISE 2.2: 
 #conf.qd0 = two_pi_f_amp
@@ -76,20 +75,20 @@ while True:
         qdd_des=zero          
 
     # EXERCISE 1.2: Step reference Generation
-#    if time > 2.0:
-#        q_des = conf.q0 + np.array([ 0.0, -0.4, 0.0, 0.0,  0.5, 0.0]) 
-#        qd_des =  zero
-#        qdd_des = zero 
-#    else:
-#        q_des = conf.q0
-#        qd_des =  zero
-#        qdd_des = zero    
+    # if time > 2.0:
+    #     q_des = conf.q0 + np.array([ 0.0, -0.4, 0.0, 0.0,  0.5, 0.0])
+    #     qd_des =  zero
+    #     qdd_des = zero
+    # else:
+    #     q_des = conf.q0
+    #     qd_des =  zero
+    #     qdd_des = zero
         
     # EXERCISE 2.4: Constant reference
-#    q_des = conf.q0
-#    qd_des =  zero
-#    qdd_des = zero   
- 
+    # q_des = conf.q0
+    # qd_des =  zero
+    # qdd_des = zero
+
     # Decimate print of time
     #if (divmod(time ,1.0)[1]  == 0):
        #print('Time %.3f s'%(time))
@@ -113,16 +112,15 @@ while True:
 
         
     # EXERCISE  1.5: PD control - critical damping
-#    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
-#    conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1]*M[1,1])
-#    conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2]*M[2,2])
-#    conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
-#    conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
-#    conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
-#    print (conf.kd[1,1])
-#    print (conf.kd[4,4])
-        
-    
+    # conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0]*M[0,0])
+    # conf.kd[1,1] = 2*np.sqrt(conf.kp[1,1]*M[1,1])
+    # conf.kd[2,2] = 2*np.sqrt(conf.kp[2,2]*M[2,2])
+    # conf.kd[3,3] = 2*np.sqrt(conf.kp[3,3]*M[3,3])
+    # conf.kd[4,4] = 2*np.sqrt(conf.kp[4,4]*M[4,4])
+    # conf.kd[5,5] = 2*np.sqrt(conf.kp[5,5]*M[5,5])
+    # print (conf.kd[1,1])
+    # print (conf.kd[4,4])
+
     # EXERCISE  2.3: Inverse Dynamics (computed torque) - low gains
 #    conf.kp = np.eye(6)*60
 #    conf.kd[0,0] = 2*np.sqrt(conf.kp[0,0])
@@ -137,72 +135,75 @@ while True:
     tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)
     
     # Exercise 1.6: PD control + Gravity Compensation
-#    tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
+    #tau = conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
     
     # Exercise 1.7: PD + gravity + Feed-Forward term   
-#    M_des = robot.mass(q_des) 
-#    tau =  np.multiply(np.diag(M_des), qdd_des) + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
+    #M_des = robot.mass(q_des)
+    #tau =  np.multiply(np.diag(M_des), qdd_des) + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)  + g
  
     # EXERCISE 2.1 Inverse Dynamics (Computed Torque)
-#    tau = M.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h    
+    #tau = M.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h
 
     # EXERCISE 2.5 Inverse Dynamics (Computed Torque) - uncertainty in the cancellation   
-#    M_hat  = M*1.1 
-#    h_hat  = h*1.1 
-#    tau = M_hat.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_hat
+    # M_hat  = M*1.1
+    # h_hat  = h*1.1
+    # tau = M_hat.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_hat
 
     # EXERCISE 2.6  Inverse Dynamics (Desired states)
-#    M_des = robot.mass(q_des)            
-#    h_des = robot.nle(q_des, qd_des) 
-#    tau = M_des.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_des    
-##    			
+    # M_des = robot.mass(q_des)
+    # h_des = robot.nle(q_des, qd_des)
+    # tau = M_des.dot(qdd_des + conf.kp.dot(q_des-q) + conf.kd.dot(qd_des-qd)) + h_des
     
     if conf.EXTERNAL_FORCE:   		
         # EXERCISE 2.4: Add external force at T = 3.0s
-#        if time>3.0:         
-#            F_env = conf.extForce
-#        else:
-#            F_env = np.array([0.0, 0.0, 0.0])  									
+        if time>3.0:
+           F_env = conf.extForce
+        else:
+           F_env = np.array([0.0, 0.0, 0.0])
         			
         # EXERCISE 2.7: Add  unilateral compliant contact (normal spring)
-#        pd = J.dot(qd)     
-#        if (conf.n.dot(conf.p0 - p)>0.0):      
-#            F = conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd)
-#            F_proj =  np.dot(conf.n, conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd))
-#            F_env = conf.n * F_proj
-#        
-#        else:
-#            F_env = np.array([0.0, 0.0, 0.0]) 
-            
-#        # EXERCISE 2.8: Add  unilateral compliant contact  (full 3D model)
-#        pd = J.dot(qd)     
-#        if (conf.n.dot(conf.p0 - p)>0.0): 
-#            # sample P0
-#            if (not contact_sampled): 
-#                conf.p0 = p
-#                contact_sampled = True
-#            F_env =  conf.K_env.dot(conf.p0 - p) - conf.D_env.dot(pd)
-##                        
-##
-###            # EXERCISE 2.9: Friction coefficient
-##            # clamp to friction cone
-##            # X component
-##            if (F_env[0] >= conf.mu * F_env[2]):
-##                F_env[0] = conf.mu * F_env[2]
-##            if (F_env[0] <= -conf.mu * F_env[2]):
-##                F_env[0] = -conf.mu * F_env[2]
-##            # Y component                
-##            if (F_env[1] >= conf.mu * F_env[2]):
-##                F_env[1] = conf.mu * F_env[2]
-##            if (F_env[1] <= -conf.mu * F_env[2]):
-##                F_env[1] = -conf.mu * F_env[2]
-##            ros_pub.add_cone(p, conf.n, conf.mu, color = "blue")  
-               
-#        else:
-#            contact_sampled = False 
-#            F_env = np.array([0.0, 0.0, 0.0])
-        ros_pub.add_arrow(p,F_env/100)      
-        tau += J.transpose().dot(F_env)          					 
+        # pd = J.dot(qd)
+        # if (conf.n.dot(conf.p0 - p)>0.0):
+        #     Fk = conf.K_env.dot(conf.p0 - p)
+        #     if (conf.n.dot(pd)<0.0):
+        #         Fd = - conf.D_env.dot(pd)
+        #     F_proj =  np.dot(conf.n, Fk + Fd) #scalar
+        #     F_env = conf.n * F_proj #vector
+        # else:
+        #     F_env = np.array([0.0, 0.0, 0.0])
+        #
+#       # EXERCISE 2.8: Add  unilateral compliant contact  (full 3D model)
+#         pd = J.dot(qd)
+#         if (conf.n.dot(conf.p0 - p)>0.0):
+#             # sample P0
+#             if (not contact_sampled):
+#                 conf.p0 = p
+#                 contact_sampled = True
+#             F_env =  conf.K_env.dot(conf.p0 - p)
+#             if (conf.n.dot(pd) < 0.0):
+#                 F_env += - conf.D_env.dot(pd)
+#
+#            # EXERCISE 2.9: Friction coefficient
+#             # # clamp to friction cone
+#             # # X component
+#             # if (F_env[0] >= conf.mu * F_env[2]):
+#             #     F_env[0] = conf.mu * F_env[2]
+#             # if (F_env[0] <= -conf.mu * F_env[2]):
+#             #     F_env[0] = -conf.mu * F_env[2]
+#             # # Y component
+#             # if (F_env[1] >= conf.mu * F_env[2]):
+#             #     F_env[1] = conf.mu * F_env[2]
+#             # if (F_env[1] <= -conf.mu * F_env[2]):
+#             #     F_env[1] = -conf.mu * F_env[2]
+#             # ros_pub.add_cone(p, conf.n, conf.mu, color = "blue")
+#
+#         else:
+#             contact_sampled = False
+#             F_env = np.array([0.0, 0.0, 0.0])
+
+
+        ros_pub.add_arrow(p,F_env/100.)
+        tau += J.transpose().dot(F_env)
     ros_pub.add_marker(p)     				
     		      
   
@@ -223,6 +224,7 @@ while True:
     qd_des_log[:,log_counter] = qd_des
     qdd_log[:,log_counter] = qdd
     qdd_des_log[:,log_counter] = qdd_des
+    p_log[:, log_counter] = p
     tau_log[:,log_counter] = tau
     log_counter+=1
          
@@ -248,6 +250,7 @@ plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log
 #plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 #plotJoint('torque', 3, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
+plotEndeff('position', 3, time_log, p_log)
 plt.show(block=True)
 
 

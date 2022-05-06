@@ -4,6 +4,7 @@ Created on Mon Oct 11 10:11:28 2021
 
 @author: mfocchi
 """
+import matplotlib.pyplot as plt
 
 from ref_generation import ReferenceGenerator
 from base_controller.utils.common_functions import  State
@@ -78,6 +79,5 @@ if __name__ == "__main__":
     active_plots.grforces = False    
     
     refclass.plotReference(active_plots)
-    
-    
-    
+
+    plt.show(block=True)
