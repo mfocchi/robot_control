@@ -316,7 +316,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
     return q0, log_err, log_grad
 
 
-def fifthOrderPolynomialTrajectory(tf,start,end):
+def fifthOrderPolynomialTrajectory(tf,start_pos,end_pos, start_vel = 0, end_vel = 0, start_acc =0, end_acc = 0):
 
     # Matrix used to solve the linear system of equations for the polynomial trajectory
     polyMatrix = np.array([[1,  0,              0,               0,                  0,                0],
@@ -326,7 +326,7 @@ def fifthOrderPolynomialTrajectory(tf,start,end):
                            [0,  1,           2*tf,3*np.power(tf,2),   4*np.power(tf,3), 5*np.power(tf,4)],
                            [0,  0,              2,             6*tf, 12*np.power(tf,2),20*np.power(tf,3)]])
     
-    polyVector = np.array([start, 0, 0, end, 0, 0])
+    polyVector = np.array([start_pos, start_vel, start_acc, end_pos, end_vel, end_acc])
     matrix_inv = np.linalg.inv(polyMatrix)
     polyCoeff = matrix_inv.dot(polyVector)
 
