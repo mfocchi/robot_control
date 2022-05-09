@@ -393,3 +393,53 @@ class robotKinematics():
         out = self.isOutOfJointLims(q, joint_limits_max, joint_limits_min)
         
         return out
+
+
+
+    def invKinFoot(self, ee_pos_des_BF, frame_name, q0_leg=np.zeros(3), verbose = False):
+        # Error initialization
+        niter = 0
+        # Recursion parameters
+        epsilon = 1e-06  # Tolerance
+        # alpha = 0.1
+        alpha = 1  # Step size
+        lambda_ = 0.0000001  # Damping coefficient for pseudo-inverse
+        max_iter = 200  # Maximum number of iterations
+        out_of_workspace = False
+
+        # Inverse kinematics with line search
+        while True:
+            # compute foot position
+            q0 = np.hstack((np.zeros(3), q0_leg))
+            self.robot.computeAllTerms(q0, np.zeros(6))
+            ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
+            # get the square matrix jacobian that is smaller (3x6)
+            J_ee = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True,
+                                            pinocchio.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+
+            # computed error wrt the des cartesian position
+            e_bar = ee_pos_des_BF - ee_pos0
+            Jpinv = (np.linalg.inv(J_ee.T.dot(J_ee) + lambda_ * np.identity(J_ee.shape[1]))).dot(J_ee.T)
+            grad = J_ee.T.dot(e_bar)
+            dq = Jpinv.dot(e_bar)
+            if np.linalg.norm(grad) < epsilon:
+                IKsuccess = True
+                if verbose:
+                    print("IK Convergence achieved!, norm(grad) :", np.linalg.norm(grad))
+                    print("Inverse kinematics solved in {} iterations".format(niter))
+                    if np.linalg.norm(e_bar) > 0.1:
+                        print("THE END EFFECTOR POSITION IS OUT OF THE WORKSPACE, norm(error) :", np.linalg.norm(e_bar))
+                        out_of_workspace = True
+                break
+
+            if niter >= max_iter:
+                if verbose:
+                    print(
+                        "\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ",
+                        np.linalg.norm(e_bar))
+                IKsuccess = False
+                break
+
+            q0_leg += alpha*dq
+            niter += 1
+        return q0_leg, IKsuccess, out_of_workspace

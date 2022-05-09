@@ -132,56 +132,6 @@ class JumpLegController(BaseControllerFixed):
             self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
                                  np.zeros(self.robot.na))
 
-
-    def invKinFoot(self, ee_pos_des_BF, frame_name, q0_leg=np.zeros(3), verbose = False):
-        # Error initialization
-        niter = 0
-        # Recursion parameters
-        epsilon = 1e-06  # Tolerance
-        # alpha = 0.1
-        alpha = 1  # Step size
-        lambda_ = 0.0000001  # Damping coefficient for pseudo-inverse
-        max_iter = 200  # Maximum number of iterations
-        out_of_workspace = False
-
-        # Inverse kinematics with line search
-        while True:
-            # compute foot position
-            q0 = np.hstack((np.zeros(3), q0_leg))
-            self.robot.computeAllTerms(q0, np.zeros(6))
-            ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
-            # get the square matrix jacobian that is smaller (3x6)
-            J_ee = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True,
-                                            pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
-
-            # computed error wrt the des cartesian position
-            e_bar = ee_pos_des_BF - ee_pos0
-            Jpinv = (np.linalg.inv(J_ee.T.dot(J_ee) + lambda_ * np.identity(J_ee.shape[1]))).dot(J_ee.T)
-            grad = J_ee.T.dot(e_bar)
-            dq = Jpinv.dot(e_bar)
-            if np.linalg.norm(grad) < epsilon:
-                IKsuccess = True
-                if verbose:
-                    print("IK Convergence achieved!, norm(grad) :", np.linalg.norm(grad))
-                    print("Inverse kinematics solved in {} iterations".format(niter))
-                    if np.linalg.norm(e_bar) > 0.1:
-                        print("THE END EFFECTOR POSITION IS OUT OF THE WORKSPACE, norm(error) :", np.linalg.norm(e_bar))
-                        out_of_workspace = True
-                break
-
-            if niter >= max_iter:
-                if verbose:
-                    print(
-                        "\n Warning: Max number of iterations reached, the iterative algorithm has not reached convergence to the desired precision. Error is: ",
-                        np.linalg.norm(e_bar))
-                IKsuccess = False
-                break
-
-            q0_leg += alpha*dq
-            niter += 1
-        return q0_leg, IKsuccess, out_of_workspace
-
-
     def thirdOrderPolynomialTrajectory(self, tf, q0, qf):
         # Matrix used to solve the linear system of equations for the polynomial trajectory
         polyMatrix = np.array([[1, 0, 0, 0],
@@ -222,9 +172,11 @@ def talker(p):
     com_f = np.array([0.1, 0., 0.25])
     comd_f = np.array([0.1, 0., 0.5])
 
-    q_0_leg, ik_success, out_of_workspace = p.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
-    q_f_leg, ik_success, out_of_workspace = p.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
-    a = np.empty((3, 4))
+    # boundary conditions
+    #position
+    q_0_leg, ik_success, out_of_workspace = p.ikin.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
+    q_f_leg, ik_success, out_of_workspace = p.ikin.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
+    # we need to recompute the jacobian  for the final joint position
     for i in range(3):
          a[i,:] = p.thirdOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i])
 
