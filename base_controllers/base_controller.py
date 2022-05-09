@@ -121,14 +121,21 @@ class BaseController(threading.Thread):
         self.b_R_w = np.eye(3)       
                                   
         self.grForcesW = np.zeros(self.robot.na)
+        self.grForcesW_gt = np.zeros(self.robot.na)
         self.basePoseW = np.zeros(6) 
         self.J = [np.zeros((6,self.robot.nv))]* 4
         self.wJ = [np.eye(3)]* 4
         self.W_contacts = [np.zeros((3))]*4                       
         self.B_contacts = [np.zeros((3))]*4   
-      
-        #uncomment if you want to use receivestate ground truth
-        #self.sub_contact = ros.Subscriber("/"+self.robot_name+"/contacts_state", ContactsState, callback=self._receive_contact, queue_size=1, buff_size=2**24,  tcp_nodelay=True)       
+
+        self.use_ground_truth_contacts = False
+
+        if self.use_ground_truth_contacts:
+            self.sub_contact_lf = ros.Subscriber("/" +self.robot_name+"/lf_foot_bumper", ContactsState, callback=self._receive_contact_lf, queue_size=1, buff_size=2**24,  tcp_nodelay=True)
+            self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState, callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,   tcp_nodelay=True)
+            self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,   callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 2,     tcp_nodelay=True)
+            self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState, callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,        tcp_nodelay=True)
+
         #self.sub_pose = ros.Subscriber("/"+self.robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1,buff_size=2**24, tcp_nodelay=True) no longer used
         self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)     
         self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)                  
@@ -144,26 +151,55 @@ class BaseController(threading.Thread):
 								
         #send data to param server
         self.verbose = conf.verbose
-																							
+
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
         print("Initialized basecontroller---------------------------------------------------------------")
                                  
-    def _receive_contact(self, msg):
-        # get the ground truth from gazebo (only works with framwork, dls_hw_sim has already LF RF LH RH convention) TODO publish them in ros_impedance_controller
-#        self.grForcesW[0] = msg.states[0].wrenches[0].force.x
-#        self.grForcesW[1] =  msg.states[0].wrenches[0].force.y
-#        self.grForcesW[2] =  msg.states[0].wrenches[0].force.z
-#        self.grForcesW[3] = msg.states[1].wrenches[0].force.x
-#        self.grForcesW[4] =  msg.states[1].wrenches[0].force.y
-#        self.grForcesW[5] =  msg.states[1].wrenches[0].force.z
-#        self.grForcesW[6] = msg.states[2].wrenches[0].force.x
-#        self.grForcesW[7] =  msg.states[2].wrenches[0].force.y
-#        self.grForcesW[8] =  msg.states[2].wrenches[0].force.z
-#        self.grForcesW[9] = msg.states[3].wrenches[0].force.x
-#        self.grForcesW[10] =  msg.states[3].wrenches[0].force.y
-#        self.grForcesW[11] =  msg.states[3].wrenches[0].force.z
-        pass
-                                                
+    def _receive_contact_lf(self, msg):
+        if (self.use_ground_truth_contacts):
+            grf = np.zeros(3)
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
+            configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lower_leg") ).rotation.dot(grf)
+            self.u.setLegJointState(0, grf, self.grForcesW_gt)
+        else:
+            pass
+    def _receive_contact_rf(self, msg):
+        if (self.use_ground_truth_contacts):
+            grf = np.zeros(3)
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
+            configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lower_leg") ).rotation.dot(grf)
+            self.u.setLegJointState(1, grf, self.grForcesW_gt)
+        else:
+            pass
+    def _receive_contact_lh(self, msg):
+        if (self.use_ground_truth_contacts):
+            grf = np.zeros(3)
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
+            configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lower_leg")).rotation.dot(grf)
+            self.u.setLegJointState(2, grf, self.grForcesW_gt)
+        else:
+            pass
+    def _receive_contact_rh(self, msg):
+        if (self.use_ground_truth_contacts):
+            grf = np.zeros(3)
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
+            configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lower_leg")).rotation.dot(grf)
+            self.u.setLegJointState(3, grf, self.grForcesW_gt)
+        else:
+            pass
+
     def _receive_pose(self, msg):
         
         self.quaternion[0]=    msg.pose.pose.orientation.x
@@ -449,7 +485,9 @@ def talker(p):
         
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")        
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")
+            if (p.use_ground_truth_contacts):
+                p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)), "red")
         p.ros_pub.publishVisual()      				
   
 #        if (p.time>0.5): 
