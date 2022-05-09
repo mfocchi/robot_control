@@ -10,8 +10,11 @@ class PidManager:
     def __init__(self, jnames):
         print("Initializing PID Manager")
         self.joint_names = jnames
-        #ros.wait_for_service('/set_pids')
-        self.set_pd_service = ros.ServiceProxy("/set_pids", set_pids)
+        try:
+            ros.wait_for_service("/set_pids", 5.0)
+            self.set_pd_service = ros.ServiceProxy("/set_pids", set_pids)
+        except (ros.ServiceException, ros.ROSException) as e:
+            ros.logger("Service call non available: %s" % (e,))
         self.joint_pid = pid()
         self.joint_pid_log = len(jnames)*[pid()]
         self.req_msg = set_pidsRequest()						
