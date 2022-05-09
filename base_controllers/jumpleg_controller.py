@@ -16,6 +16,7 @@ from utils.common_functions import plotJoint, plotCoMLinear
 import os
 
 from base_controller_fixed import BaseControllerFixed
+from utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
 import  params as conf
 robotName = "jumpleg"
 
@@ -49,33 +50,23 @@ class JumpLegController(BaseControllerFixed):
         self.q_fixed = np.hstack((np.zeros(3), self.q[3:]))
         self.qd_fixed = np.hstack((np.zeros(3), self.qd[3:]))
 
-
-        self.robot.computeAllTerms(self.q_fixed , self.qd_fixed)
+        self.robot.computeAllTerms(self.q  , self.qd )
         # joint space inertia matrix                
-        self.M = self.robot.mass(self.q_fixed)
+        self.M = self.robot.mass(self.q )
         # bias terms                
-        self.h = self.robot.nle(self.q_fixed , self.qd_fixed)
+        self.h = self.robot.nle(self.q  , self.qd )
         #gravity terms                
-        self.g = self.robot.gravity(self.q_fixed)
+        self.g = self.robot.gravity(self.q )
         #compute ee position  in the world frame  
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
         # this is expressed in a workdframe with the origin attached to the base frame origin
         self.x_ee = self.robot.framePlacement(self.q_fixed, self.robot.model.getFrameId(frame_name)).translation
 
 
-        # TODO compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
-        self.J = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
-        self.dJdq = self.robot.frameClassicAcceleration(self.q, self.qd, None,  self.robot.model.getFrameId(frame_name), False).linear
-
-        # TODO fix this
-        # Moore-penrose pseudoinverse of A = J^T => (A^TA)^-1 * A^T
-        #JTpinv = np.linalg.inv(self.J.dot(self.J.T)).dot(self.J)
-        M_inv = np.linalg.inv(self.M[3:, 3:])
-        # lambda_  inertia mapped at the end effector
-        lambda_ = np.linalg.inv(self.J.dot(M_inv).dot(self.J.T))
-        JTpinv = lambda_.dot(self.J).dot(M_inv)
-        # null-space projector of J^T#
-        self.N = (np.eye(3) - (self.J.T).dot(JTpinv))
+        # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
+        self.J6 = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
+        self.J = self.J6[:, 3:]
+        self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
         # compute com variables accordint to a frame located at the foot
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data)
@@ -177,9 +168,21 @@ def talker(p):
     q_0_leg, ik_success, out_of_workspace = p.ikin.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
     q_f_leg, ik_success, out_of_workspace = p.ikin.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
     # we need to recompute the jacobian  for the final joint position
-    for i in range(3):
-         a[i,:] = p.thirdOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i])
+    J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)), p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,
+                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+    #velocity
+    qd_0_leg = np.zeros(3)
+    qd_f_leg = -np.linalg.inv(J_final).dot(comd_f)
+    #accelerations
+    qdd_0_leg = np.zeros(3)
+    qdd_f_leg = -np.linalg.inv(J_final).dot(np.array([0.,0.,-9.81]))
 
+    # a = np.empty((3, 4))
+    # for i in range(3):
+    #      a[i,:] = p.thirdOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i])
+    a = np.empty((3, 6))
+    for i in range(3):
+         a[i,:] = fifthOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i], qd_0_leg[i],  qd_f_leg[i],  qdd_0_leg[i],  qdd_f_leg[i])
 
     # here the RL loop...
 
@@ -195,9 +198,13 @@ def talker(p):
         if (p.time > startTrust) and (p.time < startTrust + T_f):
             t = p.time - startTrust
             for i in range(3):
-                p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
-                p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
-            #     #qdd = 2 * a[2] + 6 * a[3] * time + 12 * a[4] * time ** 2 + 20 * a[5] * time ** 3
+                # third order
+                # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
+                # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
+                # fifth order
+                p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
+                p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
+                p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
 
         if (p.time > startTrust):
             # pd  =  np.multiply( conf.robot_params[p.robot_name]['kp'][3:], np.subtract(p.q_des[3:],   p.q[3:]) ) \
