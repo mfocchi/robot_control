@@ -381,14 +381,14 @@ def talker(p):
             #update the kinematics
             p.updateKinematicsDynamics()
 
-            # EXE L7-1: set constant joint reference
+            # EXE L8-1.1: set constant joint reference
             p.q_des = np.copy(p.q_des_q0)
 
-            # EXE L7-2: set sinusoidal joint reference
-            #p.q_des  = p.q_des_q0  + 0.15 * np.sin(0.5*3.14*p.time)
+            # EXE L8-1.2: set sinusoidal joint reference
+            #p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
 
 
-            # EXE L7-3: set constant ee reference
+            # EXE L8-1.3: set constant ee reference
             # p.x_ee_des = lab_conf.ee_reference
             # p.ros_pub.add_marker(p.x_ee_des + p.base_offset, color='blue')
             # p.q_des, ok, out_ws = p.ikin.endeffectorInverseKinematicsLineSearch(p.x_ee_des,
@@ -397,7 +397,7 @@ def talker(p):
             #                                                                     postural_task=True, w_postural=0.00001,
             #                                                                     q_postural=p.q_des_q0)
 
-            # EXE L7-5:  set constant ee reference and create polynomial trajectory to reach it
+            # EXE L8-1.5:  set constant ee reference and create polynomial trajectory to reach it
             # p.x_ee_des = lab_conf.ee_reference
             # p.ros_pub.add_marker(p.x_ee_des + p.base_offset, color='blue')
             # if not p.polynomial_flag and p.time > 3.0:
@@ -418,18 +418,19 @@ def talker(p):
             #                                                                     postural_task=True, w_postural=0.00001,
             #                                                                     q_postural=p.q_des_q0)
 
-            # EXE L7-4:  set constant ee reference and desired orientation
-            # rpy_des = np.array([ -1.9, -0.5, -0.1])
+            # EXE L8-1.4:  set constant ee reference and desired orientation
+            # rpy_des = lab_conf.des_orient
             # w_R_e_des = p.math_utils.eul2Rot(rpy_des) # compute rotation matrix representing the desired orientation from Euler Angles
             # p.q_des, ok, out_ws = p.ikin.endeffectorFrameInverseKinematicsLineSearch(p.x_ee_des, w_R_e_des, conf.robot_params[p.robot_name]['ee_frame'], p.q)
+            # TODO create polynomial for orientation!
 
-            # EXE L7-6 - admittance control
+            # EXE L8-2 - admittance control
             if (lab_conf.admittance_control):
                 p.EXTERNAL_FORCE = True
                 p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
                 p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
 
-            # EXE L7-7 - load estimation
+            # EXE L8-7 - load estimation
             # if (p.time > 10.0):
             #     p.payload_weight_avg = 0.99 * p.payload_weight_avg + 0.01 * (-p.contactForceW[2] / 9.81)
             #     print("estimated load: ", p.payload_weight_avg)
