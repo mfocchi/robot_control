@@ -107,19 +107,17 @@ class JumpLegController(BaseControllerFixed):
             self.freezeBaseFlag = flag
             print("releasing base")
             p.tau_ffwd[2] = 0.
+            # set base joints PD to zero
             self.pid.setPDjoint(0, 0., 0., 0.)
             self.pid.setPDjoint(1, 0., 0., 0.)
             self.pid.setPDjoint(2, 0., 0., 0.)
-
-            # debug
-            #self.q_des[2] = 0.3
 
         if (not self.freezeBaseFlag) and (flag):
             self.freezeBaseFlag = flag
             print("freezing base")
             self.q_des = np.copy(p.q_des_q0)
             self.tau_ffwd = np.zeros(self.robot.na)
-            self.tau_ffwd[2] = p.g[2]
+            self.tau_ffwd[2] = p.g[2] # compensate gravitu in the virtual joint to go exactly there
             self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
                                  np.zeros(self.robot.na))
 
@@ -157,11 +155,13 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
     # compute coeff first time
+    p.updateKinematicsDynamics()
     # initial com posiiton
     T_f = 0.3
     com_0 = np.array([0., 0., 0.25])
-    com_f = np.array([0.1, 0., 0.25])
-    comd_f = np.array([0.1, 0., 0.5])
+    # final com position /velocity
+    com_f = np.array([0.15, 0., 0.25])
+    comd_f = np.array([0.3, 0., 0.3])
 
     # boundary conditions
     #position
@@ -188,11 +188,10 @@ def talker(p):
 
     p.time = 0
     startTrust = 2.0
-    p.updateKinematicsDynamics()
     p.freezeBase(True)
-    counter = 0
+
     #control loop
-    while p.time < (startTrust + 2.):
+    while p.time < (startTrust + T_f):
         #update the kinematics
         p.updateKinematicsDynamics()
         if (p.time > startTrust) and (p.time < startTrust + T_f):
@@ -207,22 +206,35 @@ def talker(p):
                 p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
 
         if (p.time > startTrust):
-            # pd  =  np.multiply( conf.robot_params[p.robot_name]['kp'][3:], np.subtract(p.q_des[3:],   p.q[3:]) ) \
-            #               +np.multiply(conf.robot_params[p.robot_name]['kd'][3:], np.subtract(p.qd_des[3:],   p.qd[3:]))
-            p.tau_ffwd[3:] = -p.J.T.dot( p.g[:3])  # gravity compensation
+            p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
+            # only gravity compensation (not used anymore)
+            #p.tau_ffwd[3:] = -p.J.T.dot( p.g[:3])
 
-            # TODO fix this
-            # p.qdd_ref = p.qdd_des[3:] + pd
-            # p.tau_ffwd[3:] = np.linalg.pinv(p.N) @ p.N @ (p.M[3:, 3:] @ p.qdd_ref + p.h[3:])
+            # with inv dyn
+            # compute constraint consinstent base accell
+            p.base_accel = -p.J.dot(p.qdd_des[3:]) -p.dJdq
+            p.qdd_des[:3] = p.base_accel
+            p.qdd_ref = p.qdd_des
+
+            #add feedback part
+            pd = np.multiply(conf.robot_params[p.robot_name]['kp'][3:], np.subtract(p.q_des[3:], p.q[3:])) #\
+                # + np.multiply(conf.robot_params[p.robot_name]['kd'][3:], np.subtract(p.qd_des[3:], p.qd[3:]))
+            p.qdd_ref[3:] += pd
+
+            # form matrix A
+            S = np.vstack(( np.zeros((3,3)) , np.eye(3) ))
+            A = np.zeros((6,6))
+            A[:6, :3] = S
+            A[:6, 3:] = p.J6.T
+            x = np.linalg.pinv(A).dot(p.M.dot(p.qdd_ref) + p.h)
+            p.tau_ffwd[3:] = x[:3]
+            p.contactForceW = x[3:]
 
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
         # log variables
         p.logData()
-
-        if ( p.time > startTrust):
-            p.freezeBase(False)
 
         # disturbance force
         # if (p.time > 3.0 and p.EXTERNAL_FORCE):
