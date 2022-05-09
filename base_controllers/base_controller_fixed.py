@@ -41,6 +41,7 @@ import matplotlib.pyplot as plt
 
 
 import  params as conf
+# robots can be ur5 and jumpleg to load ur5 you need to set this xacro path in loadModelAndPublishers  rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
 robotName = "jumpleg"
 
 from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
@@ -88,6 +89,7 @@ class BaseControllerFixed(threading.Thread):
         if use_torque_control is not None:
             cli_args.append('use_torque_control:=' + str(self.use_torque_control))
         if world_name is not None:
+            print(colored("Setting custom model: "+str(world_name), "blue"))
             cli_args.append('world_name:=' + str(world_name))
 
         roslaunch_args = cli_args[1:]
@@ -95,7 +97,7 @@ class BaseControllerFixed(threading.Thread):
         parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
         parent.start()
         ros.sleep(1.0)
-        print(colored('-----------------------------------------------SIMULATION', 'blue'))
+        print(colored('SIMULATION Started', 'blue'))
 
     def loadModelAndPublishers(self,  xacro_path = None):
 

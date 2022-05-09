@@ -89,16 +89,19 @@ class JumpLegController(BaseControllerFixed):
     def initVars(self):
         super().initVars()
         self.qdd_des =  np.zeros(self.robot.na)
+        self.base_accel = np.zeros(3)
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.comd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         #self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.qdd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
                 self.com_log[:, self.log_counter] = self.com
                 self.comd_log[:, self.log_counter] = self.comd
                 #self.comdd_log[:, self.log_counter] = self.comdd
+                self.qdd_des_log[:, self.log_counter] = self.qdd_des
             super().logData()
 
     def freezeBase(self, flag):
@@ -259,9 +262,14 @@ def talker(p):
     ros.signal_shutdown("killed")
     p.deregister_node()
 
-    plotCoMLinear('position', 1, p.time_log, None, p.com_log, None, p.comd_log)
-    plotCoMLinear('position', 2, p.time_log, None, p.contactForceW_log)
-    plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log,  p.qd_log, p.qd_des_log,   joint_names=conf.robot_params[p.robot_name]['joint_names'])
+    plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+    plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+    plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log,  p.qd_log, p.qd_des_log,  p.qdd_des_log, None, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+    plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+              joint_names=conf.robot_params[p.robot_name]['joint_names'])
+    plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+              joint_names=conf.robot_params[p.robot_name]['joint_names'])
+
     plt.show(block=True)
 
 

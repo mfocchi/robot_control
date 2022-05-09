@@ -349,29 +349,12 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
 
 
 
-def plotCoMLinear(name, figure_id, time_log, des_com=None, com=None, des_comd=None, comd=None, des_comdd= None, comdd=None):
-    plot_var_des_log = None
-    if name == 'position':
-        plot_var_log = com
-        if (des_com is not None):
-            plot_var_des_log = des_com
-    elif name == 'velocity':
-        plot_var_log = comd
-        if (des_comd is not None):
-            plot_var_des_log = des_comd
-    elif name == 'acceleration':
-        plot_var_log = comdd
-        if ( des_comdd is not None):
-            plot_var_des_log =  des_comdd
-    else:
-        print("wrong choice")
-
-
+def plotCoMLinear(name, figure_id, time_log, plot_var_des_log=None, plot_var_log=None):
     # neet to transpose the matrix other wise it cannot be plot with numpy array
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)
     plt.subplot(3, 1, 1)
-    plt.ylabel("CoM X")
+    plt.ylabel("X")
     plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     if (plot_var_des_log is not None):
         plt.plot(time_log, plot_var_des_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
@@ -380,16 +363,15 @@ def plotCoMLinear(name, figure_id, time_log, des_com=None, com=None, des_comd=No
     plt.grid()
 
     plt.subplot(3, 1, 2)
-    plt.ylabel("CoM Y")
+    plt.ylabel("Y")
     plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue',
              label="q")
     if (plot_var_des_log is not None):
-        plt.plot(time_log, plot_var_des_log[1, :], linestyle='-', lw=lw_des, color='red', label="q_des")
-    plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
+        plt.plot(time_log, plot_var_des_log[1, :], linestyle='-', lw=lw_des, color='red', label="des")
     plt.grid()
 
     plt.subplot(3, 1, 3)
-    plt.ylabel("CoM Z")
+    plt.ylabel("Z")
     plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     if (plot_var_des_log is not None):
         plt.plot(time_log, plot_var_des_log[2, :], linestyle='-', lw=lw_des, color='red')
