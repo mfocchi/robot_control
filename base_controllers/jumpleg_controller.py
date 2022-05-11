@@ -13,6 +13,7 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress 
 import matplotlib.pyplot as plt
 from numpy import nan
 from utils.common_functions import plotJoint, plotCoMLinear
+from termcolor import colored
 import os
 
 from base_controller_fixed import BaseControllerFixed
@@ -123,6 +124,11 @@ class JumpLegController(BaseControllerFixed):
                 self.pid.setPDjoint(1, 0., 0., 0.)
                 self.pid.setPDjoint(2, 0., 0., 0.)
 
+                # setting PD joints to 0 (needed otherwise it screws up inverse dynamics)
+                self.pid.setPDjoint(3, 0., 0.2, 0.)
+                self.pid.setPDjoint(4, 0., 0.2, 0.)
+                self.pid.setPDjoint(5, 0., 0.2, 0.)
+
             if (not self.freezeBaseFlag) and (flag):
                 self.freezeBaseFlag = flag
                 print("freezing base")
@@ -158,17 +164,28 @@ class JumpLegController(BaseControllerFixed):
              + np.multiply(conf.robot_params[self.robot_name]['kd'][start_idx:end_idx], np.subtract(self.qd_des[start_idx:end_idx], self.qd[start_idx:end_idx]))
         return pd
 
-    def computeInverseDynamics(self, qdd_des):
-        # with inv dyn
-        # add feedback part
+    def computeInverseDynamics(self):
+        # debug of idyn(stabilization of base) override references and set q0
+        # p.q_des = conf.robot_params[p.robot_name]['q_0']
+        # p.qd_des = np.zeros(6)
+        # p.qdd_des = np.zeros(6)
+        # # add fback on base
+        # pd = p.computeFeedbackAction(0, 3)
+        # # compute constraint consinstent joint accell
+        # p.qdd_des[3:] = np.linalg.inv(p.J).dot( -( p.qdd_des[:3] + pd)  -p.dJdq)
+        # qdd_ref = np.zeros(6)
+        # qdd_ref[:3] = p.qdd_des[:3] + pd
+        # qdd_ref[3:] = p.qdd_des[3:]
+
+        # # add feedback part on the joints
         pd = p.computeFeedbackAction(3, 6)
         # compute constraint consinstent base accell
-        p.base_accel = -p.J.dot(qdd_des[3:] + pd) - p.dJdq
+        p.base_accel = -p.J.dot(p.qdd_des[3:] + pd) - p.dJdq
         qdd_ref = np.zeros(6)
         qdd_ref[:3] = p.base_accel
-        qdd_ref[3:] = qdd_des[3:] + pd
+        qdd_ref[3:] = p.qdd_des[3:] + pd
 
-        # form matrix A
+        # form matrix A , x = [tau_joints, f]
         S = np.vstack((np.zeros((3, 3)), np.eye(3)))
         A = np.zeros((6, 6))
         A[:6, :3] = S
@@ -209,7 +226,8 @@ def talker(p):
     com_0 = np.array([0., 0., 0.25])
     # final com position /velocity
     com_f = np.array([0.15, 0., 0.25])
-    comd_f = np.array([0.3, 0., 0.3])
+    #com_f = np.array([0.15, 0., 0.28]) #hits joint limits!! screws up!
+    comd_f = np.array([0.3, 0., 1.0])
 
     # boundary conditions
     #position
@@ -239,7 +257,7 @@ def talker(p):
     p.freezeBase(True)
 
     #control loop
-    while p.time < (startTrust + T_f) + 20.:
+    while p.time < (startTrust + T_f):
         #update the kinematics
         p.updateKinematicsDynamics()
         if (p.time > startTrust):
@@ -247,19 +265,25 @@ def talker(p):
             #compute joint reference
             if   (p.time < startTrust + T_f):
                 t = p.time - startTrust
-                #for i in range(3):
+                for i in range(3):
                     # third order
                     # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
                     # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
-                    # fifth order
-                    # p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
-                    # p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
-                    # p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
+                    #fifth order
+                    p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
+                    p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
+                    p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
+                    if (p.q_des[3 + i] > p.robot.model.upperPositionLimit[3+i]):
+                        #put negative reward here
+                        print(colored("upper limit hit in "+str(3+i)+"-th joint","red"))
+                    if (p.q_des[3 + i] < p.robot.model.lowerPositionLimit[3 + i]):
+                        # put negative reward here
+                        print(colored("lower limit hit in " + str(3 + i) + "-th joint", "red"))
 
             #compute control action
             # only gravity compensation (not used anymore)
             #p.tau_ffwd[3:] = -p.J.T.dot( p.g[:3])
-            p.tau_ffwd[:3], p.contactForceW = p.computeInverseDynamics(p.qdd_des)
+            p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
 
             # send commands to gazebo
             if p.no_gazebo:
@@ -302,7 +326,6 @@ def talker(p):
               joint_names=conf.robot_params[p.robot_name]['joint_names'])
     plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
               joint_names=conf.robot_params[p.robot_name]['joint_names'])
-
     plt.show(block=True)
 
 
@@ -314,7 +337,15 @@ if __name__ == '__main__':
         talker(p)
     except ros.ROSInterruptException:
         print("PLOTTING")
-        #
+        plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+        plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+        plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plt.show(block=True)
 
 
         
