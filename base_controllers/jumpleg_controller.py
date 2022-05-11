@@ -16,6 +16,8 @@ from utils.common_functions import plotJoint, plotCoMLinear
 import os
 
 from base_controller_fixed import BaseControllerFixed
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.common_functions import getRobotModel
 from utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
 import  params as conf
 robotName = "jumpleg"
@@ -26,6 +28,7 @@ class JumpLegController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
+        self.no_gazebo = True
         print("Initialized jump leg controller---------------------------------------------------------------")
 
     def applyForce(self):
@@ -96,6 +99,11 @@ class JumpLegController(BaseControllerFixed):
         #self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.qdd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
+        self.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
+
+        if p.no_gazebo:
+            p.q = conf.robot_params[p.robot_name]['q_0']
+
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
                 self.com_log[:, self.log_counter] = self.com
@@ -105,24 +113,24 @@ class JumpLegController(BaseControllerFixed):
             super().logData()
 
     def freezeBase(self, flag):
+        if not self.no_gazebo:
+            if (self.freezeBaseFlag) and (not flag):
+                self.freezeBaseFlag = flag
+                print("releasing base")
+                p.tau_ffwd[2] = 0.
+                #set base joints PD to zero
+                self.pid.setPDjoint(0, 0., 0., 0.)
+                self.pid.setPDjoint(1, 0., 0., 0.)
+                self.pid.setPDjoint(2, 0., 0., 0.)
 
-        if (self.freezeBaseFlag) and (not flag):
-            self.freezeBaseFlag = flag
-            print("releasing base")
-            p.tau_ffwd[2] = 0.
-            # set base joints PD to zero
-            self.pid.setPDjoint(0, 0., 0., 0.)
-            self.pid.setPDjoint(1, 0., 0., 0.)
-            self.pid.setPDjoint(2, 0., 0., 0.)
-
-        if (not self.freezeBaseFlag) and (flag):
-            self.freezeBaseFlag = flag
-            print("freezing base")
-            self.q_des = np.copy(p.q_des_q0)
-            self.tau_ffwd = np.zeros(self.robot.na)
-            self.tau_ffwd[2] = p.g[2] # compensate gravitu in the virtual joint to go exactly there
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
-                                 np.zeros(self.robot.na))
+            if (not self.freezeBaseFlag) and (flag):
+                self.freezeBaseFlag = flag
+                print("freezing base")
+                self.q_des = np.copy(p.q_des_q0)
+                self.tau_ffwd = np.zeros(self.robot.na)
+                self.tau_ffwd[2] = p.g[2] # compensate gravitu in the virtual joint to go exactly there
+                self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
+                                     np.zeros(self.robot.na))
 
     def thirdOrderPolynomialTrajectory(self, tf, q0, qf):
         # Matrix used to solve the linear system of equations for the polynomial trajectory
@@ -137,6 +145,14 @@ class JumpLegController(BaseControllerFixed):
 
         return polyCoeff
 
+    def forwardEulerIntegration(self, tau, force):
+        # dont use gazebo
+        M_inv = np.linalg.inv(self.M)
+        qdd = M_inv.dot(tau - self.h + self.J6.T.dot(force))
+        # Forward Euler Integration
+        self.qd += qdd * conf.robot_params[p.robot_name]['dt']
+        self.q += conf.robot_params[self.robot_name]['dt'] * self.qd + 0.5 * pow(conf.robot_params[self.robot_name]['dt'], 2) * qdd
+
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
@@ -146,12 +162,18 @@ class JumpLegController(BaseControllerFixed):
 def talker(p):
 
     p.start()
-    p.startSimulator()
-    p.loadModelAndPublishers()
-    p.initVars()     
-    p.startupProcedure()
+    # dont use gazebo
+    if p.no_gazebo:
+        p.ros_pub = RosPub("jumpleg")
+        p.robot = getRobotModel("jumpleg")
+    else:
+        p.startSimulator("slow.world")
+        #p.startSimulator()
+        p.loadModelAndPublishers()
+        p.startupProcedure()
+
+    p.initVars()
     ros.sleep(1.0)
-    p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     p.q_des = np.copy(p.q_des_q0)
 
     #loop frequency
@@ -233,8 +255,13 @@ def talker(p):
             p.tau_ffwd[3:] = x[:3]
             p.contactForceW = x[3:]
 
-        # send commands to gazebo
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            # send commands to gazebo
+            if p.no_gazebo:
+                p.forwardEulerIntegration(p.tau_ffwd, p.contactForceW )
+                p.ros_pub.publish(p.robot, p.q)
+
+        if not p.no_gazebo:
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
         # log variables
         p.logData()

@@ -125,8 +125,6 @@ class BaseControllerFixed(threading.Thread):
                                          callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
-        self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
-
         self.pid = PidManager(self.joint_names)
 
     def _receive_jstate(self, msg):
@@ -189,6 +187,9 @@ class BaseControllerFixed(threading.Thread):
         self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.time = 0.0
         self.log_counter = 0
+
+        self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
+
 
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
