@@ -44,10 +44,10 @@ for idx,name in enumerate(robot.model.joints):
 		w_com_link = robot.data.oMi[idx].rotation.dot(com_link) + robot.data.oMi[idx].translation		
 		w_com_robot +=  mass_link * w_com_link
 w_com_robot /=mass_robot
-print "Com Position w_com_robot: ", w_com_robot
+print("Com Position w_com_robot: ", w_com_robot)
 # compute using native pinocchio function
 com_test = pin.centerOfMass(robot.model, robot.data, q, v)
-print "Com Position (pinocchio): ", com_test
+print( "Com Position (pinocchio): ", com_test)
 
 #print(robot.frameJacobian(q,  robot.model.getFrameId('lf_foot'), True,pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)  )
 

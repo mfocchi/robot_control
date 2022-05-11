@@ -4,6 +4,7 @@ from ros_impedance_controller.msg import pid
 
 import rospy as ros
 import copy
+from termcolor import colored
 
 class PidManager:
 
@@ -11,10 +12,10 @@ class PidManager:
         print("Initializing PID Manager")
         self.joint_names = jnames
         try:
-            ros.wait_for_service("/set_pids", 5.0)
+            ros.wait_for_service("/set_pids")
             self.set_pd_service = ros.ServiceProxy("/set_pids", set_pids)
         except (ros.ServiceException, ros.ROSException) as e:
-            ros.logger("Service call non available: %s" % (e,))
+            print(colored("PID Manager: Service call /set_pids non available","red"))
         self.joint_pid = pid()
         self.joint_pid_log = len(jnames)*[pid()]
         self.req_msg = set_pidsRequest()						
