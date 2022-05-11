@@ -28,7 +28,7 @@ class JumpLegController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
-        self.no_gazebo = True
+        self.no_gazebo = False
         print("Initialized jump leg controller---------------------------------------------------------------")
 
     def applyForce(self):
@@ -99,10 +99,10 @@ class JumpLegController(BaseControllerFixed):
         #self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.qdd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
-        self.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
+        self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
 
-        if p.no_gazebo:
-            p.q = conf.robot_params[p.robot_name]['q_0']
+        if self.no_gazebo:
+            self.q = conf.robot_params[self.robot_name]['q_0']
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -117,7 +117,7 @@ class JumpLegController(BaseControllerFixed):
             if (self.freezeBaseFlag) and (not flag):
                 self.freezeBaseFlag = flag
                 print("releasing base")
-                p.tau_ffwd[2] = 0.
+                self.tau_ffwd[2] = 0.
                 #set base joints PD to zero
                 self.pid.setPDjoint(0, 0., 0., 0.)
                 self.pid.setPDjoint(1, 0., 0., 0.)
@@ -126,9 +126,9 @@ class JumpLegController(BaseControllerFixed):
             if (not self.freezeBaseFlag) and (flag):
                 self.freezeBaseFlag = flag
                 print("freezing base")
-                self.q_des = np.copy(p.q_des_q0)
+                self.q_des = np.copy(self.q_des_q0)
                 self.tau_ffwd = np.zeros(self.robot.na)
-                self.tau_ffwd[2] = p.g[2] # compensate gravitu in the virtual joint to go exactly there
+                self.tau_ffwd[2] = self.g[2] # compensate gravitu in the virtual joint to go exactly there
                 self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
                                      np.zeros(self.robot.na))
 
@@ -150,8 +150,31 @@ class JumpLegController(BaseControllerFixed):
         M_inv = np.linalg.inv(self.M)
         qdd = M_inv.dot(tau - self.h + self.J6.T.dot(force))
         # Forward Euler Integration
-        self.qd += qdd * conf.robot_params[p.robot_name]['dt']
+        self.qd += qdd * conf.robot_params[self.robot_name]['dt']
         self.q += conf.robot_params[self.robot_name]['dt'] * self.qd + 0.5 * pow(conf.robot_params[self.robot_name]['dt'], 2) * qdd
+
+    def computeFeedbackAction(self, start_idx, end_idx):
+        pd = np.multiply(conf.robot_params[self.robot_name]['kp'][start_idx:end_idx], np.subtract(self.q_des[start_idx:end_idx], self.q[start_idx:end_idx])) \
+             + np.multiply(conf.robot_params[self.robot_name]['kd'][start_idx:end_idx], np.subtract(self.qd_des[start_idx:end_idx], self.qd[start_idx:end_idx]))
+        return pd
+
+    def computeInverseDynamics(self, qdd_des):
+        # with inv dyn
+        # add feedback part
+        pd = p.computeFeedbackAction(3, 6)
+        # compute constraint consinstent base accell
+        p.base_accel = -p.J.dot(qdd_des[3:] + pd) - p.dJdq
+        qdd_ref = np.zeros(6)
+        qdd_ref[:3] = p.base_accel
+        qdd_ref[3:] = qdd_des[3:] + pd
+
+        # form matrix A
+        S = np.vstack((np.zeros((3, 3)), np.eye(3)))
+        A = np.zeros((6, 6))
+        A[:6, :3] = S
+        A[:6, 3:] = p.J6.T
+        x = np.linalg.pinv(A).dot(p.M.dot(qdd_ref) + p.h)
+        return x[:3], x[3:]
 
     def deregister_node(self):
         super().deregister_node()
@@ -216,44 +239,27 @@ def talker(p):
     p.freezeBase(True)
 
     #control loop
-    while p.time < (startTrust + T_f):
+    while p.time < (startTrust + T_f) + 20.:
         #update the kinematics
         p.updateKinematicsDynamics()
-        if (p.time > startTrust) and (p.time < startTrust + T_f):
-            t = p.time - startTrust
-            for i in range(3):
-                # third order
-                # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
-                # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
-                # fifth order
-                p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
-                p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
-                p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
-
         if (p.time > startTrust):
             p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
+            #compute joint reference
+            if   (p.time < startTrust + T_f):
+                t = p.time - startTrust
+                #for i in range(3):
+                    # third order
+                    # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
+                    # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
+                    # fifth order
+                    # p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
+                    # p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
+                    # p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
+
+            #compute control action
             # only gravity compensation (not used anymore)
             #p.tau_ffwd[3:] = -p.J.T.dot( p.g[:3])
-
-            # with inv dyn
-            # compute constraint consinstent base accell
-            p.base_accel = -p.J.dot(p.qdd_des[3:]) -p.dJdq
-            p.qdd_des[:3] = p.base_accel
-            p.qdd_ref = p.qdd_des
-
-            #add feedback part
-            pd = np.multiply(conf.robot_params[p.robot_name]['kp'][3:], np.subtract(p.q_des[3:], p.q[3:])) #\
-                # + np.multiply(conf.robot_params[p.robot_name]['kd'][3:], np.subtract(p.qd_des[3:], p.qd[3:]))
-            p.qdd_ref[3:] += pd
-
-            # form matrix A
-            S = np.vstack(( np.zeros((3,3)) , np.eye(3) ))
-            A = np.zeros((6,6))
-            A[:6, :3] = S
-            A[:6, 3:] = p.J6.T
-            x = np.linalg.pinv(A).dot(p.M.dot(p.qdd_ref) + p.h)
-            p.tau_ffwd[3:] = x[:3]
-            p.contactForceW = x[3:]
+            p.tau_ffwd[:3], p.contactForceW = p.computeInverseDynamics(p.qdd_des)
 
             # send commands to gazebo
             if p.no_gazebo:
