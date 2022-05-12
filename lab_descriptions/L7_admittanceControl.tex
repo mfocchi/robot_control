@@ -61,7 +61,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \rhead{\textit{\thepage}}
-\lhead{\textit{ Task Space Motion Control Lab}}
+\lhead{\textit{ LAB 4: Admittance Control and Planning}}
 
 %For inserting the code
 \usepackage{fancyvrb}
@@ -106,7 +106,7 @@
 \newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
 
 
-\title{LAB 7: Admittance Control}
+\title{LAB 4: Admittance Control and Planning}
 \author{Michele Focchi and Matteo Saveriano}
 \date{}
 
@@ -196,23 +196,23 @@ The transfer function G(s) for this model in the Laplace domain is :
 
 \begin{align}
 \label{eq:tf}
-\Delta p_e &= \frac{ F_{ext} }{K_d s + K_p}\\
-G(s)& = \frac{\Delta p_e}{F_{ext}} = \frac{ 1 }{K_d s + K_p} \nonumber
+\Delta p_e &= \frac{ F_{ext} }{D_x s + K_x}\\
+G(s)& = \frac{\Delta p_e}{F_{ext}} = \frac{ 1 }{D_x s + K_x} \nonumber
 \end{align}
 
 
 Where the input is the contact force $F_{ext}\in \Rnum^3$ and the output the shift  $\Delta p_e\in \Rnum^3$ to be applied to the end-effector reference to emulate a virtual stiffness in response to  $F_{ext}$. Note that this transfer function is in continuous time and we need a discretized version for a digital implementation on a computer. To get the discrete version, it is convenient to convert \eqref{eq:tf} first in the time domain:
 
 \begin{align*}
-K_d \Delta\dot{ p_e} + K_p{\Delta p_e}  =  F_{ext}  
+D_x \Delta\dot{ p_e} + K_x{\Delta p_e}  =  F_{ext}  
 \end{align*}
  
 Then, if  we  employ Backward Differentiation Formula $\dot{p_e} = (p_e(k)- p_e(k-1))dT^{-1}$ to approximate the derivative, then we can get the following difference equation:
 
 \begin{align*}
-&K_d \frac{p_e(k)- p_e(k-1)}{dT}  + K_p \Delta p_e(k)  =  F_{ext}(k)  \\
-&\Delta p_e(k) (K_d dT^{-1} + K_p ) - K_d \Delta p_e(k-1)dT^{-1} =  F_{ext}(k)\\
-&\Delta p_e(k) =  (K_d dT^{-1} + K_p )^{-1} (F_{ext}(k) + K_d \Delta p_e(k-1)dT^{-1})
+&D_x \frac{\Delta p_e(k)- \Delta p_e(k-1)}{dT}  + K_x \Delta p_e(k)  =  F_{ext}(k)  \\
+&\Delta p_e(k) (D_x dT^{-1} + K_x ) - D_x \Delta p_e(k-1)dT^{-1} =  F_{ext}(k)\\
+&\Delta p_e(k) =  (D_x dT^{-1} + K_x )^{-1} (F_{ext}(k) + D_x \Delta p_e(k-1)dT^{-1})
 \end{align*}
 
 where (k)and (k-1) refer to the actual and previous samples of the variables. \\
@@ -222,8 +222,8 @@ Now that we wrote a function to implement the admittance model, we still miss to
 
 
 \textbf{2.3 - External push with a constant reference}\\
-Now we are ready to test the implemented algorithm. Set  a constant joint reference $q_0$  for the robot to follow (this will correspond to a constant end-effector position) and set the admittance gains to $K_p = 1000I_{3\times3}$,  $K_d = 300I_{3\times3}$. We can have a feeling  on how the controller works by applying an external force either in simulation (calling the function \codeword{applyForce()} after 5 seconds) or pushing manually (gently!) the end-effector (Important! keep always the E-stop in your hand to kill the robot in case some instability arise!). You should feel the robot deviating from the reference in the same direction of the force (we are setting a diagonal stiffness matrix), as if a spring is attached at the end-effector trying to push it back to the original position. 
-Now try to reduce the stiffness gain to $K_p = 600I_{3\times3}$, in order to make the robot more ``soft''. You should feel that for the same force you are applying you are getting a bigger deflection (almost double).
+Now we are ready to test the implemented algorithm. Set  a constant joint reference $q_0$  for the robot to follow (this will correspond to a constant end-effector position) and set the admittance gains to $K_x = 1000I_{3\times3}$,  $D_x = 300I_{3\times3}$. We can have a feeling  on how the controller works by applying an external force either in simulation (calling the function \codeword{applyForce()} after 5 seconds) or pushing manually (gently!) the end-effector (Important! keep always the E-stop in your hand to kill the robot in case some instability arise!). You should feel the robot deviating from the reference in the same direction of the force (we are setting a diagonal stiffness matrix), as if a spring is attached at the end-effector trying to push it back to the original position. 
+Now try to reduce the stiffness gain to $K_x = 600I_{3\times3}$, in order to make the robot more ``soft''. You should feel that for the same force you are applying you are getting a bigger deflection (almost double).
 Plot the signals of the end-effector position and force to evaluate the direction of the deflection is consistent with the force.
 
 \textbf{2.4 - External push with a sinusoidal reference}

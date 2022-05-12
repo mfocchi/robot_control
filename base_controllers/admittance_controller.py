@@ -19,6 +19,10 @@ class AdmittanceControl():
         self.Kd = Kd
         self.q_postural =   self.conf['q_0']
 
+    def setAdmittanceGains(self, Kp, Kd):
+        self.Kp = Kp
+        self.Kd = Kd
+
     def setPosturalTask(self, q_postural):
         self.q_postural = q_postural
 

@@ -11,6 +11,7 @@ import os
 import rospy as ros
 import sys
 # messages for topic subscribers
+from docutils.nodes import label
 from geometry_msgs.msg import WrenchStamped
 from geometry_msgs.msg import Wrench, Point
 from std_srvs.srv import Trigger
@@ -123,7 +124,6 @@ class LabAdmittanceController(BaseControllerFixed):
             self.available_controllers = ["joint_group_pos_controller",
                                           "pos_joint_traj_controller" ]
         self.active_controller = self.available_controllers[0]
-        self.admit = AdmittanceControl(self.ikin, 600 * np.identity(3), 300 * np.identity(3), conf.robot_params[self.robot_name])
 
     def applyForce(self):
         wrench = Wrench()
@@ -210,6 +210,7 @@ class LabAdmittanceController(BaseControllerFixed):
         # position of the center of the objects is in WF
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
         self.obs_avoidance.setCylinderParameters(0.125, 0.3, np.array([0.6, 0.25, 1.0]))
+        self.admit = AdmittanceControl(self.ikin, lab_conf.Kx, lab_conf.Dx, conf.robot_params[self.robot_name])
 
     def logData(self):
         if (conf.robot_params[self.robot_name]['control_type'] == "admittance"):

@@ -25,3 +25,6 @@ obstacle_avoidance = False
 # EXE L8-5:  polynomial trajectory
 poly_duration = 3.0
 
+# EXE L2-2.3: admittance control
+Kx = 600 * np.identity(3)
+Dx = 300 * np.identity(3)
