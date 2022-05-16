@@ -29,6 +29,7 @@ class JumpLegController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
+        self.inverseDynamicsFlag = False
         self.no_gazebo = False
         print("Initialized jump leg controller---------------------------------------------------------------")
 
@@ -88,7 +89,8 @@ class JumpLegController(BaseControllerFixed):
         self.estimateContactForces()
 
     def estimateContactForces(self):
-        self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
+        if not  self.inverseDynamicsFlag:
+            self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
 
     def initVars(self):
         super().initVars()
@@ -125,15 +127,17 @@ class JumpLegController(BaseControllerFixed):
                 self.pid.setPDjoint(2, 0., 0., 0.)
 
                 # setting PD joints to 0 (needed otherwise it screws up inverse dynamics)
-                self.pid.setPDjoint(3, 0., 0.2, 0.)
-                self.pid.setPDjoint(4, 0., 0.2, 0.)
-                self.pid.setPDjoint(5, 0., 0.2, 0.)
+                if self.inverseDynamicsFlag:
+                    self.pid.setPDjoint(3, 0., 0., 0.)
+                    self.pid.setPDjoint(4, 0., 0., 0.)
+                    self.pid.setPDjoint(5, 0., 0., 0.)
 
             if (not self.freezeBaseFlag) and (flag):
                 self.freezeBaseFlag = flag
                 print("freezing base")
                 self.q_des = np.copy(self.q_des_q0)
-                self.tau_ffwd = np.zeros(self.robot.na)
+                self.qd_des = np.copy(np.zeros(self.robot.na))
+                self.tau_ffwd = np.copy(np.zeros(self.robot.na))
                 self.tau_ffwd[2] = self.g[2] # compensate gravitu in the virtual joint to go exactly there
                 self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
                                      np.zeros(self.robot.na))
@@ -191,6 +195,7 @@ class JumpLegController(BaseControllerFixed):
         A[:6, :3] = S
         A[:6, 3:] = p.J6.T
         x = np.linalg.pinv(A).dot(p.M.dot(qdd_ref) + p.h)
+        print(x)
         return x[:3], x[3:]
 
     def deregister_node(self):
@@ -222,26 +227,30 @@ def talker(p):
     # compute coeff first time
     p.updateKinematicsDynamics()
     # initial com posiiton
-    T_f = 0.3
+    T_f = 0.5
     com_0 = np.array([0., 0., 0.25])
     # final com position /velocity
-    com_f = np.array([0.15, 0., 0.25])
+    com_f = np.array([0.1, 0., 0.3])
     #com_f = np.array([0.15, 0., 0.28]) #hits joint limits!! screws up!
-    comd_f = np.array([0.3, 0., 1.0])
+    comd_f = np.array([0.0, 0., 0.5])
 
     # boundary conditions
     #position
-    q_0_leg, ik_success, out_of_workspace = p.ikin.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
-    q_f_leg, ik_success, out_of_workspace = p.ikin.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
+    q_0_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
+    q_f_leg, ik_success, final_out_of_workspace = p.ikin.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
     # we need to recompute the jacobian  for the final joint position
     J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)), p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,
                                        pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+
+    if (initial_out_of_workspace) or final_out_of_workspace:
+        # put seuper high reward here
+        print(colored("initial or final value out of workspace!!!!!!","red"))
     #velocity
     qd_0_leg = np.zeros(3)
     qd_f_leg = -np.linalg.inv(J_final).dot(comd_f)
     #accelerations
     qdd_0_leg = np.zeros(3)
-    qdd_f_leg = -np.linalg.inv(J_final).dot(np.array([0.,0.,-9.81]))
+    qdd_f_leg = -np.linalg.inv(J_final).dot(np.zeros(3)) #np.array([0.,0.,-9.81]
 
     # a = np.empty((3, 4))
     # for i in range(3):
@@ -257,11 +266,14 @@ def talker(p):
     p.freezeBase(True)
 
     #control loop
-    while p.time < (startTrust + T_f):
+    while True:# p.time < (startTrust + T_f):
         #update the kinematics
         p.updateKinematicsDynamics()
         if (p.time > startTrust):
             p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
+            #plot com target
+            p.ros_pub.add_marker(com_f, color="blue", radius=0.1)
+
             #compute joint reference
             if   (p.time < startTrust + T_f):
                 t = p.time - startTrust
@@ -280,11 +292,15 @@ def talker(p):
                         # put negative reward here
                         print(colored("lower limit hit in " + str(3 + i) + "-th joint", "red"))
 
-            #compute control action
-            # only gravity compensation (not used anymore)
-            #p.tau_ffwd[3:] = -p.J.T.dot( p.g[:3])
-            p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
-
+            # compute control action
+            if p.inverseDynamicsFlag: # TODO fix this
+                p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
+            else:
+                if (p.time < startTrust + T_f):
+                    p.tau_ffwd[3:] = -p.J.T.dot(p.g[:3])
+                else:
+                    p.tau_ffwd[3:] = np.zeros(3)
+                    
             # send commands to gazebo
             if p.no_gazebo:
                 p.forwardEulerIntegration(p.tau_ffwd, p.contactForceW )
@@ -304,6 +320,8 @@ def talker(p):
         # plot end-effector and contact force
         p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
         p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
+
+
         p.ros_pub.publishVisual()
 
         #wait for synconization of the control loop
