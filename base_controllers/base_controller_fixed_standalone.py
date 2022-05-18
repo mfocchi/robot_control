@@ -601,7 +601,7 @@ def talker(p):
               p.tau_ffwd_log, p.joint_names,p.q_des_log)
     plotJoint('torque', 2, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
                p.tau_ffwd_log, p.joint_names)
-    plotEndeff('force', 1, p.time_log, p.xee_log,  f_log=p.contactForceW_log)
+    plotEndeff('force', 1, p.time_log, p.contactForceW_log)
     plt.show(block=True)
 
 

@@ -10,15 +10,13 @@ import os
 
 dt = 0.001                                          # controller time step [s]
 exp_duration = 5.0                                  # simulation duration
-
 SLOW_FACTOR = 1                                     # to slow down simulation
-
 frame_name = 'ee_link'                              # name of the frame to control (end-effector)
 
 # PD controller
 ## Matrix of gains
 kp = np.eye(6)*300                                  # proportional gains
-kd = np.eye(6)*20                                   # derivative gains (critical damping)
+kd = np.eye(6)*20                                   # derivative gains
 
 ## Parameters of the reference sinusoidal trajectory (1, 2, 3, 4, 5, 6)
 exp_duration_sin = exp_duration - 1.0               # sine reference duration

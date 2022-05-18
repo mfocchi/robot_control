@@ -154,7 +154,9 @@ Now set a sinusoidal reference starting from the  $q^0$ configuration with ampli
 q^d(t) = q_0 + Asin(2\pi f t )
 \end{align*} 
 
- Try to avoid to set too large amplitude in order to avoid hitting some obstacles. \\
+ Try to avoid to set too large amplitude in order to avoid hitting some obstacles. 
+ Now that we are using Gazebo as a simulator you can set the fields \codeword{ <dynamics damping="0.0" friction="0.0"/>} in the joint's tag to emulate the effect of viscous friction (damping parameter) and static friction (friction parameter) at the joint. Observe the effect of friction in the tracking of a sinuoidal trajectory as we did for the DC motor.
+ \\
 
 \textbf{1.3 Position Control - Constant Cartesian Reference}\\
 Now let's set a constant Cartesian position (expressed in the base frame, check the base frame axes) 

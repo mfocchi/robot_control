@@ -328,7 +328,7 @@ class LabAdmittanceController(BaseControllerFixed):
                           self.tau_ffwd_log, self.joint_names, self.q_des_log)
             plotJoint('torque', 2, self.time_log, self.q_log, self.q_des_log, self.qd_log, self.qd_des_log, None, None, self.tau_log,
                       self.tau_ffwd_log, self.joint_names)
-            plotEndeff('force', 1, self.time_log, self.x_ee_log, f_log=self.contactForceW_log)
+            plotEndeff('force', 1, p.time_log, p.contactForceW_log)
             plt.show(block=True)
 
 def talker(p):
