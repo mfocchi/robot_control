@@ -431,14 +431,15 @@ def talker(p):
                 p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
                 p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
 
-            # EXE L8-7 - load estimation
+            # EXE L8-2.5 - load estimation
             # if (p.time > 10.0):
             #     p.payload_weight_avg = 0.99 * p.payload_weight_avg + 0.01 * (-p.contactForceW[2] / 9.81)
             #     print("estimated load: ", p.payload_weight_avg)
 
             # controller with gravity coriolis comp
             p.tau_ffwd = p.h + np.zeros(p.robot.na)
-            # only torque loop
+
+            # only torque loop (not used)
             #p.tau_ffwd = conf.robot_params[p.robot_name]['kp']*(np.subtract(p.q_des,   p.q))  - conf.robot_params[p.robot_name]['kd']*p.qd
 
             # override the position command if you use admittance controller
@@ -450,7 +451,7 @@ def talker(p):
             # send commands to gazebo
             if (p.use_torque_control):
                 if (lab_conf.obstacle_avoidance):
-                    p.tau_ffwd = p.obs_avoidance.computeTorques(p,  np.array([0.7, 0.8, 1.1]))
+                    p.tau_ffwd = p.obs_avoidance.computeTorques(p,  lab_conf.des_ee_goal)
                 p.send_des_jstate(q_to_send, p.qd_des, p.tau_ffwd)
             else:
                 p.send_reduced_des_jstate(q_to_send)
