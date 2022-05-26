@@ -273,81 +273,140 @@ m_p = -F_z / g
 Finally, apply some filtering to take out the noise. 
 
 
-%
-%
-%\section{Potential fields for obstacle avoidance}
-%In this assignment you will be developing code to guide the end-effector of the robot from one location to another in a
-%3D  Cartesian space using \textit{artificial potential fields}. The figure \ref{fig:pot_fields} depicts a plot of
-%the energy surface associated with a similar  environment with 4 obstacles. The end-effector of the robot is modeled by
-%the red sphere which we can think of as rolling down the energy surface towards the goal location.
-%Create a \codeword{GradientBasedPlanner} to control the motion of the robot to generate a torque set-point to arrive to the goal $p_g = \mat{0.7& 1.1& 1.2}^T$.
-%\begin{figure}[bht]
-%	\centering
-%	\includegraphics[width=10cm]{pics/pot_fields.pdf}
-%	\caption{Sketch of an energy surface associated to artificial potential field with a few obstacles, the red ball represents the starting point, the green ball represents the goal.}
-%	\label{fig:pot_fields}
-%\end{figure} 
-%%
-%The signature of the function is given below:
-%%
-%\begin{verbatim} 
-%tau_ffwd = computeTorques (actual_pos, goal):
-%\end{verbatim}
-%The input arguments to this function are explained below:
-%\begin{verbatim} 
-%	actual_pos: An array specifying the coordinates of the actual end-effector location
-%	goal: An array specifying the coordinates of the goal
-%\end{verbatim}
-%
-%We want to create an attractive field for the end-effector to attain the goal $p_g$:
-%
-%
-%We have two obstacles to avoid, one cylinder and a box we can exploit the additive property of potential field to cumulate their influences. 
-%Additionally we want to keep also the joints (not only the end effector) away from the obstacles. We can therefore introduce control 
-%points checking which is the closest point to the obstacle for each link. 
-%We discretize the robot using 5 control points: 
-%
-%\begin{verbatim} 
-%	'tool0', 
-%	'upper_arm_link_middle', 
-%	'forearm_link',  
-%	'forearm_link_middle', 
-%	'forearm_link_end'
-%\end{verbatim}
-%
-%Add the missing frames \codeword{'upper_arm_link_middle', 'forearm_link_middle', 'forearm_link_end'} to the URDF of the robot and get their position and Jacobians with Pinocchio.
 
+
+\section{Potential fields for obstacle avoidance}
+In this assignment you will be developing code to guide the end-effector of the robot from one location to another in a
+3D  Cartesian space using \textit{artificial potential fields}. Figure \ref{fig:pot_fields} depicts 
+the energy surface associated with an  environment with 4 obstacles. The end-effector of the robot is modeled by
+the red sphere which we can think of as rolling down the energy surface towards the goal location (green).
+
+
+\begin{figure}[bht]
+	\centering
+	\includegraphics[width=10cm]{pics/pot_fields.pdf}
+	\caption{Sketch of an energy surface associated to artificial potential field with a few obstacles, the red ball represents the starting point, the green ball represents the goal.}
+	\label{fig:pot_fields}
+\end{figure} 
+
+Create a \codeword{GradientBasedPlanner} to control the motion of the robot to arrive to the goal $p_g = \mat{0.7& 1.1& 1.2}^T$.
+We want to create an attractive field for the end-effector $p$ to attain the goal $p_g$:
+
+\begin{equation}
+f_a(p) = \begin{cases}
+k_{a} \mathbf{e}(p)  \quad if \quad  \|\mathbf{e}(p)\| \leq d \\
+k_{b} \frac{\mathbf{e}(p)}{\|\mathbf{e}(p)\|}   \quad if \quad  \|\mathbf{e}(p)\| > d \\		
+\end{cases}
+\end{equation}
+
+where $e = p_g -p$ with $k_{b} = d k_{a}$ to ensure field continuity at $d = 0.2 m$ and field strength $k_a = 8$.
+In addition we have  two obstacles in the workspace: one cylinder and a box (see in black in Fig. \ref{fig:workspace}) whose parameters 
+are reported in Table  \ref{tab:obstacles}: 
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=8cm]{pics/workbench.png}
+	\caption{Robot workspace with two obstacles (in black).}
+	\label{fig:workspace}
+\end{figure} 
+
+
+\begin{table}[h!]
+	\caption{Obstacles parameters}
+	\begin{center}
+		\begin{tabular}{@{} l l l l @{}}
+		\hline\hline
+			\textbf{Parameter} & {\textbf{Symbol}} &Cylinder    & Cube \\ 
+			\hline
+			Center [$m$] & $x_c$&  $\mat{0.6 &0.25&1.0}$  & $\mat{0.125 &0.75& 0.975}$  \\
+			Height [$m$] & $h_{cyl}$&  0.125  & -    \\
+			Radius [$m$]& $R_{cyl}$&  16  & -    \\
+			Side [$m$]  & $d_{cube}$& -   & 0.25    \\
+		\hline\hline
+		\end{tabular}
+		\label{tab:obstacles}
+	\end{center}
+\end{table}
 %
-%To avoid the chance of our local planner to get stuck in local minima consider to produce some highe level goals (via points)
+
+Let's compute the repulsive potential field force for each of them from the end-effector $p$:
+
+\begin{equation}
+\mathbf{f}_{r, i}(p)=-\nabla_{p} U_{r, i}(p)=\left\{\begin{array}{ll}
+\frac{k_{r, i}}{\rho_{i}^{2}(p)}\left(\frac{1}{\rho_{i}(p)}-\frac{1}{d_{0}}\right) \nabla_{p} \rho_{i}(p) & \text { if } \rho_{i}(p) \leq d_{0} \\
+0 & \text { if } \rho_{i}(p)>d_{0}
+\end{array}\right.
+\end{equation}
+ 
+where $\rho$ is the distance $\Vert p - y\Vert$ from the control point $p$ to the closest point $y$ on obstacle $CO_i$, while  $k_{r, i}$ is the field strength and $d_0$ the distance from the obstacle after which the field vanish. Where the derivative $ \nabla_{p} \rho_{i}(p) $ can be approximated to be:
+
+\begin{equation}
+ \nabla_{p} \rho_{i}(p) = \frac{ p_k - y}{\Vert p_k -y \Vert}
+\end{equation}
+
+
+ Note that because we have convex obstacles to compute the closest point $y$ on the obstacle we can solve a constrained convex optimization problem:
+
+\begin{align}
+y^* &= \argmin_y \Vert p - y \Vert ^2\\
+&s.t.  \nonumber  \\
+   &Ay \leq b   \nonumber \\ 
+   &\Vert Cy + d \Vert \leq f \nonumber 
+\end{align}
+
+where $   Ay \leq b$ and $ \Vert Cy + d \Vert \leq f$ are appropriate linear (cube) and second order cone constraints (cylinder)
+that  represent the space occupied by the object.
+Now, we can exploit the additive property of potential fields to cumulate their influences. 
+
+\begin{align}
+\mathbf{f}_{r}(p) = f_a(p) + \mathbf{f}_{r, {cyl}}(p) + \mathbf{f}_{r, {cube}}(p)
+\end{align}
+
+
+
+
+Additionally we want to keep also the joints (e.g. not only the end effector) 
+away from the obstacles. We can therefore introduce other $p_k$  control 
+points, at least one  for each link. 
+We discretize the robot using 5 control points: 
+
+\begin{verbatim} 
+	'tool0', 
+	'upper_arm_link_middle', 
+	'forearm_link',  
+	'forearm_link_middle', 
+	'forearm_link_end'
+\end{verbatim}
+
+Add the missing frames:\\
+\codeword{'upper_arm_link_middle', 'forearm_link_middle', 'forearm_link_end'} 
+to the URDF of the robot and get their position and Jacobians with Pinocchio.
+Note that you will have to compute only the repulsive force for these control points as we for the end-effector.
+
+Now we can map these virtual forces into either 
+joint torques of set-points for joint velocity, depending on the planning strategy (the latter being more reactive ) 
+and sum over the $N$ control points. 
+We chose to implement the torque approach  therefore we need to remember 
+to add a damping $B$ at the joint level otherwise the system will oscillate forever around the goal:
+
+\begin{equation}
+\tau =-\sum_{k=1}^{N-1} \mathbf{J}_{i}^{T}(\mathbf{q}) \nabla_{p} U_{r}\left(\mathbf{p}_{k}\right)-\mathbf{J}_{N}^{T}(\mathbf{q}) \nabla_{p} U_{t}\left(\mathbf{p}_{P}\right)+B \dot{q}
+\end{equation}
+
+The signature of the function is given below:
 %
-%
-%In a cluttered environment, local minima can
-%
-%occur in the resultant potential field. This can lead to
-%
-%a stable positioning of the robot before reaching its
-%
-%goal. While local procedures can be designed to exit
-%
-%from such configurations, limitations for complex
-%
-%tasks will remain. This is because the approach has a
-%
-%local perspective of the robot environment
-%
-%Note that the potential field approach can be combined with any other the task space formulation  considering a inverse dynamics 
-% that tracks the force generated from the field at each of the control points 
-% 
-% or at the velocity level.
-%
-%
-%
-%
-%1. On every iteration the planner should update the position of the robot based on the gradient
-%values contained in the arrays gx and gy. Note that the gradient is only giving informations on the direction (in the joint space) is up to you to limit the speed according to some heuristics.  Make sure you normalize the gradient vectors.
-%Update the route by adding the new position of the robot to the end of the route array.
-%Continue the same procedure until the distance between the robot’s current position and the
-%goal is less than 2.0 or the number of iterations exceeds the value contained in max its.
+\begin{verbatim} 
+tau_ffwd = computeTorques (actual_pos, goal):
+\end{verbatim}
+The input arguments to this function are explained below:
+\begin{verbatim} 
+actual_pos: An array specifying the coordinates of the actual end-effector location
+goal: An array specifying the coordinates of the goal
+\end{verbatim}
+
+On every iteration the planner should update the set-point for the  torques of the robot based on the gradient
+values computed.  Observe how the end-effector reaches the goal and changes its trajectory to  stay away from  the obstacles. 
+
 
 
 %%TODO implement for speed

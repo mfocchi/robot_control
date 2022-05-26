@@ -225,7 +225,7 @@ to add the contributions of the two  tasks use the Null-space projector $N$ of $
 
 \begin{align}
 N & = I_{6 \times 6} - J^T J^{T\#}\\
-\tau& = \tau_c  + N\tau_0 
+\tau& = \tau_c  + N\tau_0 =  \tau_c  + \tau_{null}
 \end{align}
 
 Observe that the joints now are no longer wobbling around, and the tracking of the end-effector is no longer affected by the random motion of the joints. 
@@ -236,7 +236,7 @@ This is because this lives in the null-space of $J^{T\#}$ (that has the same dim
 Add a gravity compensation term computed in the task space $G= J^{T\#}g$).
 
 \begin{align}
-\tau_c & = J^T\left( K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{T\#}g \right)
+\tau & = J^T\left( K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{T\#}g \right) + \tau_{null}
 \end{align}
 
 Give the step reference generated in (2.1) as input to the system. 
@@ -248,7 +248,7 @@ Add also a feed-forward acceleration action to the PD control. Use the the refle
 at the end-effector $\Lambda = (J M^{-1} J^T)^{-1}$ (note that we no longer use only the diagonal elements!):
 
 \begin{align}
-\tau_c & = J^T\left( \Lambda \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{T\#}g \right)
+\tau & = J^T\left( \Lambda \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  + J^{T\#}g \right) + \tau_{null}
 \end{align}
 
 Note that J should be full row rank  otherwise you need to add a damping term to make $JM^{-1}J^T$ invertible.
@@ -268,7 +268,7 @@ Note that because our robot is redundant for the (3D) positioning task the Jacob
 &F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
 & \Lambda = (J M^{-1}J^T)^{-1}\\
 &\mu(q,\dot{q})  = J^{T\#} h -\Lambda \dot{J} \dot{q} \\
-&\tau_c  = J^T\left( \Lambda F^d +  \mu(q,\dot{q}) \right)
+&\tau  = J^T\left( \Lambda F^d +  \mu(q,\dot{q}) \right) + \tau_{null}
 \end{align}
 
 
@@ -280,7 +280,7 @@ Observe that the tracking is now almost perfect, there are no coupling between d
 Rather than compensate for the bias terms reflected at the end-effector $\mu(q,\dot{q})$,  compensate for them at the joint space level ($h$) and observe that the result is the same. 
 \begin{align}
 &F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
-&\tau_c  = J^T\left( \Lambda F^d  \right) + h
+&\tau  = J^T\left( \Lambda F^d  \right) + h + \tau_{null}
 \end{align}
 
 The advantage of this (less elegant) approach is that it saves us the computation of the terms $\dot{J}$ and $J^{T\#}$.\\

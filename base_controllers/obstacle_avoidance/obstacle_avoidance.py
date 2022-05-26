@@ -20,11 +20,10 @@ class ObstacleAvoidance():
         self.f_repulsive_cube = len(self.control_point_frames)*[None]
         self.f_repulsive_cyl = len(self.control_point_frames) * [None]
 
-        self.goal_influence = 0.5
-        self.scale_repulsive_forces = 0.01
-        self.scale_attractive_forces = 8
+        self.goal_influence = 0.2
+        self.kr = 0.1
+        self.ka = 8
         self.d0 = 0.3
-        self.k = 10 #field strength
 
     def setCylinderParameters(self, cyl_radius, cyl_height, cyl_center_pos):
         self.cyl_radius = cyl_radius
@@ -67,7 +66,7 @@ class ObstacleAvoidance():
         A = np.array([[0.0, 0.0, 1.0],
                      [0.0, 0.0, -1.0],
                      [0.0, 1.0, 0.0],
-                     [0.0, -1.0, 0.0],\
+                     [0.0, -1.0, 0.0],
                      [1.0, 0.0, 0.0],
                      [-1.0, 0.0, 0.0]])
         x = cp.Variable(3)
@@ -91,18 +90,16 @@ class ObstacleAvoidance():
             self.control_point_pos[i] =  base_offset + robot.framePlacement(q, robot.model.getFrameId(self.control_point_frames[i])).translation
             self.control_point_jac[i] =   robot.frameJacobian(q, robot.model.getFrameId(self.control_point_frames[i]), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, :]
 
-
             #compute cube repulsive force
             self.f_repulsive_cube[i]  = self.computeCubeRepulsiveForce(self.control_point_pos[i])
 
             # compute cylinder repulsive force
             self.f_repulsive_cyl[i] = self.computeCylinderRepulsiveForce(self.control_point_pos[i])
 
-
             # compute cube attractive force
             if (self.control_point_frames[i] == 'tool0'):
-                self.f_attractive = self.computeAttractivePotential(self.control_point_pos[i], goal)
-                tau_field += self.control_point_jac[i].T.dot(self.scale_attractive_forces*self.f_attractive)
+                self.f_attractive = self.computeAttractiveForce(self.control_point_pos[i], goal)
+                tau_field += self.control_point_jac[i].T.dot(self.f_attractive)
 
             # print("attractive", self.f_attractive)
             # print("repulsive cyl",self.f_repulsive_cyl)
@@ -111,23 +108,23 @@ class ObstacleAvoidance():
             # print(d_cube)
 
             #map to joints
-            tau_field += self.control_point_jac[i].T.dot(self.f_repulsive_cyl[i] + self.f_repulsive_cube[i])*self.scale_repulsive_forces
+            tau_field += self.control_point_jac[i].T.dot(self.f_repulsive_cyl[i] + self.f_repulsive_cube[i])
 
         return tau_field, self.f_repulsive_cube, self.f_repulsive_cyl, self.f_attractive
 
 
-    def computeAttractivePotential(self, actual_pos, goal):
+    def computeAttractiveForce(self, actual_pos, goal):
         d_goal = np.linalg.norm( actual_pos  - goal)
         if d_goal < self.goal_influence:  # paraboloic behaviour
-            return self.goal_influence * (goal - actual_pos)
-        else:  # conical behaviour
-            return self.goal_influence * (goal - actual_pos) / d_goal
+            return self.ka * (goal - actual_pos)
+        else:                           # conical behaviour
+            return self.ka * self.goal_influence * (goal - actual_pos) / d_goal
 
     def computeCylinderRepulsiveForce(self, actual_pos):
         d_cyl, closest_cyl = self.getCylinderDistance(actual_pos)
         grad_distance_cyl = (actual_pos - closest_cyl) / d_cyl
         if (d_cyl < self.d0):
-            return self.k * (1 / d_cyl - 1 / self.d0) * (1 / pow(d_cyl, 2)) * grad_distance_cyl
+            return self.kr * (1 / d_cyl - 1 / self.d0) * (1 / pow(d_cyl, 2)) * grad_distance_cyl
         else:
             return np.zeros(3)
 
@@ -135,7 +132,7 @@ class ObstacleAvoidance():
         d_cube, closest_cube = self.getCubeDistance(actual_pos)
         grad_distance_cube = (actual_pos - closest_cube) / d_cube
         if (d_cube< self.d0):
-            return self.k*(1/d_cube - 1/self.d0)*(1/pow(d_cube,2) )* grad_distance_cube
+            return self.kr * (1/d_cube - 1/self.d0)*(1/pow(d_cube,2) )* grad_distance_cube
         else:
             return np.zeros(3)
 
