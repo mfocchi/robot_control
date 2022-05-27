@@ -20,7 +20,7 @@ des_orient = np.array([ -1.9, -0.5, -0.1])
 admittance_control = False
 
 # EXE L8-2.5: obstacle avoidance
-obstacle_avoidance = True
+obstacle_avoidance = False
 des_ee_goal = np.array([0.7, 1.1, 1.2])
 
 # EXE L8-5:  polynomial trajectory

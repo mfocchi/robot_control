@@ -428,6 +428,7 @@ def talker(p):
             # EXE L8-2 - admittance control
             if (lab_conf.admittance_control):
                 p.EXTERNAL_FORCE = True
+                ## TODO to implement at the velocity level you need to load the VelocityInterface and use the joint_group_vel_controller
                 p.x_ee_des = p.robot.framePlacement(p.q_des,p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation
                 p.q_des_adm, p.x_ee_des_adm = p.admit.computeAdmittanceReference(p.contactForceW, p.x_ee_des, p.q)
 

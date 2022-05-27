@@ -38,7 +38,7 @@ from utils.common_functions import getRobotModel
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from termcolor import colored
 import matplotlib.pyplot as plt
-
+import distro
 
 import  params as conf
 # robots can be ur5 and jumpleg to load ur5 you need to set this xacro path in loadModelAndPublishers  rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -78,7 +78,8 @@ class BaseControllerFixed(threading.Thread):
 
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
-
+        if (distro.linux_distribution()[1] == "16.04"):
+            print(colored("This file only works with distribution from ROS lunar (I.e. ubuntu 17.04 or later) ", "red"))
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
         cli_args = [rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch',
@@ -125,7 +126,8 @@ class BaseControllerFixed(threading.Thread):
                                          callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
-        self.pid = PidManager(self.joint_names)
+        if (self.use_torque_control):
+            self.pid = PidManager(self.joint_names)
 
     def _receive_jstate(self, msg):
          for msg_idx in range(len(msg.name)):          
@@ -152,7 +154,8 @@ class BaseControllerFixed(threading.Thread):
 
 
     def startupProcedure(self):
-        self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
+        if (self.use_torque_control):
+            self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
         print("Startup accomplished -----------------------")
 
     def initVars(self):
