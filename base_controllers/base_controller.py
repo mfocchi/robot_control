@@ -389,7 +389,7 @@ class BaseController(threading.Thread):
                 print("starting com controller (no joint PD)...")                
                 self.pid.setPDs(0.0, 0.0, 0.0)                  
             
-            if (self.robot_name == 'solo'):                        
+            if (self.robot_name == 'solo' or self.robot_name == 'aliengo'):
                 start_t = ros.get_time()
                 while ros.get_time() - start_t < 0.5:
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
@@ -455,9 +455,9 @@ def talker(p):
         p.updateKinematics()    
 
         # controller                             
-        p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp  
+        #p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp
         #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:] 
-        #p.tau_ffwd = np.zeros(p.robot.na)						
+        p.tau_ffwd = np.zeros(p.robot.na)
         
         
         #        p.q_des[14] += omega *conf.robot_params[p.robot_name_]['dt']		
@@ -510,9 +510,9 @@ if __name__ == '__main__':
     except ros.ROSInterruptException:
         from utils.common_functions import plotCoM,  plotJoint
         
-       
-        plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
-        plotCoM('position', 1, p.time_log, None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
-        plt.show(block=True)
+        if conf.plotting:
+            plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
+            plotCoM('position', 1, p.time_log, None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
+            plt.show(block=True)
     
         
