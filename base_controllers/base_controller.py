@@ -96,8 +96,8 @@ class BaseController(threading.Thread):
 								
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name,True)                    
-        self.joint_names = ""
-        self.u = Utils()	
+        self.u = Utils()
+        self.joint_names = self.u.mapFromRos([i for i in self.robot.model.names][2:])
                                 
         self.comPoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
@@ -227,20 +227,11 @@ class BaseController(threading.Thread):
         self.b_R_w = self.mathJet.rpyToRot(self.euler)
    
     def _receive_jstate(self, msg):
-          #need to map to robcogen only the arrays coming from gazebo because of ROS convention is different
-         self.joint_names = msg.name   
-         q_ros = np.zeros(self.robot.na)
-         qd_ros = np.zeros(self.robot.na)
-         tau_ros = np.zeros(self.robot.na)             
-         for i in range(len(self.joint_names)):           
-             q_ros[i] = msg.position[i]
-             qd_ros[i] = msg.velocity[i]
-             tau_ros[i] = msg.effort[i]
-         #map from ROS (alphabetical) to our  LF RF LH RH convention
-         self.q = self.u.mapFromRos(q_ros)
-         self.qd = self.u.mapFromRos(qd_ros)                    
-         self.tau = self.u.mapFromRos(tau_ros)  
-         
+         for i in range(self.robot.na):
+             self.q[i] = msg.position[i]
+             self.qd[i] = msg.velocity[i]
+             self.tau[i] = msg.effort[i]
+
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
@@ -361,8 +352,6 @@ class BaseController(threading.Thread):
                                  
                                  
     def startupProcedure(self):
-            ros.sleep(0.5)  # wait for callback to fill in jointmnames
-            
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
             self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0) 
