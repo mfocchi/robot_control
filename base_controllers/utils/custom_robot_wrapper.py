@@ -84,7 +84,8 @@ class RobotWrapper(PinocchioRobotWrapper):
         if(update):
             pin.crba(self.model, self.data, q)
         return self.data.M[3:3+3,3:3+3];
-        
+
+    @property
     def robotMass(self):
         pin.crba(self.model, self.data, pin.neutral(self.model))
         return self.data.M[0,0]
@@ -232,6 +233,15 @@ class RobotWrapper(PinocchioRobotWrapper):
         return names
 
     @property
+    def getEndEffectorsFrames(self):
+        frames = []
+        for f in self.model.frames:
+            if 'foot' in f.name and 'joint' not in f.name:
+                frames.append(f)
+        return frames
+
+
+    @property
     def nee(self):
         return len(self.getEndEffectorsFrameId)
 
@@ -296,15 +306,15 @@ class RobotWrapper(PinocchioRobotWrapper):
         # Fo: stack of friction offsets
         #                                                 [Fv]
         # tau_friction[i] = frictionRegressor(qd)[i, :] * [Fc]
-        #                                                 [Fo]
+        #
 
-        Y_v = np.diag(v[6:])
+        #Y_v = np.diag(v[6:])
         Y_c = np.diag(np.sign(v[6:]))
-        Y_o = np.eye(self.na)
+        #Y_o = np.eye(self.na)
 
-        Y_f = np.hstack([Y_v, Y_c, Y_o])
+        #Y_f = np.hstack([Y_v, Y_c])#, Y_o])
 
-        return Y_f
+        return Y_c
 __all__ = ['RobotWrapper']
 
 

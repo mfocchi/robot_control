@@ -1,4 +1,4 @@
-from controller import Controller
+from base_controllers.controller import Controller, conf
 
 import numpy as np
 import pinocchio as pin
@@ -10,11 +10,9 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool
 import tf
 
-from utils.ros_publish import RosPub
+from base_controllers.utils.ros_publish import RosPub
 
-from common_functions import checkRosMaster
-
-import params as conf
+from base_controllers.utils.common_functions import checkRosMaster
 
 
 class ExpController(Controller):
@@ -100,21 +98,21 @@ class ExpController(Controller):
         self.IMU_lin_accel[0] = msg.linear_acceleration.x
         self.IMU_lin_accel[1] = msg.linear_acceleration.y
         self.IMU_lin_accel[2] = msg.linear_acceleration.z
-        # # TODO: update base pose and twist
-        # euler = euler_from_quaternion(self.quaternion)
+        #TODO: update base pose and twist
+        euler = euler_from_quaternion(self.quaternion)
         # self.basePoseW[0] = 0
         # self.basePoseW[1] = 0
         # self.basePoseW[2] = 0
-        # self.basePoseW[3] = 0
-        # self.basePoseW[4] = 0
-        # self.basePoseW[5] = 0
+        self.basePoseW[3] = euler[0]
+        self.basePoseW[4] = euler[1]
+        self.basePoseW[5] = euler[2]
         #
         # self.baseTwistW[0] = 0
         # self.baseTwistW[1] = 0
         # self.baseTwistW[2] = 0
-        # self.baseTwistW[3] = 0
-        # self.baseTwistW[4] = 0
-        # self.baseTwistW[5] = 0
+        self.baseTwistW[3] = self.IMU_ang_vel[0]
+        self.baseTwistW[4] = self.IMU_ang_vel[1]
+        self.baseTwistW[5] = self.IMU_ang_vel[2]
         # compute orientation matrix
         self.b_R_w = self.mathJet.rpyToRot(euler)
 
@@ -154,17 +152,19 @@ class ExpController(Controller):
             self.bJ[leg] = self.robot.frameJacobian(neutral_configuration,
                                                        self.robot.model.getFrameId(self.ee_frames[leg]),
                                                        pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, leg_joints]
-            grf = np.linalg.inv(self.bJ[leg].T).dot(self.u.getLegJointState(leg, joint_gravity_torques - self.tau))
-
-            self.u.setLegJointState(leg, grf, self.grForcesB)
-            self.contacts_state[leg] = grf[2] > force_th
+            try:
+                grf = np.linalg.inv(self.bJ[leg].T).dot(self.u.getLegJointState(leg, joint_gravity_torques - self.tau))
+                self.u.setLegJointState(leg, grf, self.grForcesB)
+                self.contacts_state[leg] = grf[2] > self.force_th
+            except np.linalg.linalg.LinAlgError as err:
+                print('Singular Jacobian at leg '+ str(leg)+ '. Contact state not computed')
 
 
 
     def visualizeContacts(self):
         for leg in range(4):
             self.ros_pub.add_arrow(self.B_contacts[leg],
-                                   self.u.getLegJointState(leg, self.grForcesB/ self.robot.robotMass() ), "green")
+                                   self.u.getLegJointState(leg, self.grForcesB/ (2*self.robot.robotMass) ), "green")
             if self.contacts_state[leg]:
                 self.ros_pub.add_marker(self.B_contacts[leg], radius=0.1)
             else:
@@ -183,8 +183,8 @@ class ExpController(Controller):
 
         self.broadcaster.sendTransform( (0,0,0), self.quaternion, ros.Time.now(), '/base_link', '/world')
 
-        if w_vl_b_old[2] >= 0 and self.w_vl_b[2] < 0:
-            print('APEX DETECTED: ', w_vl_b_old[2], self.w_vl_b[2])
+        # if w_vl_b_old[2] >= 0 and self.w_vl_b[2] < 0:
+        #     print('APEX DETECTED: ', w_vl_b_old[2], self.w_vl_b[2])
 
         self.publishBaseTwist()
 
