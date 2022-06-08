@@ -118,6 +118,7 @@ class SimController(Controller):
 
         self.apply_body_wrench = rospy.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
         self.APPLY_EXTERNAL_WRENCH = False
+        self.TIME_EXTERNAL_WRENCH = 0.6
 
         self.g_mag = 9.81
 
@@ -214,10 +215,10 @@ class SimController(Controller):
 
         self._send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
 
-        # if (self.APPLY_EXTERNAL_WRENCH and self.time > 1.5):
-        #     print("START APPLYING EXTERNAL WRENCH")
-        #     self.applyForce(0.0,0.0,0.0,0.0, 1.0,0.0, 0.05)
-        #     self.APPLY_EXTERNAL_WRENCH = False
+        if (self.APPLY_EXTERNAL_WRENCH and self.time > self.TIME_EXTERNAL_WRENCH):
+            print("START APPLYING EXTERNAL WRENCH")
+            self.applyForce(0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.05)
+            self.APPLY_EXTERNAL_WRENCH = False
 
         # log variables
         self.rate.sleep()

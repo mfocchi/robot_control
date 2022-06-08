@@ -7,7 +7,7 @@ Created on Thu Apr  2 18:07:44 2020
 import os
 import psutil
 #from pinocchio.visualize import GepettoVisualizer
-from base_controllers.utils.custom_robot_wrapper import RobotWrapper
+from utils.custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -111,6 +111,12 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             try:
                 flywheel = ros.get_param('/flywheel')
                 args+=' flywheel:='+flywheel
+
+                flywheel2 = ros.get_param('/flywheel2')
+                args += ' flywheel2:=' + flywheel2
+
+                angle = ros.get_param('/angle')
+                args += ' angle:=' + angle
             except:
                 pass          
             
@@ -172,15 +178,20 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
     else:
         labels_ur =joint_names
     labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
-    labels_flywheel = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE", 
-                  "back_wheel", "front_wheel", "left_wheel", "right_wheel"]
+    labels_flywheel2 = ["LF_HAA", "LF_HFE", "LF_KFE", "RF_HAA", "RF_HFE", "RF_KFE", "LH_HAA", "LH_HFE", "LH_KFE",
+                        "RH_HAA", "RH_HFE", "RH_KFE", "left_wheel", "right_wheel"]
+    labels_flywheel4 = ["LF_HAA", "LF_HFE", "LF_KFE", "RF_HAA", "RF_HFE", "RF_KFE", "LH_HAA", "LH_HFE", "LH_KFE",
+                        "RH_HAA", "RH_HFE", "RH_KFE",
+                        "back_wheel", "front_wheel", "left_wheel", "right_wheel"]
 
     if njoints <= 6:
-        labels = labels_ur         
+        labels = labels_ur
     if njoints == 12:
-        labels = labels_hyq                  
+        labels = labels_hyq
+    if njoints == 14:
+        labels = labels_flywheel2
     if njoints == 16:
-        labels = labels_flywheel
+        labels = labels_flywheel4
         
     for jidx in range(njoints):
      

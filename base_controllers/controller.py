@@ -22,7 +22,7 @@ import datetime
 
 
 
-""" This class is parent of ExperimentController and of SimulationController. It implements methods that are necessary
+""" This class is parent of ExperimentController and of SimulationController. It implements methods that are necessari
  to both the children"""
 
 class Controller(threading.Thread):
@@ -42,7 +42,10 @@ class Controller(threading.Thread):
         self.qd = np.empty(self.robot.na) * np.nan
         self.tau = np.empty(self.robot.na) * np.nan
 
-        self.q_des = conf.robot_params[robot_name]['q_0']
+        if self.robot.na == 14:
+            self.q_des = conf.robot_params[robot_name + '_fw']['q_0']
+        else:
+            self.q_des = conf.robot_params[robot_name]['q_0']
         self.qd_des = np.empty(self.robot.na) * np.nan
         self.tau_des = np.empty(self.robot.na) * np.nan         # tau_des = tau_ffwd + tau_fb
         self.tau_fb = np.empty(self.robot.na) * np.nan
@@ -51,6 +54,8 @@ class Controller(threading.Thread):
 
         self.basePoseW = np.empty(6) * np.nan
         self.baseTwistW = np.empty(6) * np.nan
+        self.basePoseW_des = np.empty(6) * np.nan
+        self.baseTwistW_des = np.empty(6) * np.nan
 
         self.quaternion = np.empty(4) * np.nan
 
@@ -190,6 +195,8 @@ class Controller(threading.Thread):
         self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
         self.baseTwistW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
+        self.basePoseW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.baseTwistW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.w_p_b_legOdom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.w_v_b_legOdom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
@@ -251,6 +258,8 @@ class Controller(threading.Thread):
         self.log_counter = 0
 
     def logData(self):
+        self.log_counter += 1
+        self.time += self.dt # TODO: modify with a more sofisticate update of time
         # if log_counter exceed N*buffer_size, reshape all the log variables
         if self.log_counter != 0 and (self.log_counter % conf.robot_params[self.robot_name]['buffer_size']) == 0:
             self.comPosB_log       = self.log_policy(self.comPosB_log)
@@ -261,6 +270,8 @@ class Controller(threading.Thread):
             self.comVelW_des_log   = self.log_policy(self.comVelW_des_log)
             self.basePoseW_log     = self.log_policy(self.basePoseW_log)
             self.baseTwistW_log    = self.log_policy(self.baseTwistW_log)
+            self.basePoseW_des_log = self.log_policy(self.basePoseW_des_log)
+            self.baseTwistW_des_log = self.log_policy(self.baseTwistW_des_log)
             self.w_p_b_legOdom_log = self.log_policy(self.w_p_b_legOdom_log)
             self.w_v_b_legOdom_log = self.log_policy(self.w_v_b_legOdom_log)
             self.q_des_log         = self.log_policy(self.q_des_log)
@@ -271,6 +282,7 @@ class Controller(threading.Thread):
             self.tau_ffwd_log      = self.log_policy(self.tau_ffwd_log)
             self.tau_des_log       = self.log_policy(self.tau_des_log)
             self.tau_log           = self.log_policy(self.tau_log)
+            self.grForcesW_log     = self.log_policy(self.grForcesW_log)
             self.time_log          = self.log_policy(self.time_log)
             self.constr_viol_log   = self.log_policy(self.constr_viol_log)
             self.grForcesW_log     = self.log_policy(self.grForcesW_log)
@@ -301,6 +313,8 @@ class Controller(threading.Thread):
         self.comVelW_des_log[:, self.log_counter] = self.comVelW_des
         self.basePoseW_log[:, self.log_counter] = self.basePoseW
         self.baseTwistW_log[:, self.log_counter] = self.baseTwistW
+        self.basePoseW_des_log[:, self.log_counter] = self.basePoseW_des
+        self.baseTwistW_des_log[:, self.log_counter] = self.baseTwistW_des
         self.w_p_b_legOdom_log[:, self.log_counter] = self.w_p_b_legOdom
         self.w_v_b_legOdom_log[:, self.log_counter] = self.w_v_b_legOdom
         self.q_des_log[:, self.log_counter] = self.q_des
