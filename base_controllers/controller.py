@@ -42,7 +42,10 @@ class Controller(threading.Thread):
         self.qd = np.empty(self.robot.na) * np.nan
         self.tau = np.empty(self.robot.na) * np.nan
 
-        self.q_des = conf.robot_params[robot_name]['q_0']
+        if self.robot.na == 14:
+            self.q_des = conf.robot_params[robot_name + '_fw']['q_0']
+        else:
+            self.q_des = conf.robot_params[robot_name]['q_0']
         self.qd_des = np.empty(self.robot.na) * np.nan
         self.tau_des = np.empty(self.robot.na) * np.nan         # tau_des = tau_ffwd + tau_fb
         self.tau_fb = np.empty(self.robot.na) * np.nan
@@ -51,6 +54,8 @@ class Controller(threading.Thread):
 
         self.basePoseW = np.empty(6) * np.nan
         self.baseTwistW = np.empty(6) * np.nan
+        self.basePoseW_des = np.empty(6) * np.nan
+        self.baseTwistW_des = np.empty(6) * np.nan
 
         self.quaternion = np.empty(4) * np.nan
 
@@ -69,6 +74,9 @@ class Controller(threading.Thread):
         self.comPosB = np.empty(3) * np.nan
         self.comVelB = np.empty(3) * np.nan
 
+        self.w_p_b_legOdom = np.empty(3) * np.nan
+        self.w_v_b_legOdom = np.empty(3) * np.nan
+
 
         self.centroidalInertiaB = np.identity(3)
         self.compositeRobotInertiaB = np.identity(3)
@@ -77,15 +85,19 @@ class Controller(threading.Thread):
 
         self.contact_matrix = np.hstack( [np.vstack( [np.eye(3),np.empty((3,3))] )]*self.robot.nee )
         self.gravityW = -self.robot.robot_mass*self.robot.model.gravity.vector
-        self.gravityB = self.gravityW.copy()
+        self.gravityB = np.zeros_like(self.gravityW)
 
         self.grForcesW = np.empty(3*self.robot.nee) * np.nan
         self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
+        self.grForcesLocal_gt = np.empty(3 * self.robot.nee) * np.nan
+        self.grForcesW_gt  = np.empty(3 * self.robot.nee) * np.nan
         self.wJ = [np.zeros((6, self.robot.nv))] * 4
         self.bJ = [np.eye(3)] * 4
 
         self.W_contacts = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
+
+        self.grForcesLocal_gt_tmp = np.zeros(3)
 
         # Attribute to be set by ALL children
         self.dt = NotImplemented
@@ -99,6 +111,7 @@ class Controller(threading.Thread):
 
         # These are for solo!
         self.ee_frames = ['lf_foot', 'rf_foot', 'lh_foot', 'rh_foot']
+        self.lower_leg_frames = ['lf_lower_leg', 'rf_lower_leg', 'lh_lower_leg', 'rh_lower_leg']
         self.ros_joints_name = ['universe',
                                 'floating_base_joint',
                                 'lf_haa_joint',
@@ -113,7 +126,12 @@ class Controller(threading.Thread):
                                 'rh_haa_joint',
                                 'rh_hfe_joint',
                                 'rh_kfe_joint']  # ros convention
-        self.force_th = 2.0
+        self.force_th = conf.robot_params[robot_name]['force_th']
+
+        # send data to param server
+        self.verbose = conf.verbose
+
+        self.u.putIntoGlobalParamServer("verbose", self.verbose)
 
 
 
@@ -171,8 +189,16 @@ class Controller(threading.Thread):
         self.comPosW_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
         self.comVelW_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
+        self.comVelW_leg_odom = np.empty((3))*np.nan
+        self.comVelW_leg_odom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+
         self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
         self.baseTwistW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+
+        self.basePoseW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.baseTwistW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.w_p_b_legOdom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.w_v_b_legOdom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
         self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
         self.q_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
@@ -187,6 +213,9 @@ class Controller(threading.Thread):
 
         self.grForcesW_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
         self.grForcesB_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.grForcesW_gt_log = np.empty((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+
+        self.grForcesW_des_log = np.empty((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
         self.W_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
         self.B_contacts_log = np.empty((3*self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
@@ -196,8 +225,36 @@ class Controller(threading.Thread):
         self.constr_viol_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
 
         self.time_log = np.empty((1, (conf.robot_params[self.robot_name]['buffer_size']))) *np.nan
+        
+        self.tau_minus_h_log = np.empty((self.robot.nv, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.tau_minus_h = np.zeros(self.robot.nv)
+        
+        self.qdd_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.qdd = np.zeros(self.robot.na)
 
-        self.time = 0.0
+        self.base_acc_W_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.base_acc_W = np.zeros(6)
+
+        self.C_qd_log = np.empty((self.robot.nv, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.C_qd = np.zeros(self.robot.nv)
+
+
+        self.T_p_com_ref_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.T_p_base_leg_odom_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+
+        self.T_p_com_ref_lc = np.zeros(3)
+        self.T_p_base_leg_odom_lc = np.zeros(3)
+
+        self.T_v_com_ref_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.T_v_base_leg_odom_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+
+        self.T_v_com_ref_lc = np.zeros(3)
+        self.T_v_base_leg_odom_lc = np.zeros(3)
+
+        self.gravity_prop_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) *np.nan
+        self.gravity_prop = np.zeros(3)
+
+        self.time = 0.
         self.log_counter = 0
 
     def logData(self):
@@ -213,6 +270,10 @@ class Controller(threading.Thread):
             self.comVelW_des_log   = self.log_policy(self.comVelW_des_log)
             self.basePoseW_log     = self.log_policy(self.basePoseW_log)
             self.baseTwistW_log    = self.log_policy(self.baseTwistW_log)
+            self.basePoseW_des_log = self.log_policy(self.basePoseW_des_log)
+            self.baseTwistW_des_log = self.log_policy(self.baseTwistW_des_log)
+            self.w_p_b_legOdom_log = self.log_policy(self.w_p_b_legOdom_log)
+            self.w_v_b_legOdom_log = self.log_policy(self.w_v_b_legOdom_log)
             self.q_des_log         = self.log_policy(self.q_des_log)
             self.q_log             = self.log_policy(self.q_log)
             self.qd_des_log        = self.log_policy(self.qd_des_log)
@@ -225,10 +286,23 @@ class Controller(threading.Thread):
             self.time_log          = self.log_policy(self.time_log)
             self.constr_viol_log   = self.log_policy(self.constr_viol_log)
             self.grForcesW_log     = self.log_policy(self.grForcesW_log)
+            self.grForcesW_des_log = self.log_policy(self.grForcesW_des_log)
             self.grForcesB_log     = self.log_policy(self.grForcesB_log)
+            self.grForcesW_gt_log   = self.log_policy(self.grForcesW_gt_log)
             self.W_contacts_log    = self.log_policy(self.W_contacts_log)
             self.B_contacts_log    = self.log_policy(self.B_contacts_log)
             self.contacts_state_log= self.log_policy(self.contacts_state_log)
+            self.tau_minus_h_log = self.log_policy(self.tau_minus_h_log)
+            self.qdd_log = self.log_policy(self.qdd_log)
+            self.base_acc_W_log = self.log_policy(self.base_acc_W_log)
+            self.C_qd_log = self.log_policy(self.C_qd_log)
+            self.T_p_com_ref_lc_log      = self.log_policy(self.T_p_com_ref_lc_log)
+            self.T_p_base_leg_odom_lc_log = self.log_policy(self.T_p_base_leg_odom_lc_log)
+            self.T_v_com_ref_lc_log      = self.log_policy(self.T_v_com_ref_lc_log)
+            self.T_v_base_leg_odom_lc_log = self.log_policy(self.T_v_base_leg_odom_lc_log)
+            self.comVelW_leg_odom_log = self.log_policy(self.comVelW_leg_odom_log)
+            self.gravity_prop_log = self.log_policy(self.gravity_prop_log)
+
 
         # Fill with new values
         self.comPosB_log[:, self.log_counter] = self.comPosB
@@ -239,6 +313,10 @@ class Controller(threading.Thread):
         self.comVelW_des_log[:, self.log_counter] = self.comVelW_des
         self.basePoseW_log[:, self.log_counter] = self.basePoseW
         self.baseTwistW_log[:, self.log_counter] = self.baseTwistW
+        self.basePoseW_des_log[:, self.log_counter] = self.basePoseW_des
+        self.baseTwistW_des_log[:, self.log_counter] = self.baseTwistW_des
+        self.w_p_b_legOdom_log[:, self.log_counter] = self.w_p_b_legOdom
+        self.w_v_b_legOdom_log[:, self.log_counter] = self.w_v_b_legOdom
         self.q_des_log[:, self.log_counter] = self.q_des
         self.q_log[:, self.log_counter] = self.q
         self.qd_des_log[:, self.log_counter] = self.qd_des
@@ -248,9 +326,28 @@ class Controller(threading.Thread):
         self.tau_des_log[:, self.log_counter] = self.tau_des
         self.tau_log[:, self.log_counter] = self.tau
         self.grForcesW_log[:, self.log_counter] = self.grForcesW
+        self.grForcesW_gt_log[:, self.log_counter] = self.grForcesW_gt
+        #self.grForcesW_des_log[:, self.log_counter] = self.grForcesW
+        self.grForcesB_log[:, self.log_counter] = self.grForcesB
         self.contacts_state_log[:, self.log_counter] = self.contacts_state
+        self.tau_minus_h_log[:, self.log_counter] = self.tau_minus_h
+        self.qdd_log[:, self.log_counter] = self.qdd
+        self.base_acc_W_log[:, self.log_counter] = self.base_acc_W
+        self.C_qd_log[:, self.log_counter] = self.C_qd
+        self.T_p_com_ref_lc_log[:, self.log_counter] = self.T_p_com_ref_lc
+        self.T_p_base_leg_odom_lc_log[:, self.log_counter] = self.T_p_base_leg_odom_lc
+
+        self.T_v_com_ref_lc_log[:, self.log_counter] = self.T_v_com_ref_lc
+        self.T_v_base_leg_odom_lc_log[:, self.log_counter] = self.T_v_base_leg_odom_lc
+
+        self.comVelW_leg_odom_log[:, self.log_counter] = self.comVelW_leg_odom
+        self.gravity_prop_log[:, self.log_counter] = self.gravity_prop
+
 
         self.time_log[:, self.log_counter] = self.time
+
+        self.log_counter += 1
+        self.time += self.dt  # TODO: modify with a more sofisticate update of time
 
 
     def log_policy(self, var):
@@ -260,20 +357,19 @@ class Controller(threading.Thread):
 
     # feedforward controllers
 
-    def gravityCompensation(self):
+    def self_weightCompensation(self):
         self.qPin_base_oriented[3:7] = self.quaternion
         self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
         gravity_torques = self.u.mapToRos(self.robot.gravity(self.qPin_base_oriented))[6:]
-        return -gravity_torques
+        return gravity_torques
 
-    def contactCompensation(self):
+    def gravityCompensation(self):
         # to simplyfy, all the feet are assumed to be in contact
-        self.qPin_base_oriented[3:7] = self.quaternion
-        self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
+        fb_config = np.hstack((pin.neutral(self.robot.model)[:7] ,  self.u.mapFromRos(self.q)))
 
-        com_B = self.robot.com(self.qPin_base_oriented)
+        com_B = self.robot.com(fb_config)
 
-        self.robot.forwardKinematics(self.qPin_base_oriented)
+        self.robot.forwardKinematics(fb_config)
         pin.updateFramePlacements(self.robot.model, self.robot.data)
 
         for i, index in enumerate(self.robot.getEndEffectorsFrameId):
@@ -284,9 +380,9 @@ class Controller(threading.Thread):
         C_pinv = np.linalg.pinv(self.contact_matrix)
         self.gravityB[0:3] = pin.Quaternion(self.quaternion).toRotationMatrix().T @ self.gravityW[0:3]
         feet_forces_gravity = C_pinv @ self.gravityB
-        J = self.robot.getEEStackJacobians(self.qPin_base_oriented, 'linear')[:, 6:]
-        contact_torques = self.u.mapToRos(J.T @ feet_forces_gravity)
-        return -contact_torques
+        J = self.robot.getEEStackJacobians(fb_config, 'linear')[:, 6:]
+        contact_torques = -self.u.mapFromRos(J.T @ feet_forces_gravity)
+        return contact_torques
 
     def comFeedforward(self, a_com):
         self.qPin_base_oriented[3:7] = self.quaternion

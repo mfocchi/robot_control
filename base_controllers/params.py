@@ -10,7 +10,10 @@ import numpy as np
 robot_params = {}
 robot_params['hyq'] = {'dt': 0.004, 'kp': 400, 'kd': 6, 'q_0':  np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4]), 
                         'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'], 'buffer_size': 30001}
-robot_params['solo'] ={'dt': 0.002, 'kp': 5., 'kd': 0.1, 'q_0':  np.array([0.,  np.pi/4, -np.pi/2, -0.,  np.pi/4, -np.pi/2, 0., -np.pi/4,  np.pi/2, 0., -np.pi/4,  np.pi/2]), 
+robot_params['solo'] ={'dt': 0.002, 'kp': 5., 'kd': 0.1, 'q_0':  np.array([0.,  np.pi/4, -np.pi/2, -0.,  np.pi/4, -np.pi/2, 0., -np.pi/4,  np.pi/2, 0., -np.pi/4,  np.pi/2]),
+                        'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'],
+                        'buffer_size': 1501} # note the frames are all aligned with base for joints = 0
+robot_params['solo_fw'] ={'dt': 0.002, 'kp': 5., 'kd': 0.1, 'q_0':  np.array([0.,  np.pi/4, -np.pi/2, -0.,  np.pi/4, -np.pi/2, 0., -np.pi/4,  np.pi/2, 0., -np.pi/4,  np.pi/2, 0, 0]),
                         'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'],
                         'buffer_size': 1501} # note the frames are all aligned with base for joints = 0
 
@@ -24,6 +27,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
                        'ee_frame': 'tool0',
                        'control_mode': 'point', # 'trajectory','point'
+                       'control_type': 'position', # 'position', 'torque'
                        'real_robot': False,
                        'control_type': 'torque', # 'position', 'torque'
                        'spawn_x' : 0.5,

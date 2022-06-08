@@ -12,6 +12,7 @@ import tf
 import rospy
 import roslib
 from rospy import Time
+import pinocchio as pin
 
 os.system("killall rosmaster rviz gzserver gzclient")  
 br = tf.TransformBroadcaster()
@@ -23,8 +24,9 @@ q_des = np.zeros((robot.na))
 
 q_des[:12] = np.array([-0.0, 0.7, -1.4, -0.0, -0.7, 1.4,  -0.0, 0.7, -1.4,-0.0, -0.7, 1.4])
 
-translation = (0.0, 0.0, 1.0)
-rotation = (0.0, 0.0, 0.0, 1.0)
+translation = (1.0, 0.0, 0.50)
+rpy = np.array([0., -np.pi/15, 0.])
+rotation = pin.Quaternion(pin.rpy.rpyToMatrix(rpy))
 rate = rospy.Rate(5)  # 5hz    
 
 while not rospy.is_shutdown():

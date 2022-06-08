@@ -369,7 +369,12 @@ class BaseController(threading.Thread):
             print(colored("Starting startup procedure", "red"))
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
-            self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0) 
+            s# set joint pdi gains
+            n_not_leg_joints = self.robot.na - 12
+            Kp = 12 * [conf.robot_params[self.robot_name]['kp']] + n_not_leg_joints * [0.]
+            Kd = 12 * [conf.robot_params[self.robot_name]['kd']] + n_not_leg_joints * [0.]
+            Ki = self.robot.na * [0.]
+            self.pid.setPDjoints(Kp, Kd, Ki)
            
   
             

@@ -7,7 +7,7 @@ Created on Thu Apr  2 18:07:44 2020
 import os
 import psutil
 #from pinocchio.visualize import GepettoVisualizer
-from base_controllers.utils.custom_robot_wrapper import RobotWrapper
+from utils.custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -111,6 +111,12 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             try:
                 flywheel = ros.get_param('/flywheel')
                 args+=' flywheel:='+flywheel
+
+                flywheel2 = ros.get_param('/flywheel2')
+                args += ' flywheel2:=' + flywheel2
+
+                angle = ros.get_param('/angle')
+                args += ' angle:=' + angle
             except:
                 pass          
             
@@ -131,6 +137,7 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
     return robot                    
 
 def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, joint_names = None, q_adm = None):
+    plot_var_des_log = None
     if name == 'position':
         plot_var_log = q_log
         if   (q_des_log is not None):
@@ -171,15 +178,20 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
     else:
         labels_ur =joint_names
     labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
-    labels_flywheel = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE", 
-                  "back_wheel", "front_wheel", "left_wheel", "right_wheel"]
+    labels_flywheel2 = ["LF_HAA", "LF_HFE", "LF_KFE", "RF_HAA", "RF_HFE", "RF_KFE", "LH_HAA", "LH_HFE", "LH_KFE",
+                        "RH_HAA", "RH_HFE", "RH_KFE", "left_wheel", "right_wheel"]
+    labels_flywheel4 = ["LF_HAA", "LF_HFE", "LF_KFE", "RF_HAA", "RF_HFE", "RF_KFE", "LH_HAA", "LH_HFE", "LH_KFE",
+                        "RH_HAA", "RH_HFE", "RH_KFE",
+                        "back_wheel", "front_wheel", "left_wheel", "right_wheel"]
 
     if njoints <= 6:
-        labels = labels_ur         
+        labels = labels_ur
     if njoints == 12:
-        labels = labels_hyq                  
+        labels = labels_hyq
+    if njoints == 14:
+        labels = labels_flywheel2
     if njoints == 16:
-        labels = labels_flywheel
+        labels = labels_flywheel4
         
     for jidx in range(njoints):
      
@@ -255,7 +267,7 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
     plt.ylabel("norm of ee force")
     plt.grid()
     
-def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, des_baseAccW=None, wrenchW=None):
+def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, baseAccW=None, des_baseAccW=None, wrenchW=None):
     plot_var_des_log = None
     if name == 'position':
         plot_var_log = basePoseW
@@ -266,6 +278,7 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
         if   (des_baseTwistW is not None):
             plot_var_des_log  = des_baseTwistW
     elif name == 'acceleration':
+        plot_var_log = baseAccW
         if   (des_baseAccW is not None):
             plot_var_des_log  = des_baseAccW    
     elif name == 'wrench':
@@ -361,8 +374,6 @@ def plotCoMLinear(name, figure_id, time_log, plot_var_des_log=None, plot_var_log
 
 
 def plotGRFs(figure_id, time_log, des_forces, act_forces):
-           
-
     # %% Input plots
 
     fig = plt.figure(figure_id)
@@ -372,43 +383,43 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, des_forces[0,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[0,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                 
     plt.subplot(6,2,3)
     plt.ylabel("$LF_y$", fontsize=10)
     plt.plot(time_log, des_forces[1,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[1,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                 
     plt.subplot(6,2,5)
     plt.ylabel("$LF_z$", fontsize=10)
     plt.plot(time_log, des_forces[2,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[2,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((0,450))
+    #plt.ylim((0,450))
 
     #RF
     plt.subplot(6,2,2)
-    plt.ylabel("$RF_x$", fontsize=plot_var_des_log10)
+    plt.ylabel("$RF_x$", fontsize=10)
     plt.plot(time_log, des_forces[3,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[3,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                 
     plt.subplot(6,2,4)
     plt.ylabel("$RF_y$", fontsize=10)
     plt.plot(time_log, des_forces[4,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[4,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                 
     plt.subplot(6,2,6)
     plt.ylabel("$RF_z$", fontsize=10)
     plt.plot(time_log, des_forces[5,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[5,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((0,450))
+    #plt.ylim((0,450))
                 
      #LH
     plt.subplot(6,2,7)
@@ -416,14 +427,14 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, des_forces[6,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[6,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                 
     plt.subplot(6,2,9)
     plt.ylabel("$LH_y$", fontsize=10)
     plt.plot(time_log, des_forces[7,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[7,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                 
                 
     plt.subplot(6,2,11)
@@ -431,7 +442,7 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, des_forces[8,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[8,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((0,450))
+    #plt.ylim((0,450))
                 
      #RH
     plt.subplot(6,2,8)
@@ -439,21 +450,138 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     plt.plot(time_log, des_forces[9,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[9,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                 
     plt.subplot(6,2,10)
     plt.ylabel("$RH_y$", fontsize=10)
     plt.plot(time_log, des_forces[10,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[10,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((-100,100))
+    #plt.ylim((-100,100))
                         
     plt.subplot(6,2,12)
     plt.ylabel("$RH_z$", fontsize=10)
     plt.plot(time_log, des_forces[11,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[11,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
-    plt.ylim((0,450))
+    #plt.ylim((0,450))
+
+
+def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_states):
+    # %% Input plots
+
+    fig = plt.figure(figure_id)
+    fig.suptitle("ground reaction forces", fontsize=20)
+    plt.subplot(6, 2, 1)
+    plt.ylabel("$LF_x$", fontsize=10)
+    plt.plot(time_log, des_forces[0, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[0, :], linestyle='-', lw=lw_act, color='blue')
+    coeff =  max(np.nanmax(des_forces[0, :]), np.nanmax(act_forces[0, :]))
+    plt.plot(time_log, coeff*contact_states[0, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 3)
+    plt.ylabel("$LF_y$", fontsize=10)
+    plt.plot(time_log, des_forces[1, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[1, :], linestyle='-', lw=lw_act, color='blue')
+    coeff =  max(np.nanmax(des_forces[1, :]), np.nanmax(act_forces[1, :]))
+    plt.plot(time_log, coeff * contact_states[0, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 5)
+    plt.ylabel("$LF_z$", fontsize=10)
+    plt.plot(time_log, des_forces[2, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[2, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[2, :]), np.nanmax(act_forces[2, :]))
+    plt.plot(time_log, coeff * contact_states[0, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((0,450))
+
+    # RF
+    plt.subplot(6, 2, 2)
+    plt.ylabel("$RF_x$", fontsize=10)
+    plt.plot(time_log, des_forces[3, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[3, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[3, :]), np.nanmax(act_forces[3, :]))
+    plt.plot(time_log, coeff * contact_states[1, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 4)
+    plt.ylabel("$RF_y$", fontsize=10)
+    plt.plot(time_log, des_forces[4, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[4, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[4, :]), np.nanmax(act_forces[4, :]))
+    plt.plot(time_log, coeff * contact_states[1, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 6)
+    plt.ylabel("$RF_z$", fontsize=10)
+    plt.plot(time_log, des_forces[5, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[5, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[5, :]), np.nanmax(act_forces[5, :]))
+    plt.plot(time_log, coeff * contact_states[1, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((0,450))
+
+    # LH
+    plt.subplot(6, 2, 7)
+    plt.ylabel("$LH_x$", fontsize=10)
+    plt.plot(time_log, des_forces[6, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[6, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[6, :]), np.nanmax(act_forces[6, :]))
+    plt.plot(time_log, coeff * contact_states[2, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 9)
+    plt.ylabel("$LH_y$", fontsize=10)
+    plt.plot(time_log, des_forces[7, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[7, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[7, :]), np.nanmax(act_forces[7, :]))
+    plt.plot(time_log, coeff * contact_states[2, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 11)
+    plt.ylabel("$LH_z$", fontsize=10)
+    plt.plot(time_log, des_forces[8, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[8, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[8, :]), np.nanmax(act_forces[8, :]))
+    plt.plot(time_log, coeff * contact_states[2, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((0,450))
+
+    # RH
+    plt.subplot(6, 2, 8)
+    plt.ylabel("$RH_x$", fontsize=10)
+    plt.plot(time_log, des_forces[9, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[9, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[9, :]), np.nanmax(act_forces[9, :]))
+    plt.plot(time_log, coeff * contact_states[3, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 10)
+    plt.ylabel("$RH_y$", fontsize=10)
+    plt.plot(time_log, des_forces[10, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[10, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[10, :]), np.nanmax(act_forces[10, :]))
+    plt.plot(time_log, coeff * contact_states[3, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((-100,100))
+
+    plt.subplot(6, 2, 12)
+    plt.ylabel("$RH_z$", fontsize=10)
+    plt.plot(time_log, des_forces[11, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, act_forces[11, :], linestyle='-', lw=lw_act, color='blue')
+    coeff = max(np.nanmax(des_forces[11, :]), np.nanmax(act_forces[11, :]))
+    plt.plot(time_log, coeff * contact_states[3, :], linestyle='-', lw=lw_act/2, color='black')
+    plt.grid()
+    # plt.ylim((0,450))
 
 def plotConstraitViolation(figure_id,constr_viol_log):
     fig = plt.figure(figure_id)            
