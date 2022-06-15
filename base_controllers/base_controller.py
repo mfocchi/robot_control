@@ -98,7 +98,7 @@ class BaseController(threading.Thread):
         self.ros_pub = RosPub(self.robot_name,True)                    
         self.u = Utils()
         self.joint_names = self.u.mapFromRos([i for i in self.robot.model.names][2:])
-                                
+
         self.comPoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
         self.stance_legs = np.array([True, True, True, True])
@@ -128,12 +128,12 @@ class BaseController(threading.Thread):
         self.W_contacts = [np.zeros((3))]*4                       
         self.B_contacts = [np.zeros((3))]*4   
 
-        self.use_ground_truth_contacts = False
+        self.use_ground_truth_contacts = True
 
         if self.use_ground_truth_contacts:
-            self.sub_contact_lf = ros.Subscriber("/" +self.robot_name+"/lf_foot_bumper", ContactsState, callback=self._receive_contact_lf, queue_size=1, buff_size=2**24,  tcp_nodelay=True)
+            self.sub_contact_lf = ros.Subscriber("/" +self.robot_name + "/lf_foot_bumper", ContactsState, callback=self._receive_contact_lf, queue_size=1, buff_size=2**24,  tcp_nodelay=True)
             self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState, callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,   tcp_nodelay=True)
-            self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,   callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 2,     tcp_nodelay=True)
+            self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,   callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 24,     tcp_nodelay=True)
             self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState, callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,        tcp_nodelay=True)
 
         #self.sub_pose = ros.Subscriber("/"+self.robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1,buff_size=2**24, tcp_nodelay=True) no longer used
@@ -157,13 +157,16 @@ class BaseController(threading.Thread):
                                  
     def _receive_contact_lf(self, msg):
         if (self.use_ground_truth_contacts):
+
             grf = np.zeros(3)
             grf[0] = msg.states[0].wrenches[0].force.x
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lower_leg") ).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lowerleg") ).rotation.dot(grf)
+
             self.u.setLegJointState(0, grf, self.grForcesW_gt)
+
         else:
             pass
     def _receive_contact_rf(self, msg):
@@ -173,7 +176,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lower_leg") ).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lowerleg") ).rotation.dot(grf)
             self.u.setLegJointState(1, grf, self.grForcesW_gt)
         else:
             pass
@@ -184,7 +187,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lower_leg")).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lowerleg")).rotation.dot(grf)
             self.u.setLegJointState(2, grf, self.grForcesW_gt)
         else:
             pass
@@ -195,7 +198,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lower_leg")).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lowerleg")).rotation.dot(grf)
             self.u.setLegJointState(3, grf, self.grForcesW_gt)
         else:
             pass
@@ -227,10 +230,18 @@ class BaseController(threading.Thread):
         self.b_R_w = self.mathJet.rpyToRot(self.euler)
    
     def _receive_jstate(self, msg):
-         for i in range(self.robot.na):
-             self.q[i] = msg.position[i]
-             self.qd[i] = msg.velocity[i]
-             self.tau[i] = msg.effort[i]
+
+        q_ros = np.zeros(self.robot.na)
+        qd_ros = np.zeros(self.robot.na)
+        tau_ros = np.zeros(self.robot.na)
+        for i in range(self.robot.na):
+            q_ros[i] = msg.position[i]
+            qd_ros[i] = msg.velocity[i]
+            tau_ros[i] = msg.effort[i]
+        # map from ROS (alphabetical) to our  LF RF LH RH convention
+        self.q = self.u.mapFromRos(q_ros)
+        self.qd = self.u.mapFromRos(qd_ros)
+        self.tau = self.u.mapFromRos(tau_ros)
 
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
@@ -347,11 +358,15 @@ class BaseController(threading.Thread):
     def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
-            grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.u.mapFromRos(self.h_joints)-self.tau ))        
+            try:
+                grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.u.mapFromRos(self.h_joints)-self.tau ))
+            except np.linalg.linalg.LinAlgError as error:
+                grf = np.zeros(3)
             self.u.setLegJointState(leg, grf, self.grForcesW)   
                                  
                                  
     def startupProcedure(self):
+            print(colored("Starting startup procedure", "red"))
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
             s# set joint pdi gains
@@ -394,13 +409,13 @@ class BaseController(threading.Thread):
                 print("starting com controller (no joint PD)...")                
                 self.pid.setPDs(0.0, 0.0, 0.0)                  
             
-            if (self.robot_name == 'solo' or self.robot_name == 'aliengo'):
-                start_t = ros.get_time()
-                while ros.get_time() - start_t < 0.5:
-                    self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-                    ros.sleep(0.01)
-                #self.pid.setPDs(0.0, 0.0, 0.0)                    
-            print("finished startup")    
+            # if (self.robot_name == 'solo' or self.robot_name == 'aliengo'):
+            #     start_t = ros.get_time()
+            #     while ros.get_time() - start_t < 0.5:
+            #         self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+            #         ros.sleep(0.01)
+            self.pid.setPDs(0.0, 0.0, 0.0)
+            print(colored("Finished startup procedure", "red"))
 
     def initVars(self):
  
@@ -438,67 +453,44 @@ def talker(p):
     p.start()
     p.initVars()        
    
-    p.startupProcedure() 
+    p.startupProcedure()
          
     #loop frequency       
-    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
-    
-#    ros.sleep(0.1)
-#    p.resetGravity(True) 
-#    
-#    print ("Start flight phase")
-    
-#    p.time = 0.0
-#    RPM2RAD =2*np.pi/60.0
-#    omega = 5000*RPM2RAD
-    
+    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
+    # from pysolo.controllers.simple_controllers import PushUpReference
+    # ref = PushUpReference(conf.robot_params[p.robot_name]['q_0'], 0.2, 0.5)
 
     #control loop
     while True:  
         #update the kinematics
-        p.updateKinematics()    
+        p.updateKinematics()
+        #p.tau_ffwd = np.zeros(p.robot.na)
 
-        # controller                             
-        #p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp
-        #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:] 
-        p.tau_ffwd = np.zeros(p.robot.na)
-        
-        
-        #        p.q_des[14] += omega *conf.robot_params[p.robot_name_]['dt']		
-#        p.q_des[15] += -omega *conf.robot_params[p.robot_name_]['dt']	    
-
-        #max torque
-#        p.tau_ffwd[14]= 0.21
-#        p.tau_ffwd[15] = -0.21
-        
+        p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des, p.q) - \
+                     conf.robot_params[p.robot_name]['kd'] * p.qd
+        #
+        #p.q_des, p.qd_des = ref.compute(p.time)
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-          
-	   # log variables
-        p.logData()    
-        
-        # plot actual (green) and desired (blue) contact forces 
+
+
+        # plot actual (green) and desired (blue) contact forces
         for leg in range(4):
             p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")
             if (p.use_ground_truth_contacts):
                 p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)), "red")
-        p.ros_pub.publishVisual()      				
-  
-#        if (p.time>0.5): 
-#            print ("pitch", p.basePoseW[p.u.sp_crd["AY"]])
-#            break;
+        p.ros_pub.publishVisual()
 
-        #wait for synconization of the control loop
         rate.sleep()     
        
         p.time = p.time + conf.robot_params[p.robot_name]['dt']			
 	   # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():
             print ("Shutting Down")                    
-            break;                                                
+            break;
                              
     # restore PD when finished        
-    p.pid.setPDs(conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.0) 
+    #p.pid.setPDs(conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.0)
     ros.sleep(1.0)                
     print ("Shutting Down")                 
     ros.signal_shutdown("killed")           

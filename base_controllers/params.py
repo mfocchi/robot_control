@@ -17,7 +17,7 @@ robot_params['solo_fw'] ={'dt': 0.002, 'kp': 5., 'kd': 0.1, 'q_0':  np.array([0.
                         'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'],
                         'buffer_size': 1501} # note the frames are all aligned with base for joints = 0
 
-robot_params['aliengo'] ={'dt': 0.002, 'kp': 150, 'kd': 2, 'q_0':  np.array([-0.0, 0.7, -1.4, -0.0, 0.7, -1.4, -0.0, 0.7, -1.4, -0.0, 0.7, -1.4]),
+robot_params['aliengo'] ={'dt': 0.002, 'kp': 15.0, 'kd': 1.0, 'q_0':  np.array([0.2, 0.7, -1.4, -0.2, 0.7, -1.4, 0.2, 0.7, -1.4, -0.2, 0.7, -1.4]),
                         'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'], 'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 robot_params['ur5'] ={'dt': 0.001, 
                        'kp': np.array([300, 300, 300,30,30,1]), 
