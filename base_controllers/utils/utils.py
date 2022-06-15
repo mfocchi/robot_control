@@ -105,16 +105,16 @@ class Utils:
         return self.leg_map[leg]*3 + self.crd[coord]
 
     def setLegJointState(self, legid,  input, jointState):
-
-        jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3] = input
-
-    def setLegJointState(self, legid,  input, jointState):
-        jointState[legid*3:legid*3+3] = input
-
-    def getLegJointState(self, legid,  jointState):
-        return jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3]
+        if isinstance(legid, str):
+            jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3] = input
+        elif isinstance(legid, int):
+            jointState[legid*3:legid*3+3] = input
 
     def getLegJointState(self, legid,  jointState):
+        if isinstance(legid, str):
+            jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3]
+        elif isinstance(legid, int):
+            jointState[legid * 3:legid * 3 + 3]
         return jointState[legid*3:legid*3+3]
 
     def spy(self, var):
