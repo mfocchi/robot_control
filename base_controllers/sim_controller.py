@@ -47,7 +47,8 @@ import time
 
 
 class SimController(Controller):
-    def __init__(self, robot_name, launch_file=None):
+    def __init__(self, robot_name, launch_file=None, save_bag=False):
+        self.save_bag = save_bag
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
         if rosgraph.is_master_online():  # Checks the master uri and results boolean (True or False)
@@ -70,6 +71,7 @@ class SimController(Controller):
         rospy.sleep(1.5)
 
         super().__init__(self.robot_name)
+        super().__init__(self.robot_name,save_bag=self.save_bag)
         self.dt = conf.robot_params[self.robot_name]['dt']
         self.robot.q_home = conf.robot_params[self.robot_name]['q_0']
         self.ros_pub = RosPub(self.robot_name, only_visual=True, visual_frame = "world")
@@ -223,6 +225,8 @@ class SimController(Controller):
         # log variables
         self.rate.sleep()
         self.logData()
+        if self.save_bag:
+            self.bag()
 
 
     def register_node(self):

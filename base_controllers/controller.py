@@ -27,7 +27,9 @@ import datetime
 
 class Controller(threading.Thread):
 
-    def __init__(self, robot_name):
+    def __init__(self, robot_name, save_bag=False):
+        self.save_bag = save_bag
+
         self.robot_name = robot_name
         self.robot = getRobotModel(robot_name, generate_urdf = True)
 
@@ -107,7 +109,8 @@ class Controller(threading.Thread):
         now = datetime.datetime.now()
         date_string = now.strftime("%Y%m%d%H%M")
 
-        self.sensors_bag = rosbag.Bag(os.environ['PYSOLO_FROSCIA'] + '/bags/' + date_string + '.bag', 'w')
+        if self.save_bag:
+            self.sensors_bag = rosbag.Bag(os.environ['PYSOLO_FROSCIA'] + '/bags/' + date_string + '.bag', 'w')
 
         # These are for solo!
         self.ee_frames = ['lf_foot', 'rf_foot', 'lh_foot', 'rh_foot']

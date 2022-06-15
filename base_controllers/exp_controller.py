@@ -16,9 +16,10 @@ from base_controllers.utils.common_functions import checkRosMaster
 
 
 class ExpController(Controller):
-    def __init__(self, robot_name):
+    def __init__(self, robot_name, save_bag=False):
+        self.save_bag = save_bag
         checkRosMaster()
-        super().__init__(robot_name)
+        super().__init__(robot_name,save_bag=self.save_bag)
 
         self.dt = conf.robot_params[robot_name]['dt']   #['dt_exp']
         self.ros_pub = RosPub(robot_name, only_visual=False, visual_frame = "base_link")
