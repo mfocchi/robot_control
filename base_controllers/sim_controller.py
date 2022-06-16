@@ -70,7 +70,6 @@ class SimController(Controller):
         self.launch.start()
         rospy.sleep(1.5)
 
-        super().__init__(self.robot_name)
         super().__init__(self.robot_name,save_bag=self.save_bag)
         self.dt = conf.robot_params[self.robot_name]['dt']
         self.robot.q_home = conf.robot_params[self.robot_name]['q_0']
