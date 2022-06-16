@@ -174,6 +174,15 @@ class Utils:
             index_out = 1            
         return index_out
 
+    def mapLegListToRos(self, list):
+        tmp1 = list[1]
+        tmp2 = list[2]
+
+        list[1] = tmp2
+        list[2] = tmp1
+
+        return list
+
 class ZeroSE3_State:
     def __init__(self, na):
         self.na = na
