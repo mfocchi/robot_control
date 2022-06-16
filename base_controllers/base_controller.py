@@ -349,7 +349,10 @@ class BaseController(threading.Thread):
     def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
-            grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.u.mapFromRos(self.h_joints)-self.tau ))        
+            try:
+                grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.u.mapFromRos(self.h_joints)-self.tau ))
+            except np.linalg.linalg.LinAlgError as error:
+                grf = np.zeros(3)
             self.u.setLegJointState(leg, grf, self.grForcesW)   
                                  
                                  
