@@ -229,10 +229,18 @@ class BaseController(threading.Thread):
         self.b_R_w = self.mathJet.rpyToRot(self.euler)
    
     def _receive_jstate(self, msg):
-         for i in range(self.robot.na):
-             self.q[i] = msg.position[i]
-             self.qd[i] = msg.velocity[i]
-             self.tau[i] = msg.effort[i]
+
+        q_ros = np.zeros(self.robot.na)
+        qd_ros = np.zeros(self.robot.na)
+        tau_ros = np.zeros(self.robot.na)
+        for i in range(self.robot.na):
+            q_ros[i] = msg.position[i]
+            qd_ros[i] = msg.velocity[i]
+            tau_ros[i] = msg.effort[i]
+        # map from ROS (alphabetical) to our  LF RF LH RH convention
+        self.q = self.u.mapFromRos(q_ros)
+        self.qd = self.u.mapFromRos(qd_ros)
+        self.tau = self.u.mapFromRos(tau_ros)
 
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
