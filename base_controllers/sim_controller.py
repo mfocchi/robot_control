@@ -265,7 +265,7 @@ class SimController(Controller):
             req_reset_gravity.gravity.z = -9.81
         self.set_physics_client(req_reset_gravity)
 
-    def freezeBase(self, g_mag = None):
+    def freezeBase(self, pose = None, twist = None, g_mag = None):
 
         self.resetGravity(g_mag)
         # create the message
@@ -273,22 +273,41 @@ class SimController(Controller):
         # create model state
         model_state = ModelState()
         model_state.model_name = self.robot_name
-        model_state.pose.position.x = 0.0
-        model_state.pose.position.y = 0.0
-        model_state.pose.position.z = 0.8
+        if pose  is None:
+            model_state.pose.position.x = 0.0
+            model_state.pose.position.y = 0.0
+            model_state.pose.position.z = 0.0
 
-        model_state.pose.orientation.w = 1.0
-        model_state.pose.orientation.x = 0.0
-        model_state.pose.orientation.y = 0.0
-        model_state.pose.orientation.z = 0.0
+            model_state.pose.orientation.x = 0.0
+            model_state.pose.orientation.y = 0.0
+            model_state.pose.orientation.z = 0.0
+            model_state.pose.orientation.w = 1.0
+        else:
+            model_state.pose.position.x = pose[0]
+            model_state.pose.position.y = pose[1]
+            model_state.pose.position.z = pose[2]
 
-        model_state.twist.linear.x = 0.0
-        model_state.twist.linear.y = 0.0
-        model_state.twist.linear.z = 0.0
+            model_state.pose.orientation.x = pose[3]
+            model_state.pose.orientation.y = pose[4]
+            model_state.pose.orientation.z = pose[5]
+            model_state.pose.orientation.w = pose[6]
 
-        model_state.twist.angular.x = 0.0
-        model_state.twist.angular.y = 0.0
-        model_state.twist.angular.z = 0.0
+        if twist is None:
+            model_state.twist.linear.x = 0.0
+            model_state.twist.linear.y = 0.0
+            model_state.twist.linear.z = 0.0
+
+            model_state.twist.angular.x = 0.0
+            model_state.twist.angular.y = 0.0
+            model_state.twist.angular.z = 0.0
+        else:
+            model_state.twist.linear.x = twist[0]
+            model_state.twist.linear.y = twist[1]
+            model_state.twist.linear.z = twist[2]
+
+            model_state.twist.angular.x = twist[3]
+            model_state.twist.angular.y = twist[4]
+            model_state.twist.angular.z = twist[5]
 
         req_reset_world.model_state = model_state
         # send request and get response (in this case none)
