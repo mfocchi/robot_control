@@ -162,8 +162,10 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lower_leg") ).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lowerleg") ).rotation.dot(grf)
+
             self.u.setLegJointState(0, grf, self.grForcesW_gt)
+
         else:
             pass
     def _receive_contact_rf(self, msg):
@@ -173,7 +175,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lower_leg") ).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lowerleg") ).rotation.dot(grf)
             self.u.setLegJointState(1, grf, self.grForcesW_gt)
         else:
             pass
@@ -184,7 +186,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lower_leg")).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lowerleg")).rotation.dot(grf)
             self.u.setLegJointState(2, grf, self.grForcesW_gt)
         else:
             pass
@@ -195,7 +197,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lower_leg")).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lowerleg")).rotation.dot(grf)
             self.u.setLegJointState(3, grf, self.grForcesW_gt)
         else:
             pass
