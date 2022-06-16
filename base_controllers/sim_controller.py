@@ -473,7 +473,19 @@ class SimController(Controller):
         rospy.sleep(0.5)  # wait for callback to fill in jointmnames
 
         self.pid = PidManager(self.joint_names)
-        self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0)
+
+        # set gains only to leg joint pid's
+        kp = conf.robot_params[self.robot_name]['kp']
+        kd = conf.robot_params[self.robot_name]['kd']
+        ki = 0.0
+
+        for i, joint in enumerate(self.joint_names):
+            if 'lf' in joint or 'rf' in joint or 'lh' in joint or 'rh' in joint:
+                self.pid.setPDjoint(i, kp, kd, ki)
+            else:
+                self.pid.setPDjoint(i, 0., 0., 0.)
+
+
 
         if (self.robot_name == 'hyq'):
             # these torques are to compensate the leg gravity
