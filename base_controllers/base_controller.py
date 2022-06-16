@@ -153,7 +153,7 @@ class BaseController(threading.Thread):
         self.verbose = conf.verbose
 
         self.u.putIntoGlobalParamServer("verbose", self.verbose)   
-        print("Initialized basecontroller---------------------------------------------------------------")
+        print("Initialized base controller---------------------------------------------------------------")
                                  
     def _receive_contact_lf(self, msg):
         if (self.use_ground_truth_contacts):
