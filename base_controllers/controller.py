@@ -129,7 +129,7 @@ class Controller(threading.Thread):
                                 'rh_haa_joint',
                                 'rh_hfe_joint',
                                 'rh_kfe_joint']  # ros convention
-        self.force_th = conf.robot_params[robot_name]['force_th']
+        self.force_th = 0. #conf.robot_params[robot_name]['force_th']
 
         # send data to param server
         self.verbose = conf.verbose
@@ -349,8 +349,6 @@ class Controller(threading.Thread):
 
         self.time_log[:, self.log_counter] = self.time
 
-        self.log_counter += 1
-        self.time += self.dt  # TODO: modify with a more sofisticate update of time
 
 
     def log_policy(self, var):
