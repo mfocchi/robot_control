@@ -118,9 +118,16 @@ class Controller(BaseController):
         self.APPLY_EXTERNAL_WRENCH = False
         self.TIME_EXTERNAL_WRENCH = 0.6
 
-
-
-
+    #####################
+    # OVERRIDEN METHODS #
+    #####################
+    # initVars
+    # logData
+    # startupProcedure
+    # _receive_contact_lf
+    # _receive_contact_rf
+    # _receive_contact_lh
+    # _receive_contact_rh
 
     def initVars(self):
         self.comPosB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
@@ -557,6 +564,39 @@ class Controller(BaseController):
                 ros.sleep(0.01)
         #self.pid.setPDs(0.0, 0.0, 0.0)
         print("finished startup")
+
+
+    def _receive_contact_lf(self, msg):
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] = msg.states[0].wrenches[0].force.y
+        grf[2] = msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(0, grf, self.grForcesLocal_gt)
+
+    def _receive_contact_rf(self, msg):
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] = msg.states[0].wrenches[0].force.y
+        grf[2] = msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(1, grf, self.grForcesLocal_gt)
+
+    def _receive_contact_lh(self, msg):
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] = msg.states[0].wrenches[0].force.y
+        grf[2] = msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(2, grf, self.grForcesLocal_gt)
+
+    def _receive_contact_rh(self, msg):
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] = msg.states[0].wrenches[0].force.y
+        grf[2] = msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(3, grf, self.grForcesLocal_gt)
+
+
+
+
 
     def save_reference(self, filename):
         DATA = {}
