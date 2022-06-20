@@ -19,7 +19,8 @@ class PidManager:
         self.joint_pid = pid()
         self.joint_pid_log = len(jnames)*[pid()]
         self.req_msg = set_pidsRequest()						
-	                                
+        print(colored("PID Manager initialized", "red"))
+
     def setPDs(self, kp, kd, ki):              
         # create the message
         self.req_msg.data = []

@@ -109,7 +109,9 @@ class RosPub():
            marker.color.r = 0.0
            marker.color.g = 1.0
            marker.color.b = 0.0
-                               
+       marker.pose.orientation.x = 0.
+       marker.pose.orientation.y = 0.
+       marker.pose.orientation.z = 0.
        marker.pose.orientation.w = 1.0
        marker.pose.position.x = pos[0]
        marker.pose.position.y = pos[1] 
@@ -147,7 +149,10 @@ class RosPub():
        marker.scale.z = 0.02
        marker.color.a = 1.0
        marker.lifetime = ros.Duration(0.0)
-
+       marker.pose.orientation.x = 0.
+       marker.pose.orientation.y = 0.
+       marker.pose.orientation.z = 0.
+       marker.pose.orientation.w = 1.
        marker.id = self.id_arrow
        self.id_arrow += 1
        self.markerArray_arrows.markers.append(marker)
