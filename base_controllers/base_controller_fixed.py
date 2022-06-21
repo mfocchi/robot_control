@@ -64,6 +64,7 @@ class BaseControllerFixed(threading.Thread):
         self.broadcaster = tf.TransformBroadcaster()
         #send data to param server
         self.verbose = conf.verbose
+        self.use_torque_control = True
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
@@ -88,6 +89,7 @@ class BaseControllerFixed(threading.Thread):
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
 
         if use_torque_control is not None:
+            self.use_torque_control = use_torque_control
             cli_args.append('use_torque_control:=' + str(self.use_torque_control))
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
