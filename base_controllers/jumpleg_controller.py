@@ -20,6 +20,16 @@ from base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.ros_publish import RosPub
 from base_controllers.utils.common_functions import getRobotModel
 from utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
+
+from jumpleg_rl.srv import get_action
+
+from jumpleg_rl.srv import get_actionResponse
+from jumpleg_rl.srv import get_actionRequest
+
+from jumpleg_rl.srv import get_target
+from jumpleg_rl.srv import set_reward
+
+
 import  params as conf
 robotName = "jumpleg"
 
@@ -117,7 +127,7 @@ class JumpLegController(BaseControllerFixed):
 
     def freezeBase(self, flag):
         if not self.no_gazebo:
-            if (self.freezeBaseFlag) and (not flag):
+            if (self.freezeBaseFlag):
                 self.freezeBaseFlag = flag
                 print("releasing base")
                 self.tau_ffwd[2] = 0.
@@ -198,6 +208,23 @@ class JumpLegController(BaseControllerFixed):
         print(x)
         return x[:3], x[3:]
 
+    def detectApex(self):
+        if not self.detectedApexFlag:
+            if (self.qd[2] <= 0.0):
+                self.detectedApexFlag = True
+                print(colored("APEX detected", "red"))
+                # reset joints at q0
+                self.q_des[3:] = self.q_des_q0[3:]
+
+
+    def detectTouchDown(self):
+        foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
+        if (foot_pos_w[2] <= 0.025 ):
+            print(colored("TOUCHDOWN detected","red"))
+            return True
+        else:
+            return False
+
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
@@ -260,78 +287,104 @@ def talker(p):
          a[i,:] = fifthOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i], qd_0_leg[i],  qd_f_leg[i],  qdd_0_leg[i],  qdd_f_leg[i])
 
     # here the RL loop...
+    while True:
 
-    p.time = 0
-    startTrust = 2.0
-    p.freezeBase(True)
+        # TODO call the rl agent to get the action
+        p.time = 0
+        startTrust = 0.5
+        p.freezeBase(True)
+        p.firstTime = True
+        p.detectedApexFlag = False
 
-    #control loop
-    while True:# p.time < (startTrust + T_f):
-        #update the kinematics
-        p.updateKinematicsDynamics()
-        if (p.time > startTrust):
-            p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
-            #plot com target
-            p.ros_pub.add_marker(com_f, color="blue", radius=0.1)
 
-            #compute joint reference
-            if   (p.time < startTrust + T_f):
-                t = p.time - startTrust
-                for i in range(3):
-                    # third order
-                    # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
-                    # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
-                    #fifth order
-                    p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
-                    p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
-                    p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
-                    if (p.q_des[3 + i] > p.robot.model.upperPositionLimit[3+i]):
-                        #put negative reward here
-                        print(colored("upper limit hit in "+str(3+i)+"-th joint","red"))
-                    if (p.q_des[3 + i] < p.robot.model.lowerPositionLimit[3 + i]):
-                        # put negative reward here
-                        print(colored("lower limit hit in " + str(3 + i) + "-th joint", "red"))
+        #control loop
+        while True:# p.time < (startTrust + T_f):
+            #update the kinematics
+            p.updateKinematicsDynamics()
+            if (p.time > startTrust):
+                if p.firstTime:
+                    p.firstTime = False
+                    p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
+                #plot com target
+                p.ros_pub.add_marker(com_f, color="blue", radius=0.1)
 
-            # compute control action
-            if p.inverseDynamicsFlag: # TODO fix this
-                p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
-            else:
-                if (p.time < startTrust + T_f):
-                    p.tau_ffwd[3:] = -p.J.T.dot(p.g[:3])
+                #compute joint reference
+                if   (p.time < startTrust + T_f):
+                    t = p.time - startTrust
+                    for i in range(3):
+                        # third order
+                        # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
+                        # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
+                        #fifth order
+                        p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
+                        p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
+                        p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
+                        if (p.q_des[3 + i] >= p.robot.model.upperPositionLimit[3+i]):
+                            #put negative reward here
+                            print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
+                        if (p.q_des[3 + i] <= p.robot.model.lowerPositionLimit[3 + i]):
+                            # put negative reward here
+                            print(colored("lower end-stop limit hit in " + str(3 + i) + "-th joint", "red"))
+                        if (p.tau_ffwd[3 + i] >= p.robot.model.effortLimit[3 + i]):
+                            # put negative reward here
+                            print(colored("upper torque limit hit in " + str(3 + i) + "-th joint", "red"))
+                        if (p.tau_ffwd[3 + i] <= -p.robot.model.effortLimit[3 + i]):
+                            # put negative reward here
+                            print(colored("lower torque limit hit in " + str(3 + i) + "-th joint", "red"))
+                        # singularity
+                        if (np.linalg.norm(p.com) >= 0.7):
+                            print(p.com)
+                            print(colored("Getting singular configuration", "red"))
+
                 else:
-                    p.tau_ffwd[3:] = np.zeros(3)
-                    
-            # send commands to gazebo
-            if p.no_gazebo:
-                p.forwardEulerIntegration(p.tau_ffwd, p.contactForceW )
-                p.ros_pub.publish(p.robot, p.q)
+                    # apex detection
+                    p.detectApex()
+                    if (p.detectedApexFlag):
+                        if p.detectTouchDown():
+                            # TODO Evaluate rewards
+                            break
 
-        if not p.no_gazebo:
-            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-
-        # log variables
-        p.logData()
-
-        # disturbance force
-        # if (p.time > 3.0 and p.EXTERNAL_FORCE):
-        #     p.applyForce()
-        #     p.EXTERNAL_FORCE = False
-
-        # plot end-effector and contact force
-        p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
-        p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
+                # compute control action
+                if p.inverseDynamicsFlag: # TODO fix this
+                    p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
+                else:
+                    if (p.time < startTrust + T_f):
+                        p.tau_ffwd[3:] = -p.J.T.dot(p.g[:3])
+                    else:
+                        p.tau_ffwd[3:] = np.zeros(3)
 
 
-        p.ros_pub.publishVisual()
+                # send commands to gazebo
+                if p.no_gazebo:
+                    p.forwardEulerIntegration(p.tau_ffwd, p.contactForceW )
+                    p.ros_pub.publish(p.robot, p.q)
 
-        #wait for synconization of the control loop
-        rate.sleep()
+            if not p.no_gazebo:
+                p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-        p.time = p.time + conf.robot_params[p.robot_name]['dt']
-       # stops the while loop if  you prematurely hit CTRL+C
-        if ros.is_shutdown():
-            print ("Shutting Down")
-            break
+            # log variables
+            p.logData()
+
+            # disturbance force
+            # if (p.time > 3.0 and p.EXTERNAL_FORCE):
+            #     p.applyForce()
+            #     p.EXTERNAL_FORCE = False
+
+            # plot end-effector and contact force
+            p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
+            p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
+
+
+            p.ros_pub.publishVisual()
+
+            #wait for synconization of the control loop
+            rate.sleep()
+
+            p.time = p.time + conf.robot_params[p.robot_name]['dt']
+           # stops the while loop if  you prematurely hit CTRL+C
+            if ros.is_shutdown():
+                print ("Shutting Down")
+                break
 
     print("Shutting Down")
     ros.signal_shutdown("killed")
