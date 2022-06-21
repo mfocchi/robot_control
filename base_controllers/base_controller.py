@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on 3 May  2022
@@ -41,8 +42,9 @@ from geometry_msgs.msg import Pose
 
 # ros utils
 import roslaunch
-import rosnode
+import rospkg
 import rosgraph
+from gazebo_msgs.srv import ApplyBodyWrench
 
 #other utils
 from base_controllers.utils.ros_publish import RosPub
@@ -63,98 +65,96 @@ robotName = "solo"
 class BaseController(threading.Thread):
     
     def __init__(self, robot_name="hyq", launch_file=None):
-        
+        threading.Thread.__init__(self)
         self.robot_name = robot_name
-        #clean up previous process
+        self.base_offset = np.array([conf.robot_params[self.robot_name]['spawn_x'],
+                                     conf.robot_params[self.robot_name]['spawn_y'],
+                                     conf.robot_params[self.robot_name]['spawn_z']])
 
-        os.system("killall rosmaster rviz gzserver gzclient")                                
-        if rosgraph.is_master_online(): # Checks the master uri and results boolean (True or False)
-            print ('ROS MASTER is active')
-            nodes = rosnode.get_node_names()
-            if "/rviz" in nodes:
-                 print("Rviz active")
-                 rvizflag=" rviz:=false"
-            else:                                                         
-                 rvizflag=" rviz:=true" 
-        #start ros impedance controller
+
+        self.joint_names = ""
+        self.u = Utils()
+        self.math_utils = Math()
+        # send data to param server
+        self.verbose = conf.verbose
+
+        self.use_ground_truth_contacts = True
+
+        print("Initialized basecontroller---------------------------------------------------------------")
+
+    def startSimulator(self, world_name = None, use_torque_control = None):
+        # needed to be able to load a custom world file
+        print(colored('Adding gazebo model path!', 'blue'))
+        custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
+        if os.getenv("GAZEBO_MODEL_PATH") is not None:
+            os.environ["GAZEBO_MODEL_PATH"] +=":"+custom_models_path
+        else:
+            os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
+
+        # clean up previous process
+        os.system("killall rosmaster rviz gzserver gzclient")
+
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
-        if launch_file is None:
-            launch_file = self.robot_name
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_"+launch_file+".launch"])
-        #only available in ros lunar
-#        roslaunch_args=rvizflag                             
-#        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/ros_impedance_controller_stdalone.launch"],roslaunch_args=[roslaunch_args])
-        self.launch.start() 
+        cli_args = [rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch',
+                    'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
+                    'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
+                    'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
+
+        if use_torque_control is not None:
+            cli_args.append('use_torque_control:=' + str(self.use_torque_control))
+        if world_name is not None:
+            print(colored("Setting custom model: "+str(world_name), "blue"))
+            cli_args.append('world_name:=' + str(world_name))
+
+        roslaunch_args = cli_args[1:]
+        roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
+        parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
+        parent.start()
         ros.sleep(1.0)
+        print(colored('SIMULATION Started', 'blue'))
+
+    def loadModelAndPublishers(self, xacro_path=None):
 
         # Loading a robot model of robot (Pinocchio)
-        self.robot = getRobotModel(self.robot_name, generate_urdf = True)
-        
+        if xacro_path is None:
+            xacro_path = rospkg.RosPack().get_path(
+                self.robot_name + '_description') + '/robots/' + self.robot_name + '.urdf.xacro'
+        else:
+            print("loading custom xacro path: ", xacro_path)
+        self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path)
 
-        threading.Thread.__init__(self)
-								
         # instantiating objects
-        self.ros_pub = RosPub(self.robot_name,True)                    
-        self.u = Utils()
-        self.joint_names = self.u.mapFromRos([i for i in self.robot.model.names][2:])
-                                
-        self.comPoseW = np.zeros(6)
-        self.baseTwistW = np.zeros(6)
-        self.stance_legs = np.array([True, True, True, True])
-        self.centroidalInertiaB = np.identity(3)
-        self.compositeRobotInertiaB = np.identity(3)
-        
-        self.q = np.zeros(self.robot.na)
-        self.qd = np.zeros(self.robot.na)
-        self.tau = np.zeros(self.robot.na)
-        self.q_des =np.zeros(self.robot.na)
-        
-        self.mathJet = Math()
-        self.quaternion = np.array([0.,0.,0.,1.])
-        # GOZERO Keep the fixed configuration for the joints at the start of simulation
-        self.q_des[:12] = conf.robot_params[self.robot_name]['q_0']   
-        self.qd_des = np.zeros(self.robot.na)
-        self.tau_ffwd =np.zeros(self.robot.na)
-        self.gravity_comp = np.zeros(self.robot.na)
-        
-        self.b_R_w = np.eye(3)       
-                                  
-        self.grForcesW = np.zeros(self.robot.na)
-        self.grForcesW_gt = np.zeros(self.robot.na)
-        self.basePoseW = np.zeros(6) 
-        self.J = [np.zeros((6,self.robot.nv))]* 4
-        self.wJ = [np.eye(3)]* 4
-        self.W_contacts = [np.zeros((3))]*4                       
-        self.B_contacts = [np.zeros((3))]*4   
-
-        self.use_ground_truth_contacts = False
-
-        if self.use_ground_truth_contacts:
-            self.sub_contact_lf = ros.Subscriber("/" +self.robot_name + "/lf_foot_bumper", ContactsState, callback=self._receive_contact_lf, queue_size=1, buff_size=2**24,  tcp_nodelay=True)
-            self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState, callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,   tcp_nodelay=True)
-            self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,   callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 24,     tcp_nodelay=True)
-            self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState, callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,        tcp_nodelay=True)
-
-        #self.sub_pose = ros.Subscriber("/"+self.robot_name+"/base_state", BaseState, callback=self._receive_pose, queue_size=1,buff_size=2**24, tcp_nodelay=True) no longer used
-        self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)     
+        self.ros_pub = RosPub(self.robot_name, only_visual=True)
+        self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
         self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)                  
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
-
-        # freeze base  and pause simulation service 
+        # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.set_physics_client = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
         self.get_physics_client = ros.ServiceProxy('/gazebo/get_physics_properties', GetPhysicsProperties)
- 
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
-        self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)        
-								
-        #send data to param server
-        self.verbose = conf.verbose
+        self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
+        self.u.putIntoGlobalParamServer("verbose", self.verbose)
+        self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
+        self.pid = PidManager(self.joint_names)
 
-        self.u.putIntoGlobalParamServer("verbose", self.verbose)   
-        print("Initialized base controller---------------------------------------------------------------")
-                                 
+        self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
+                                       queue_size=1, tcp_nodelay=True)
+        if self.use_ground_truth_contacts:
+            self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
+                                                 callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
+                                                 tcp_nodelay=True)
+            self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState,
+                                                 callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,
+                                                 tcp_nodelay=True)
+            self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,
+                                                 callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 2,
+                                                 tcp_nodelay=True)
+            self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
+                                                 callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
+                                                 tcp_nodelay=True)
+
     def _receive_contact_lf(self, msg):
         if (self.use_ground_truth_contacts):
             grf = np.zeros(3)
@@ -162,10 +162,8 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lowerleg") ).rotation.dot(grf)
-
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lower_leg") ).rotation.dot(grf)
             self.u.setLegJointState(0, grf, self.grForcesW_gt)
-
         else:
             pass
     def _receive_contact_rf(self, msg):
@@ -175,7 +173,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lowerleg") ).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lower_leg") ).rotation.dot(grf)
             self.u.setLegJointState(1, grf, self.grForcesW_gt)
         else:
             pass
@@ -186,7 +184,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lowerleg")).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lower_leg")).rotation.dot(grf)
             self.u.setLegJointState(2, grf, self.grForcesW_gt)
         else:
             pass
@@ -197,7 +195,7 @@ class BaseController(threading.Thread):
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
             configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lowerleg")).rotation.dot(grf)
+            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lower_leg")).rotation.dot(grf)
             self.u.setLegJointState(3, grf, self.grForcesW_gt)
         else:
             pass
@@ -226,7 +224,7 @@ class BaseController(threading.Thread):
         
       
         # compute orientation matrix                                
-        self.b_R_w = self.mathJet.rpyToRot(self.euler)
+        self.b_R_w = self.math_utils.rpyToRot(self.euler)
    
     def _receive_jstate(self, msg):
 
@@ -365,9 +363,9 @@ class BaseController(threading.Thread):
                                  
                                  
     def startupProcedure(self):
+            ros.sleep(1.5)
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
-            s# set joint pdi gains
             n_not_leg_joints = self.robot.na - 12
             Kp = 12 * [conf.robot_params[self.robot_name]['kp']] + n_not_leg_joints * [0.]
             Kd = 12 * [conf.robot_params[self.robot_name]['kd']] + n_not_leg_joints * [0.]
@@ -416,7 +414,32 @@ class BaseController(threading.Thread):
             print("finished startup")    
 
     def initVars(self):
- 
+
+        self.comPoseW = np.zeros(6)
+        self.baseTwistW = np.zeros(6)
+        self.stance_legs = np.array([True, True, True, True])
+        self.centroidalInertiaB = np.identity(3)
+        self.compositeRobotInertiaB = np.identity(3)
+        self.q = np.zeros(self.robot.na)
+        self.qd = np.zeros(self.robot.na)
+        self.tau = np.zeros(self.robot.na)
+        self.q_des = np.zeros(self.robot.na)
+        self.quaternion = np.array([0., 0., 0., 1.])
+        self.q_des[:12] = conf.robot_params[self.robot_name]['q_0']
+        self.qd_des = np.zeros(self.robot.na)
+        self.tau_ffwd = np.zeros(self.robot.na)
+        self.gravity_comp = np.zeros(self.robot.na)
+        self.b_R_w = np.eye(3)
+        self.grForcesW = np.zeros(self.robot.na)
+        self.grForcesW_gt = np.zeros(self.robot.na)
+        self.basePoseW = np.zeros(6)
+        self.J = [np.zeros((6, self.robot.nv))] * 4
+        self.wJ = [np.eye(3)] * 4
+        self.W_contacts = [np.zeros((3))] * 4
+        self.B_contacts = [np.zeros((3))] * 4
+
+
+        #log vars
         self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.baseTwistW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
@@ -449,8 +472,9 @@ class BaseController(threading.Thread):
 def talker(p):
             
     p.start()
-    p.initVars()        
-   
+    p.startSimulator()
+    p.loadModelAndPublishers()
+    p.initVars()           
     p.startupProcedure() 
          
     #loop frequency       
