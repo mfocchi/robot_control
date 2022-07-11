@@ -39,9 +39,11 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress 
 from termcolor import colored
 import matplotlib.pyplot as plt
 import distro
+import rosgraph
+import rosnode
 
 import  params as conf
-# robots can be ur5 and jumpleg to load ur5 you need to set this xacro path in loadModelAndPublishers  rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
+# robots can be ur5 and jumpleg to load ur5 you need to set this xacro path in loadModelAndPublishers
 robotName = "ur5"
 
 from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
@@ -68,7 +70,7 @@ class BaseControllerFixed(threading.Thread):
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None, use_torque_control = None):
+    def startSimulator(self, world_name = None, use_torque_control = True):
         # needed to be able to load a custom world file
         print(colored('Adding gazebo model path!', 'blue'))
         custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
@@ -87,10 +89,7 @@ class BaseControllerFixed(threading.Thread):
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
-
-        if use_torque_control is not None:
-            self.use_torque_control = use_torque_control
-            cli_args.append('use_torque_control:=' + str(self.use_torque_control))
+        cli_args.append('use_torque_control:=' + str(use_torque_control))
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
             cli_args.append('world_name:=' + str(world_name))
@@ -156,9 +155,14 @@ class BaseControllerFixed(threading.Thread):
 
 
     def startupProcedure(self):
+        ros.sleep(1.0)
         if (self.use_torque_control):
-            self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
-        print("Startup accomplished -----------------------")
+            if (not rosgraph.is_master_online()) or (
+                    "/" + self.robot_name + "/ros_impedance_controller" not in rosnode.get_node_names()):
+                print(colored('Error: you need to launch the ros impedance controller in torque mode!', 'red'))
+                sys.exit()
+         #   self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
+        print(colored("Startup accomplished -----------------------","red"))
 
     def initVars(self):
 
@@ -214,7 +218,9 @@ class BaseControllerFixed(threading.Thread):
 def talker(p):
     p.start()
     p.startSimulator()
-    p.loadModelAndPublishers()
+    if ( robotName == 'ur5'):
+        xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
+    p.loadModelAndPublishers(xacro_path)
     p.initVars()     
     p.startupProcedure()
     ros.sleep(1.0)

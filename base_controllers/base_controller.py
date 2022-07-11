@@ -46,7 +46,7 @@ from base_controllers.utils.common_functions import getRobotModel
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
-robotName = "solo_fw"
+robotName = "solo"
 
 class BaseController(threading.Thread):
     
