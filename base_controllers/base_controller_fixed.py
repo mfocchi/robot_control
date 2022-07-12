@@ -41,6 +41,7 @@ import matplotlib.pyplot as plt
 import distro
 import rosgraph
 import rosnode
+import sys
 
 import  params as conf
 # robots can be ur5 and jumpleg to load ur5 you need to set this xacro path in loadModelAndPublishers
@@ -157,8 +158,7 @@ class BaseControllerFixed(threading.Thread):
     def startupProcedure(self):
         ros.sleep(1.0)
         if (self.use_torque_control):
-            if (not rosgraph.is_master_online()) or (
-                    "/" + self.robot_name + "/ros_impedance_controller" not in rosnode.get_node_names()):
+            if  ("/" + self.robot_name + "/ros_impedance_controller" not in rosnode.get_node_names()):
                 print(colored('Error: you need to launch the ros impedance controller in torque mode!', 'red'))
                 sys.exit()
          #   self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
@@ -219,8 +219,9 @@ def talker(p):
     p.start()
     p.startSimulator()
     if ( robotName == 'ur5'):
-        xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
-    p.loadModelAndPublishers(xacro_path)
+        p.loadModelAndPublishers(rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro')
+    else:
+        p.loadModelAndPublishers()
     p.initVars()     
     p.startupProcedure()
     ros.sleep(1.0)
