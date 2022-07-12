@@ -21,13 +21,7 @@ from base_controllers.utils.ros_publish import RosPub
 from base_controllers.utils.common_functions import getRobotModel
 from utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
 
-from jumpleg_rl.srv import get_action
-
-from jumpleg_rl.srv import get_actionResponse
-from jumpleg_rl.srv import get_actionRequest
-
-from jumpleg_rl.srv import get_target
-from jumpleg_rl.srv import set_reward
+from jumpleg_rl.srv import *
 
 
 import  params as conf
@@ -42,6 +36,7 @@ class JumpLegController(BaseControllerFixed):
         self.inverseDynamicsFlag = False
         self.no_gazebo = False
         print("Initialized jump leg controller---------------------------------------------------------------")
+
 
     def applyForce(self):
         from geometry_msgs.msg import Wrench, Point
@@ -248,8 +243,21 @@ def talker(p):
     ros.sleep(1.0)
     p.q_des = np.copy(p.q_des_q0)
 
+    # wait for agent service to start
+    print("Waiting for JumplegAgent services")
+    ros.wait_for_service('JumplegAgent/get_action')
+    ros.wait_for_service('JumplegAgent/get_target')
+    ros.wait_for_service('JumplegAgent/set_reward')
+
+    print("JumplegAgent services ready")
+    action_service = ros.ServiceProxy('JumplegAgent/get_action', get_action)
+    target_service = ros.ServiceProxy('JumplegAgent/get_target', get_target)
+    reward_service = ros.ServiceProxy('JumplegAgent/set_reward', set_reward)
+
+
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
+
 
     # compute coeff first time
     p.updateKinematicsDynamics()
@@ -289,16 +297,19 @@ def talker(p):
     # here the RL loop...
     while True:
 
-        # TODO call the rl agent to get the action
         p.time = 0
         startTrust = 0.5
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
+        target_position = target_service()
+        # TODO: Call action based on state
+        print("Target position from agent:", target_position)
 
 
-        #control loop
+        #Control loop
         while True:# p.time < (startTrust + T_f):
+
             #update the kinematics
             p.updateKinematicsDynamics()
             if (p.time > startTrust):
@@ -319,6 +330,8 @@ def talker(p):
                         p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
                         p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
                         p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
+
+                        # TODO: Cumulate possible penalties
                         if (p.q_des[3 + i] >= p.robot.model.upperPositionLimit[3+i]):
                             #put negative reward here
                             print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
@@ -341,7 +354,8 @@ def talker(p):
                     p.detectApex()
                     if (p.detectedApexFlag):
                         if p.detectTouchDown():
-                            # TODO Evaluate rewards
+                            # TODO send rewards with final state
+                            # ack = reward_service(final_state,reward)
                             break
 
                 # compute control action
