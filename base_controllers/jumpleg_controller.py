@@ -99,6 +99,9 @@ class JumpLegController(BaseControllerFixed):
 
     def initVars(self):
         super().initVars()
+        self.a = np.empty((3, 6))
+        self.T_th = 0.5
+
         self.qdd_des =  np.zeros(self.robot.na)
         self.base_accel = np.zeros(3)
         # init new logged vars here
@@ -124,7 +127,7 @@ class JumpLegController(BaseControllerFixed):
         if not self.no_gazebo:
             if (self.freezeBaseFlag):
                 self.freezeBaseFlag = flag
-                print("releasing base")
+                print(colored("releasing base", "red"))
                 self.tau_ffwd[2] = 0.
                 #set base joints PD to zero
                 self.pid.setPDjoint(0, 0., 0., 0.)
@@ -139,7 +142,7 @@ class JumpLegController(BaseControllerFixed):
 
             if (not self.freezeBaseFlag) and (flag):
                 self.freezeBaseFlag = flag
-                print("freezing base")
+                print(colored("freezing base","red"))
                 self.q_des = np.copy(self.q_des_q0)
                 self.qd_des = np.copy(np.zeros(self.robot.na))
                 self.tau_ffwd = np.copy(np.zeros(self.robot.na))
@@ -211,6 +214,38 @@ class JumpLegController(BaseControllerFixed):
                 # reset joints at q0
                 self.q_des[3:] = self.q_des_q0[3:]
 
+    def computeHeuristicSolution(self, com_0, com_f, comd_f, T_th):
+        # boundary conditions
+        # position
+        q_0_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com_0,
+                                                                          conf.robot_params[p.robot_name]['ee_frame'],
+                                                                          p.q_des_q0[3:].copy(), verbose=False)
+        q_f_leg, ik_success, final_out_of_workspace = p.ikin.invKinFoot(-com_f,
+                                                                        conf.robot_params[p.robot_name]['ee_frame'],
+                                                                        p.q_des_q0[3:].copy(), verbose=False)
+        # we need to recompute the jacobian  for the final joint position
+        J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)),
+                                        p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,
+                                        pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+
+        if (initial_out_of_workspace) or final_out_of_workspace:
+            # put seuper high reward here
+            print(colored("initial or final value out of workspace!!!!!!", "red"))
+        # velocity
+        qd_0_leg = np.zeros(3)
+        qd_f_leg = -np.linalg.inv(J_final).dot(comd_f)
+        # accelerations
+        qdd_0_leg = np.zeros(3)
+        qdd_f_leg = -np.linalg.inv(J_final).dot(np.zeros(3))  # np.array([0.,0.,-9.81]
+
+        # a = np.empty((3, 4))
+        # for i in range(3):
+        #      a[i,:] = p.thirdOrderPolynomialTrajectory(T_th, q_0_leg[i], q_f_leg[i])
+        poly_coeff = np.empty((3, 6))
+        for i in range(3):
+            poly_coeff[i, :] = fifthOrderPolynomialTrajectory(T_th, q_0_leg[i], q_f_leg[i], qd_0_leg[i], qd_f_leg[i],
+                                                     qdd_0_leg[i], qdd_f_leg[i])
+        return poly_coeff
 
     def detectTouchDown(self):
         foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
@@ -261,38 +296,14 @@ def talker(p):
 
     # compute coeff first time
     p.updateKinematicsDynamics()
+
     # initial com posiiton
-    T_f = 0.5
-    com_0 = np.array([0., 0., 0.25])
-    # final com position /velocity
+    com_0 = np.array([-0.01303,  0.00229,  0.25252])
+
+    # target final com position /velocity
     com_f = np.array([0.1, 0., 0.3])
-    #com_f = np.array([0.15, 0., 0.28]) #hits joint limits!! screws up!
     comd_f = np.array([0.0, 0., 0.5])
-
-    # boundary conditions
-    #position
-    q_0_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
-    q_f_leg, ik_success, final_out_of_workspace = p.ikin.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
-    # we need to recompute the jacobian  for the final joint position
-    J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)), p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,
-                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
-
-    if (initial_out_of_workspace) or final_out_of_workspace:
-        # put seuper high reward here
-        print(colored("initial or final value out of workspace!!!!!!","red"))
-    #velocity
-    qd_0_leg = np.zeros(3)
-    qd_f_leg = -np.linalg.inv(J_final).dot(comd_f)
-    #accelerations
-    qdd_0_leg = np.zeros(3)
-    qdd_f_leg = -np.linalg.inv(J_final).dot(np.zeros(3)) #np.array([0.,0.,-9.81]
-
-    # a = np.empty((3, 4))
-    # for i in range(3):
-    #      a[i,:] = p.thirdOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i])
-    a = np.empty((3, 6))
-    for i in range(3):
-         a[i,:] = fifthOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i], qd_0_leg[i],  qd_f_leg[i],  qdd_0_leg[i],  qdd_f_leg[i])
+    p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
 
     # here the RL loop...
     while True:
@@ -320,7 +331,7 @@ def talker(p):
 
 
         #Control loop
-        while True:# p.time < (startTrust + T_f):
+        while True:
 
             #update the kinematics
             p.updateKinematicsDynamics()
@@ -332,16 +343,16 @@ def talker(p):
                 p.ros_pub.add_marker(com_f, color="blue", radius=0.1)
 
                 #compute joint reference
-                if   (p.time < startTrust + T_f):
+                if   (p.time < startTrust + p.T_th):
                     t = p.time - startTrust
                     for i in range(3):
                         # third order
-                        # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
-                        # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
+                        # p.q_des[3+i] = p.a[i, 0] + p.a[i,1] * t + p.a[i,2] * pow(t, 2) + p.a[i,3] * pow(t, 3)
+                        # p.qd_des[3+i] = p.a[i, 1] + 2 * p.a[i,2] * t + 3 * p.a[i,3] * pow(t, 2)
                         #fifth order
-                        p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
-                        p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
-                        p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
+                        p.q_des[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) +  p.a[i,4] *pow(t, 4) + p.a[i,5] *pow(t, 5)
+                        p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
+                        p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
 
                         # TODO: Cumulate possible penalties
                         if (p.q_des[3 + i] >= p.robot.model.upperPositionLimit[3+i]):
@@ -374,7 +385,7 @@ def talker(p):
                 if p.inverseDynamicsFlag: # TODO fix this
                     p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
                 else:
-                    if (p.time < startTrust + T_f):
+                    if (p.time < startTrust + p.T_th):
                         p.tau_ffwd[3:] = -p.J.T.dot(p.g[:3])
                     else:
                         p.tau_ffwd[3:] = np.zeros(3)
@@ -411,6 +422,8 @@ def talker(p):
             if ros.is_shutdown():
                 print ("Shutting Down")
                 break
+        #eval rewards
+
 
     print("Shutting Down")
     ros.signal_shutdown("killed")
