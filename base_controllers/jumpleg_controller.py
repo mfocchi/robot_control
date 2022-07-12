@@ -79,7 +79,7 @@ class JumpLegController(BaseControllerFixed):
         self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
         # compute com variables accordint to a frame located at the foot
-        robotComB = pin.centerOfMass(self.robot.model, self.robot.data)
+        robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q_fixed)
 
         # only for real robot
         #self.com = -self.x_ee + robotComB
