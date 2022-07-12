@@ -196,7 +196,8 @@ class LabAdmittanceController(BaseControllerFixed):
             #self.pid.setPDs(0.0, 0.0, 0.0)
         if (self.real_robot):
             self.zero_sensor()
-
+        print(colored("finished startup -- starting controller", "red"))
+        
     def initVars(self):
         super().initVars()
 

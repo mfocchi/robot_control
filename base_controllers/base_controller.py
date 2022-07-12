@@ -10,20 +10,13 @@ from __future__ import print_function
 
 import copy
 import os
-
 import rospy as ros
-import sys
-import time
 import threading
-
-from sensor_msgs.msg import JointState
 from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
-#from ros_impedance_controller.msg import BaseState # no longer used
-
 from tf.transformations import euler_from_quaternion
-from std_srvs.srv import Empty, EmptyRequest
+from std_srvs.srv import Empty
 from termcolor import colored
 
 #gazebo messages
@@ -34,22 +27,15 @@ from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetPhysicsProperties
 from gazebo_msgs.srv import SetPhysicsPropertiesRequest
 from gazebo_msgs.srv import GetPhysicsProperties
-from gazebo_msgs.srv import GetPhysicsPropertiesRequest
-from geometry_msgs.msg import Vector3
-from gazebo_msgs.msg import ODEPhysics
-from std_msgs.msg import Float64
-from geometry_msgs.msg import Pose
 
 # ros utils
 import roslaunch
 import rospkg
-import rosgraph
 from gazebo_msgs.srv import ApplyBodyWrench
 
 #other utils
 from base_controllers.utils.ros_publish import RosPub
 from base_controllers.utils.pidManager import PidManager
-from base_controllers.utils.utils import Utils
 from base_controllers.utils.math_tools import *
 from numpy import nan
 import matplotlib.pyplot as plt
@@ -77,12 +63,12 @@ class BaseController(threading.Thread):
         self.math_utils = Math()
         # send data to param server
         self.verbose = conf.verbose
-
-        self.use_ground_truth_contacts = True
+        self.custom_launch_file = False
+        self.use_ground_truth_contacts = False
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None, use_torque_control = None):
+    def startSimulator(self, world_name = None):
         # needed to be able to load a custom world file
         print(colored('Adding gazebo model path!', 'blue'))
         custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
@@ -94,15 +80,18 @@ class BaseController(threading.Thread):
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
 
+        if self.custom_launch_file:
+            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
+        else:
+            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_floating.launch'
+
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
-        cli_args = [rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch',
+        cli_args = [launch_file,
+                    'robot_name:=' + self.robot_name,
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
-
-        if use_torque_control is not None:
-            cli_args.append('use_torque_control:=' + str(self.use_torque_control))
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
             cli_args.append('world_name:=' + str(world_name))
@@ -126,8 +115,7 @@ class BaseController(threading.Thread):
 
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
-        self.sub_pose = ros.Subscriber("/"+self.robot_name+"/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
-        self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)                  
+        self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
         # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -371,9 +359,7 @@ class BaseController(threading.Thread):
             Kd = 12 * [conf.robot_params[self.robot_name]['kd']] + n_not_leg_joints * [0.]
             Ki = self.robot.na * [0.]
             self.pid.setPDjoints(Kp, Kd, Ki)
-           
-  
-            
+
             if (self.robot_name == 'hyq'):                        
                 # these torques are to compensate the leg gravity
                 self.gravity_comp = np.array(
@@ -411,10 +397,9 @@ class BaseController(threading.Thread):
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                     ros.sleep(0.01)
                 #self.pid.setPDs(0.0, 0.0, 0.0)                    
-            print("finished startup")    
+            print(colored("finished startup -- starting controller", "red"))
 
     def initVars(self):
-
         self.comPoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
         self.stance_legs = np.array([True, True, True, True])
@@ -437,7 +422,6 @@ class BaseController(threading.Thread):
         self.wJ = [np.eye(3)] * 4
         self.W_contacts = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
-
 
         #log vars
         self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
@@ -470,13 +454,14 @@ class BaseController(threading.Thread):
             self.log_counter+=1
 	
 def talker(p):
-            
     p.start()
+    if (p.robot_name == 'aliengo') or (p.robot_name == 'solo_fw'):
+        p.custom_launch_file = True
     p.startSimulator()
     p.loadModelAndPublishers()
     p.initVars()           
-    p.startupProcedure() 
-         
+    p.startupProcedure()
+
     #loop frequency       
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
     
@@ -488,8 +473,6 @@ def talker(p):
 #    p.time = 0.0
 #    RPM2RAD =2*np.pi/60.0
 #    omega = 5000*RPM2RAD
-    
-
 
     #control loop
     while True:  
@@ -532,7 +515,7 @@ def talker(p):
 	   # stops the while loop if  you prematurely hit CTRL+C                    
         if ros.is_shutdown():
             print ("Shutting Down")                    
-            break;                                                
+            break
                              
     # restore PD when finished        
     p.pid.setPDs(conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.0) 

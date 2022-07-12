@@ -103,20 +103,20 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             name = 'xacro'
             namespace = '/'
             # with gazebo 11 you should set in the ros_impedance_controllerXX.launch the new_gazebo_version = true
-            # note we generate the urdf with the floating base joint (new gazebo version should be false by default in the xacro! because Pinocchio needs it!
+            # note we generate the urdf with the floating base joint (new gazebo version should be false by default in the xacro of the robot! because Pinocchio needs it!
             args = xacro_path+ ' --inorder -o '+os.environ['LOCOSIM_DIR']+'/robot_urdf/generated_urdf/'+robot_name+'.urdf'
      
      
        
             try:
-                flywheel = ros.get_param('/flywheel')
-                args+=' flywheel:='+flywheel
+                flywheel = ros.get_param('/flywheel4')
+                args+=' flywheel4:='+flywheel
 
                 flywheel2 = ros.get_param('/flywheel2')
                 args += ' flywheel2:=' + flywheel2
 
-                angle = ros.get_param('/angle')
-                args += ' angle:=' + angle
+                angle = ros.get_param('/angle_deg')
+                args += ' angle_deg:=' + angle
             except:
                 pass          
             
