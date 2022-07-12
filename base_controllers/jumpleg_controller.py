@@ -15,6 +15,7 @@ from numpy import nan
 from utils.common_functions import plotJoint, plotCoMLinear
 from termcolor import colored
 import os
+import roslaunch
 
 from base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.ros_publish import RosPub
@@ -255,6 +256,17 @@ class JumpLegController(BaseControllerFixed):
         else:
             return False
 
+    def loadRLAgent(self, mode = 'train'):
+        package = 'jumpleg_rl'
+        executable = 'agent.py'
+        name = 'rlagent'
+        namespace = '/'
+        args = mode
+        node = roslaunch.core.Node(package, executable, name, namespace,args,output="screen")
+        self.launch = roslaunch.scriptapi.ROSLaunch()
+        self.launch.start()
+        process = self.launch.launch(node)
+
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
@@ -273,6 +285,8 @@ def talker(p):
         #p.startSimulator()
         p.loadModelAndPublishers()
         p.startupProcedure()
+
+    p.loadRLAgent('train')
 
     p.initVars()
     ros.sleep(1.0)
