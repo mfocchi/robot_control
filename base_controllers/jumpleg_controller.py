@@ -302,9 +302,21 @@ def talker(p):
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
-        target_position = target_service()
-        # TODO: Call action based on state
-        print("Target position from agent:", target_position)
+
+        target_CoM = (target_service()).target_CoM
+        print("Target position from agent:", target_CoM)
+
+        state = np.concatenate((com_0, target_CoM))
+        action_coeff = (action_service(state)).action
+        print("Coeff from agent:", action_coeff)
+
+        T_th = action_coeff[0]
+        haa_coef = action_coeff[1:7]
+        hfe_coeff = action_coeff[7:13]
+        kfe_coeff = action_coeff[13:19]
+
+        # TODO: Concat coeff to a matrix
+
 
 
         #Control loop
