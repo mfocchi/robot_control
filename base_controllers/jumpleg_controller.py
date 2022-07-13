@@ -16,6 +16,7 @@ from utils.common_functions import plotJoint, plotCoMLinear
 from termcolor import colored
 import os
 import roslaunch
+from gazebo_msgs.msg import ContactsState
 
 from base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.ros_publish import RosPub
@@ -69,6 +70,11 @@ class JumpLegController(BaseControllerFixed):
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
         self.no_gazebo = False
+        self.use_ground_truth_contacts = True
+
+        if self.use_ground_truth_contacts:
+            self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
+                                                 callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,tcp_nodelay=True)
         print("Initialized jump leg controller---------------------------------------------------------------")
 
 
@@ -128,8 +134,18 @@ class JumpLegController(BaseControllerFixed):
         self.estimateContactForces()
 
     def estimateContactForces(self):
-        if not  self.inverseDynamicsFlag:
+        if not  self.inverseDynamicsFlag and not self.use_ground_truth_contacts:
             self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
+
+    def _receive_contact_lf(self, msg):
+        if (self.use_ground_truth_contacts):
+            grf = np.zeros(3)
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] = msg.states[0].wrenches[0].force.y
+            grf[2] = msg.states[0].wrenches[0].force.z
+            self.contactForceW = self.robot.framePlacement(self.q, self.robot.model.getFrameId("lf_lower_leg")).rotation.dot(grf)
+        else:
+            pass
 
     def initVars(self):
         super().initVars()
@@ -509,8 +525,8 @@ def talker(p):
             # plot end-effector and contact force
             p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
             p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
-
-
+            p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, 0.1, color="blue")
+            p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.publishVisual()
 
             #wait for synconization of the control loop
