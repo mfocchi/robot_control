@@ -37,6 +37,7 @@ class Cost():
         self.joint_range = 0
         self.joint_torques = 0
         self.target = 0
+        self.weights = np.array([0., 0., 0., 0., 0., 0.])
     def reset(self):
         self.unilateral = 0
         self.friction = 0
@@ -44,6 +45,21 @@ class Cost():
         self.joint_range = 0
         self.joint_torques = 0
         self.target = 0
+    def printCosts(self):
+        return f"unil:{self.unilateral}  " \
+               f"friction:{self.friction}  " \
+               f"sing: {self.singularity} " \
+               f"jointkin:{self.joint_range} " \
+               f"torques:{self.joint_torques} " \
+               f"target:{self.target}"
+
+    def printWeightedCosts(self):
+        return f"unil:{self.weights[0]*self.unilateral}  " \
+               f"friction:{self.weights[1]*self.friction}  " \
+               f"sing: {self.weights[2]*self.singularity} " \
+               f"jointkin:{self.weights[3]*self.joint_range} " \
+               f"torques:{self.weights[4]*self.joint_torques} " \
+               f"target:{self.weights[5]*self.target}"
 
 class JumpLegController(BaseControllerFixed):
     
@@ -120,7 +136,7 @@ class JumpLegController(BaseControllerFixed):
         self.a = np.empty((3, 6))
         self.T_th = 0.5
         self.cost = Cost()
-        self.weights = np.array([0., 0., 0., 0., 0., 0. ])
+        self.cost.weights = np.array([1., 1., 1., 1., 1., 10.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -340,11 +356,20 @@ class JumpLegController(BaseControllerFixed):
         return singularity
 
     def evalTotalReward(self):
+        colored("Evaluating costs", "blue")
         # target
         self.cost.target = np.linalg.norm(self.com - self.target_CoM)
         msg = set_rewardRequest()
-        msg.reward = -(self.weights[0]*self.cost.target + self.weights[1]*self.cost.unilateral + self.weights[2]*self.cost.friction \
-                     + self.weights[3]*self.cost.joint_torques + self.weights[4]*self.cost.joint_range + self.weights[5]*self.cost.singularity)
+        print(colored("Costs: " + self.cost.printCosts(), "green"))
+        print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
+
+        #unil  friction sing jointrange torques target
+        msg.reward = -(self.cost.weights[0]*self.cost.unilateral +
+                       self.cost.weights[1]*self.cost.friction   +
+                       self.cost.weights[2] * self.cost.singularity +
+                       self.cost.weights[3]*self.cost.joint_range +
+                       self.cost.weights[4] * self.cost.joint_torques +
+                       self.cost.weights[5]*self.cost.target)
         msg.next_state = np.concatenate((self.com, self.target_CoM))
         self.reward_service(msg)
 
