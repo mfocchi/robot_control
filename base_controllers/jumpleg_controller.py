@@ -268,18 +268,18 @@ class JumpLegController(BaseControllerFixed):
         self.launch.start()
         process = self.launch.launch(node)
 
-    def computeActivationFunction(self, activationType, residual ,lower, upper):
-        if (activationType == 'linear'):
-
-            if np.linalg.norm(residual) > 0:
-                cost =
-
-
-        if (activationType == 'quadratic'):
-
-        return cost
-
-    def evaluateRewards(self):
+    # def computeActivationFunction(self, activationType, residual ,lower, upper):
+    #     if (activationType == 'linear'):
+    #
+    #         if np.linalg.norm(residual) > 0:
+    #             cost =
+    #
+    #
+    #     if (activationType == 'quadratic'):
+    #
+    #     return cost
+    #
+    # def evaluateRewards(self):
 
 
     def deregister_node(self):
@@ -351,14 +351,10 @@ def talker(p):
         action_coeff = (action_service(state)).action
         print("Coeff from agent:", action_coeff)
 
-        T_th = action_coeff[0]
-        haa_coef = action_coeff[1:7]
-        hfe_coeff = action_coeff[7:13]
-        kfe_coeff = action_coeff[13:19]
-
-        # TODO: Concat coeff to a matrix
-
-
+        p.T_th = action_coeff[0]
+        p.a[0,:] = action_coeff[1:7]
+        p.a[1,:] = action_coeff[7:13]
+        p.a[2,:] = action_coeff[13:19]
 
         #Control loop
         while True:
