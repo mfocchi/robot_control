@@ -267,11 +267,26 @@ class JumpLegController(BaseControllerFixed):
         self.launch.start()
         process = self.launch.launch(node)
 
+    def computeActivationFunction(self, activationType, residual ,lower, upper):
+        if (activationType == 'linear'):
+
+            if np.linalg.norm(residual) > 0:
+                cost =
+
+
+        if (activationType == 'quadratic'):
+
+        return cost
+
+    def evaluateRewards(self):
+
+
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
         os.system(" rosnode kill /gzserver /gzclient")
         os.system(" pkill rosmaster")
+
 
 def talker(p):
 
