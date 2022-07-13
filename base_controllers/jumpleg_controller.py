@@ -257,12 +257,13 @@ class JumpLegController(BaseControllerFixed):
             return False
 
     def loadRLAgent(self, mode = 'train'):
+        print(colored(f"Starting RLagent in  {mode} mode","red"))
         package = 'jumpleg_rl'
         executable = 'agent.py'
         name = 'rlagent'
         namespace = '/'
-        args = mode
-        node = roslaunch.core.Node(package, executable, name, namespace,args,output="screen")
+        args = '--mode '+mode
+        node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
         self.launch = roslaunch.scriptapi.ROSLaunch()
         self.launch.start()
         process = self.launch.launch(node)
@@ -301,7 +302,7 @@ def talker(p):
         p.loadModelAndPublishers()
         p.startupProcedure()
 
-    p.loadRLAgent('train')
+    p.loadRLAgent(mode='train')
 
     p.initVars()
     ros.sleep(1.0)
