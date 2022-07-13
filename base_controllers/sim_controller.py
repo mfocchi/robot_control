@@ -120,6 +120,9 @@ class SimController(Controller):
         self.apply_body_wrench = rospy.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
         self.APPLY_EXTERNAL_WRENCH = False
         self.TIME_EXTERNAL_WRENCH = 0.6
+        self.distWrench = np.zeros(3)
+        self.distForce = np.zeros(3)
+        self.distDuration = 0.05
 
         self.g_mag = 9.81
 
@@ -185,6 +188,8 @@ class SimController(Controller):
         wrench.torque.z = Mz
         reference_frame = "world"  # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
         reference_point = Point(x=0, y=0, z=0)
+        self.distWrench = np.array([Mx,My,Mz])
+        self.distForce = np.array([Fx, Fy, Fz])
         try:
             self.apply_body_wrench(body_name="solo::base_link", reference_frame=reference_frame,
                                    reference_point=reference_point, wrench=wrench, duration=rospy.Duration(duration))
@@ -218,8 +223,13 @@ class SimController(Controller):
 
         if (self.APPLY_EXTERNAL_WRENCH and self.time > self.TIME_EXTERNAL_WRENCH):
             print("START APPLYING EXTERNAL WRENCH")
-            self.applyForce(0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.05)
+            self.applyForce(0.0, 0.0, 0.0, 0.5, 0.5, 0.0, self.distDuration)
             self.APPLY_EXTERNAL_WRENCH = False
+
+        # plot disturbance force
+        if (self.time > self.TIME_EXTERNAL_WRENCH) and (self.time < (self.TIME_EXTERNAL_WRENCH  + self.distDuration)):
+            p.ros_pub.add_arrow(p.basePoseW[:3],  p.distWrench, "red")
+            p.ros_pub.add_arrow(p.basePoseW[:3], p.distForce, "blue")
 
         # log variables
         self.rate.sleep()
