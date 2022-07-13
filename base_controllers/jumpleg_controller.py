@@ -279,8 +279,32 @@ class JumpLegController(BaseControllerFixed):
     #
     #     return cost
     #
-    # def evaluateRewards(self):
+    def evaluateRewards(self):
 
+        singularity = False
+        for i in range(3):
+            # TODO: Cumulate possible penalties
+            if (self.q_des[3 + i] >= self.robot.model.upperPositionLimit[3+i]):
+                #put negative reward here
+                print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
+            if (self.q_des[3 + i] <= self.robot.model.lowerPositionLimit[3 + i]):
+                # put negative reward here
+                print(colored("lower end-stop limit hit in " + str(3 + i) + "-th joint", "red"))
+            if (self.tau_ffwd[3 + i] >= self.robot.model.effortLimit[3 + i]):
+                # put negative reward here
+                print(colored("upper torque limit hit in " + str(3 + i) + "-th joint", "red"))
+            if (self.tau_ffwd[3 + i] <= -self.robot.model.effortLimit[3 + i]):
+                # put negative reward here
+                print(colored("lower torque limit hit in " + str(3 + i) + "-th joint", "red"))
+
+        # singularity
+        #if (np.linalg.norm(self.com) >= 0.4):
+        smallest_svalue = np.sqrt(np.min(np.linalg.eigvals(p.J.T.dot(p.J))))
+        if smallest_svalue <= 0.035:
+            singularity = True
+            print(colored("Getting singular configuration", "red"))
+            
+        return singularity
 
     def deregister_node(self):
         super().deregister_node()
@@ -380,24 +404,8 @@ def talker(p):
                         p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
                         p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
 
-                        # TODO: Cumulate possible penalties
-                        if (p.q_des[3 + i] >= p.robot.model.upperPositionLimit[3+i]):
-                            #put negative reward here
-                            print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
-                        if (p.q_des[3 + i] <= p.robot.model.lowerPositionLimit[3 + i]):
-                            # put negative reward here
-                            print(colored("lower end-stop limit hit in " + str(3 + i) + "-th joint", "red"))
-                        if (p.tau_ffwd[3 + i] >= p.robot.model.effortLimit[3 + i]):
-                            # put negative reward here
-                            print(colored("upper torque limit hit in " + str(3 + i) + "-th joint", "red"))
-                        if (p.tau_ffwd[3 + i] <= -p.robot.model.effortLimit[3 + i]):
-                            # put negative reward here
-                            print(colored("lower torque limit hit in " + str(3 + i) + "-th joint", "red"))
-                        # singularity
-                        if (np.linalg.norm(p.com) >= 0.7):
-                            print(p.com)
-                            print(colored("Getting singular configuration", "red"))
-
+                    if p.evaluateRewards():
+                        break
                 else:
                     # apex detection
                     p.detectApex()
@@ -448,7 +456,9 @@ def talker(p):
             if ros.is_shutdown():
                 print ("Shutting Down")
                 break
+
         #eval rewards
+        print(colored("STARTING A NEW EPISODE\n","red"))
 
 
     print("Shutting Down")
