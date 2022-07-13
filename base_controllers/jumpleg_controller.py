@@ -28,6 +28,23 @@ from jumpleg_rl.srv import *
 import  params as conf
 robotName = "jumpleg"
 
+
+class Cost():
+    def __init__(self):
+        self.unilateral = 0
+        self.friction = 0
+        self.singularity = 0
+        self.joint_range = 0
+        self.joint_torques = 0
+        self.target = 0
+    def reset(self):
+        self.unilateral = 0
+        self.friction = 0
+        self.singularity = 0
+        self.joint_range = 0
+        self.joint_torques = 0
+        self.target = 0
+
 class JumpLegController(BaseControllerFixed):
     
     def __init__(self, robot_name="ur5"):
@@ -102,6 +119,9 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.T_th = 0.5
+        self.cost = Cost()
+        self.weights = np.array([0., 0., 0., 0., 0., 0. ])
+        self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
         self.base_accel = np.zeros(3)
@@ -268,43 +288,65 @@ class JumpLegController(BaseControllerFixed):
         self.launch.start()
         process = self.launch.launch(node)
 
-    # def computeActivationFunction(self, activationType, residual ,lower, upper):
-    #     if (activationType == 'linear'):
-    #
-    #         if np.linalg.norm(residual) > 0:
-    #             cost =
-    #
-    #
-    #     if (activationType == 'quadratic'):
-    #
-    #     return cost
-    #
-    def evaluateRewards(self):
+    def computeActivationFunction(self, activationType, value ,lower, upper):
+
+        if (activationType == 'linear'):
+            return abs( min(value - lower, 0) + max(value-upper, 0))
+
+        if (activationType == 'quadratic'):
+            return pow( min(value - lower, 0) ,2)/2.0 + pow(max(value-upper, 0), 2)/2.0
+
+    def evaluateCosts(self):
 
         singularity = False
+        cumsum_joint_range = 0
+        cumsum_joint_torque = 0
+
+        #only for joint variables
         for i in range(3):
-            # TODO: Cumulate possible penalties
-            if (self.q_des[3 + i] >= self.robot.model.upperPositionLimit[3+i]):
-                #put negative reward here
-                print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
-            if (self.q_des[3 + i] <= self.robot.model.lowerPositionLimit[3 + i]):
-                # put negative reward here
-                print(colored("lower end-stop limit hit in " + str(3 + i) + "-th joint", "red"))
-            if (self.tau_ffwd[3 + i] >= self.robot.model.effortLimit[3 + i]):
-                # put negative reward here
-                print(colored("upper torque limit hit in " + str(3 + i) + "-th joint", "red"))
-            if (self.tau_ffwd[3 + i] <= -self.robot.model.effortLimit[3 + i]):
-                # put negative reward here
-                print(colored("lower torque limit hit in " + str(3 + i) + "-th joint", "red"))
+            cumsum_joint_range += self.computeActivationFunction('linear', self.q_des[3 + i], self.robot.model.lowerPositionLimit[3 + i], self.robot.model.upperPositionLimit[3+i])
+            cumsum_joint_torque += self.computeActivationFunction('linear', self.tau_ffwd[3 + i], -self.robot.model.effortLimit[3 + i], self.robot.model.effortLimit[3 + i])
+        self.cost.joint_range +=cumsum_joint_range
+
+        #friction constraints
+        residual = np.linalg.norm(p.contactForceW[:2] - p.mu*p.contactForceW[2])
+        self.cost.friction += self.computeActivationFunction('linear', residual, -np.inf, 0.0)
+
+        # unilateral constraints
+        self.cost.unilateral += self.computeActivationFunction('linear', p.contactForceW[2], 0.0, np.inf)
+
+        # for i in range(3):
+        #     # TODO: Cumulate possible penalties
+        #     if (self.q_des[3 + i] >= self.robot.model.upperPositionLimit[3+i]):
+        #         #put negative reward here
+        #         print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
+        #     if (self.q_des[3 + i] <= self.robot.model.lowerPositionLimit[3 + i]):
+        #         # put negative reward here
+        #         print(colored("lower end-stop limit hit in " + str(3 + i) + "-th joint", "red"))
+        #     if (self.tau_ffwd[3 + i] >= self.robot.model.effortLimit[3 + i]):
+        #         # put negative reward here
+        #         print(colored("upper torque limit hit in " + str(3 + i) + "-th joint", "red"))
+        #     if (self.tau_ffwd[3 + i] <= -self.robot.model.effortLimit[3 + i]):
+        #         # put negative reward here
+        #         print(colored("lower torque limit hit in " + str(3 + i) + "-th joint", "red"))
 
         # singularity
         #if (np.linalg.norm(self.com) >= 0.4):
         smallest_svalue = np.sqrt(np.min(np.linalg.eigvals(p.J.T.dot(p.J))))
         if smallest_svalue <= 0.035:
+            self.cost.singularity = 1./(1e-05 + smallest_svalue)
             singularity = True
             print(colored("Getting singular configuration", "red"))
-            
         return singularity
+
+    def evalTotalReward(self):
+        # target
+        self.cost.target = np.linalg.norm(self.com - self.target_CoM)
+        msg = set_rewardRequest()
+        msg.reward = -(self.weights[0]*self.cost.target + self.weights[1]*self.cost.unilateral + self.weights[2]*self.cost.friction \
+                     + self.weights[3]*self.cost.joint_torques + self.weights[4]*self.cost.joint_range + self.weights[5]*self.cost.singularity)
+        msg.next_state = np.concatenate((self.com, self.target_CoM))
+        self.reward_service(msg)
 
     def deregister_node(self):
         super().deregister_node()
@@ -339,9 +381,9 @@ def talker(p):
     ros.wait_for_service('JumplegAgent/set_reward')
 
     print("JumplegAgent services ready")
-    action_service = ros.ServiceProxy('JumplegAgent/get_action', get_action)
-    target_service = ros.ServiceProxy('JumplegAgent/get_target', get_target)
-    reward_service = ros.ServiceProxy('JumplegAgent/set_reward', set_reward)
+    p.action_service = ros.ServiceProxy('JumplegAgent/get_action', get_action)
+    p.target_service = ros.ServiceProxy('JumplegAgent/get_target', get_target)
+    p.reward_service = ros.ServiceProxy('JumplegAgent/set_reward', set_reward)
 
 
     #loop frequency
@@ -368,11 +410,11 @@ def talker(p):
         p.firstTime = True
         p.detectedApexFlag = False
 
-        target_CoM = (target_service()).target_CoM
-        print("Target position from agent:", target_CoM)
+        p.target_CoM = (p.target_service()).target_CoM
+        print("Target position from agent:", p.target_CoM)
 
-        state = np.concatenate((com_0, target_CoM))
-        action_coeff = (action_service(state)).action
+        state = np.concatenate((com_0, p.target_CoM))
+        action_coeff = (p.action_service(state)).action
         print("Coeff from agent:", action_coeff)
 
         p.T_th = action_coeff[0]
@@ -404,16 +446,14 @@ def talker(p):
                         p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
                         p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
 
-                    if p.evaluateRewards():
+                    if p.evaluateCosts():
                         break
                 else:
                     # apex detection
                     p.detectApex()
                     if (p.detectedApexFlag):
                         if p.detectTouchDown():
-                            # TODO send rewards with final state
-                            # ack = reward_service(final_state,reward)
-                            break
+                           break
 
                 # compute control action
                 if p.inverseDynamicsFlag: # TODO fix this
@@ -458,8 +498,9 @@ def talker(p):
                 break
 
         #eval rewards
+        p.evalTotalReward()
         print(colored("STARTING A NEW EPISODE\n","red"))
-
+        p.cost.reset()
 
     print("Shutting Down")
     ros.signal_shutdown("killed")
