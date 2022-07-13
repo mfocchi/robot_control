@@ -325,7 +325,7 @@ class JumpLegController(BaseControllerFixed):
         self.cost.joint_range +=cumsum_joint_range
 
         #friction constraints
-        residual = np.linalg.norm(p.contactForceW[:2] - p.mu*p.contactForceW[2])
+        residual = np.linalg.norm(p.contactForceW[:2]) - p.mu*p.contactForceW[2]
         self.cost.friction += self.computeActivationFunction('linear', residual, -np.inf, 0.0)
 
         # unilateral constraints
