@@ -64,7 +64,6 @@ class BaseControllerFixed(threading.Thread):
         self.math_utils = Math()
         self.contact_flag = False
         self.joint_names = conf.robot_params[self.robot_name]['joint_names']
-        self.broadcaster = tf.TransformBroadcaster()
         #send data to param server
         self.verbose = conf.verbose
         self.use_torque_control = True
@@ -79,6 +78,7 @@ class BaseControllerFixed(threading.Thread):
             os.environ["GAZEBO_MODEL_PATH"] +=":"+custom_models_path
         else:
             os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
+
 
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
@@ -114,6 +114,7 @@ class BaseControllerFixed(threading.Thread):
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
 
 
+
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
         # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -139,8 +140,6 @@ class BaseControllerFixed(threading.Thread):
                      self.qd[joint_idx] = msg.velocity[msg_idx]
                      self.tau[joint_idx] = msg.effort[msg_idx]
 
-         # broadcast base world TF if they are different (not needed because we have a world link)
-         #self.broadcaster.sendTransform(self.base_offset, (0.0, 0.0, 0.0, 1.0),   Time.now(), '/base_link', '/world')
 
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
@@ -161,7 +160,7 @@ class BaseControllerFixed(threading.Thread):
             if  ("/" + self.robot_name + "/ros_impedance_controller" not in rosnode.get_node_names()):
                 print(colored('Error: you need to launch the ros impedance controller in torque mode!', 'red'))
                 sys.exit()
-         #   self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
+            self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
         print(colored("Startup accomplished -----------------------","red"))
 
     def initVars(self):
