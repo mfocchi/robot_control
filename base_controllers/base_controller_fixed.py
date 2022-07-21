@@ -115,8 +115,7 @@ class BaseControllerFixed(threading.Thread):
 
 
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
-        # freeze base  and pause simulation service
-        self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
+        #  pause simulation service
         self.set_physics_client = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
         self.get_physics_client = ros.ServiceProxy('/gazebo/get_physics_properties', GetPhysicsProperties)
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)

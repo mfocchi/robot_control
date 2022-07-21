@@ -23,6 +23,10 @@ from base_controllers.utils.ros_publish import RosPub
 from base_controllers.utils.common_functions import getRobotModel
 from utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
 
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.srv import SetModelStateRequest
+from gazebo_msgs.msg import ModelState
+
 from jumpleg_rl.srv import *
 
 
@@ -167,6 +171,9 @@ class JumpLegController(BaseControllerFixed):
 
         if self.no_gazebo:
             self.q = conf.robot_params[self.robot_name]['q_0']
+
+        self.reset_platform= ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
+
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -396,6 +403,27 @@ class JumpLegController(BaseControllerFixed):
         os.system(" pkill rosmaster")
 
 
+    def setJumpPlatformPosition(self, target):
+        # create the message
+        set_platform_position = SetModelStateRequest()
+        # create model state
+        model_state = ModelState()
+        model_state.model_name = 'jump_platform'
+        model_state.pose.position.x = target[0]
+        model_state.pose.position.y = target[1]
+        model_state.pose.position.z = target[2]
+
+        model_state.pose.orientation.w = 1.0
+        model_state.pose.orientation.x = 0.0
+        model_state.pose.orientation.y = 0.0
+        model_state.pose.orientation.z = 0.0
+
+        set_platform_position.model_state = model_state
+        # send request and get response (in this case none)
+        self.reset_platform(set_platform_position)
+
+
+
 def talker(p):
 
     p.start()
@@ -404,7 +432,7 @@ def talker(p):
         p.ros_pub = RosPub("jumpleg")
         p.robot = getRobotModel("jumpleg")
     else:
-        p.startSimulator("slow.world")
+        p.startSimulator("jump_platform.world")
         #p.startSimulator()
         p.loadModelAndPublishers()
         p.startupProcedure()
@@ -451,8 +479,12 @@ def talker(p):
         p.firstTime = True
         p.detectedApexFlag = False
 
+        # TODO the target on Z should be generated wrt to Com0
         p.target_CoM = (p.target_service()).target_CoM
+
         print("Target position from agent:", p.target_CoM)
+        for i in range(10):
+            p.setJumpPlatformPosition(p.target_CoM)
 
         state = np.concatenate((com_0, p.target_CoM))
         action_coeff = (p.action_service(state)).action
