@@ -96,10 +96,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
-                self.com_log[:, self.log_counter] = self.com
-                self.comd_log[:, self.log_counter] = self.comd
-                #self.comdd_log[:, self.log_counter] = self.comdd
-                self.qdd_des_log[:, self.log_counter] = self.qdd_des
+                pass
             super().logData()
 
     def freezeBase(self, flag):
@@ -143,7 +140,7 @@ def talker(p):
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
-    p.updateKinematicsDynamics()
+    #p.updateKinematicsDynamics()
     #p.freezeBase(True)
     while True:
 
@@ -162,8 +159,8 @@ def talker(p):
         #     p.EXTERNAL_FORCE = False
 
         # plot end-effector and contact force
-        p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
-        p.ros_pub.add_marker(p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
+        p.ros_pub.add_arrow(p.base_offset +  p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
+        p.ros_pub.add_marker(p.base_offset +  p.x_ee, radius=0.05)
         p.ros_pub.publishVisual()
 
         # wait for synconization of the control loop
