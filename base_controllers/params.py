@@ -60,31 +60,22 @@ robot_params['jumpleg'] ={'dt': 0.001,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
 robot_params['climbingrobot'] ={'dt': 0.001,
-                       'kp': np.array([1000, 1000, 1000,
-                                       1000, 1000, 1000,
-                                       1000,
-                                       0, 0, 0,
-                                       5, 5, 5 ]),
-                       'kd':  np.array([100 , 100, 100,
-                                        10,10,10,
-                                        10,
-                                        0,0,0,
-                                        0.2,0.2,0.2]),
-                       'q_0':  np.array([0.0, 0.0, 2.0,
-                                         2.0, 2.0, 2.0,
-                                         0.,
-                                         0., 0., 0,
-                                         -0.0,0.0, 0.]),
-                       'joint_names': ['anchor_x_joint', 'anchor_y_joint','anchor_z_joint','mountain_wire_pitch', 'mountain_wire_roll', 'mountain_wire_yaw', 'wire_base_prismatic',
+                       'kp': np.array([0,0,0,20,0,0,0, 5,5,5]),
+                       'kd':  np.array([1,1,1,2,1,1,1,2,2,2]),
+                       'q_0':  np.array([ 0,0,0,0,0,0,0,0,0,0 ]), #leg
+
+                       'joint_names': ['mountain_wire_pitch', 'mountain_wire_roll', 'mountain_wire_yaw', 'wire_base_prismatic',
                                        'wire_base_pitch', 'wire_base_roll','wire_base_yaw',
                                        'hip_pitch', 'hip_roll','knee'],
+
+
                        'ee_frame': 'foot',
                        'spawn_x' : 0.0,
                        'spawn_y' : 0.0,
                        'spawn_z' : 0.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
                          
-verbose = False
+verbose = True
 plotting = False
 
 
