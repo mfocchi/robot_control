@@ -6,6 +6,8 @@ Created on Fri Nov  2 16:52:08 2018
 """
 
 from __future__ import print_function
+
+import rospy
 import rospy as ros
 from utils.math_tools import *
 import pinocchio as pin
@@ -475,6 +477,7 @@ def talker(p):
 
         p.time = 0
         startTrust = 0.5
+        max_episode_time = 30
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
@@ -483,23 +486,34 @@ def talker(p):
         p.target_CoM = (p.target_service()).target_CoM
 
         print("Target position from agent:", p.target_CoM)
-        for i in range(10):
-            p.setJumpPlatformPosition(p.target_CoM)
+        # for i in range(10):
+        #     p.setJumpPlatformPosition(p.target_CoM)
 
         state = np.concatenate((com_0, p.target_CoM))
-        action_coeff = (p.action_service(state)).action
-        print("Coeff from agent:", action_coeff)
+        action_coeff = p.action_service(state).action
+        # print("Coeff from agent:", action_coeff)
 
         p.T_th = action_coeff[0]
         p.a[0,:] = action_coeff[1:7]
         p.a[1,:] = action_coeff[7:13]
         p.a[2,:] = action_coeff[13:19]
 
+        print(f"Actor action:\n"
+              f"T_th: {p.T_th}\n"
+              f"haa: {p.a[0,:]}\n"
+              f"hfe: {p.a[1,:]}\n"
+              f"kfe: {p.a[2,:]}\n")
+
+
         #Control loop
         while True:
 
             #update the kinematics
             p.updateKinematicsDynamics()
+            if (p.time > startTrust+max_episode_time):
+                # max episode time elapsed
+                print(colored("--Max time elapsed!--","blue"))
+                break
             if (p.time > startTrust):
                 if p.firstTime:
                     p.firstTime = False
