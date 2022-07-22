@@ -46,11 +46,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def updateKinematicsDynamics(self):
         # q is continuously updated
-        # to compute in the base frame  you should put neutral base
-        self.q_fixed = np.hstack((np.zeros(3), self.q[3:]))
-        self.qd_fixed = np.hstack((np.zeros(3), self.qd[3:]))
-
-        self.robot.computeAllTerms(self.q  , self.qd )
+        self.robot.computeAllTerms(self.q, self.qd )
         # joint space inertia matrix                
         self.M = self.robot.mass(self.q )
         # bias terms                
@@ -60,8 +56,9 @@ class ClimbingrobotController(BaseControllerFixed):
         #compute ee position  in the world frame  
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
         # this is expressed in a workdframe with the origin attached to the base frame origin
-        self.x_ee = self.robot.framePlacement(self.q_fixed, self.robot.model.getFrameId(frame_name)).translation
-
+        self.anchor_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor')).translation
+        self.base_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).translation
+        self.x_ee =  self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
 
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
         self.J6 = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
@@ -130,8 +127,8 @@ class ClimbingrobotController(BaseControllerFixed):
 def talker(p):
 
     p.start()
-    #p.startSimulator("slow.world")
-    p.startSimulator()
+    p.startSimulator("climb_wall.world")
+    #p.startSimulator()
     p.loadModelAndPublishers()
     p.startupProcedure()
 
@@ -142,25 +139,52 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     #p.updateKinematicsDynamics()
     #p.freezeBase(True)
-    while True:
+    p.thrustingFlag = False
+    p.thrustDuration = 0.5
+    p.q_des = np.copy(p.q_des_q0)
 
+    while True:
+        p.tau_ffwd = np.zeros(p.robot.na)
         # update the kinematics
         p.updateKinematicsDynamics()
-        p.tau_ffwd = np.zeros(p.robot.na)
-        p.q_des = np.copy(p.q_des_q0)
+
+        if (p.time > 3.0) and  (p.time < 3.0 +p.thrustDuration )  and (not p.thrustingFlag):
+            p.pid.setPDjoint(4, 0., 2., 0.)
+            p.pid.setPDjoint(5, 0., 2., 0.)
+            p.pid.setPDjoint(3, 0., 0., 0.)
+            p.pid.setPDjoint(9, 0., 2., 0.)
+            p.thrustingFlag = True
+            print(colored("Start Trhusting", "blue"))
+
+        if (p.thrustingFlag):
+            p.tau_ffwd[9] = -20.
+            p.tau_ffwd[3] = -60.5 * (p.q[3] - conf.robot_params[p.robot_name]['q_0'][3])
+            if (p.time > (3.0 + p.thrustDuration)):
+                p.thrustingFlag = False
+                p.pid.setPDjoint(3, conf.robot_params[p.robot_name]['kp'][3], conf.robot_params[p.robot_name]['kd'][3], 0.)
+                p.pid.setPDjoint(4, conf.robot_params[p.robot_name]['kp'][4], conf.robot_params[p.robot_name]['kd'][4],  0.)
+                p.pid.setPDjoint(5, conf.robot_params[p.robot_name]['kp'][5], conf.robot_params[p.robot_name]['kd'][5],
+                                 0.)
+                p.pid.setPDjoint(9, conf.robot_params[p.robot_name]['kp'][9], conf.robot_params[p.robot_name]['kd'][9],
+                                 0.)
+                print(colored("Stop Trhusting", "blue"))
+                p.q_des[3] = p.q[3]
+
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
         # log variables
         p.logData()
+
+
 
         # disturbance force
         # if (p.time > 3.0 and p.EXTERNAL_FORCE):
         #     p.applyForce()
         #     p.EXTERNAL_FORCE = False
 
-        # plot end-effector and contact force
-        p.ros_pub.add_arrow(p.base_offset +  p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
-        p.ros_pub.add_marker(p.base_offset +  p.x_ee, radius=0.05)
+        # plot  rope bw base link and anchor
+        p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green")
+        p.ros_pub.add_marker(p.x_ee, radius=0.05)
         p.ros_pub.publishVisual()
 
         # wait for synconization of the control loop
@@ -177,14 +201,6 @@ def talker(p):
     ros.signal_shutdown("killed")
     p.deregister_node()
 
-    plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-    plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-    plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log,  p.qd_log, p.qd_des_log,  p.qdd_des_log, None, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-              joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-              joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plt.show(block=True)
 
 
 
@@ -194,16 +210,17 @@ if __name__ == '__main__':
     try:
         talker(p)
     except ros.ROSInterruptException:
-        print("PLOTTING")
-        plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-        plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-        plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plt.show(block=True)
+        pass
+        # print("PLOTTING")
+        # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+        # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+        # plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        # plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        # plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        # plt.show(block=True)
 
 
         

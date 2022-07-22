@@ -111,14 +111,27 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             try:
                 flywheel = ros.get_param('/flywheel4')
                 args+=' flywheel4:='+flywheel
+            except:
+                pass
 
+            try:
                 flywheel2 = ros.get_param('/flywheel2')
                 args += ' flywheel2:=' + flywheel2
+            except:
+                pass
 
+            try:
                 angle = ros.get_param('/angle_deg')
                 args += ' angle_deg:=' + angle
             except:
-                pass          
+                pass
+
+            try:
+                anchorZ = ros.get_param('/anchorZ')
+                args += ' anchorZ:=' + anchorZ
+            except:
+                pass
+
             
             os.system("rosrun xacro xacro "+args)  
             #os.system("rosparam get /robot_description > "+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf')  
