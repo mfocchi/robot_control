@@ -28,6 +28,11 @@ class ClimbingrobotController(BaseControllerFixed):
         self.freezeBaseFlag = False
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
+        self.rope_index = 3
+        self.leg_index = np.array([7,8,9])
+        self.base_passive_joints = np.array([4,5,6])
+        self.anchor_passive_joints = np.array([0,1,2])
+
     def applyForce(self):
         from geometry_msgs.msg import Wrench, Point
         wrench = Wrench()
@@ -58,19 +63,25 @@ class ClimbingrobotController(BaseControllerFixed):
         # this is expressed in a workdframe with the origin attached to the base frame origin
         self.anchor_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor')).translation
         self.base_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).translation
+        self.w_R_b = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).rotation
+
         self.x_ee =  self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
 
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
-        self.J6 = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
-        self.J = self.J6[:, 3:]
+        self.J = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
+        self.Jleg = self.J[:, -3:]
         self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
+
+        self.l = self.q[p.rope_index]
+        self.theta = self.q[0]
+        self.phi = self.q[2]
+
         # compute com variables accordint to a frame located at the foot
-        robotComB = pin.centerOfMass(self.robot.model, self.robot.data)
+        robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
 
         # from ground truth
-        self.com = self.q[:3] + robotComB
-        self.comd = self.qd[:3]
+        self.com = self.base_pos + robotComB
 
         #compute contact forces TODO
         #self.estimateContactForces()
@@ -84,7 +95,6 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_accel = np.zeros(3)
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
-        self.comd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         #self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.qdd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
@@ -96,26 +106,6 @@ class ClimbingrobotController(BaseControllerFixed):
                 pass
             super().logData()
 
-    def freezeBase(self, flag):
-        if (self.freezeBaseFlag):
-            self.freezeBaseFlag = flag
-            print("releasing base")
-            self.tau_ffwd[2] = 0.
-            # set base joints PD to zero
-            self.pid.setPDjoint(0, 0., 0., 0.)
-            self.pid.setPDjoint(1, 0., 0., 0.)
-            self.pid.setPDjoint(2, 0., 0., 0.)
-
-
-        if (not self.freezeBaseFlag) and (flag):
-            self.freezeBaseFlag = flag
-            print("freezing base")
-            self.q_des = np.copy(self.q_des_q0)
-            self.qd_des = np.copy(np.zeros(self.robot.na))
-            self.tau_ffwd = np.copy(np.zeros(self.robot.na))
-            self.tau_ffwd[2] = self.g[2]  # compensate gravitu in the virtual joint to go exactly there
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
-                                 np.zeros(self.robot.na))
 
 
     def deregister_node(self):
@@ -127,8 +117,7 @@ class ClimbingrobotController(BaseControllerFixed):
 def talker(p):
 
     p.start()
-    p.startSimulator("climb_wall.world")
-    #p.startSimulator()
+    p.startSimulator()
     p.loadModelAndPublishers()
     p.startupProcedure()
 
@@ -137,38 +126,64 @@ def talker(p):
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
-    #p.updateKinematicsDynamics()
-    #p.freezeBase(True)
-    p.thrustingFlag = False
-    p.thrustDuration = 0.5
-    p.q_des = np.copy(p.q_des_q0)
+
+    p.updateKinematicsDynamics()
+
+    # jump parameters
+    p.startJump = 3.0
+    p.numberOfJumps = 3
+    p.thrustDuration = 0.1
+    p.jumpDuration = 1.
+    p.stateMachine = 'idle'
+    p.Fun = 8.9
+    p.Fut = 0
+    p.ropeStiffness = 60.
+    p.b_Fu = np.array([p.Fun, p.Fut, 0.0])
+    p.w_Fu = p.w_R_b.dot(p.b_Fu)
+    p.l_0 = conf.robot_params[p.robot_name]['q_0'][p.rope_index]
+    p.jumpNumber  = 0
 
     while True:
         p.tau_ffwd = np.zeros(p.robot.na)
         # update the kinematics
         p.updateKinematicsDynamics()
 
-        if (p.time > 3.0) and  (p.time < 3.0 +p.thrustDuration )  and (not p.thrustingFlag):
-            p.pid.setPDjoint(4, 0., 2., 0.)
-            p.pid.setPDjoint(5, 0., 2., 0.)
-            p.pid.setPDjoint(3, 0., 0., 0.)
-            p.pid.setPDjoint(9, 0., 2., 0.)
-            p.thrustingFlag = True
-            print(colored("Start Trhusting", "blue"))
+        #multiple jumps state machine
+        if ( p.stateMachine == 'idle') and (p.time > p.startJump) and (p.jumpNumber<p.numberOfJumps):
+            print(colored("-------------------------------", "blue"))
+            print(colored(f"Start trusting Jump number : {p.jumpNumber}" , "blue"))
+            p.pid.setPDjoint(p.base_passive_joints, 0., 2., 0.)
+            p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+            p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
+            p.stateMachine = 'thrusting'
 
-        if (p.thrustingFlag):
-            p.tau_ffwd[9] = -20.
-            p.tau_ffwd[3] = -60.5 * (p.q[3] - conf.robot_params[p.robot_name]['q_0'][3])
-            if (p.time > (3.0 + p.thrustDuration)):
-                p.thrustingFlag = False
-                p.pid.setPDjoint(3, conf.robot_params[p.robot_name]['kp'][3], conf.robot_params[p.robot_name]['kd'][3], 0.)
-                p.pid.setPDjoint(4, conf.robot_params[p.robot_name]['kp'][4], conf.robot_params[p.robot_name]['kd'][4],  0.)
-                p.pid.setPDjoint(5, conf.robot_params[p.robot_name]['kp'][5], conf.robot_params[p.robot_name]['kd'][5],
-                                 0.)
-                p.pid.setPDjoint(9, conf.robot_params[p.robot_name]['kp'][9], conf.robot_params[p.robot_name]['kd'][9],
-                                 0.)
+        if (p.stateMachine == 'thrusting'):
+            #p.tau_ffwd[p.leg_index] = - np.linalg.inv(p.Jleg.T).dot(p.w_Fu)
+            p.tau_ffwd[9] = -20
+            p.tau_ffwd[p.rope_index] = - p.ropeStiffness * (p.l - p.l_0)
+            p.ros_pub.add_arrow( p.x_ee, p.w_Fu, "red")
+            if (p.time > (p.startJump + p.thrustDuration)):
                 print(colored("Stop Trhusting", "blue"))
-                p.q_des[3] = p.q[3]
+                p.stateMachine = 'flying'
+                # reenable  the PDs of default values for landing
+                p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
+                p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
+                print(colored("Start Flying", "blue"))
+
+        if (p.stateMachine == 'flying'):
+            # keep extending rope
+            p.tau_ffwd[p.rope_index] = - p.ropeStiffness * (p.l - p.l_0)
+            if (p.time > (p.startJump + p.thrustDuration + p.jumpDuration)):
+                print(colored("Stop Flying", "blue"))
+                # reset the qdes
+                p.stateMachine = 'idle'
+
+                # enable PD for rope and reset the PD reference to the new estension
+                p.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'][p.rope_index], conf.robot_params[p.robot_name]['kd'][p.rope_index], 0.)
+                p.q_des[p.rope_index] = p.q[p.rope_index]
+                p.l_0 = p.l
+                p.jumpNumber += 1
+                p.startJump = p.time
 
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
