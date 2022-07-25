@@ -131,15 +131,12 @@ def talker(p):
 
     # jump parameters
     p.startJump = 3.0
-    p.numberOfJumps = 3
-    p.thrustDuration = 0.1
-    p.jumpDuration = 1.
+    p.jumps = [{"Fun": 8.9, "Fut": 0., "K_rope": 60, "Tf": 1.0},
+               {"Fun": 8.9, "Fut": 0., "K_rope": 60, "Tf": 1.0},
+               {"Fun": 8.9, "Fut": 0., "K_rope": 60, "Tf": 1.0}]
+    p.numberOfJumps = len(p.jumps)
+    p.thrustDuration = 0.05
     p.stateMachine = 'idle'
-    p.Fun = 8.9
-    p.Fut = 0
-    p.ropeStiffness = 60.
-    p.b_Fu = np.array([p.Fun, p.Fut, 0.0])
-    p.w_Fu = p.w_R_b.dot(p.b_Fu)
     p.l_0 = conf.robot_params[p.robot_name]['q_0'][p.rope_index]
     p.jumpNumber  = 0
 
@@ -155,12 +152,14 @@ def talker(p):
             p.pid.setPDjoint(p.base_passive_joints, 0., 2., 0.)
             p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
             p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
+            p.b_Fu = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0.0])
+            p.w_Fu = p.w_R_b.dot(p.b_Fu)
             p.stateMachine = 'thrusting'
 
         if (p.stateMachine == 'thrusting'):
             #p.tau_ffwd[p.leg_index] = - np.linalg.inv(p.Jleg.T).dot(p.w_Fu)
             p.tau_ffwd[9] = -20
-            p.tau_ffwd[p.rope_index] = - p.ropeStiffness * (p.l - p.l_0)
+            p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             p.ros_pub.add_arrow( p.x_ee, p.w_Fu, "red")
             if (p.time > (p.startJump + p.thrustDuration)):
                 print(colored("Stop Trhusting", "blue"))
@@ -172,8 +171,8 @@ def talker(p):
 
         if (p.stateMachine == 'flying'):
             # keep extending rope
-            p.tau_ffwd[p.rope_index] = - p.ropeStiffness * (p.l - p.l_0)
-            if (p.time > (p.startJump + p.thrustDuration + p.jumpDuration)):
+            p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            if (p.time > (p.startJump + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"])):
                 print(colored("Stop Flying", "blue"))
                 # reset the qdes
                 p.stateMachine = 'idle'
