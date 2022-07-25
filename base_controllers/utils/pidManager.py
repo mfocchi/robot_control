@@ -5,6 +5,7 @@ from ros_impedance_controller.msg import pid
 import rospy as ros
 import copy
 from termcolor import colored
+import numpy as np
 
 class PidManager:
 
@@ -94,13 +95,31 @@ class PidManager:
     def setPDjoint(self, joint_idx, kp, kd, ki):
         # create the message
         self.req_msg.data = []
+        if isinstance(joint_idx, int):
+            # fill in the message with des values for kp kd
+            self.joint_pid.joint_name = self.joint_names[joint_idx]
+            self.joint_pid.p_value = kp
+            self.joint_pid.d_value = kd
+            self.joint_pid.i_value = ki
+            self.joint_pid_log[joint_idx] = copy.deepcopy(self.joint_pid)
+        else:
+            for joint in joint_idx:
+                # fill in the message with des values for kp kd
+                self.joint_pid.joint_name = self.joint_names[joint]
+                if not isinstance(kp, np.ndarray):
+                    self.joint_pid.p_value = kp
+                else:
+                    self.joint_pid.p_value = kp[joint]
+                if not isinstance(kd, np.ndarray):
+                    self.joint_pid.d_value = kd
+                else:
+                    self.joint_pid.d_value = kd[joint]
+                if not isinstance(ki, np.ndarray):
+                    self.joint_pid.i_value = ki
+                else:
+                    self.joint_pid.i_value = ki[joint]
 
-        # fill in the message with des values for kp kd
-        self.joint_pid.joint_name = self.joint_names[joint_idx]
-        self.joint_pid.p_value = kp
-        self.joint_pid.d_value = kd
-        self.joint_pid.i_value = ki
-        self.joint_pid_log[joint_idx] = copy.deepcopy(self.joint_pid)
+                self.joint_pid_log[joint] = copy.deepcopy(self.joint_pid)
        
         self.req_msg.data =  copy.deepcopy(self.joint_pid_log)
 
@@ -123,3 +142,5 @@ class PidManager:
 
         # send request and get response (in this case none)
         self.set_pd_service(self.req_msg)
+
+
