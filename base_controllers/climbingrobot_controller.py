@@ -16,6 +16,10 @@ from utils.common_functions import plotJoint, plotCoMLinear
 from termcolor import colored
 import os
 from base_controller_fixed import BaseControllerFixed
+from gazebo_msgs.srv import SetModelConfiguration
+from gazebo_msgs.srv import SetModelConfigurationRequest
+from std_srvs.srv    import Empty, EmptyRequest
+import roslaunch
 
 import  params as conf
 robotName = "climbingrobot"
@@ -48,6 +52,12 @@ class ClimbingrobotController(BaseControllerFixed):
             self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point , wrench=wrench, duration=ros.Duration(10))
         except:
             pass
+
+    def loadModelAndPublishers(self, xacro_path=None):
+        super().loadModelAndPublishers()
+        self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
+        self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
+        self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
 
     def updateKinematicsDynamics(self):
         # q is continuously updated
@@ -110,13 +120,42 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def deregister_node(self):
         super().deregister_node()
-        os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
+        os.system(" rosnode kill -a")
         os.system(" rosnode kill /gzserver /gzclient")
         os.system(" pkill rosmaster")
+
+    def resetBase(self):
+        # create the message
+        req_reset_joints = SetModelConfigurationRequest()
+        req_reset_joints.model_name = self.robot_name
+        req_reset_joints.urdf_param_name = 'robot_description'
+        req_reset_joints.joint_names = self.joint_names
+        req_reset_joints.joint_positions = conf.robot_params[self.robot_name]['q_0'].tolist()
+        self.pause_physics_client(EmptyRequest())
+        # send request and get response (in this case none)
+        self.reset_joints(req_reset_joints)
+        self.unpause_physics_client(EmptyRequest())
+
+    def spawnMountain(self):
+        package = 'gazebo_ros'
+        executable = 'spawn_model'
+        name = 'spawn_climb_wall'
+        namespace = '/'
+        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] -0.37)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
+        node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
+        self.launch = roslaunch.scriptapi.ROSLaunch()
+        self.launch.start()
+        process = self.launch.launch(node)
+
+    def startupProcedure(self):
+        p.resetBase()
+        p.spawnMountain()
+        super().startupProcedure()
 
 def talker(p):
 
     p.start()
+    #p.startSimulator("slow.world")
     p.startSimulator()
     p.loadModelAndPublishers()
     p.startupProcedure()

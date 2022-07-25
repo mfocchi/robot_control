@@ -77,15 +77,15 @@ class RosPub():
  
     def publishVisual(self):                                
         #publish also the markers if any
-        if len(self.markerArray.markers)>0:                                                                                                                            
+        if len(self.markerArray.markers)>0:
             self.marker_pub.publish(self.markerArray)
             # reset the marker array making it ready for another round
-            self.markerArray.markers = []
+            self.markerArray.markers.clear()
             self.id = 0
 
         if len(self.markerArray_arrows.markers) > 0:
             self.arrow_pub.publish(self.markerArray_arrows)
-            self.markerArray_arrows.markers = []
+            self.markerArray_arrows.markers.clear()
             self.id_arrow = 0
                                 
     def add_marker(self, pos, radius = 0.1, color = "red"):
