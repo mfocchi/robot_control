@@ -155,7 +155,6 @@ class BaseControllerFixed(threading.Thread):
 
 
     def startupProcedure(self):
-        ros.sleep(1.0)
         if (self.use_torque_control):
             if  ("/" + self.robot_name + "/ros_impedance_controller" not in rosnode.get_node_names()):
                 print(colored('Error: you need to launch the ros impedance controller in torque mode!', 'red'))
