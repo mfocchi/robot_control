@@ -174,11 +174,11 @@ def talker(p):
     # jump parameters
     p.startJump = 0.5
 
-    p.jumps = [{"Fun": 20, "Fut": 0., "K_rope": 100, "Tf": 1.0},
-               {"Fun": 20, "Fut": 0., "K_rope": 100, "Tf": 1.0},
-               {"Fun": 20, "Fut": 0., "K_rope": 100, "Tf": 1.0}]
+    p.jumps = [{"Fun": 40, "Fut": 20., "K_rope": 80, "Tf": 1.0},
+               {"Fun": 40, "Fut": 20., "K_rope": 80, "Tf": 1.0},
+               {"Fun": 40, "Fut": 20., "K_rope": 80, "Tf": 1.0}]
     p.numberOfJumps = len(p.jumps)
-    p.thrustDuration = 0.1
+    p.thrustDuration = 0.05
     p.stateMachine = 'idle'
 
     p.jumpNumber  = 0
@@ -196,17 +196,16 @@ def talker(p):
             #p.pid.setPDjoint(p.base_passive_joints, 0., 2., 0.)
             p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
             p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
-            print(colored(f"ZERO LEG PD", "red"))
+            print(colored(f"ZERO LEG AND ROPE PD", "red"))
             # p.b_Fu = np.array([8, 0.0, 0.0])
             # p.w_Fu = p.w_R_b.dot(p.b_Fu)
             p.b_Fu_xy = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"]])
-
             p.l_0 = p.l
             p.stateMachine = 'thrusting'
             p.tau_ffwd = np.zeros(p.robot.na)
 
         if (p.stateMachine == 'thrusting'):
-            p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
+            p.w_Fu_xy = p.b_Fu_xy #p.w_R_b[:2, :2].dot(p.b_Fu_xy)
             p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
             p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
@@ -220,14 +219,12 @@ def talker(p):
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
                 p.tau_ffwd[p.leg_index] = np.zeros(2)
                 print(colored("Start Flying", "blue"))
-                print(p.l )
+
         if (p.stateMachine == 'flying'):
-
-
             # keep extending rope
             p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             # orientation control hip roll = - base yaw TODO
-            #p.q_des[8] = -p.q[6])
+            #p.q_des[7] = -p.q[5]
 
             if (p.time > (p.startJump + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"])):
                 print(colored("Stop Flying", "blue"))
