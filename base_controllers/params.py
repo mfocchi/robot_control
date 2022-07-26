@@ -60,10 +60,10 @@ robot_params['jumpleg'] ={'dt': 0.001,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
 robot_params['climbingrobot'] ={'dt': 0.001,
-                       'kp': np.array([0,0,10,200,10,10,10, 10, 10, 10]),
-                       'kd':  np.array([1,1,1,10,1,1,1, 1,1,1]),
+                       'kp': np.array([400 ,  400, 400,   400,  100, 100, 100,    30, 10, 10]),
+                       'kd':  np.array([50,    50,  50,       10,   10,  10,  10,  5,   1,1]),
 
-                       'q_0':  np.array([ 0,0,0, 1.0, 0,0,0, 1.57, 0, 0.0 ]),
+                       'q_0':  np.array([ 0,0,0, 1.0, 0,0,0, -1.57, 0.0, 0.0 ]),
                        'joint_names': ['mountain_wire_pitch', 'mountain_wire_roll', 'mountain_wire_yaw', 'wire_base_prismatic',
                                        'wire_base_pitch', 'wire_base_roll','wire_base_yaw',
                                        'hip_pitch', 'hip_roll', 'knee'],

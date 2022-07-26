@@ -33,7 +33,7 @@ class ClimbingrobotController(BaseControllerFixed):
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
         self.rope_index = 3
-        self.leg_index = np.array([7,8,9])
+        self.leg_index = np.array([8,9])
         self.base_passive_joints = np.array([4,5,6])
         self.anchor_passive_joints = np.array([0,1,2])
 
@@ -79,7 +79,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
         self.J = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
-        self.Jleg = self.J[:, -3:]
+        self.Jleg = self.J[:, self.leg_index]
         self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
 
@@ -131,32 +131,33 @@ class ClimbingrobotController(BaseControllerFixed):
         req_reset_joints.urdf_param_name = 'robot_description'
         req_reset_joints.joint_names = self.joint_names
         req_reset_joints.joint_positions = conf.robot_params[self.robot_name]['q_0'].tolist()
-        self.pause_physics_client(EmptyRequest())
+
         # send request and get response (in this case none)
         self.reset_joints(req_reset_joints)
-        self.unpause_physics_client(EmptyRequest())
+
 
     def spawnMountain(self):
         package = 'gazebo_ros'
         executable = 'spawn_model'
         name = 'spawn_climb_wall'
         namespace = '/'
-        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] -0.37)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
+        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] -0.35)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
         node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
         self.launch = roslaunch.scriptapi.ROSLaunch()
         self.launch.start()
         process = self.launch.launch(node)
 
     def startupProcedure(self):
-        p.resetBase()
+
         p.spawnMountain()
+        p.resetBase()
         super().startupProcedure()
 
 def talker(p):
 
     p.start()
-    #p.startSimulator("slow.world")
-    p.startSimulator()
+    p.startSimulator("slow.world")
+    #p.startSimulator()
     p.loadModelAndPublishers()
     p.startupProcedure()
 
@@ -168,19 +169,22 @@ def talker(p):
 
     p.updateKinematicsDynamics()
 
+    p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
+    p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
-    p.startJump = 3.0
-    p.jumps = [{"Fun": 8.9, "Fut": 0., "K_rope": 60, "Tf": 1.0},
-               {"Fun": 8.9, "Fut": 0., "K_rope": 60, "Tf": 1.0},
-               {"Fun": 8.9, "Fut": 0., "K_rope": 60, "Tf": 1.0}]
+    p.startJump = 0.5
+
+    p.jumps = [{"Fun": 20, "Fut": 0., "K_rope": 100, "Tf": 1.0},
+               {"Fun": 20, "Fut": 0., "K_rope": 100, "Tf": 1.0},
+               {"Fun": 20, "Fut": 0., "K_rope": 100, "Tf": 1.0}]
     p.numberOfJumps = len(p.jumps)
-    p.thrustDuration = 0.05
+    p.thrustDuration = 0.1
     p.stateMachine = 'idle'
-    p.l_0 = conf.robot_params[p.robot_name]['q_0'][p.rope_index]
+
     p.jumpNumber  = 0
 
     while True:
-        p.tau_ffwd = np.zeros(p.robot.na)
+
         # update the kinematics
         p.updateKinematicsDynamics()
 
@@ -188,38 +192,51 @@ def talker(p):
         if ( p.stateMachine == 'idle') and (p.time > p.startJump) and (p.jumpNumber<p.numberOfJumps):
             print(colored("-------------------------------", "blue"))
             print(colored(f"Start trusting Jump number : {p.jumpNumber}" , "blue"))
-            p.pid.setPDjoint(p.base_passive_joints, 0., 2., 0.)
+            p.tau_ffwd = np.zeros(p.robot.na)
+            #p.pid.setPDjoint(p.base_passive_joints, 0., 2., 0.)
             p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
             p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
-            p.b_Fu = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0.0])
-            p.w_Fu = p.w_R_b.dot(p.b_Fu)
+            print(colored(f"ZERO LEG PD", "red"))
+            # p.b_Fu = np.array([8, 0.0, 0.0])
+            # p.w_Fu = p.w_R_b.dot(p.b_Fu)
+            p.b_Fu_xy = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"]])
+
+            p.l_0 = p.l
             p.stateMachine = 'thrusting'
+            p.tau_ffwd = np.zeros(p.robot.na)
 
         if (p.stateMachine == 'thrusting'):
-            #p.tau_ffwd[p.leg_index] = - np.linalg.inv(p.Jleg.T).dot(p.w_Fu)
-            p.tau_ffwd[9] = -20
+            p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
+            p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
             p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
-            p.ros_pub.add_arrow( p.x_ee, p.w_Fu, "red")
+            p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
+
             if (p.time > (p.startJump + p.thrustDuration)):
                 print(colored("Stop Trhusting", "blue"))
                 p.stateMachine = 'flying'
-                # reenable  the PDs of default values for landing
-                p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
+                print(colored(f"RESTORING LEG PD", "red"))
+                # reenable  the PDs of default values for landing and reset the torque on the leg
+                #p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
+                p.tau_ffwd[p.leg_index] = np.zeros(2)
                 print(colored("Start Flying", "blue"))
-
+                print(p.l )
         if (p.stateMachine == 'flying'):
+
+
             # keep extending rope
             p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            # orientation control hip roll = - base yaw TODO
+            #p.q_des[8] = -p.q[6])
+
             if (p.time > (p.startJump + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"])):
                 print(colored("Stop Flying", "blue"))
                 # reset the qdes
                 p.stateMachine = 'idle'
-
+                print(colored(f"RESTORING ROPE PD", "red"))
                 # enable PD for rope and reset the PD reference to the new estension
                 p.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'][p.rope_index], conf.robot_params[p.robot_name]['kd'][p.rope_index], 0.)
                 p.q_des[p.rope_index] = p.q[p.rope_index]
-                p.l_0 = p.l
                 p.jumpNumber += 1
                 p.startJump = p.time
 
@@ -237,6 +254,9 @@ def talker(p):
 
         # plot  rope bw base link and anchor
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green")
+        p.ros_pub.add_marker(p.x_ee, radius=0.05)
+        if (p.jumpNumber == p.numberOfJumps):
+            p.ros_pub.add_marker(p.x_ee, color="green", radius=0.15)
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
         p.ros_pub.publishVisual()
 
@@ -264,16 +284,13 @@ if __name__ == '__main__':
         talker(p)
     except ros.ROSInterruptException:
         pass
-        # print("PLOTTING")
+        print("PLOTTING")
         # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
         # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-        # plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        # plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        # plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        # plt.show(block=True)
+        plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, None, None, None, None,
+                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
+
+        plt.show(block=True)
 
 
         
