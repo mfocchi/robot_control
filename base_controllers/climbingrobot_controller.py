@@ -15,6 +15,8 @@ from numpy import nan
 from utils.common_functions import plotJoint, plotCoMLinear
 from termcolor import colored
 import os
+from rospy import Time
+import tf
 from base_controller_fixed import BaseControllerFixed
 from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
@@ -58,6 +60,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
         self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
+        self.broadcaster = tf.TransformBroadcaster()
 
     def updateKinematicsDynamics(self):
         # q is continuously updated
@@ -95,6 +98,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
         #compute contact forces TODO
         #self.estimateContactForces()
+
+        self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -0.33, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), Time.now(), '/wall', '/world')
 
     def estimateContactForces(self):
         self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
@@ -141,7 +146,7 @@ class ClimbingrobotController(BaseControllerFixed):
         executable = 'spawn_model'
         name = 'spawn_climb_wall'
         namespace = '/'
-        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] -0.35)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
+        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] -0.33)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
         node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
         self.launch = roslaunch.scriptapi.ROSLaunch()
         self.launch.start()
@@ -173,10 +178,10 @@ def talker(p):
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
     p.startJump = 0.5
+    p.targetPos = np.array([0,3,-8])
 
-    p.jumps = [{"Fun": 40, "Fut": 20., "K_rope": 80, "Tf": 1.0},
-               {"Fun": 40, "Fut": 20., "K_rope": 80, "Tf": 1.0},
-               {"Fun": 40, "Fut": 20., "K_rope": 80, "Tf": 1.0}]
+    p.jumps = [{"Fun": 17.9, "Fut": 0.0, "K_rope":  14.43, "Tf": 2.04, "Fixed_L": True},
+               {"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93, "Fixed_L": False}]
     p.numberOfJumps = len(p.jumps)
     p.thrustDuration = 0.05
     p.stateMachine = 'idle'
@@ -190,11 +195,17 @@ def talker(p):
 
         #multiple jumps state machine
         if ( p.stateMachine == 'idle') and (p.time > p.startJump) and (p.jumpNumber<p.numberOfJumps):
+            p.tau_ffwd = np.zeros(p.robot.na)
             print(colored("-------------------------------", "blue"))
             print(colored(f"Start trusting Jump number : {p.jumpNumber}" , "blue"))
             p.tau_ffwd = np.zeros(p.robot.na)
             #p.pid.setPDjoint(p.base_passive_joints, 0., 2., 0.)
-            p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+            if not p.jumps[p.jumpNumber]["Fixed_L"]:
+                p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+            else:
+                print(colored(f"FIXED LENGTH JUMP", "red"))
+                p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
+            p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
             p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
             print(colored(f"ZERO LEG AND ROPE PD", "red"))
             # p.b_Fu = np.array([8, 0.0, 0.0])
@@ -202,10 +213,10 @@ def talker(p):
             p.b_Fu_xy = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"]])
             p.l_0 = p.l
             p.stateMachine = 'thrusting'
-            p.tau_ffwd = np.zeros(p.robot.na)
+
 
         if (p.stateMachine == 'thrusting'):
-            p.w_Fu_xy = p.b_Fu_xy #p.w_R_b[:2, :2].dot(p.b_Fu_xy)
+            p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
             p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
             p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
@@ -215,16 +226,21 @@ def talker(p):
                 p.stateMachine = 'flying'
                 print(colored(f"RESTORING LEG PD", "red"))
                 # reenable  the PDs of default values for landing and reset the torque on the leg
-                #p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
+                p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
                 p.tau_ffwd[p.leg_index] = np.zeros(2)
                 print(colored("Start Flying", "blue"))
 
         if (p.stateMachine == 'flying'):
-            # keep extending rope
-            p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            if not p.jumps[p.jumpNumber]["Fixed_L"]:
+                # keep extending rope
+                p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             # orientation control hip roll = - base yaw TODO
             #p.q_des[7] = -p.q[5]
+            # orientation control hip roll with future jump Force alignment
+            if ( (p.jumpNumber+1) < p.numberOfJumps):
+                p.q_des[7] = math.atan2( p.jumps[p.jumpNumber+1]["Fut"], p.jumps[p.jumpNumber+1]["Fun"])
+
 
             if (p.time > (p.startJump + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"])):
                 print(colored("Stop Flying", "blue"))
@@ -252,6 +268,7 @@ def talker(p):
         # plot  rope bw base link and anchor
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green")
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
+        p.ros_pub.add_marker(p.anchor_pos + p.targetPos, color="red", radius=0.5)
         if (p.jumpNumber == p.numberOfJumps):
             p.ros_pub.add_marker(p.x_ee, color="green", radius=0.15)
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
