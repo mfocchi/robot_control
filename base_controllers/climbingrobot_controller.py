@@ -32,10 +32,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.freezeBaseFlag = False
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
-        self.rope_index = 3
-        self.leg_index = np.array([8,9])
-        self.base_passive_joints = np.array([4,5,6])
-        self.anchor_passive_joints = np.array([0,1,2])
+        self.rope_index = 2
+        self.leg_index = np.array([7,8])
+        self.base_passive_joints = np.array([3,4,5])
+        self.anchor_passive_joints = np.array([0,1])
 
     def applyForce(self):
         from geometry_msgs.msg import Wrench, Point
