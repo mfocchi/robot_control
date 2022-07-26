@@ -87,6 +87,8 @@ class RosPub():
             self.arrow_pub.publish(self.markerArray_arrows)
             self.markerArray_arrows.markers.clear()
             self.id_arrow = 0
+
+        self.delete_all_markers()
                                 
     def add_marker(self, pos, radius = 0.1, color = "red"):
        marker = Marker()
@@ -124,8 +126,6 @@ class RosPub():
                             
     def add_arrow(self, start, vector, color = "green"):
        marker = Marker()
-
-
        if (color == "green"):
            marker.color.r = 0.0
            marker.color.g = 1.0
@@ -156,7 +156,15 @@ class RosPub():
        marker.id = self.id_arrow
        self.id_arrow += 1
        self.markerArray_arrows.markers.append(marker)
-       
+
+    def delete_all_markers(self):
+        marker_array_msg = MarkerArray()
+        marker = Marker()
+        marker.id = 0
+        marker.action = Marker.DELETEALL
+        marker_array_msg.markers.append(marker)
+        self.arrow_pub.publish(marker_array_msg)
+
     def add_cone(self,  origin, normal, friction_coeff, color = "green"):     
         
        height = 0.2;
