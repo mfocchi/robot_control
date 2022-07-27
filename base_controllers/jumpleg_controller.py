@@ -456,7 +456,6 @@ def talker(p):
     p.target_service = ros.ServiceProxy('JumplegAgent/get_target', get_target)
     p.reward_service = ros.ServiceProxy('JumplegAgent/set_reward', set_reward)
 
-
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
@@ -510,11 +509,11 @@ def talker(p):
 
             #update the kinematics
             p.updateKinematicsDynamics()
-            if (p.time > startTrust+max_episode_time):
-                # max episode time elapsed
-                print(colored("--Max time elapsed!--","blue"))
-                break
             if (p.time > startTrust):
+                if (p.time > startTrust + max_episode_time):
+                    # max episode time elapsed
+                    print(colored("--Max time elapsed!--", "blue"))
+                    break
                 if p.firstTime:
                     p.firstTime = False
                     p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
