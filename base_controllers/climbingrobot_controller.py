@@ -36,6 +36,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.leg_index = np.array([7,8])
         self.base_passive_joints = np.array([3,4,5])
         self.anchor_passive_joints = np.array([0,1])
+        self.mountain_thickness = 0.1
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
     def applyForce(self, Fx, Fy, Fz, duration):
@@ -93,8 +94,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
         #compute contact forces TODO
         #self.estimateContactForces()
-        self.mountain_thinkness = 0.1
-        self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -self.mountain_thinkness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), Time.now(), '/wall', '/world')
+
+        self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), Time.now(), '/wall', '/world')
 
     def estimateContactForces(self):
         self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
@@ -147,7 +148,7 @@ class ClimbingrobotController(BaseControllerFixed):
         executable = 'spawn_model'
         name = 'spawn_climb_wall'
         namespace = '/'
-        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] - self.mountain_thinckness/2)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
+        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] - self.mountain_thickness/2)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
         node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
         self.launch = roslaunch.scriptapi.ROSLaunch()
         self.launch.start()
