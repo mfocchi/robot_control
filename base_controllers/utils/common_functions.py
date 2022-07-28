@@ -206,11 +206,13 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
             labels = labels_flywheel4
     else:
         labels = joint_names
-        
+
     for jidx in range(njoints):
-     
-        plt.subplot(int(njoints/2),2,jidx+1)
-        plt.ylabel(labels[jidx])    
+        if (njoints % 3 == 0): #divisible by 3
+            plt.subplot(njoints / 3, 3, jidx + 1)
+        else:  # divisible by 2
+            plt.subplot(int(njoints / 2), 2, jidx + 1)
+        plt.ylabel(labels[jidx])
         if   (plot_var_des_log is not None):
              plt.plot(time_log, plot_var_des_log[jidx,:], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
         plt.plot(time_log, plot_var_log[jidx,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
