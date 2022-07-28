@@ -45,7 +45,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'control_type': 'torque', # 'position', 'torque'
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
-                       'spawn_z' : 1.8,
+                       'spawn_z' : 1.75,
                        'buffer_size': 6000} # note the frames are all aligned with base for joints = 0
 
 robot_params['jumpleg'] ={'dt': 0.001,
