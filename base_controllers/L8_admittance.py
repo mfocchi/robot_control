@@ -347,6 +347,7 @@ def talker(p):
     ros.sleep(1.0)
 
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
+    p.q_des = np.copy(p.q_des_q0)
     p.admit.setPosturalTask(np.copy(p.q_des_q0))
 
     #loop frequency
