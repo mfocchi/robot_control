@@ -22,6 +22,7 @@ from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from std_srvs.srv    import Empty, EmptyRequest
 import roslaunch
+from geometry_msgs.msg import Wrench, Point
 
 import  params as conf
 robotName = "climbingrobot"
@@ -30,30 +31,24 @@ class ClimbingrobotController(BaseControllerFixed):
     
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
-        self.EXTERNAL_FORCE = False
-        self.freezeBaseFlag = False
-        print("Initialized climbingrobot controller---------------------------------------------------------------")
-
+        self.EXTERNAL_FORCE = True
         self.rope_index = 2
         self.leg_index = np.array([7,8])
         self.base_passive_joints = np.array([3,4,5])
         self.anchor_passive_joints = np.array([0,1])
+        print("Initialized climbingrobot controller---------------------------------------------------------------")
 
-    def applyForce(self):
-        from geometry_msgs.msg import Wrench, Point
+    def applyForce(self, Fx, Fy, Fz, duration):
         wrench = Wrench()
-        wrench.force.x = 0
-        wrench.force.y = 0
-        wrench.force.z = 30
-        wrench.torque.x = 0
-        wrench.torque.y = 0
-        wrench.torque.z = 0
-        reference_frame = "world" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
-        reference_point = Point(x = 0, y = 0, z = 0)
-        try:
-            self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point , wrench=wrench, duration=ros.Duration(10))
-        except:
-            pass
+        wrench.force.x = Fx
+        wrench.force.y = Fy
+        wrench.force.z = Fz
+        wrench.torque.x = 0.
+        wrench.torque.y = 0.
+        wrench.torque.z = 0.
+        reference_frame = "" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
+        reference_point = Point(x = 0., y = 0., z = 0.)
+        self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point , wrench=wrench,  duration=ros.Duration(1))
 
     def loadModelAndPublishers(self, xacro_path=None):
         super().loadModelAndPublishers()
@@ -88,7 +83,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         self.l = self.q[p.rope_index]
         self.theta = self.q[0]
-        self.phi = self.q[2]
+        self.phi = self.q[1]
 
         # compute com variables accordint to a frame located at the foot
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
@@ -98,8 +93,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
         #compute contact forces TODO
         #self.estimateContactForces()
-
-        self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -0.33, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), Time.now(), '/wall', '/world')
+        self.mountain_thinkness = 0.1
+        self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -self.mountain_thinkness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), Time.now(), '/wall', '/world')
 
     def estimateContactForces(self):
         self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
@@ -110,14 +105,17 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_accel = np.zeros(3)
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
-        #self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.qdd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
+        self.simp_model_state_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
 
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
+                self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
+                self.base_pos_log[:, self.log_counter] = self.base_pos
                 pass
             super().logData()
 
@@ -135,7 +133,10 @@ class ClimbingrobotController(BaseControllerFixed):
         req_reset_joints.model_name = self.robot_name
         req_reset_joints.urdf_param_name = 'robot_description'
         req_reset_joints.joint_names = self.joint_names
+
         req_reset_joints.joint_positions = conf.robot_params[self.robot_name]['q_0'].tolist()
+        # recompute the theta angle to have the anchor attached to the wall
+        req_reset_joints.joint_positions[0] = math.atan2( 0.32, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
 
         # send request and get response (in this case none)
         self.reset_joints(req_reset_joints)
@@ -146,7 +147,7 @@ class ClimbingrobotController(BaseControllerFixed):
         executable = 'spawn_model'
         name = 'spawn_climb_wall'
         namespace = '/'
-        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] -0.33)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
+        args = '-urdf -param climb_wall -model mountain -x '+ str(conf.robot_params[self.robot_name]['spawn_x'] - self.mountain_thinckness/2)+ ' -y '+ str(conf.robot_params[self.robot_name]['spawn_y'])
         node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
         self.launch = roslaunch.scriptapi.ROSLaunch()
         self.launch.start()
@@ -157,6 +158,7 @@ class ClimbingrobotController(BaseControllerFixed):
         p.spawnMountain()
         p.resetBase()
         super().startupProcedure()
+
 
 def talker(p):
 
@@ -179,8 +181,7 @@ def talker(p):
     # jump parameters
     p.startJump = 0.5
     p.targetPos = np.array([0,3,-8])
-
-    p.jumps = [{"Fun": 17.9, "Fut": 0.0, "K_rope":  14.43, "Tf": 2.04, "Fixed_L": True},
+    p.jumps = [{"Fun": 17.9, "Fut": 0.0, "K_rope":  14.43, "Tf": 1.0, "Fixed_L": True},
                {"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93, "Fixed_L": False}]
     p.numberOfJumps = len(p.jumps)
     p.thrustDuration = 0.05
@@ -259,10 +260,10 @@ def talker(p):
         p.logData()
 
 
-
-        # disturbance force
-        # if (p.time > 3.0 and p.EXTERNAL_FORCE):
-        #     p.applyForce()
+        # TEST IMPULSE DOES NOT WORK is delayed 10 seconds
+        # if ((p.time > p.startJump) and p.EXTERNAL_FORCE):
+        #     print(colored("Start applying force","red"))
+        #     p.applyForce(115.,73.,0., p.thrustDuration)
         #     p.EXTERNAL_FORCE = False
 
         # plot  rope bw base link and anchor
@@ -289,7 +290,21 @@ def talker(p):
     p.deregister_node()
 
 
-
+def plot3D(name, figure_id, time_log, state, label):
+    fig = plt.figure(figure_id)
+    fig.suptitle(name, fontsize=20)
+    plt.subplot(3,1,1)
+    plt.ylabel(label[0])
+    plt.plot(time_log, state[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.grid()
+    plt.subplot(3,1,2)
+    plt.ylabel(label[1])
+    plt.plot(time_log, state[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.grid()
+    plt.subplot(3,1,3)
+    plt.ylabel(label[2])
+    plt.plot(time_log, state[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.grid()
 
 if __name__ == '__main__':
     p = ClimbingrobotController(robotName)
@@ -297,14 +312,14 @@ if __name__ == '__main__':
     try:
         talker(p)
     except ros.ROSInterruptException:
-        pass
         print("PLOTTING")
         # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
         # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-        plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, None, None, None, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,  None, None, None,  None, None, None, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plot3D('states', 1, p.time_log, p.simp_model_state_log, ['theta','phi','l'])
+        plot3D('basePos', 2, p.time_log, p.base_pos_log, ['X','Y','Z'])
         plt.show(block=True)
+        pass
 
 
         
