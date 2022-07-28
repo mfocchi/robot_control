@@ -7,7 +7,7 @@ Created on Thu Apr 18 09:47:07 2019
 import numpy as np
 
 # EXE L8-1.2: Sinisoidal joint reference
-amplitude = 0.15
+amplitude = 0.1
 frequency = 0.25
 
 # EXE L8-1.3: Constant Cartesian reference
@@ -27,5 +27,7 @@ des_ee_goal = np.array([0.7, 1.1, 1.2])
 poly_duration = 3.0
 
 # EXE L2-2.3: admittance control
-Kx = 1000 * np.identity(3)
-Dx = 300 * np.identity(3)
+Kx = 600 * np.identity(3)
+Dx = 200 * np.identity(3)
+
+USER_TRAJECTORY = False

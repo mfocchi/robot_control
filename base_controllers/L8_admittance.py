@@ -51,6 +51,9 @@ from base_controllers.base_controller_fixed import BaseControllerFixed
 from admittance_controller import AdmittanceControl
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 
+import tf
+from rospy import Time
+
 class LabAdmittanceController(BaseControllerFixed):
     
     def __init__(self, robot_name="ur5"):
@@ -124,6 +127,8 @@ class LabAdmittanceController(BaseControllerFixed):
             self.available_controllers = ["joint_group_pos_controller",
                                           "pos_joint_traj_controller" ]
         self.active_controller = self.available_controllers[0]
+
+        self.broadcaster = tf.TransformBroadcaster()
 
     def applyForce(self):
         wrench = Wrench()
@@ -212,6 +217,12 @@ class LabAdmittanceController(BaseControllerFixed):
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
         self.obs_avoidance.setCylinderParameters(0.125, 0.3, np.array([0.6, 0.25, 1.0]))
         self.admit = AdmittanceControl(self.ikin, lab_conf.Kx, lab_conf.Dx, conf.robot_params[self.robot_name])
+
+        if lab_conf.USER_TRAJECTORY:
+            data = np.load('ur5_q_ref' + '.npz')
+            self.q_ref = data['q']
+            self.traj_duration = self.q_ref.shape[0]
+
 
     def logData(self):
         if (conf.robot_params[self.robot_name]['control_type'] == "admittance"):
@@ -344,11 +355,12 @@ def talker(p):
     p.loadModelAndPublishers(xacro_path)
     p.initVars()
     p.startupProcedure()
-    ros.sleep(1.0)
+
 
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     p.q_des = np.copy(p.q_des_q0)
     p.admit.setPosturalTask(np.copy(p.q_des_q0))
+
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
@@ -366,6 +378,9 @@ def talker(p):
         # reset to actual
         p.updateKinematicsDynamics()
         p.time_poly = None
+
+        ext_traj_counter =0
+
         #control loop
         while True:
             # homing procedure
@@ -384,11 +399,17 @@ def talker(p):
             #update the kinematics
             p.updateKinematicsDynamics()
 
+            if lab_conf.USER_TRAJECTORY and (p.time >6.0) and (ext_traj_counter < p.traj_duration):
+                p.q_des = p.q_ref[ext_traj_counter,:]
+                ext_traj_counter += 1
+
             # EXE L8-1.1: set constant joint reference
-            p.q_des = np.copy(p.q_des_q0)
+            #p.q_des = np.copy(p.q_des_q0)
+
+
 
             # EXE L8-1.2: set sinusoidal joint reference
-            #p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
+            p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
 
 
             # EXE L8-1.3: set constant ee reference
