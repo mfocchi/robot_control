@@ -58,6 +58,17 @@ class ClimbingrobotController(BaseControllerFixed):
         self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.broadcaster = tf.TransformBroadcaster()
 
+    def rot2phi_theta(self, R):
+        # this rotation is obtrained rotating phi about Z and theta about -Y axis as in Luigis convention
+        #[cos(phi) * cos(theta), -sin(phi), -cos(phi) * sin(theta)]
+        #[cos(theta) * sin(phi), cos(phi), -sin(phi) * sin(theta)]
+        #[sin(theta), 0, cos(theta)]
+        phi = np.arctan2(R[1, 0], R[0, 0])  #cos(theta) * sin(phi)/cos(phi) * cos(theta)
+        theta = np.arctan2(R[2, 0],R[2,2])
+
+        # returns  pitch = theta,  yaw = phi
+        return theta, phi
+
     def updateKinematicsDynamics(self):
         # q is continuously updated
         self.robot.computeAllTerms(self.q, self.qd )
@@ -81,10 +92,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Jleg = self.J[:, self.leg_index]
         self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
-
+        w_R_wire = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire')).rotation
+        self.theta, self.phi =  self.rot2phi_theta(w_R_wire)
         self.l = self.q[p.rope_index]
-        self.theta = self.q[0]
-        self.phi = self.q[1]
 
         # compute com variables accordint to a frame located at the foot
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
