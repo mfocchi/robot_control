@@ -39,7 +39,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mountain_thickness = 0.1
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
-    def applyForce(self, Fx, Fy, Fz, duration):
+    def applyForce(self, Fx, Fy, Fz, interval):
         wrench = Wrench()
         wrench.force.x = Fx
         wrench.force.y = Fy
@@ -47,9 +47,9 @@ class ClimbingrobotController(BaseControllerFixed):
         wrench.torque.x = 0.
         wrench.torque.y = 0.
         wrench.torque.z = 0.
-        reference_frame = "" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
+        reference_frame = "world" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
         reference_point = Point(x = 0., y = 0., z = 0.)
-        self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point , wrench=wrench,  duration=ros.Duration(1))
+        self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point, wrench=wrench, start_time=ros.Time(),  duration=ros.Duration(interval))
 
     def loadModelAndPublishers(self, xacro_path=None):
         super().loadModelAndPublishers()
@@ -105,7 +105,7 @@ class ClimbingrobotController(BaseControllerFixed):
         #compute contact forces TODO
         #self.estimateContactForces()
 
-        self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), Time.now(), '/wall', '/world')
+        self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
 
     def estimateContactForces(self):
         self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
@@ -147,7 +147,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         req_reset_joints.joint_positions = conf.robot_params[self.robot_name]['q_0'].tolist()
         # recompute the theta angle to have the anchor attached to the wall
-        req_reset_joints.joint_positions[0] = math.atan2( 0.32, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
+        req_reset_joints.joint_positions[0] = math.atan2( 1.35, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
 
         # send request and get response (in this case none)
         self.reset_joints(req_reset_joints)
@@ -174,8 +174,8 @@ class ClimbingrobotController(BaseControllerFixed):
 def talker(p):
 
     p.start()
-    p.startSimulator("slow.world")
-    #p.startSimulator()
+    #p.startSimulator("slow.world")
+    p.startSimulator()
     p.loadModelAndPublishers()
     p.startupProcedure()
 
@@ -190,14 +190,14 @@ def talker(p):
     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
-    p.startJump = 0.5
+    p.startJump = 10.5
     p.targetPos = np.array([0,3,-8])
-    p.jumps = [{"Fun": 17.9, "Fut": 0.0, "K_rope":  14.43, "Tf": 1.0, "Fixed_L": True},
-               {"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93, "Fixed_L": False}]
+    p.jumps = [{"Fun": 115.9, "Fut": 170, "K_rope":  15.43, "Tf": 0.9}]
+               #{"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93}]
     p.numberOfJumps = len(p.jumps)
-    p.thrustDuration = 0.05
+    p.thrustDuration = 0.1
+    p.orientTime = 2.0
     p.stateMachine = 'idle'
-
     p.jumpNumber  = 0
 
     while True:
@@ -207,36 +207,44 @@ def talker(p):
 
         #multiple jumps state machine
         if ( p.stateMachine == 'idle') and (p.time > p.startJump) and (p.jumpNumber<p.numberOfJumps):
-            p.tau_ffwd = np.zeros(p.robot.na)
             print(colored("-------------------------------", "blue"))
+            p.l_0 = p.l
+            if (p.EXTERNAL_FORCE):
+                    print(colored("Start applying force", "red"))
+                    p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.thrustDuration)
+                    p.stateMachine = 'flying'
+                    p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+                    print(colored("Start Flying", "blue"))
+            else:
+                p.q_des[7] = math.atan2(20, 100)
+                print(colored(f"Start orienting leg to  : {p.q_des[7]}", "blue"))
+                p.stateMachine = 'orienting_leg'
+
+        if (p.stateMachine == 'orienting_leg') and (p.time > (p.startJump + p.orientTime)):
+
             print(colored(f"Start trusting Jump number : {p.jumpNumber}" , "blue"))
             p.tau_ffwd = np.zeros(p.robot.na)
-            #p.pid.setPDjoint(p.base_passive_joints, 0., 2., 0.)
-            if not p.jumps[p.jumpNumber]["Fixed_L"]:
-                p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
-            else:
-                print(colored(f"FIXED LENGTH JUMP", "red"))
-                p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
+            p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
             p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
             p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
             print(colored(f"ZERO LEG AND ROPE PD", "red"))
             # p.b_Fu = np.array([8, 0.0, 0.0])
             # p.w_Fu = p.w_R_b.dot(p.b_Fu)
             p.b_Fu_xy = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"]])
-            p.l_0 = p.l
             p.stateMachine = 'thrusting'
 
 
         if (p.stateMachine == 'thrusting'):
             p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
             p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
-            p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            #p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
 
-            if (p.time > (p.startJump + p.thrustDuration)):
+            if (p.time > (p.startJump +  p.orientTime + p.thrustDuration)):
                 print(colored("Stop Trhusting", "blue"))
                 p.stateMachine = 'flying'
                 print(colored(f"RESTORING LEG PD", "red"))
+                p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
                 # reenable  the PDs of default values for landing and reset the torque on the leg
                 p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
@@ -244,17 +252,13 @@ def talker(p):
                 print(colored("Start Flying", "blue"))
 
         if (p.stateMachine == 'flying'):
-            if not p.jumps[p.jumpNumber]["Fixed_L"]:
-                # keep extending rope
-                p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
-            # orientation control hip roll = - base yaw TODO
-            #p.q_des[7] = -p.q[5]
-            # orientation control hip roll with future jump Force alignment
-            if ( (p.jumpNumber+1) < p.numberOfJumps):
-                p.q_des[7] = math.atan2( p.jumps[p.jumpNumber+1]["Fut"], p.jumps[p.jumpNumber+1]["Fun"])
-
-
-            if (p.time > (p.startJump + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"])):
+            # keep extending rope
+            p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            if (p.EXTERNAL_FORCE):
+                end_flying = p.startJump  + p.thrustDuration +  p.jumps[p.jumpNumber]["Tf"]
+            else:
+                end_flying = p.startJump + p.orientTime + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"]
+            if (p.time >end_flying):
                 print(colored("Stop Flying", "blue"))
                 # reset the qdes
                 p.stateMachine = 'idle'
@@ -271,11 +275,7 @@ def talker(p):
         p.logData()
 
 
-        # TEST IMPULSE DOES NOT WORK is delayed 10 seconds
-        # if ((p.time > p.startJump) and p.EXTERNAL_FORCE):
-        #     print(colored("Start applying force","red"))
-        #     p.applyForce(115.,73.,0., p.thrustDuration)
-        #     p.EXTERNAL_FORCE = False
+
 
         # plot  rope bw base link and anchor
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green")
