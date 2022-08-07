@@ -156,9 +156,8 @@ class JumpLegController(BaseControllerFixed):
     def initVars(self):
         super().initVars()
         self.a = np.empty((3, 6))
-        self.T_th = 0.5
         self.cost = Cost()
-        self.cost.weights = np.array([1., 1., 1., 1., 1., 10.]) #unil  friction sing jointrange torques target
+        self.cost.weights = np.array([1., 1., 10., 1., 1., 10.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -411,9 +410,9 @@ class JumpLegController(BaseControllerFixed):
         # create model state
         model_state = ModelState()
         model_state.model_name = 'jump_platform'
-        model_state.pose.position.x = target[0]
+        model_state.pose.position.x = -target[0]
         model_state.pose.position.y = target[1]
-        model_state.pose.position.z = target[2]
+        model_state.pose.position.z = target[2]-0.25
 
         model_state.pose.orientation.w = 1.0
         model_state.pose.orientation.x = 0.0
@@ -466,11 +465,6 @@ def talker(p):
     # initial com posiiton
     com_0 = np.array([-0.01303,  0.00229,  0.25252])
 
-    # target final com position /velocity
-    com_f = np.array([0.1, 0., 0.3])
-    comd_f = np.array([0.0, 0., 0.5])
-    p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
-
     # here the RL loop...
     while True:
 
@@ -481,21 +475,24 @@ def talker(p):
         p.firstTime = True
         p.detectedApexFlag = False
 
-        # TODO the target on Z should be generated wrt to Com0
+        # TODO: extend the target on Z
         p.target_CoM = (p.target_service()).target_CoM
 
         print("Target position from agent:", p.target_CoM)
         for i in range(10):
-            p.setJumpPlatformPosition([p.target_CoM[0],p.target_CoM[1],p.target_CoM[2]-0.25])
+            p.setJumpPlatformPosition(p.target_CoM)
 
         state = np.concatenate((com_0, p.target_CoM))
-        action_coeff = p.action_service(state).action
-        print("Coeff from agent:", action_coeff)
+        action = p.action_service(state).action
+        print("Coeff from agent:", action)
 
-        p.T_th = action_coeff[0]
-        p.a[0,:] = action_coeff[1:7]
-        p.a[1,:] = action_coeff[7:13]
-        p.a[2,:] = action_coeff[13:19]
+        p.T_th = action[0]
+        com_f = np.array(action[1:4])
+        comd_f = np.array(action[4:])
+        p.a = p.computeHeuristicSolution(com_0,com_f,comd_f,p.T_th)
+        # p.a[0,:] = action_coeff[1:7]
+        # p.a[1,:] = action_coeff[7:13]
+        # p.a[2,:] = action_coeff[13:19]
 
         print(f"Actor action:\n"
               f"T_th: {p.T_th}\n"
@@ -518,7 +515,7 @@ def talker(p):
                     p.firstTime = False
                     p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
                 #plot com target
-                p.ros_pub.add_marker(com_f, color="blue", radius=0.1)
+                p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
 
                 #compute joint reference
                 if   (p.time < startTrust + p.T_th):
