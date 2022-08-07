@@ -373,7 +373,7 @@ class JumpLegController(BaseControllerFixed):
 
         # singularity
         #if (np.linalg.norm(self.com) >= 0.4):
-        smallest_svalue = np.sqrt(np.min(np.linalg.eigvals(p.J.T.dot(p.J))))
+        smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
         if smallest_svalue <= 0.035:
             self.cost.singularity = 1./(1e-05 + smallest_svalue)
             singularity = True
@@ -485,12 +485,12 @@ def talker(p):
         p.target_CoM = (p.target_service()).target_CoM
 
         print("Target position from agent:", p.target_CoM)
-        # for i in range(10):
-        #     p.setJumpPlatformPosition(p.target_CoM)
+        for i in range(10):
+            p.setJumpPlatformPosition([p.target_CoM[0],p.target_CoM[1],p.target_CoM[2]-0.25])
 
         state = np.concatenate((com_0, p.target_CoM))
         action_coeff = p.action_service(state).action
-        # print("Coeff from agent:", action_coeff)
+        print("Coeff from agent:", action_coeff)
 
         p.T_th = action_coeff[0]
         p.a[0,:] = action_coeff[1:7]
