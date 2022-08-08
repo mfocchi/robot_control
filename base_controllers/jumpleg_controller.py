@@ -19,6 +19,8 @@ from termcolor import colored
 import os
 import roslaunch
 from gazebo_msgs.msg import ContactsState
+from gazebo_msgs.srv import SetModelConfiguration
+from gazebo_msgs.srv import SetModelConfigurationRequest
 
 from base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.ros_publish import RosPub
@@ -157,7 +159,7 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.cost = Cost()
-        self.cost.weights = np.array([1., 1., 10., 1., 1., 10.]) #unil  friction sing jointrange torques target
+        self.cost.weights = np.array([1., 1., 1., 1., 1., 100.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -169,6 +171,8 @@ class JumpLegController(BaseControllerFixed):
         self.qdd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
+
+        self.joint_names = conf.robot_params[self.robot_name]['joint_names']
 
         if self.no_gazebo:
             self.q = conf.robot_params[self.robot_name]['q_0']
@@ -183,6 +187,18 @@ class JumpLegController(BaseControllerFixed):
                 #self.comdd_log[:, self.log_counter] = self.comdd
                 self.qdd_des_log[:, self.log_counter] = self.qdd_des
             super().logData()
+
+    def resetBase(self):
+        # create the message
+        req_reset_joints = SetModelConfigurationRequest()
+        req_reset_joints.model_name = self.robot_name
+        req_reset_joints.urdf_param_name = 'robot_description'
+        req_reset_joints.joint_names = self.joint_names
+
+        req_reset_joints.joint_positions = np.copy(self.q_des_q0)
+
+        # send request and get response (in this case none)
+        self.reset_joints(req_reset_joints)
 
     def freezeBase(self, flag):
         if not self.no_gazebo:
@@ -204,6 +220,8 @@ class JumpLegController(BaseControllerFixed):
             if (not self.freezeBaseFlag) and (flag):
                 self.freezeBaseFlag = flag
                 print(colored("freezing base","red"))
+                self.resetBase()
+                print(colored("resetting base","red"))
                 self.q_des = np.copy(self.q_des_q0)
                 self.qd_des = np.copy(np.zeros(self.robot.na))
                 self.tau_ffwd = np.copy(np.zeros(self.robot.na))
@@ -376,7 +394,7 @@ class JumpLegController(BaseControllerFixed):
         if smallest_svalue <= 0.035:
             self.cost.singularity = 1./(1e-05 + smallest_svalue)
             singularity = True
-            print(colored("Getting singular configuration", "red"))
+            # print(colored("Getting singular configuration", "red"))
         return singularity
 
     def evalTotalReward(self):
@@ -436,6 +454,7 @@ def talker(p):
         p.startSimulator("jump_platform.world")
         #p.startSimulator()
         p.loadModelAndPublishers()
+        p.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         p.startupProcedure()
 
     p.loadRLAgent(mode='train')
@@ -470,7 +489,7 @@ def talker(p):
 
         p.time = 0
         startTrust = 0.5
-        max_episode_time = 30
+        max_episode_time = 5
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
@@ -529,8 +548,10 @@ def talker(p):
                         p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
                         p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
 
-                    if p.evaluateCosts():
-                        break
+                    # if p.evaluateCosts():
+                    #     break
+                    singluarity = p.evaluateCosts()
+
                 else:
                     # apex detection
                     p.detectApex()
