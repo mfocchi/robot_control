@@ -21,6 +21,8 @@ import roslaunch
 from gazebo_msgs.msg import ContactsState
 from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
 
 from base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.ros_publish import RosPub
@@ -159,7 +161,7 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.cost = Cost()
-        self.cost.weights = np.array([1., 1., 1., 1., 1., 100.]) #unil  friction sing jointrange torques target
+        self.cost.weights = np.array([1., 10., 100., 10., 1., 100.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -177,7 +179,7 @@ class JumpLegController(BaseControllerFixed):
         if self.no_gazebo:
             self.q = conf.robot_params[self.robot_name]['q_0']
 
-        self.reset_platform= ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
+        self.set_state= ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
 
     def logData(self):
@@ -193,12 +195,29 @@ class JumpLegController(BaseControllerFixed):
         req_reset_joints = SetModelConfigurationRequest()
         req_reset_joints.model_name = self.robot_name
         req_reset_joints.urdf_param_name = 'robot_description'
-        req_reset_joints.joint_names = self.joint_names
+        req_reset_joints.joint_names = self.joint_names[3:]
 
-        req_reset_joints.joint_positions = np.copy(self.q_des_q0)
-
+        req_reset_joints.joint_positions = self.q_des_q0[3:]
+        print (self.q_des_q0[3:])
         # send request and get response (in this case none)
-        self.reset_joints(req_reset_joints)
+        return self.reset_joints(req_reset_joints)
+
+        # set_model_position = SetModelStateRequest()
+        # # create model state
+        # model_state = ModelState()
+        # model_state.model_name =  self.robot_name
+        # model_state.pose.position.x = 0
+        # model_state.pose.position.y = 0
+        # model_state.pose.position.z = 1
+        #
+        # model_state.pose.orientation.w = -1.0
+        # model_state.pose.orientation.x = 0.0
+        # model_state.pose.orientation.y = 0.0
+        # model_state.pose.orientation.z = 0.0
+        #
+        # set_model_position.model_state = model_state
+        # # send request and get response (in this case none)
+        # self.set_state(set_model_position)
 
     def freezeBase(self, flag):
         if not self.no_gazebo:
@@ -220,8 +239,6 @@ class JumpLegController(BaseControllerFixed):
             if (not self.freezeBaseFlag) and (flag):
                 self.freezeBaseFlag = flag
                 print(colored("freezing base","red"))
-                self.resetBase()
-                print(colored("resetting base","red"))
                 self.q_des = np.copy(self.q_des_q0)
                 self.qd_des = np.copy(np.zeros(self.robot.na))
                 self.tau_ffwd = np.copy(np.zeros(self.robot.na))
@@ -285,12 +302,30 @@ class JumpLegController(BaseControllerFixed):
         print(x)
         return x[:3], x[3:]
 
+    def correct_angle(self, angle):
+        correct_angle = angle
+
+        if abs(angle) > 360:
+            sign = 1 if angle > 0 else -1
+            correct_angle = sign * (abs(angle) - 360)
+
+        return correct_angle
+
     def detectApex(self):
         if not self.detectedApexFlag:
             if (self.qd[2] <= 0.0):
                 self.detectedApexFlag = True
                 print(colored("APEX detected", "red"))
                 # reset joints at q0
+                req_reset_joints = SetModelConfigurationRequest()
+                req_reset_joints.model_name = self.robot_name
+                req_reset_joints.urdf_param_name = 'robot_description'
+                req_reset_joints.joint_names = self.joint_names[3:]
+
+                req_reset_joints.joint_positions = self.q_des_q0[3:]
+                print(self.q_des_q0[3:])
+                # send request and get response (in this case none)
+                return self.reset_joints(req_reset_joints)
                 self.q_des[3:] = self.q_des_q0[3:]
 
     def computeHeuristicSolution(self, com_0, com_f, comd_f, T_th):
@@ -302,6 +337,12 @@ class JumpLegController(BaseControllerFixed):
         q_f_leg, ik_success, final_out_of_workspace = p.ikin.invKinFoot(-com_f,
                                                                         conf.robot_params[p.robot_name]['ee_frame'],
                                                                         p.q_des_q0[3:].copy(), verbose=False)
+
+        # print(q_0_leg,q_f_leg)
+        # q_0_leg = np.array(list(map(self.correct_angle,q_0_leg)))
+        # q_f_leg = np.array(list(map(self.correct_angle, q_f_leg)))
+        # print(q_0_leg,q_f_leg)
+
         # we need to recompute the jacobian  for the final joint position
         J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)),
                                         p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,
@@ -391,10 +432,10 @@ class JumpLegController(BaseControllerFixed):
         # singularity
         #if (np.linalg.norm(self.com) >= 0.4):
         smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
-        if smallest_svalue <= 0.035:
+        if smallest_svalue <= 0.01: #0.035:
             self.cost.singularity = 1./(1e-05 + smallest_svalue)
             singularity = True
-            # print(colored("Getting singular configuration", "red"))
+            print(colored("Getting singular configuration", "red"))
         return singularity
 
     def evalTotalReward(self):
@@ -439,7 +480,7 @@ class JumpLegController(BaseControllerFixed):
 
         set_platform_position.model_state = model_state
         # send request and get response (in this case none)
-        self.reset_platform(set_platform_position)
+        self.set_state(set_platform_position)
 
 
 
@@ -488,9 +529,10 @@ def talker(p):
     while True:
 
         p.time = 0
-        startTrust = 0.5
+        startTrust = 1
         max_episode_time = 5
         p.freezeBase(True)
+        print(colored(f"resetting base: {p.resetBase()}", "magenta"))
         p.firstTime = True
         p.detectedApexFlag = False
 
@@ -505,9 +547,9 @@ def talker(p):
         action = p.action_service(state).action
         print("Coeff from agent:", action)
 
-        p.T_th = action[0]
-        com_f = np.array(action[1:4])
-        comd_f = np.array(action[4:])
+        p.T_th = 0.5#action[0]
+        com_f = np.array([0.,0,0.35])#np.array(action[1:4])
+        comd_f = np.array([0,0,0.5])#np.array(action[4:])
         p.a = p.computeHeuristicSolution(com_0,com_f,comd_f,p.T_th)
         # p.a[0,:] = action_coeff[1:7]
         # p.a[1,:] = action_coeff[7:13]
@@ -518,7 +560,6 @@ def talker(p):
               f"haa: {p.a[0,:]}\n"
               f"hfe: {p.a[1,:]}\n"
               f"kfe: {p.a[2,:]}\n")
-
 
         #Control loop
         while True:
@@ -534,7 +575,6 @@ def talker(p):
                     p.firstTime = False
                     p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
                 #plot com target
-                p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
 
                 #compute joint reference
                 if   (p.time < startTrust + p.T_th):
@@ -548,9 +588,9 @@ def talker(p):
                         p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
                         p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
 
-                    # if p.evaluateCosts():
-                    #     break
-                    singluarity = p.evaluateCosts()
+                    if p.evaluateCosts():
+                        break
+                    # singluarity = p.evaluateCosts()
 
                 else:
                     # apex detection
@@ -590,6 +630,9 @@ def talker(p):
             p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
             p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, 0.1, color="blue")
             p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
+            p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
+            p.ros_pub.add_marker(com_f, color="red", radius=0.1)
+            p.ros_pub.add_arrow(com_f, comd_f, "red")
             p.ros_pub.publishVisual()
 
             #wait for synconization of the control loop
