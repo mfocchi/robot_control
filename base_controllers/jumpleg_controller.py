@@ -161,7 +161,7 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.cost = Cost()
-        self.cost.weights = np.array([1., 10., 100., 10., 1., 100.]) #unil  friction sing jointrange torques target
+        self.cost.weights = np.array([10., 100., 1000., 10., 10., 10000.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -195,10 +195,9 @@ class JumpLegController(BaseControllerFixed):
         req_reset_joints = SetModelConfigurationRequest()
         req_reset_joints.model_name = self.robot_name
         req_reset_joints.urdf_param_name = 'robot_description'
-        req_reset_joints.joint_names = self.joint_names[3:]
+        req_reset_joints.joint_names = self.joint_names
 
-        req_reset_joints.joint_positions = self.q_des_q0[3:]
-        print (self.q_des_q0[3:])
+        req_reset_joints.joint_positions = self.q_des_q0
         # send request and get response (in this case none)
         return self.reset_joints(req_reset_joints)
 
@@ -316,16 +315,6 @@ class JumpLegController(BaseControllerFixed):
             if (self.qd[2] <= 0.0):
                 self.detectedApexFlag = True
                 print(colored("APEX detected", "red"))
-                # reset joints at q0
-                req_reset_joints = SetModelConfigurationRequest()
-                req_reset_joints.model_name = self.robot_name
-                req_reset_joints.urdf_param_name = 'robot_description'
-                req_reset_joints.joint_names = self.joint_names[3:]
-
-                req_reset_joints.joint_positions = self.q_des_q0[3:]
-                print(self.q_des_q0[3:])
-                # send request and get response (in this case none)
-                return self.reset_joints(req_reset_joints)
                 self.q_des[3:] = self.q_des_q0[3:]
 
     def computeHeuristicSolution(self, com_0, com_f, comd_f, T_th):
@@ -432,7 +421,7 @@ class JumpLegController(BaseControllerFixed):
         # singularity
         #if (np.linalg.norm(self.com) >= 0.4):
         smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
-        if smallest_svalue <= 0.01: #0.035:
+        if smallest_svalue <= 0.035:
             self.cost.singularity = 1./(1e-05 + smallest_svalue)
             singularity = True
             print(colored("Getting singular configuration", "red"))
@@ -531,8 +520,8 @@ def talker(p):
         p.time = 0
         startTrust = 1
         max_episode_time = 5
-        p.freezeBase(True)
         print(colored(f"resetting base: {p.resetBase()}", "magenta"))
+        p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
 
@@ -545,15 +534,12 @@ def talker(p):
 
         state = np.concatenate((com_0, p.target_CoM))
         action = p.action_service(state).action
-        print("Coeff from agent:", action)
+        print("Action from agent:", action)
 
-        p.T_th = 0.5#action[0]
-        com_f = np.array([0.,0,0.35])#np.array(action[1:4])
-        comd_f = np.array([0,0,0.5])#np.array(action[4:])
-        p.a = p.computeHeuristicSolution(com_0,com_f,comd_f,p.T_th)
-        # p.a[0,:] = action_coeff[1:7]
-        # p.a[1,:] = action_coeff[7:13]
-        # p.a[2,:] = action_coeff[13:19]
+        p.T_th = action[0]
+        com_f = np.array(action[1:4])
+        comd_f = np.array(action[4:])
+        p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
 
         print(f"Actor action:\n"
               f"T_th: {p.T_th}\n"
@@ -632,6 +618,7 @@ def talker(p):
             p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
             p.ros_pub.add_marker(com_f, color="red", radius=0.1)
+            p.ros_pub.add_marker([0,0,0], color="green", radius=0.8)
             p.ros_pub.add_arrow(com_f, comd_f, "red")
             p.ros_pub.publishVisual()
 
