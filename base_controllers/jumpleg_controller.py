@@ -236,12 +236,15 @@ class JumpLegController(BaseControllerFixed):
                     self.pid.setPDjoint(5, 0., 0., 0.)
 
             if (not self.freezeBaseFlag) and (flag):
+                print(colored(f"resetting base: {p.resetBase()}", "magenta"))
                 self.freezeBaseFlag = flag
                 print(colored("freezing base","red"))
-                self.q_des = np.copy(self.q_des_q0)
-                self.qd_des = np.copy(np.zeros(self.robot.na))
-                self.tau_ffwd = np.copy(np.zeros(self.robot.na))
+                self.q_des = self.q_des_q0.copy()
+                self.qd_des = np.zeros(self.robot.na).copy()
+                self.tau_ffwd = np.zeros(self.robot.na).copy()
                 self.tau_ffwd[2] = self.g[2] # compensate gravitu in the virtual joint to go exactly there
+                print(f"Gravity compens tau: {self.tau_ffwd}")
+                print(f"Q_des comps tau: {self.q_des}")
                 self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
                                      np.zeros(self.robot.na))
 
@@ -520,7 +523,6 @@ def talker(p):
         p.time = 0
         startTrust = 1
         max_episode_time = 5
-        print(colored(f"resetting base: {p.resetBase()}", "magenta"))
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
