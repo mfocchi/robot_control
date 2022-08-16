@@ -304,14 +304,6 @@ class JumpLegController(BaseControllerFixed):
         print(x)
         return x[:3], x[3:]
 
-    def correct_angle(self, angle):
-        correct_angle = angle
-
-        if abs(angle) > 360:
-            sign = 1 if angle > 0 else -1
-            correct_angle = sign * (abs(angle) - 360)
-
-        return correct_angle
 
     def detectApex(self):
         if not self.detectedApexFlag:

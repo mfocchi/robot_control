@@ -442,4 +442,11 @@ class robotKinematics():
 
             q0_leg += alpha*dq
             niter += 1
+
+        for i in range(len(q0_leg)):
+            while q0_leg[i] >= 2 * math.pi:
+                q0_leg[i] -= 2 * math.pi
+            while q0_leg[i] < -2 * math.pi:
+                q0_leg[i] += 2 * math.pi
+
         return q0_leg, IKsuccess, out_of_workspace
