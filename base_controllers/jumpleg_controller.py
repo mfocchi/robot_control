@@ -338,18 +338,22 @@ class JumpLegController(BaseControllerFixed):
 
         # velocity
         qd_0_leg = np.zeros(3)
-        qd_f_leg = -np.linalg.inv(J_final).dot(comd_f)
-        # accelerations
+        qd_f_leg = np.linalg.inv(J_final).dot(-comd_f)
+        # accelerations ( we neglect Jd qd)
         qdd_0_leg = np.zeros(3)
-        qdd_f_leg = -np.linalg.inv(J_final).dot(np.zeros(3))  # np.array([0.,0.,-9.81]
+        # we assume it stops decelerating
+        Jdqd_f = self.robot.frameClassicAcceleration(np.hstack((np.zeros(3), q_f_leg)), np.hstack((comd_f, qd_f_leg)), None, self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).linear
+        comdd_f = np.zeros(3) #stops accelerating at the end
+        qdd_f_leg = np.linalg.inv(J_final).dot(comdd_f - Jdqd_f)  # np.array([0.,0.,-9.81]
 
         # a = np.empty((3, 4))
         # for i in range(3):
         #      a[i,:] = p.thirdOrderPolynomialTrajectory(T_th, q_0_leg[i], q_f_leg[i])
         poly_coeff = np.empty((3, 6))
         for i in range(3):
-            poly_coeff[i, :] = fifthOrderPolynomialTrajectory(T_th, q_0_leg[i], q_f_leg[i], qd_0_leg[i], qd_f_leg[i],
-                                                     qdd_0_leg[i], qdd_f_leg[i])
+            poly_coeff[i, :] = fifthOrderPolynomialTrajectory(T_th, q_0_leg[i], q_f_leg[i], qd_0_leg[i], qd_f_leg[i], qdd_0_leg[i], qdd_f_leg[i])
+
+
         return poly_coeff
 
     def detectTouchDown(self):
