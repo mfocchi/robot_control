@@ -506,10 +506,9 @@ def talker(p):
 
     # here the RL loop...
     while True:
-
-        p.time = 0
-        startTrust = 1
-        max_episode_time = 5
+        p.time = 0.
+        startTrust = 0.5
+        max_episode_time = 5.
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
