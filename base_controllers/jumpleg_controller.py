@@ -356,6 +356,36 @@ class JumpLegController(BaseControllerFixed):
 
         return poly_coeff
 
+    def computeHeuristicSolutionBezier(self, com_0, com_f, comd_f):
+        self.weights= np.zeros([3,4])
+        self.weights_der = np.zeros([3, 3])
+        comd_0 = np.zeros(3)
+        self.weights[:, 0] = com_0
+        self.weights[:, 1] = comd_0 / 3. + com_0
+        self.weights[:, 2] = com_f - comd_f / 3.
+        self.weights[:, 3] = com_f
+        self.weights_der[:, 0] = 3 * (self.weights[:, 1] - self.weights[:, 0])
+        self.weights_der[:, 1] = 3 * (self.weights[:, 2] - self.weights[:, 1])
+        self.weights_der[:, 2] = 3 * (self.weights[:, 3] - self.weights[:, 2])
+        # print(com_0)
+        # print(com_f)
+        # print(comd_f)
+        
+    def evalBezier(self, t_, T_th):
+        t = t_ /T_th
+        com = self.Bezier3(t, self.weights)
+        comd = self.Bezier2(t, self.weights_der)
+        q_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com,  conf.robot_params[p.robot_name]['ee_frame'],  p.q_des_q0[3:].copy(), verbose=False)
+        # we need to recompute the jacobian  for the final joint position
+        J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_leg)),   p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,   pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+        qd_leg = np.linalg.inv(J_final).dot(-comd)
+        # we assume it stops decelerating
+        Jdqd = self.robot.frameClassicAcceleration(np.hstack((np.zeros(3), q_leg)), np.hstack((comd, qd_leg)), None, self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).linear
+        comdd_f = np.zeros(3)  # stops accelerating at the end
+        qdd_leg = np.linalg.inv(J_final).dot(comdd_f - Jdqd)
+        qdd_leg = np.zeros(3)
+        return q_leg, qd_leg, qdd_leg
+
     def plotTrajectory(self, T_th, poly_coeff):
         number_of_blobs = 10
         t = np.linspace(0, T_th, number_of_blobs)
@@ -366,6 +396,28 @@ class JumpLegController(BaseControllerFixed):
             for i in range(3):
                 q_traj[i] = poly_coeff[i, 0] + poly_coeff[i, 1] * t[blob] +poly_coeff[i, 2] * pow(t[blob], 2) + poly_coeff[i, 3] * pow(t[blob], 3) + poly_coeff[i, 4] * pow(t[blob], 4) + poly_coeff[i, 5] * pow(t[blob], 5)
             self.intermediate_com_position.append(-self.robot.framePlacement(np.hstack((np.zeros(3), q_traj)), self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation)
+
+    def plotTrajectoryBezier(self, T_th):
+        number_of_blobs = 10
+        t = np.linspace(0, T_th, number_of_blobs)
+        self.intermediate_com_position = []
+        for blob in range(number_of_blobs):
+            self.intermediate_com_position.append(self.Bezier3(t[blob], self.weights))
+
+    # 2 order bezier
+    def Bezier2(self, t, weights):
+        t2 = t * t
+        mt = 1 - t
+        mt2 = mt * mt
+        return weights[:, 0] * mt2 + weights[:, 1] * 2 * mt * t + weights[:, 2] * t2
+
+    def Bezier3(self, t, weights):
+        t2 = t * t
+        t3 = t2 * t
+        mt = 1 - t
+        mt2 = mt * mt
+        mt3 = mt2 * mt
+        return weights[:, 0] * mt3 + 3 * weights[:, 1] * mt2 * t + 3 * weights[:, 2] * mt * t2 + weights[:, 3] * t3
 
     def detectTouchDown(self):
         foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
@@ -529,7 +581,8 @@ def talker(p):
         com_f = np.array(action[1:4])
         comd_f = np.array(action[4:])
         p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
-        p.plotTrajectory(p.T_th, p.a)
+        p.computeHeuristicSolutionBezier(com_0, com_f, comd_f)
+        p.plotTrajectoryBezier(p.T_th)
 
         print(f"Actor action:\n"
               f"T_th: {p.T_th}\n"
@@ -547,22 +600,23 @@ def talker(p):
                     # max episode time elapsed
                     print(colored("--Max time elapsed!--", "blue"))
                     break
+                # release base
                 if p.firstTime:
                     p.firstTime = False
                     p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
-                #plot com target
 
                 #compute joint reference
                 if   (p.time < startTrust + p.T_th):
                     t = p.time - startTrust
-                    for i in range(3):
-                        # third order
-                        # p.q_des[3+i] = p.a[i, 0] + p.a[i,1] * t + p.a[i,2] * pow(t, 2) + p.a[i,3] * pow(t, 3)
-                        # p.qd_des[3+i] = p.a[i, 1] + 2 * p.a[i,2] * t + 3 * p.a[i,3] * pow(t, 2)
-                        #fifth order
-                        p.q_des[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) +  p.a[i,4] *pow(t, 4) + p.a[i,5] *pow(t, 5)
-                        p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
-                        p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
+                    # for i in range(3):
+                    #     # third order
+                    #     # p.q_des[3+i] = p.a[i, 0] + p.a[i,1] * t + p.a[i,2] * pow(t, 2) + p.a[i,3] * pow(t, 3)
+                    #     # p.qd_des[3+i] = p.a[i, 1] + 2 * p.a[i,2] * t + 3 * p.a[i,3] * pow(t, 2)
+                    #     #fifth order
+                    #     p.q_des[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) +  p.a[i,4] *pow(t, 4) + p.a[i,5] *pow(t, 5)
+                    #     p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
+                    #     p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
+                    p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] =  p.evalBezier(t, p.T_th)
 
                     if p.evaluateCosts():
                         break
@@ -580,10 +634,9 @@ def talker(p):
                     p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
                 else:
                     if (p.time < startTrust + p.T_th):
-                        p.tau_ffwd[3:] = -p.J.T.dot(p.g[:3])
+                        p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3]) #add gravity compensation
                     else:
                         p.tau_ffwd[3:] = np.zeros(3)
-
 
                 # send commands to gazebo
                 if p.no_gazebo:
