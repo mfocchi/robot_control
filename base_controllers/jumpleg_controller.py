@@ -356,6 +356,17 @@ class JumpLegController(BaseControllerFixed):
 
         return poly_coeff
 
+    def plotTrajectory(self, T_th, poly_coeff):
+        number_of_blobs = 10
+        t = np.linspace(0, T_th, number_of_blobs)
+        self.intermediate_com_position = []
+
+        for blob in range(number_of_blobs):
+            q_traj = np.zeros(3)
+            for i in range(3):
+                q_traj[i] = poly_coeff[i, 0] + poly_coeff[i, 1] * t[blob] +poly_coeff[i, 2] * pow(t[blob], 2) + poly_coeff[i, 3] * pow(t[blob], 3) + poly_coeff[i, 4] * pow(t[blob], 4) + poly_coeff[i, 5] * pow(t[blob], 5)
+            self.intermediate_com_position.append(-self.robot.framePlacement(np.hstack((np.zeros(3), q_traj)), self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation)
+
     def detectTouchDown(self):
         foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
         if (foot_pos_w[2] <= 0.025 ):
@@ -502,6 +513,7 @@ def talker(p):
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
+        p.intermediate_com_position = []
 
         # TODO: extend the target on Z
         p.target_CoM = (p.target_service()).target_CoM
@@ -518,6 +530,7 @@ def talker(p):
         com_f = np.array(action[1:4])
         comd_f = np.array(action[4:])
         p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
+        p.plotTrajectory(p.T_th, p.a)
 
         print(f"Actor action:\n"
               f"T_th: {p.T_th}\n"
@@ -596,8 +609,12 @@ def talker(p):
             p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
             p.ros_pub.add_marker(com_f, color="red", radius=0.1)
-            p.ros_pub.add_marker([0,0,0], color="green", radius=0.8)
+            #p.ros_pub.add_marker([0,0,0], color="green", radius=0.8)
             p.ros_pub.add_arrow(com_f, comd_f, "red")
+            # plot com intermediate positions
+            for blob in range(len(p.intermediate_com_position)):
+                p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[blob*0.2, blob*0.2, blob*0.2], radius=0.02)
+
             p.ros_pub.publishVisual()
 
             #wait for synconization of the control loop
