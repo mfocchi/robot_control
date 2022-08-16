@@ -180,7 +180,10 @@ class JumpLegController(BaseControllerFixed):
             self.q = conf.robot_params[self.robot_name]['q_0']
 
         self.set_state= ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
-
+        print("JumplegAgent services ready")
+        self.action_service = ros.ServiceProxy('JumplegAgent/get_action', get_action)
+        self.target_service = ros.ServiceProxy('JumplegAgent/get_target', get_target)
+        self.reward_service = ros.ServiceProxy('JumplegAgent/set_reward', set_reward)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -323,9 +326,6 @@ class JumpLegController(BaseControllerFixed):
                                                                         p.q_des_q0[3:].copy(), verbose=False)
 
         # print(q_0_leg,q_f_leg)
-        # q_0_leg = np.array(list(map(self.correct_angle,q_0_leg)))
-        # q_f_leg = np.array(list(map(self.correct_angle, q_f_leg)))
-        # print(q_0_leg,q_f_leg)
 
         # we need to recompute the jacobian  for the final joint position
         J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)),
@@ -335,6 +335,7 @@ class JumpLegController(BaseControllerFixed):
         if (initial_out_of_workspace) or final_out_of_workspace:
             # put seuper high reward here
             print(colored("initial or final value out of workspace!!!!!!", "red"))
+
         # velocity
         qd_0_leg = np.zeros(3)
         qd_f_leg = -np.linalg.inv(J_final).dot(comd_f)
@@ -371,6 +372,12 @@ class JumpLegController(BaseControllerFixed):
         self.launch.start()
         process = self.launch.launch(node)
 
+        # wait for agent service to start
+        print("Waiting for JumplegAgent services")
+        ros.wait_for_service('JumplegAgent/get_action')
+        ros.wait_for_service('JumplegAgent/get_target')
+        ros.wait_for_service('JumplegAgent/set_reward')
+
     def computeActivationFunction(self, activationType, value ,lower, upper):
 
         if (activationType == 'linear'):
@@ -397,21 +404,6 @@ class JumpLegController(BaseControllerFixed):
 
         # unilateral constraints
         self.cost.unilateral += self.computeActivationFunction('linear', p.contactForceW[2], 0.0, np.inf)
-
-        # for i in range(3):
-        #     # TODO: Cumulate possible penalties
-        #     if (self.q_des[3 + i] >= self.robot.model.upperPositionLimit[3+i]):
-        #         #put negative reward here
-        #         print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
-        #     if (self.q_des[3 + i] <= self.robot.model.lowerPositionLimit[3 + i]):
-        #         # put negative reward here
-        #         print(colored("lower end-stop limit hit in " + str(3 + i) + "-th joint", "red"))
-        #     if (self.tau_ffwd[3 + i] >= self.robot.model.effortLimit[3 + i]):
-        #         # put negative reward here
-        #         print(colored("upper torque limit hit in " + str(3 + i) + "-th joint", "red"))
-        #     if (self.tau_ffwd[3 + i] <= -self.robot.model.effortLimit[3 + i]):
-        #         # put negative reward here
-        #         print(colored("lower torque limit hit in " + str(3 + i) + "-th joint", "red"))
 
         # singularity
         #if (np.linalg.norm(self.com) >= 0.4):
@@ -488,20 +480,8 @@ def talker(p):
     ros.sleep(1.0)
     p.q_des = np.copy(p.q_des_q0)
 
-    # wait for agent service to start
-    print("Waiting for JumplegAgent services")
-    ros.wait_for_service('JumplegAgent/get_action')
-    ros.wait_for_service('JumplegAgent/get_target')
-    ros.wait_for_service('JumplegAgent/set_reward')
-
-    print("JumplegAgent services ready")
-    p.action_service = ros.ServiceProxy('JumplegAgent/get_action', get_action)
-    p.target_service = ros.ServiceProxy('JumplegAgent/get_target', get_target)
-    p.reward_service = ros.ServiceProxy('JumplegAgent/set_reward', set_reward)
-
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
-
 
     # compute coeff first time
     p.updateKinematicsDynamics()
