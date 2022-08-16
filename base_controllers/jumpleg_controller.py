@@ -445,7 +445,7 @@ class JumpLegController(BaseControllerFixed):
         # create model state
         model_state = ModelState()
         model_state.model_name = 'jump_platform'
-        model_state.pose.position.x = -target[0]
+        model_state.pose.position.x = target[0]
         model_state.pose.position.y = target[1]
         model_state.pose.position.z = target[2]-0.25
 
