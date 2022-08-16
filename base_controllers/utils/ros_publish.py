@@ -87,6 +87,8 @@ class RosPub():
             self.arrow_pub.publish(self.markerArray_arrows)
             self.markerArray_arrows.markers = []
             self.id_arrow = 0
+
+        self.delete_all_markers()
                                 
     def add_marker(self, pos, radius = 0.1, color = "red"):
        marker = Marker()
@@ -101,14 +103,18 @@ class RosPub():
            marker.color.r = 1.0
            marker.color.g = 0.0
            marker.color.b = 0.0
-       if (color == "blue"):
+       elif (color == "blue"):
            marker.color.r = 0.0
            marker.color.g = 0.0
            marker.color.b = 1.0
-       if (color == "green"):
+       elif (color == "green"):
            marker.color.r = 0.0
            marker.color.g = 1.0
            marker.color.b = 0.0
+       else:
+           marker.color.r = color[0]
+           marker.color.g = color[1]
+           marker.color.b = color[2]
        marker.pose.orientation.x = 0.
        marker.pose.orientation.y = 0.
        marker.pose.orientation.z = 0.
@@ -184,8 +190,17 @@ class RosPub():
 
        marker.id = self.id
        self.id += 1     
-       self.markerArray.markers.append(marker)   
-                    
+       self.markerArray.markers.append(marker)
+
+    def delete_all_markers(self):
+        marker_array_msg = MarkerArray()
+        marker = Marker()
+        marker.id = 0
+        marker.action = Marker.DELETEALL
+        marker_array_msg.markers.append(marker)
+        self.arrow_pub.publish(marker_array_msg)
+
+
     def deregister_node(self):
         print("---------------------------------------------------------------")                  
         ros.signal_shutdown("manual kill")
