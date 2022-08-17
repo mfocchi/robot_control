@@ -290,13 +290,17 @@ class JumpLegController(BaseControllerFixed):
 
 
     def detectApex(self):
-        if not self.detectedApexFlag:
+        foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
+        #foot tradius is 0.015
+        foot_lifted_off = (foot_pos_w[2] > 0.017 )
+        if not self.detectedApexFlag and foot_lifted_off:
             if (self.qd[2] <= 0.0):
                 self.detectedApexFlag = True
                 print(colored("APEX detected", "red"))
                 self.q_des[3:] = self.q_des_q0[3:]
 
     def computeHeuristicSolution(self, com_0, com_f, comd_f, T_th):
+        # TODO write a generic inverse kinematic function to map com into joints
         # boundary conditions
         # position
         q_0_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com_0,
