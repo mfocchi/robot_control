@@ -204,28 +204,11 @@ class JumpLegController(BaseControllerFixed):
         # send request and get response (in this case none)
         return self.reset_joints(req_reset_joints)
 
-        # set_model_position = SetModelStateRequest()
-        # # create model state
-        # model_state = ModelState()
-        # model_state.model_name =  self.robot_name
-        # model_state.pose.position.x = 0
-        # model_state.pose.position.y = 0
-        # model_state.pose.position.z = 1
-        #
-        # model_state.pose.orientation.w = -1.0
-        # model_state.pose.orientation.x = 0.0
-        # model_state.pose.orientation.y = 0.0
-        # model_state.pose.orientation.z = 0.0
-        #
-        # set_model_position.model_state = model_state
-        # # send request and get response (in this case none)
-        # self.set_state(set_model_position)
-
     def freezeBase(self, flag):
         if not self.no_gazebo:
             if (self.freezeBaseFlag):
                 self.freezeBaseFlag = flag
-                print(colored("releasing base", "red"))
+                #print(colored("releasing base", "red"))
                 self.tau_ffwd[2] = 0.
                 #set base joints PD to zero
                 self.pid.setPDjoint(0, 0., 0., 0.)
@@ -239,17 +222,15 @@ class JumpLegController(BaseControllerFixed):
                     self.pid.setPDjoint(5, 0., 0., 0.)
 
             if (not self.freezeBaseFlag) and (flag):
-                print(colored(f"resetting base: {p.resetBase()}", "magenta"))
+                #print(colored("freezing base", "red"))
+                #print(colored(f"resetting base: {p.resetBase()}", "magenta"))
+                p.resetBase()
                 self.freezeBaseFlag = flag
-                print(colored("freezing base","red"))
                 self.q_des = self.q_des_q0.copy()
                 self.qd_des = np.zeros(self.robot.na).copy()
                 self.tau_ffwd = np.zeros(self.robot.na).copy()
                 self.tau_ffwd[2] = self.g[2] # compensate gravitu in the virtual joint to go exactly there
-                print(f"Gravity compens tau: {self.tau_ffwd}")
-                print(f"Q_des comps tau: {self.q_des}")
-                self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
-                                     np.zeros(self.robot.na))
+                self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],  np.zeros(self.robot.na))
 
     def thirdOrderPolynomialTrajectory(self, tf, q0, qf):
         # Matrix used to solve the linear system of equations for the polynomial trajectory
@@ -568,31 +549,29 @@ def talker(p):
 
         # TODO: extend the target on Z
         p.target_CoM = (p.target_service()).target_CoM
-
-        print("Target position from agent:", p.target_CoM)
         for i in range(10):
             p.setJumpPlatformPosition(p.target_CoM)
 
         state = np.concatenate((com_0, p.target_CoM))
         action = p.action_service(state).action
-        print("Action from agent:", action)
+        #print("Action from agent:", action)
 
         p.T_th = action[0]
         com_f = np.array(action[1:4])
         comd_f = np.array(action[4:])
-        p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
+        # OLD way
+        # p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
+        # print(f"Actor action:\n"
+        #       f"T_th: {p.T_th}\n"
+        #       f"haa: {p.a[0, :]}\n"
+        #       f"hfe: {p.a[1, :]}\n"
+        #       f"kfe: {p.a[2, :]}\n")
+
         p.computeHeuristicSolutionBezier(com_0, com_f, comd_f)
         p.plotTrajectoryBezier(p.T_th)
 
-        print(f"Actor action:\n"
-              f"T_th: {p.T_th}\n"
-              f"haa: {p.a[0,:]}\n"
-              f"hfe: {p.a[1,:]}\n"
-              f"kfe: {p.a[2,:]}\n")
-
         #Control loop
         while True:
-
             #update the kinematics
             p.updateKinematicsDynamics()
             if (p.time > startTrust):
@@ -604,6 +583,13 @@ def talker(p):
                 if p.firstTime:
                     p.firstTime = False
                     p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
+                    print("\n\n")
+                    print(colored("STARTING A NEW EPISODE---------------------------------------------------------",   "red"))
+                    print("Target position from agent:", p.target_CoM)
+                    print(f"Actor action:\n"
+                      f"T_th: {p.T_th}\n"
+                      f"com_f: {com_f}\n"
+                      f"comd_f: {comd_f}")
 
                 #compute joint reference
                 if   (p.time < startTrust + p.T_th):
@@ -680,22 +666,12 @@ def talker(p):
 
         #eval rewards
         p.evalTotalReward()
-        print(colored("STARTING A NEW EPISODE\n","red"))
         p.cost.reset()
+
 
     print("Shutting Down")
     ros.signal_shutdown("killed")
     p.deregister_node()
-
-    plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-    plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-    plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log,  p.qd_log, p.qd_des_log,  p.qdd_des_log, None, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-              joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-              joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plt.show(block=True)
-
 
 
 if __name__ == '__main__':
@@ -704,16 +680,17 @@ if __name__ == '__main__':
     try:
         talker(p)
     except ros.ROSInterruptException:
-        print("PLOTTING")
-        plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-        plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-        plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plt.show(block=True)
+        if conf.plotting:
+            print("PLOTTING")
+            plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+            plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+            plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plt.show(block=True)
 
 
         
