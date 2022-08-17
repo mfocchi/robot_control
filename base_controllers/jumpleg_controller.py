@@ -552,7 +552,7 @@ def talker(p):
     while True:
         p.time = 0.
         startTrust = 0.5
-        max_episode_time = 5.
+        max_episode_time = 1.5
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
