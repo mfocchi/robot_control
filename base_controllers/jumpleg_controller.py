@@ -445,6 +445,18 @@ class JumpLegController(BaseControllerFixed):
             cumsum_joint_range += self.computeActivationFunction('linear', self.q_des[3 + i], self.robot.model.lowerPositionLimit[3 + i], self.robot.model.upperPositionLimit[3+i])
             cumsum_joint_torque += self.computeActivationFunction('linear', self.tau_ffwd[3 + i], -self.robot.model.effortLimit[3 + i], self.robot.model.effortLimit[3 + i])
         self.cost.joint_range +=cumsum_joint_range
+        self.cost.joint_torques += cumsum_joint_torque
+
+        # debug
+        # for i in range(3):
+        #     if (self.q_des[3 + i] >= self.robot.model.upperPositionLimit[3+i]):
+        #         print(colored("upper end-stop limit hit in "+str(i)+"-th leg joint","red"))
+        #     if (self.q_des[3 + i] <= self.robot.model.lowerPositionLimit[3 + i]):
+        #         print(colored("lower end-stop limit hit in " + str(i) + "-th leg joint", "red"))
+        #     if (self.tau_ffwd[3 + i] >= self.robot.model.effortLimit[3 + i]):
+        #         print(colored("upper torque limit hit in " + str(i) + "-th leg joint", "red"))
+        #     if (self.tau_ffwd[3 + i] <= -self.robot.model.effortLimit[3 + i]):
+        #         print(colored("lower torque limit hit in " + str(i) + "-th leg joint", "red"))
 
         #friction constraints
         residual = np.linalg.norm(p.contactForceW[:2]) - p.mu*p.contactForceW[2]
