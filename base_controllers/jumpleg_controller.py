@@ -402,7 +402,7 @@ class JumpLegController(BaseControllerFixed):
 
     def detectTouchDown(self):
         foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
-        if (foot_pos_w[2] <= 0.025 ):
+        if (foot_pos_w[2] <= 0.017 ):
             print(colored("TOUCHDOWN detected","red"))
             return True
         else:
@@ -556,6 +556,7 @@ def talker(p):
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
+        p.trustPhaseFlag = False
         p.intermediate_com_position = []
 
         # TODO: extend the target on Z
@@ -601,9 +602,10 @@ def talker(p):
                       f"T_th: {p.T_th}\n"
                       f"com_f: {com_f}\n"
                       f"comd_f: {comd_f}")
+                    p.trustPhaseFlag = True
 
                 #compute joint reference
-                if   (p.time < startTrust + p.T_th):
+                if   (p.trustPhaseFlag):
                     t = p.time - startTrust
                     # for i in range(3):
                     #     # third order
@@ -617,14 +619,16 @@ def talker(p):
 
                     if p.evaluateCosts():
                         break
-                    # singluarity = p.evaluateCosts()
+                    if p.time > (startTrust + p.T_th):
+                        p.trustPhaseFlag = False
+                    #singluarity = p.evaluateCosts()
 
                 else:
                     # apex detection
                     p.detectApex()
                     if (p.detectedApexFlag):
                         if p.detectTouchDown():
-                           break
+                            break
 
                 # compute control action
                 if p.inverseDynamicsFlag: # TODO fix this
