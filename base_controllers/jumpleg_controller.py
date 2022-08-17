@@ -176,6 +176,10 @@ class JumpLegController(BaseControllerFixed):
 
         self.joint_names = conf.robot_params[self.robot_name]['joint_names']
 
+        self.x_reward = []
+        self.y_reward = []
+        self.episode_counter = 1
+
         if self.no_gazebo:
             self.q = conf.robot_params[self.robot_name]['q_0']
 
@@ -478,6 +482,8 @@ class JumpLegController(BaseControllerFixed):
                        self.cost.weights[4] * self.cost.joint_torques +
                        self.cost.weights[5]*self.cost.target)
         msg.next_state = np.concatenate((self.com, self.target_CoM))
+        self.x_reward = np.arange(0,self.episode_counter,1)
+        self.y_reward.append(msg.reward)
         self.reward_service(msg)
 
     def deregister_node(self):
@@ -536,6 +542,9 @@ def talker(p):
 
     # initial com posiiton
     com_0 = np.array([-0.01303,  0.00229,  0.25252])
+
+    plt.ion()
+    figure = plt.figure(figsize=(15, 10))
 
     # here the RL loop...
     while True:
@@ -671,6 +680,16 @@ def talker(p):
         #eval rewards
         p.evalTotalReward()
         p.cost.reset()
+        plt.cla()
+
+        plt.title("Jumpleg RL reward")
+        plt.xlabel("Epoch")
+        plt.ylabel("Reward")
+
+        plt.plot(p.x_reward, p.y_reward, color="orange")
+        figure.canvas.draw()
+        figure.canvas.flush_events()
+        p.episode_counter+=1
 
 
     print("Shutting Down")
