@@ -338,24 +338,24 @@ class JumpLegController(BaseControllerFixed):
         return poly_coeff
 
     def computeHeuristicSolutionBezier(self, com_0, com_f, comd_f):
-        self.weights= np.zeros([3,4])
-        self.weights_der = np.zeros([3, 3])
+        self.bezier_weights= np.zeros([3,4])
+        self.bezier_weights_der = np.zeros([3, 3])
         comd_0 = np.zeros(3)
-        self.weights[:, 0] = com_0
-        self.weights[:, 1] = comd_0 / 3. + com_0
-        self.weights[:, 2] = com_f - comd_f / 3.
-        self.weights[:, 3] = com_f
-        self.weights_der[:, 0] = 3 * (self.weights[:, 1] - self.weights[:, 0])
-        self.weights_der[:, 1] = 3 * (self.weights[:, 2] - self.weights[:, 1])
-        self.weights_der[:, 2] = 3 * (self.weights[:, 3] - self.weights[:, 2])
+        self.bezier_weights[:, 0] = com_0
+        self.bezier_weights[:, 1] = comd_0 / 3. + com_0
+        self.bezier_weights[:, 2] = com_f - comd_f / 3.
+        self.bezier_weights[:, 3] = com_f
+        self.bezier_weights_der[:, 0] = 3 * (self.bezier_weights[:, 1] - self.bezier_weights[:, 0])
+        self.bezier_weights_der[:, 1] = 3 * (self.bezier_weights[:, 2] - self.bezier_weights[:, 1])
+        self.bezier_weights_der[:, 2] = 3 * (self.bezier_weights[:, 3] - self.bezier_weights[:, 2])
         # print(com_0)
         # print(com_f)
         # print(comd_f)
         
     def evalBezier(self, t_, T_th):
         t = t_ /T_th
-        com = self.Bezier3(t, self.weights)
-        comd = self.Bezier2(t, self.weights_der)
+        com = self.Bezier3(t, self.bezier_weights)
+        comd = self.Bezier2(t, self.bezier_weights_der)
         q_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com,  conf.robot_params[p.robot_name]['ee_frame'],  p.q_des_q0[3:].copy(), verbose=False)
         # we need to recompute the jacobian  for the final joint position
         J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_leg)),   p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,   pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
@@ -379,11 +379,11 @@ class JumpLegController(BaseControllerFixed):
             self.intermediate_com_position.append(-self.robot.framePlacement(np.hstack((np.zeros(3), q_traj)), self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation)
 
     def plotTrajectoryBezier(self, T_th):
-        number_of_blobs = 10
-        t = np.linspace(0, T_th, number_of_blobs)
+        self.number_of_blobs = 10
+        t = np.linspace(0, T_th, self.number_of_blobs)
         self.intermediate_com_position = []
-        for blob in range(number_of_blobs):
-            self.intermediate_com_position.append(self.Bezier3(t[blob], self.weights))
+        for blob in range(self.number_of_blobs):
+            self.intermediate_com_position.append(self.Bezier3(t[blob]/T_th, self.bezier_weights))
 
     # 2 order bezier
     def Bezier2(self, t, weights):
@@ -643,7 +643,7 @@ def talker(p):
             # plot end-effector and contact force
             p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
             p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
-            p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, 0.1, color="blue")
+            p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, 0.05, color="blue")
             p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
             p.ros_pub.add_marker(com_f, color="red", radius=0.1)
@@ -651,7 +651,11 @@ def talker(p):
             p.ros_pub.add_arrow(com_f, comd_f, "red")
             # plot com intermediate positions
             for blob in range(len(p.intermediate_com_position)):
-                p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[blob*0.2, blob*0.2, blob*0.2], radius=0.02)
+                p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[blob*1./p.number_of_blobs, blob*1./p.number_of_blobs, blob*1./p.number_of_blobs], radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:,0], color=[0.,1.,0.],  radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:, 1], color=[0., 1., 0.], radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:, 2], color=[0., 1., 0.], radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[0., 1., 0.], radius=0.02)
 
             p.ros_pub.publishVisual()
 
