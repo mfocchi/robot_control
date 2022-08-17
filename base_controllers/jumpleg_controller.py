@@ -659,9 +659,11 @@ def talker(p):
             p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
             p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
             p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, 0.05, color="blue")
-            p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
+            #p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
+
             p.ros_pub.add_marker(com_f, color="red", radius=0.1)
+            #reachabe space
             #p.ros_pub.add_marker([0,0,0], color="green", radius=0.8)
             p.ros_pub.add_arrow(com_f, comd_f, "red")
             # plot com intermediate positions
