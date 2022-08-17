@@ -454,10 +454,12 @@ class JumpLegController(BaseControllerFixed):
         self.cost.unilateral += self.computeActivationFunction('linear', p.contactForceW[2], 0.0, np.inf)
 
         # singularity
-        #if (np.linalg.norm(self.com) >= 0.4):
-        smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
-        if smallest_svalue <= 0.035:
-            self.cost.singularity = 1./(1e-05 + smallest_svalue)
+        # the lower singular value is also achieved when the leg squats which is not what we want
+        #smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
+        #if smallest_svalue <= 0.035:
+        if  np.linalg.norm(self.x_ee) > 0.32:
+            #self.cost.singularity = 1./(1e-05 + smallest_svalue)
+            self.cost.singularity = 100
             singularity = True
             print(colored("Getting singular configuration", "red"))
         return singularity
@@ -496,17 +498,13 @@ class JumpLegController(BaseControllerFixed):
         model_state.pose.position.x = target[0]
         model_state.pose.position.y = target[1]
         model_state.pose.position.z = target[2]-0.25
-
         model_state.pose.orientation.w = 1.0
         model_state.pose.orientation.x = 0.0
         model_state.pose.orientation.y = 0.0
         model_state.pose.orientation.z = 0.0
-
         set_platform_position.model_state = model_state
         # send request and get response (in this case none)
         self.set_state(set_platform_position)
-
-
 
 def talker(p):
 
