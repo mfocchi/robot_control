@@ -463,7 +463,8 @@ class JumpLegController(BaseControllerFixed):
         self.cost.friction += self.computeActivationFunction('linear', residual, -np.inf, 0.0)
 
         # unilateral constraints
-        self.cost.unilateral += self.computeActivationFunction('linear', p.contactForceW[2], 0.0, np.inf)
+        min_uloading_force = 2.
+        self.cost.unilateral += self.computeActivationFunction('linear', p.contactForceW[2], min_uloading_force, np.inf)
 
         # singularity
         # the lower singular value is also achieved when the leg squats which is not what we want
