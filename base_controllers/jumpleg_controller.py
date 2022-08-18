@@ -206,7 +206,9 @@ class JumpLegController(BaseControllerFixed):
 
         req_reset_joints.joint_positions = self.q_des_q0
         # send request and get response (in this case none)
-        return self.reset_joints(req_reset_joints)
+        for i in range(10):
+            self.reset_joints(req_reset_joints)
+        return True
 
     def freezeBase(self, flag):
         if not self.no_gazebo:
