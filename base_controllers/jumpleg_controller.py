@@ -47,14 +47,17 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
+        self.error_vel_liftoff = 0
         self.target = 0
-        self.weights = np.array([0., 0., 0., 0., 0., 0.])
+
+        self.weights = np.array([0., 0., 0., 0., 0., 0., 0.])
     def reset(self):
         self.unilateral = 0
         self.friction = 0
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
+        self.error_vel_liftoff = 0
         self.target = 0
     def printCosts(self):
         return f"unil:{self.unilateral}  " \
@@ -62,6 +65,7 @@ class Cost():
                f"sing: {self.singularity} " \
                f"jointkin:{self.joint_range} " \
                f"torques:{self.joint_torques} " \
+               f"error_vel_liftoff:{self.error_vel_liftoff} " \
                f"target:{self.target}"
 
     def printWeightedCosts(self):
@@ -70,7 +74,8 @@ class Cost():
                f"sing: {self.weights[2]*self.singularity} " \
                f"jointkin:{self.weights[3]*self.joint_range} " \
                f"torques:{self.weights[4]*self.joint_torques} " \
-               f"target:{self.weights[5]*self.target}"
+               f"error_vel_liftoff:{self.weights[5]*self.error_vel_liftoff} " \
+               f"target:{self.weights[6]*self.target}"
 
 class JumpLegController(BaseControllerFixed):
     
@@ -161,7 +166,7 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.cost = Cost()
-        self.cost.weights = np.array([10., 100., 1000., 10., 10., 10000.]) #unil  friction sing jointrange torques target
+        self.cost.weights = np.array([1000., 100., 1000., 100., 100., 1., 10.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -300,7 +305,7 @@ class JumpLegController(BaseControllerFixed):
         #foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.017 )
         if not self.detectedApexFlag and foot_lifted_off:
-            if (self.qd[2] <= 0.0):
+            if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
                 print(colored("APEX detected", "red"))
                 self.q_des[3:] = self.q_des_q0[3:]
@@ -444,7 +449,7 @@ class JumpLegController(BaseControllerFixed):
         if (activationType == 'quadratic'):
             return pow( min(value - lower, 0) ,2)/2.0 + pow(max(value-upper, 0), 2)/2.0
 
-    def evaluateCosts(self):
+    def evaluateRunningCosts(self):
 
         singularity = False
         cumsum_joint_range = 0
@@ -487,10 +492,13 @@ class JumpLegController(BaseControllerFixed):
             print(colored("Getting singular configuration", "red"))
         return singularity
 
-    def evalTotalReward(self):
+    def evalTotalReward(self, comd_f):
         colored("Evaluating costs", "blue")
-        # target
+        # evaluate final target cost
         self.cost.target = np.linalg.norm(self.com - self.target_CoM)
+        # evaluate final com velocity error at lift off cost
+        self.cost.error_vel_liftoff = np.linalg.norm(self.comd_lo - comd_f)
+
         msg = set_rewardRequest()
         print(colored("Costs: " + self.cost.printCosts(), "green"))
         print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
@@ -501,7 +509,8 @@ class JumpLegController(BaseControllerFixed):
                        self.cost.weights[2] * self.cost.singularity +
                        self.cost.weights[3]*self.cost.joint_range +
                        self.cost.weights[4] * self.cost.joint_torques +
-                       self.cost.weights[5]*self.cost.target)
+                       self.cost.weights[5] * self.cost.error_vel_liftoff +
+                       self.cost.weights[6] * self.cost.target)
         msg.next_state = np.concatenate((self.com, self.target_CoM))
         self.x_reward = np.arange(0,self.episode_counter,1)
         self.y_reward.append(msg.reward)
@@ -566,13 +575,14 @@ def talker(p):
     # here the RL loop...
     while True:
         p.time = 0.
-        startTrust = 0.5
+        startTrust = 0.2
         max_episode_time = 1.5
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
         p.trustPhaseFlag = False
         p.intermediate_com_position = []
+        p.comd_lo = np.zeros(3)
 
         # TODO: extend the target on Z
         p.target_CoM = (p.target_service()).target_CoM
@@ -632,11 +642,13 @@ def talker(p):
                     #     p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
                     p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] =  p.evalBezier(t, p.T_th)
 
-                    if p.evaluateCosts():
+                    if p.evaluateRunningCosts():
                         break
                     if p.time > (startTrust + p.T_th):
                         p.trustPhaseFlag = False
-                    #singluarity = p.evaluateCosts()
+                        #sample actual com velocity
+                        p.comd_lo = np.copy(p.comd)
+                    #singluarity = p.evaluateRunningCosts()
 
                 else:
                     # apex detection
@@ -689,6 +701,9 @@ def talker(p):
             p.ros_pub.add_marker(p.bezier_weights[:, 2], color=[0., 1., 0.], radius=0.02)
             p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[0., 1., 0.], radius=0.02)
 
+            if (not p.trustPhaseFlag):
+                p.ros_pub.add_arrow(com_f, p.comd_lo, "green")
+
             p.ros_pub.publishVisual()
 
             #wait for synconization of the control loop
@@ -701,7 +716,7 @@ def talker(p):
                 break
 
         #eval rewards
-        p.evalTotalReward()
+        p.evalTotalReward(comd_f)
         p.cost.reset()
         plt.cla()
 
