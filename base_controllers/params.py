@@ -48,7 +48,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'spawn_z' : 1.8,
                        'buffer_size': 6000} # note the frames are all aligned with base for joints = 0
 
-robot_params['jumpleg'] ={'dt': 0.001,
+robot_params['jumpleg'] ={'dt': 0.002,
                        'kp': np.array([100, 100, 100, 10, 10, 10 ]),
                        'kd':  np.array([10,10,10, 0.2,0.2,0.2]),
                        'q_0':  np.array([ 0.0, 0.0, 0.25, -0.24010055475883635,0.7092776153747403,-1.4185292429491714]),
