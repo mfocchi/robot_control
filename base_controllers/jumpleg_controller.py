@@ -708,7 +708,7 @@ def talker(p):
         plt.title("Jumpleg RL reward")
         plt.xlabel("Epoch")
         plt.ylabel("Reward")
-
+        plt.yscale("symlog") #allow to deal with negative numbers
         plt.plot(p.x_reward, p.y_reward, color="orange")
         figure.canvas.draw()
         figure.canvas.flush_events()
