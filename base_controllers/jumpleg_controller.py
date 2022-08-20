@@ -166,7 +166,7 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.cost = Cost()
-        self.cost.weights = np.array([1000., 100., 1000., 100., 100., 1., 10.]) #unil  friction sing jointrange torques target
+        self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 100.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -529,7 +529,7 @@ class JumpLegController(BaseControllerFixed):
         # create model state
         model_state = ModelState()
         model_state.model_name = 'jump_platform'
-        model_state.pose.position.x = target[0]
+        model_state.pose.position.x = -1+target[0]
         model_state.pose.position.y = target[1]
         model_state.pose.position.z = target[2]-0.25
         model_state.pose.orientation.w = 1.0
@@ -691,7 +691,7 @@ def talker(p):
 
             p.ros_pub.add_marker(com_f, color="red", radius=0.1)
             #reachabe space
-            #p.ros_pub.add_marker([0,0,0], color="green", radius=0.8)
+            p.ros_pub.add_marker([0,0,0], color="green", radius=0.64)
             p.ros_pub.add_arrow(com_f, comd_f, "red")
             # plot com intermediate positions
             for blob in range(len(p.intermediate_com_position)):
