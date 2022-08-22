@@ -166,7 +166,7 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.cost = Cost()
-        self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 100.]) #unil  friction sing jointrange torques target
+        self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.]) #unil  friction sing jointrange torques target
         self.mu = 0.8
 
         self.qdd_des =  np.zeros(self.robot.na)
@@ -496,6 +496,8 @@ class JumpLegController(BaseControllerFixed):
         colored("Evaluating costs", "blue")
         # evaluate final target cost
         self.cost.target = np.linalg.norm(self.com - self.target_CoM)
+        target_cost = 1/((50*self.cost.target) + 1e-15)
+        target_cost = np.log(1+target_cost)*1000
         # evaluate final com velocity error at lift off cost
         self.cost.error_vel_liftoff = np.linalg.norm(self.comd_lo - comd_f)
 
@@ -504,13 +506,13 @@ class JumpLegController(BaseControllerFixed):
         print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
 
         #unil  friction sing jointrange torques target
-        msg.reward = -(self.cost.weights[0]*self.cost.unilateral +
+        msg.reward = self.cost.weights[6] * target_cost\
+                     -(self.cost.weights[0]*self.cost.unilateral +
                        self.cost.weights[1]*self.cost.friction   +
                        self.cost.weights[2] * self.cost.singularity +
                        self.cost.weights[3]*self.cost.joint_range +
                        self.cost.weights[4] * self.cost.joint_torques +
-                       self.cost.weights[5] * self.cost.error_vel_liftoff +
-                       self.cost.weights[6] * self.cost.target)
+                       self.cost.weights[5] * self.cost.error_vel_liftoff)
         msg.next_state = np.concatenate((self.com, self.target_CoM))
         self.x_reward = np.arange(0,self.episode_counter,1)
         self.y_reward.append(msg.reward)
@@ -529,7 +531,7 @@ class JumpLegController(BaseControllerFixed):
         # create model state
         model_state = ModelState()
         model_state.model_name = 'jump_platform'
-        model_state.pose.position.x = -1+target[0]
+        model_state.pose.position.x = -0.95+target[0]
         model_state.pose.position.y = target[1]
         model_state.pose.position.z = target[2]-0.25
         model_state.pose.orientation.w = 1.0
