@@ -307,6 +307,7 @@ class JumpLegController(BaseControllerFixed):
         if not self.detectedApexFlag and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
+                p.contactForceW = np.zeros(3)
                 print(colored("APEX detected", "red"))
                 self.q_des[3:] = self.q_des_q0[3:]
 
@@ -416,8 +417,11 @@ class JumpLegController(BaseControllerFixed):
         return weights[:, 0] * mt3 + 3 * weights[:, 1] * mt2 * t + 3 * weights[:, 2] * mt * t2 + weights[:, 3] * t3
 
     def detectTouchDown(self):
-        foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
-        if (foot_pos_w[2] <= 0.017 ):
+        # foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
+        # if (foot_pos_w[2] <= 0.017 ):
+        # print(p.contactForceW)
+        contact_force = np.linalg.norm(p.contactForceW)
+        if contact_force > 0:
             print(colored("TOUCHDOWN detected","red"))
             return True
         else:
@@ -478,7 +482,7 @@ class JumpLegController(BaseControllerFixed):
         self.cost.friction += self.computeActivationFunction('linear', residual, -np.inf, 0.0)
 
         # unilateral constraints
-        min_uloading_force = 1.
+        min_uloading_force = 0.
         self.cost.unilateral += self.computeActivationFunction('linear', p.contactForceW[2], min_uloading_force, np.inf)
 
         # singularity
