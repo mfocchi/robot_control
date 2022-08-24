@@ -23,6 +23,7 @@ from gazebo_msgs.srv import SetModelConfigurationRequest
 from std_srvs.srv    import Empty, EmptyRequest
 import roslaunch
 from geometry_msgs.msg import Wrench, Point
+from gazebo_msgs.msg import ContactsState
 
 import  params as conf
 robotName = "climbingrobot"
@@ -57,6 +58,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
         self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.broadcaster = tf.TransformBroadcaster()
+        self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
+                                             callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
+                                             tcp_nodelay=True)
 
     def rot2phi_theta(self, R):
         # this rotation is obtrained rotating phi about Z and theta about -Y axis as in Luigis convention
@@ -102,13 +106,14 @@ class ClimbingrobotController(BaseControllerFixed):
         # from ground truth
         self.com = self.base_pos + robotComB
 
-        #compute contact forces TODO
-        #self.estimateContactForces()
-
         self.broadcaster.sendTransform(np.array([conf.robot_params[self.robot_name]['spawn_x'] -self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0]), (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
 
-    def estimateContactForces(self):
-        self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
+    def _receive_contact(self, msg):
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] = msg.states[0].wrenches[0].force.y
+        grf[2] = msg.states[0].wrenches[0].force.z
+        self.contactForceW = self.robot.framePlacement(self.q,  self.robot.model.getFrameId("lower_link")).rotation.dot(grf)
 
     def initVars(self):
         super().initVars()
@@ -284,6 +289,7 @@ def talker(p):
         if (p.jumpNumber == p.numberOfJumps):
             p.ros_pub.add_marker(p.x_ee, color="green", radius=0.15)
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
+        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "blue")
         p.ros_pub.publishVisual()
 
         # wait for synconization of the control loop

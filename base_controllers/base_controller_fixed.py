@@ -126,7 +126,9 @@ class BaseControllerFixed(threading.Thread):
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
 
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
-                                         callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+                                         callback=self._receive_jstate, queue_size=1,buff_size = 2 ** 24, tcp_nodelay=True)
+
+
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
         if (self.use_torque_control):
