@@ -137,7 +137,7 @@ class BaseController(threading.Thread):
                                                  callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
             self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,
-                                                 callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 2,
+                                                 callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
             self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
                                                  callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
