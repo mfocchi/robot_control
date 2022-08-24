@@ -186,8 +186,8 @@ class ClimbingrobotController(BaseControllerFixed):
         process = self.launch.launch(node)
 
     def startupProcedure(self):
-
-        p.spawnMountain()
+        if not self.EXTERNAL_FORCE:
+            p.spawnMountain()
         p.resetBase()
         super().startupProcedure()
 
@@ -210,8 +210,8 @@ class ClimbingrobotController(BaseControllerFixed):
 def talker(p):
 
     p.start()
-    #p.startSimulator("slow.world")
-    p.startSimulator()
+    p.startSimulator("slow.world")
+    #p.startSimulator()
     p.loadModelAndPublishers()
     p.startupProcedure()
 
@@ -226,9 +226,11 @@ def talker(p):
     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
-    p.startJump = 10.5
-    p.targetPos = np.array([0,3,-8])
-    p.jumps = [{"Fun": 115.9, "Fut": 170, "K_rope":  15.43, "Tf": 0.9}]
+    p.startJump = 0.
+    p.targetPos = np.array([0,2.,-8.])
+
+
+    p.jumps = [{"Fun": 50., "Fut": 50.0, "K_rope":  12, "Tf": 1.1}]
                #{"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93}]
     p.numberOfJumps = len(p.jumps)
     p.thrustDuration = 0.1
@@ -248,11 +250,11 @@ def talker(p):
             if (p.EXTERNAL_FORCE):
                     print(colored("Start applying force", "red"))
                     p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.thrustDuration)
-                    p.stateMachine = 'flying'
+                    p.stateMachine = 'thrusting'
                     p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
-                    print(colored("Start Flying", "blue"))
+                    print(colored("Start Thrusting with EXT FORCE", "blue"))
             else:
-                p.q_des[7] = math.atan2(20, 100)
+                p.q_des[7] = math.atan2(p.jumps[p.jumpNumber]["Fut"], p.jumps[p.jumpNumber]["Fun"])
                 print(colored(f"Start orienting leg to  : {p.q_des[7]}", "blue"))
                 p.stateMachine = 'orienting_leg'
 
@@ -271,12 +273,17 @@ def talker(p):
 
 
         if (p.stateMachine == 'thrusting'):
-            p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
-            p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
-            #p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
-            p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
+            if (p.EXTERNAL_FORCE):
+                end_thrusting = p.startJump + p.thrustDuration
+                p.ros_pub.add_arrow(p.base_pos, np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0.]) / 10., "red")
+            else:
+                end_thrusting = p.startJump + p.orientTime + p.thrustDuration
+                p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
+                p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
+                #p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+                p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
 
-            if (p.time > (p.startJump +  p.orientTime + p.thrustDuration)):
+            if (p.time > end_thrusting):
                 print(colored("Stop Trhusting", "blue"))
                 p.stateMachine = 'flying'
                 print(colored(f"RESTORING LEG PD", "red"))
@@ -289,7 +296,11 @@ def talker(p):
 
         if (p.stateMachine == 'flying'):
             # keep extending rope
-            p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            Fr = -p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            p.tau_ffwd[p.rope_index] = Fr
+
+            rope_direction =  (p.base_pos - p.anchor_pos)/np.linalg.norm(p.base_pos - p.anchor_pos)
+            p.ros_pub.add_arrow( p.base_pos, rope_direction*Fr/50., "red", scale=2.5)
             if (p.EXTERNAL_FORCE):
                 end_flying = p.startJump  + p.thrustDuration +  p.jumps[p.jumpNumber]["Tf"]
             else:
@@ -300,15 +311,24 @@ def talker(p):
                 p.stateMachine = 'idle'
                 print(colored(f"RESTORING ROPE PD", "red"))
                 # enable PD for rope and reset the PD reference to the new estension
+                # sample the new elongation
+                p.q_des[p.rope_index] = np.copy(p.q[p.rope_index])
+                p.l_0 = np.copy(p.l)
+                p.tau_ffwd[p.rope_index] = 0
                 p.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'][p.rope_index], conf.robot_params[p.robot_name]['kd'][p.rope_index], 0.)
-                p.q_des[p.rope_index] = p.q[p.rope_index]
+
                 p.jumpNumber += 1
                 p.startJump = p.time
+                #p.pause_physics_client()
+
 
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+
         # log variables
-        p.logData()
+        if (p.time > p.startJump):
+            p.logData()
+
 
 
 
