@@ -124,7 +124,7 @@ class RosPub():
        self.id += 1                                        
        self.markerArray.markers.append(marker)
                             
-    def add_arrow(self, start, vector, color = "green"):
+    def add_arrow(self, start, vector, color = "green", scale = 1.):
        marker = Marker()
        if (color == "green"):
            marker.color.r = 0.0
@@ -144,9 +144,9 @@ class RosPub():
        marker.action = marker.ADD
        marker.points.append(Point(start[0], start[1], start[2]))
        marker.points.append(Point(start[0] + vector[0], start[1] + vector[1], start[2] + vector[2]))
-       marker.scale.x = 0.02
-       marker.scale.y = 0.04
-       marker.scale.z = 0.02
+       marker.scale.x = 0.02*scale
+       marker.scale.y = 0.04*scale
+       marker.scale.z = 0.02*scale
        marker.color.a = 1.0
        marker.lifetime = ros.Duration(0.0)
        marker.pose.orientation.x = 0.
