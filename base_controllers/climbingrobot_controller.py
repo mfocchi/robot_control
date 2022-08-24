@@ -112,6 +112,7 @@ class ClimbingrobotController(BaseControllerFixed):
         w_R_wire = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire')).rotation
         self.theta, self.phi =  self.rot2phi_theta(w_R_wire)
         self.l = self.q[p.rope_index]
+        self.ldot = self.qd[p.rope_index]
 
         # compute com variables accordint to a frame located at the foot
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
@@ -136,6 +137,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
 
         self.simp_model_state_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.ldot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
@@ -144,6 +146,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
                 self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
+                self.ldot_log[self.log_counter] = self.ldot
                 self.base_pos_log[:, self.log_counter] = self.base_pos
                 pass
             super().logData()
@@ -188,6 +191,21 @@ class ClimbingrobotController(BaseControllerFixed):
         p.resetBase()
         super().startupProcedure()
 
+    def plotStuff(self):
+        print("PLOTTING")
+        # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+        # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+        # import scipy.io.matlab as mio
+        # mat = mio.loadmat('log_daniele.mat')
+        # mat['time'], mat['theta']
+        # self.traj_duration = self.q_ref.shape[0]
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, None, None, None, None, None, None,
+                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plot3D('states', 1, p.time_log, p.simp_model_state_log, ['theta', 'phi', 'l'])
+        plot3D('basePos', 2, p.time_log, p.base_pos_log, ['X', 'Y', 'Z'])
+        fig = plt.figure(3)
+        plt.plot(p.time_log, p.ldot_log)
+        plt.show(block=True)
 
 def talker(p):
 
@@ -318,6 +336,7 @@ def talker(p):
     print("Shutting Down")
     ros.signal_shutdown("killed")
     p.deregister_node()
+    p.plotStuff()
 
 
 def plot3D(name, figure_id, time_log, state, label):
@@ -342,13 +361,7 @@ if __name__ == '__main__':
     try:
         talker(p)
     except ros.ROSInterruptException:
-        print("PLOTTING")
-        # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-        # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,  None, None, None,  None, None, None, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plot3D('states', 1, p.time_log, p.simp_model_state_log, ['theta','phi','l'])
-        plot3D('basePos', 2, p.time_log, p.base_pos_log, ['X','Y','Z'])
-        plt.show(block=True)
+        p.plotStuff()
         pass
 
 
