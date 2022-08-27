@@ -518,6 +518,8 @@ class JumpLegController(BaseControllerFixed):
                        self.cost.weights[4] * self.cost.joint_torques +
                        self.cost.weights[5] * self.cost.error_vel_liftoff)
         msg.next_state = np.concatenate((self.com, self.target_CoM))
+        if (msg.reward<0):
+            msg.reward = 0
         self.x_reward = np.arange(0,self.episode_counter,1)
         self.y_reward.append(msg.reward)
         self.reward_service(msg)
@@ -729,7 +731,7 @@ def talker(p):
         plt.title("Jumpleg RL reward")
         plt.xlabel("Epoch")
         plt.ylabel("Reward")
-        plt.yscale("symlog") #allow to deal with negative numbers
+        # plt.yscale("symlog") #allow to deal with negative numbers
         plt.plot(p.x_reward, p.y_reward, color="orange")
         figure.canvas.draw()
         figure.canvas.flush_events()
