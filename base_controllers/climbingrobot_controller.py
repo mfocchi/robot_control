@@ -24,6 +24,8 @@ from std_srvs.srv    import Empty, EmptyRequest
 import roslaunch
 from geometry_msgs.msg import Wrench, Point
 from gazebo_msgs.msg import ContactsState
+import scipy.io.matlab as mio
+
 
 import  params as conf
 robotName = "climbingrobot"
@@ -33,6 +35,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
         self.EXTERNAL_FORCE = True
+        self.LOAD_MATLAB_TRAJ = True
         self.rope_index = 2
         self.leg_index = np.array([7,8])
         self.base_passive_joints = np.array([3,4,5])
@@ -168,7 +171,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         req_reset_joints.joint_positions = conf.robot_params[self.robot_name]['q_0'].tolist()
         # recompute the theta angle to have the anchor attached to the wall
-        req_reset_joints.joint_positions[0] = math.atan2( 1.35, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
+        req_reset_joints.joint_positions[0] = math.atan2( 0.38, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
 
         # send request and get response (in this case none)
         self.reset_joints(req_reset_joints)
@@ -188,23 +191,24 @@ class ClimbingrobotController(BaseControllerFixed):
     def startupProcedure(self):
         if not self.EXTERNAL_FORCE:
             p.spawnMountain()
-        p.resetBase()
+
         super().startupProcedure()
 
     def plotStuff(self):
         print("PLOTTING")
         # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
         # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-        # import scipy.io.matlab as mio
-        # mat = mio.loadmat('log_daniele.mat')
-        # mat['time'], mat['theta']
-        # self.traj_duration = self.q_ref.shape[0]
-        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, None, None, None, None, None, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plot3D('states', 1, p.time_log, p.simp_model_state_log, ['theta', 'phi', 'l'])
-        plot3D('basePos', 2, p.time_log, p.base_pos_log, ['X', 'Y', 'Z'])
-        fig = plt.figure(3)
-        plt.plot(p.time_log, p.ldot_log)
+
+        # plotJoint('joint position', 0, p.time_log, p.q_log, p.q_des_log, None, None, None, None, None, None,
+        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        #plot3D('states', 1,  ['theta', 'phi', 'l'], p.time_log - p.startJump, p.simp_model_state_log)
+        traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame
+        time_gazebo = p.time_log - p.startJump
+        plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
+        plt.legend('matlab, sim')
+        mio.savemat('test_gazebo.mat', {'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
+
+
         plt.show(block=True)
 
 def talker(p):
@@ -214,26 +218,30 @@ def talker(p):
     #p.startSimulator()
     p.loadModelAndPublishers()
     p.startupProcedure()
-
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
-
     p.updateKinematicsDynamics()
-
     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
-    p.startJump = 0.
-    p.targetPos = np.array([0,2.,-8.])
+    p.startJump = 0.5
 
-
-    p.jumps = [{"Fun": 50., "Fut": 50.0, "K_rope":  12, "Tf": 1.1}]
-               #{"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93}]
+    p.targetPos = np.array([0, 5., -8.])
+    p.jumps = [{"Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
+    # {"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93}]
     p.numberOfJumps = len(p.jumps)
-    p.thrustDuration = 0.1
+    p.thrustDuration = 0.05
+
+    #override with matlab stuff
+    if p.LOAD_MATLAB_TRAJ:
+        p.matvars = mio.loadmat('test_michele.mat', squeeze_me=True,struct_as_record=False)
+        p.jumps = [{"Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut, "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
+        p.targetPos = p.matvars['pf']
+        p.thrustDuration  = p.matvars['T_th']
+
     p.orientTime = 2.0
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
@@ -244,8 +252,9 @@ def talker(p):
         p.updateKinematicsDynamics()
 
         #multiple jumps state machine
-        if ( p.stateMachine == 'idle') and (p.time > p.startJump) and (p.jumpNumber<p.numberOfJumps):
+        if ( p.stateMachine == 'idle') and (p.time >= p.startJump) and (p.jumpNumber<p.numberOfJumps):
             print(colored("-------------------------------", "blue"))
+            p.resetBase()
             p.l_0 = p.l
             if (p.EXTERNAL_FORCE):
                     print(colored("Start applying force", "red"))
@@ -259,7 +268,6 @@ def talker(p):
                 p.stateMachine = 'orienting_leg'
 
         if (p.stateMachine == 'orienting_leg') and (p.time > (p.startJump + p.orientTime)):
-
             print(colored(f"Start trusting Jump number : {p.jumpNumber}" , "blue"))
             p.tau_ffwd = np.zeros(p.robot.na)
             p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
@@ -275,7 +283,7 @@ def talker(p):
         if (p.stateMachine == 'thrusting'):
             if (p.EXTERNAL_FORCE):
                 end_thrusting = p.startJump + p.thrustDuration
-                p.ros_pub.add_arrow(p.base_pos, np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0.]) / 10., "red")
+                p.ros_pub.add_arrow(p.base_pos, np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0.]) / 100., "red", scale= 3.)
             else:
                 end_thrusting = p.startJump + p.orientTime + p.thrustDuration
                 p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
@@ -283,7 +291,7 @@ def talker(p):
                 #p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
                 p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
 
-            if (p.time > end_thrusting):
+            if (p.time >= end_thrusting):
                 print(colored("Stop Trhusting", "blue"))
                 p.stateMachine = 'flying'
                 print(colored(f"RESTORING LEG PD", "red"))
@@ -296,16 +304,26 @@ def talker(p):
 
         if (p.stateMachine == 'flying'):
             # keep extending rope
-            Fr = -p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
+            if p.LOAD_MATLAB_TRAJ:
+                try:
+                    # get index
+                    a_bool = p.matvars['solution'].time > (p.time - end_thrusting)
+                    force_index = min([i for (i, val) in enumerate(a_bool) if val])
+                except:
+                    force_index = -1
+                Fr = p.matvars['solution'].Fr[force_index]
+            else:
+                Fr = -p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             p.tau_ffwd[p.rope_index] = Fr
 
             rope_direction =  (p.base_pos - p.anchor_pos)/np.linalg.norm(p.base_pos - p.anchor_pos)
-            p.ros_pub.add_arrow( p.base_pos, rope_direction*Fr/50., "red", scale=2.5)
+            p.ros_pub.add_arrow( p.base_pos, rope_direction*Fr/100., "red", scale=2.5)
             if (p.EXTERNAL_FORCE):
                 end_flying = p.startJump  + p.thrustDuration +  p.jumps[p.jumpNumber]["Tf"]
             else:
                 end_flying = p.startJump + p.orientTime + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"]
-            if (p.time >end_flying):
+
+            if (p.time >= end_flying):
                 print(colored("Stop Flying", "blue"))
                 # reset the qdes
                 p.stateMachine = 'idle'
@@ -316,11 +334,11 @@ def talker(p):
                 p.l_0 = np.copy(p.l)
                 p.tau_ffwd[p.rope_index] = 0
                 p.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'][p.rope_index], conf.robot_params[p.robot_name]['kd'][p.rope_index], 0.)
-
                 p.jumpNumber += 1
-                p.startJump = p.time
+                # TODO for multiple jumps
+                #p.startJump = p.time
                 #p.pause_physics_client()
-
+                break
 
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -328,10 +346,6 @@ def talker(p):
         # log variables
         if (p.time > p.startJump):
             p.logData()
-
-
-
-
 
         # plot  rope bw base link and anchor
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green")
@@ -359,20 +373,29 @@ def talker(p):
     p.plotStuff()
 
 
-def plot3D(name, figure_id, time_log, state, label):
+def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
     fig = plt.figure(figure_id)
     fig.suptitle(name, fontsize=20)
+
     plt.subplot(3,1,1)
     plt.ylabel(label[0])
-    plt.plot(time_log, state[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.plot(time_log, var[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    if (var_mat is not None):
+        plt.plot(time_mat, var_mat[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
+
     plt.subplot(3,1,2)
     plt.ylabel(label[1])
-    plt.plot(time_log, state[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.plot(time_log, var[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    if (var_mat is not None):
+        plt.plot(time_mat, var_mat[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
+
     plt.subplot(3,1,3)
     plt.ylabel(label[2])
-    plt.plot(time_log, state[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.plot(time_log, var[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    if (var_mat is not None):
+        plt.plot(time_mat, var_mat[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
 
 if __name__ == '__main__':

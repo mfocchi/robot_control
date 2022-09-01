@@ -59,7 +59,7 @@ robot_params['jumpleg'] ={'dt': 0.001,
                        'spawn_z' : 0.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
-robot_params['climbingrobot'] ={'dt': 0.002,
+robot_params['climbingrobot'] ={'dt': 0.001,
                        'kp': np.array([0 ,    0,    400,  100,    50,   50,    50, 30, 30]),
                        'kd':  np.array([0,    0,    10,   10,     10,   10,     4,   4, 4  ]),
 
@@ -74,6 +74,6 @@ robot_params['climbingrobot'] ={'dt': 0.002,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
                          
 verbose = False
-plotting = False
+plotting = True
 
 
