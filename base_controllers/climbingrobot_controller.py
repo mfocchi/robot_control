@@ -34,7 +34,7 @@ class ClimbingrobotController(BaseControllerFixed):
     
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
-        self.EXTERNAL_FORCE = True
+        self.EXTERNAL_FORCE = False
         self.LOAD_MATLAB_TRAJ = True
         self.rope_index = 2
         self.leg_index = np.array([7,8])
@@ -154,8 +154,6 @@ class ClimbingrobotController(BaseControllerFixed):
                 pass
             super().logData()
 
-
-
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill -a")
@@ -190,7 +188,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def startupProcedure(self):
         if not self.EXTERNAL_FORCE:
-            p.spawnMountain()
+            p.resetBase()
+            p.spawnMountain() # I cannot apply body wrench if I spawn the mountain
 
         super().startupProcedure()
 
@@ -203,10 +202,9 @@ class ClimbingrobotController(BaseControllerFixed):
         #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
         #plot3D('states', 1,  ['theta', 'phi', 'l'], p.time_log - p.startJump, p.simp_model_state_log)
         traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame
-        time_gazebo = p.time_log - p.startJump
+        time_gazebo = p.time_log - p.end_thrusting
         plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
-        plt.legend('matlab, sim')
-        mio.savemat('test_gazebo.mat', {'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
+        mio.savemat('test_gazebo.mat', {'sol_optim': p.matvars['solution'], 'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
 
 
         plt.show(block=True)
@@ -227,24 +225,23 @@ def talker(p):
     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
-    p.startJump = 0.5
+    p.startJump = 1.5
 
-    p.targetPos = np.array([0, 5., -8.])
-    p.jumps = [{"Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
-    # {"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93}]
-    p.numberOfJumps = len(p.jumps)
-    p.thrustDuration = 0.05
+    # p.targetPos = np.array([0, 5., -8.])
+    # p.jumps = [{"Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
+    # # {"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93}]
+    # p.thrustDuration = 0.05
 
     #override with matlab stuff
-    if p.LOAD_MATLAB_TRAJ:
-        p.matvars = mio.loadmat('test_michele.mat', squeeze_me=True,struct_as_record=False)
-        p.jumps = [{"Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut, "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
-        p.targetPos = p.matvars['pf']
-        p.thrustDuration  = p.matvars['T_th']
+    p.matvars = mio.loadmat('test_optim.mat', squeeze_me=True,struct_as_record=False)
+    p.jumps = [{"Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut, "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
+    p.targetPos = p.matvars['pf']
+    p.thrustDuration  = p.matvars['T_th']
 
     p.orientTime = 2.0
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
+    p.numberOfJumps = len(p.jumps)
 
     while True:
 
@@ -254,9 +251,9 @@ def talker(p):
         #multiple jumps state machine
         if ( p.stateMachine == 'idle') and (p.time >= p.startJump) and (p.jumpNumber<p.numberOfJumps):
             print(colored("-------------------------------", "blue"))
-            p.resetBase()
             p.l_0 = p.l
             if (p.EXTERNAL_FORCE):
+                    p.resetBase()
                     print(colored("Start applying force", "red"))
                     p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.thrustDuration)
                     p.stateMachine = 'thrusting'
@@ -282,16 +279,16 @@ def talker(p):
 
         if (p.stateMachine == 'thrusting'):
             if (p.EXTERNAL_FORCE):
-                end_thrusting = p.startJump + p.thrustDuration
+                p.end_thrusting = p.startJump + p.thrustDuration
                 p.ros_pub.add_arrow(p.base_pos, np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0.]) / 100., "red", scale= 3.)
             else:
-                end_thrusting = p.startJump + p.orientTime + p.thrustDuration
+                p.end_thrusting = p.startJump + p.orientTime + p.thrustDuration
                 p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
                 p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
                 #p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
                 p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
 
-            if (p.time >= end_thrusting):
+            if (p.time >= p.end_thrusting):
                 print(colored("Stop Trhusting", "blue"))
                 p.stateMachine = 'flying'
                 print(colored(f"RESTORING LEG PD", "red"))
@@ -307,7 +304,7 @@ def talker(p):
             if p.LOAD_MATLAB_TRAJ:
                 try:
                     # get index
-                    a_bool = p.matvars['solution'].time > (p.time - end_thrusting)
+                    a_bool = p.matvars['solution'].time > (p.time - p.end_thrusting)
                     force_index = min([i for (i, val) in enumerate(a_bool) if val])
                 except:
                     force_index = -1
@@ -383,6 +380,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     if (var_mat is not None):
         plt.plot(time_mat, var_mat[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
+    plt.legend(['sim', 'matlab'])
 
     plt.subplot(3,1,2)
     plt.ylabel(label[1])
@@ -390,6 +388,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     if (var_mat is not None):
         plt.plot(time_mat, var_mat[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
+    plt.legend(['sim', 'matlab'])
 
     plt.subplot(3,1,3)
     plt.ylabel(label[2])
@@ -397,6 +396,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     if (var_mat is not None):
         plt.plot(time_mat, var_mat[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
+    plt.legend(['sim', 'matlab'])
 
 if __name__ == '__main__':
     p = ClimbingrobotController(robotName)
