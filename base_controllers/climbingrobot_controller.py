@@ -144,13 +144,14 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
-
+        self.time_jump_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
                 self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
                 self.ldot_log[self.log_counter] = self.ldot
                 self.base_pos_log[:, self.log_counter] = self.base_pos
+                self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
                 pass
             super().logData()
 
@@ -204,7 +205,9 @@ class ClimbingrobotController(BaseControllerFixed):
         traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame
         time_gazebo = p.time_log - p.end_thrusting
         plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
-        mio.savemat('test_gazebo.mat', {'sol_optim': p.matvars['solution'], 'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
+        mio.savemat('test_gazebo.mat', {'solution': p.matvars['solution'], 'T_th': p.matvars['T_th'], 'mu': p.matvars['mu'],
+                                        'Fun_max':p.matvars['Fun_max'], 'Fr_max':p.matvars['Fr_max'], 'p0':p.matvars['p0'],'pf': p.matvars['pf'],
+                                        'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
 
 
         plt.show(block=True)
@@ -242,6 +245,7 @@ def talker(p):
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
     p.numberOfJumps = len(p.jumps)
+    p.end_thrusting = np.inf
 
     while True:
 
@@ -258,8 +262,10 @@ def talker(p):
                     p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.thrustDuration)
                     p.stateMachine = 'thrusting'
                     p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+                    p.end_thrusting = p.startJump + p.thrustDuration
                     print(colored("Start Thrusting with EXT FORCE", "blue"))
             else:
+                p.end_thrusting = p.startJump + p.orientTime + p.thrustDuration
                 p.q_des[7] = math.atan2(p.jumps[p.jumpNumber]["Fut"], p.jumps[p.jumpNumber]["Fun"])
                 print(colored(f"Start orienting leg to  : {p.q_des[7]}", "blue"))
                 p.stateMachine = 'orienting_leg'
@@ -276,19 +282,16 @@ def talker(p):
             p.b_Fu_xy = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"]])
             p.stateMachine = 'thrusting'
 
-
         if (p.stateMachine == 'thrusting'):
             if (p.EXTERNAL_FORCE):
-                p.end_thrusting = p.startJump + p.thrustDuration
                 p.ros_pub.add_arrow(p.base_pos, np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0.]) / 100., "red", scale= 3.)
             else:
-                p.end_thrusting = p.startJump + p.orientTime + p.thrustDuration
                 p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
                 p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
                 #p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
                 p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 10., "red")
 
-            if (p.time >= p.end_thrusting):
+            if (p.time > p.end_thrusting):
                 print(colored("Stop Trhusting", "blue"))
                 p.stateMachine = 'flying'
                 print(colored(f"RESTORING LEG PD", "red"))
@@ -341,7 +344,7 @@ def talker(p):
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
         # log variables
-        if (p.time > p.startJump):
+        if (p.time > p.end_thrusting):
             p.logData()
 
         # plot  rope bw base link and anchor

@@ -194,7 +194,7 @@ class BaseControllerFixed(threading.Thread):
 
         self.contactForceW_log = np.empty((3,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan
         self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
-        self.time = 0.0
+
         self.log_counter = 0
 
         self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
