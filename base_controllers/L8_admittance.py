@@ -63,57 +63,6 @@ def resend_robot_program():
     # print(result)
     ros.sleep(0.1)
 
-def move_gripper(diameter):
-    import os
-    import sys
-    import socket
-
-    HOST = "192.168.0.100"  # The UR IP address
-    PORT = 30002  # UR secondary client
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    sock.settimeout(0.5)
-    try:
-        sock.connect((HOST, PORT))
-    except:
-        raise Exception("Cannot connect to end-effector socket") from None
-    sock.settimeout(None)
-    scripts_path =  rospkg.RosPack().get_path('ur_description') + '/gripper/scripts'
-
-    onrobot_script = scripts_path + "/onrobot_superminimal.script"
-    file = open(onrobot_script, "rb")  # Robotiq Gripper
-    lines = file.readlines()
-    file.close()
-
-    tool_index = 0
-    blocking = True
-    cmd_string = f"tfg_release({diameter},  tool_index={tool_index}, blocking={blocking})"
-
-    line_number_to_add = 446
-
-    new_lines = lines[0:line_number_to_add]
-    new_lines.insert(line_number_to_add + 1, str.encode(cmd_string))
-    new_lines += lines[line_number_to_add::]
-
-    offset = 0
-    buffer = 2024
-    file_to_send = b''.join(new_lines)
-
-    if len(file_to_send) < buffer:
-        buffer = len(file_to_send)
-    data = file_to_send[0:buffer]
-    while data:
-        sock.send(data)
-        offset += buffer
-        if len(file_to_send) < offset + buffer:
-            buffer = len(file_to_send) - offset
-        data = file_to_send[offset:offset + buffer]
-    sock.close()
-
-    print("Gripper moved, now resend robot program")
-    resend_robot_program()
-    return
-
 
 class LabAdmittanceController(BaseControllerFixed):
     
@@ -420,6 +369,61 @@ class LabAdmittanceController(BaseControllerFixed):
             plotEndeff('force', 1, p.time_log, p.contactForceW_log)
             plt.show(block=True)
 
+    def move_gripper(self, diameter):
+        if not self.real_robot:
+            return
+
+        import os
+        import sys
+        import socket
+
+        HOST = "192.168.0.100"  # The UR IP address
+        PORT = 30002  # UR secondary client
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        sock.settimeout(0.5)
+        try:
+            sock.connect((HOST, PORT))
+        except:
+            raise Exception("Cannot connect to end-effector socket") from None
+        sock.settimeout(None)
+        scripts_path = rospkg.RosPack().get_path('ur_description') + '/gripper/scripts'
+
+        onrobot_script = scripts_path + "/onrobot_superminimal.script"
+        file = open(onrobot_script, "rb")  # Robotiq Gripper
+        lines = file.readlines()
+        file.close()
+
+        tool_index = 0
+        blocking = True
+        cmd_string = f"tfg_release({diameter},  tool_index={tool_index}, blocking={blocking})"
+
+        line_number_to_add = 446
+
+        new_lines = lines[0:line_number_to_add]
+        new_lines.insert(line_number_to_add + 1, str.encode(cmd_string))
+        new_lines += lines[line_number_to_add::]
+
+        offset = 0
+        buffer = 2024
+        file_to_send = b''.join(new_lines)
+
+        if len(file_to_send) < buffer:
+            buffer = len(file_to_send)
+        data = file_to_send[0:buffer]
+        while data:
+            sock.send(data)
+            offset += buffer
+            if len(file_to_send) < offset + buffer:
+                buffer = len(file_to_send) - offset
+            data = file_to_send[offset:offset + buffer]
+        sock.close()
+
+        print("Gripper moved, now resend robot program")
+        resend_robot_program()
+        return
+
+
 def talker(p):
     p.start()
     if p.real_robot:
@@ -484,7 +488,7 @@ def talker(p):
                     if (e_norm<0.001):
                         p.homing_flag = False
                         print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
-                        move_gripper(30)
+                        p.move_gripper(30)
                         print(colored("GRIPPER CLOSED", 'red'))
                         break
 
@@ -499,14 +503,14 @@ def talker(p):
                     if(ext_traj_counter < len(p.Q_ref)-1):
                         print(colored("TRAJECTORY %d COMPLETED"%ext_traj_counter, 'blue'))
                         if(ext_traj_counter==0):
-                            move_gripper(65)
+                            p.move_gripper(65)
                         if (ext_traj_counter == 1):
-                            move_gripper(30)
+                            p.move_gripper(30)
                         ext_traj_counter += 1
                         ext_traj_t = 0
                     elif(not traj_completed):
                         print(colored("LAST TRAJECTORY COMPLETED", 'red'))
-                        move_gripper(60)
+                        p.move_gripper(60)
                         traj_completed = True
                         ext_traj_t = 0
                         ext_traj_counter = 0
