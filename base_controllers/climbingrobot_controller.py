@@ -67,6 +67,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def rot2phi_theta(self, R):
         # this rotation is obtrained rotating phi about Z and theta about -Y axis as in Luigis convention
+        #
+        # syms psi theta phi
         # Rsym_x = [	1   ,    0     	  ,  	  0,
         #                 0   ,    cos(psi) ,  -sin(psi),
         #                 0   ,    sin(psi) ,  cos(psi)];
@@ -84,8 +86,10 @@ class ClimbingrobotController(BaseControllerFixed):
         #[cos(theta) * sin(phi), cos(phi), -sin(phi) * sin(theta)]
         #[sin(theta), 0, cos(theta)]
         # note, with the urdf we have R = Rsym_y'*Rsym_x which has R(1,0) null
-        phi = np.arctan2(-R[0, 1], R[1, 1])  #cos(theta) * sin(phi)/cos(phi) * cos(theta)
-        theta = np.arctan2(R[2, 0],R[2,2])
+
+        theta = math.atan2(R[2, 0],R[2,2])
+        phi = math.atan2(-R[1, 2], -R[0, 2]) #-cos(phi) * sin(theta) , -sin(phi) * sin(theta)
+
         # returns  pitch = theta,  yaw = phi
         return theta, phi
 
