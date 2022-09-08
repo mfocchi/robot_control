@@ -78,9 +78,9 @@ def move_gripper(diameter):
     except:
         raise Exception("Cannot connect to end-effector socket") from None
     sock.settimeout(None)
-    scripts_path =  rospkg.RosPack().get_path(robotName+'_description') + '/grpper/scripts'
+    scripts_path =  rospkg.RosPack().get_path('ur_description') + '/gripper/scripts'
 
-    onrobot_script = scripts_path + "/onrobot_superminimal.script";
+    onrobot_script = scripts_path + "/onrobot_superminimal.script"
     file = open(onrobot_script, "rb")  # Robotiq Gripper
     lines = file.readlines()
     file.close()
@@ -151,18 +151,34 @@ class LabAdmittanceController(BaseControllerFixed):
     def startRealRobot(self):
         os.system("killall rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
+
+        # PREPARE TO LAUNCH ur_hardware_interface through launch file
+        # cli_args = ['ur_robot_driver', 'ur5e_bringup.launch', "headless_mode:=true", "robot_ip:=192.168.0.100",
+        #                  "kinematics_config:=/home/laboratorio/my_robot_calibration_1.yaml"]
+        # roslaunch_args = cli_args[1:]
+        # self.roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
+        # self.uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        # roslaunch.configure_logging(self.uuid)
+        # self.parent = roslaunch.parent.ROSLaunchParent(self.uuid, self.roslaunch_file)
+
         if (not rosgraph.is_master_online()) or (
                 "/" + self.robot_name + "/ur_hardware_interface" not in rosnode.get_node_names()):
-            print(colored('Error: you need to launch the ur driver!', 'red'))
+            print(colored('ERROR: You should first launch the ur driver!', 'red'))
             sys.exit()
-        else:
-            package = 'rviz'
-            executable = 'rviz'
-            args = '-d ' + rospkg.RosPack().get_path('ros_impedance_controller') + '/config/operator.rviz'
-            node = roslaunch.core.Node(package, executable, args=args)
-            launch = roslaunch.scriptapi.ROSLaunch()
-            launch.start()
-            process = launch.launch(node)
+            # print(colored('Launching the ur driver!', 'green'))
+            # self.parent.start()
+            # ros.sleep(5.0)
+
+        # run rviz
+        package = 'rviz'
+        executable = 'rviz'
+        args = '-d ' + rospkg.RosPack().get_path('ros_impedance_controller') + '/config/operator.rviz'
+        node = roslaunch.core.Node(package, executable, args=args)
+        launch = roslaunch.scriptapi.ROSLaunch()
+        launch.start()
+        process = launch.launch(node)
+
+        resend_robot_program()
 
     def loadModelAndPublishers(self, xacro_path):
         super().loadModelAndPublishers(xacro_path)
@@ -280,16 +296,17 @@ class LabAdmittanceController(BaseControllerFixed):
         self.admit = AdmittanceControl(self.ikin, lab_conf.Kx, lab_conf.Dx, conf.robot_params[self.robot_name])
 
         if lab_conf.USER_TRAJECTORY:
-            data = np.load('ur5_q_ref' + '.npz')
-            self.q_ref = data['q']
-            self.traj_duration = self.q_ref.shape[0]
+            self.Q_ref = []
+            for name in lab_conf.traj_file_name:
+                data = np.load(name + '.npz')
+                self.Q_ref.append(data['q'])
 
 
     def logData(self):
         if (conf.robot_params[self.robot_name]['control_type'] == "admittance"):
             self.q_des_adm_log[:, self.log_counter] = self.q_des_adm
             self.x_ee_des_adm_log[:, self.log_counter] = self.x_ee_des_adm
-        # I neeed to do after because it updates log counter
+        # I need to do this after because it updates log counter
         super().logData()
 
     def switch_controller(self, target_controller):
@@ -319,7 +336,6 @@ class LabAdmittanceController(BaseControllerFixed):
         self.pub_reduced_des_jstate.publish(msg) 
 
     def send_joint_trajectory(self):
-
         # Creates a trajectory and sends it using the selected action server
         trajectory_client = actionlib.SimpleActionClient("{}/follow_joint_trajectory".format("/" + self.robot_name + "/"+self.active_controller), FollowJointTrajectoryAction)
         # Create and fill trajectory goal
@@ -440,7 +456,9 @@ def talker(p):
         p.updateKinematicsDynamics()
         p.time_poly = None
 
-        ext_traj_counter =0
+        ext_traj_counter = 0    # counter for which trajectory is currently tracked
+        ext_traj_t = 0          # counter for the time inside a trajectory
+        traj_completed = False
 
         #control loop
         while True:
@@ -466,16 +484,32 @@ def talker(p):
                     if (e_norm<0.001):
                         p.homing_flag = False
                         print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
-                        # move_gripper(30)
+                        move_gripper(30)
                         print(colored("GRIPPER CLOSED", 'red'))
                         break
 
             #update the kinematics
             p.updateKinematicsDynamics()
 
-            if lab_conf.USER_TRAJECTORY and (p.time >6.0) and (ext_traj_counter < p.traj_duration):
-                p.q_des = p.q_ref[ext_traj_counter,:]
-                ext_traj_counter += 1
+            if lab_conf.USER_TRAJECTORY:
+                if (int(ext_traj_t) < p.Q_ref[ext_traj_counter].shape[0]): # and p.time>6.0:
+                    p.q_des = p.Q_ref[ext_traj_counter][int(ext_traj_t),:]
+                    ext_traj_t += 1.0/lab_conf.traj_slow_down_factor
+                else:
+                    if(ext_traj_counter < len(p.Q_ref)-1):
+                        print(colored("TRAJECTORY %d COMPLETED"%ext_traj_counter, 'blue'))
+                        if(ext_traj_counter==0):
+                            move_gripper(65)
+                        if (ext_traj_counter == 1):
+                            move_gripper(30)
+                        ext_traj_counter += 1
+                        ext_traj_t = 0
+                    elif(not traj_completed):
+                        print(colored("LAST TRAJECTORY COMPLETED", 'red'))
+                        move_gripper(60)
+                        traj_completed = True
+                        ext_traj_t = 0
+                        ext_traj_counter = 0
 
             # EXE L8-1.1: set constant joint reference
             #p.q_des = np.copy(p.q_des_q0)
@@ -483,7 +517,7 @@ def talker(p):
 
 
             # EXE L8-1.2: set sinusoidal joint reference
-            p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
+            # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
 
 
             # EXE L8-1.3: set constant ee reference

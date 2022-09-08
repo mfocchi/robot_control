@@ -30,6 +30,12 @@ poly_duration = 3.0
 Kx = 600 * np.identity(3)
 Dx = 200 * np.identity(3)
 
-USER_TRAJECTORY = False
 # HOMING PROCEDURE
 v_des_homing = 0.2
+
+# Trajectory tracking
+USER_TRAJECTORY = False
+# list of trajectories file names to track in sequence
+traj_file_name = ['home_2_table_robot', 'table_2_belt_robot', 'belt_2_home_robot']
+# traj_file_name = 'home_2_table_2_belt_2_home_robot'
+traj_slow_down_factor = 1 # how many times the reference trajectory has to be slowed down
