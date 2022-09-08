@@ -70,7 +70,7 @@ robot_params['climbingrobot'] ={'dt': 0.001,
                        'ee_frame': 'foot',
                        'spawn_x' : 0.0,
                        'spawn_y' : 0.0,
-                       'spawn_z' : 10.0,
+                       'spawn_z' : 20.0, 
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
                          
 verbose = False

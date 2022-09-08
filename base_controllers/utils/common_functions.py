@@ -176,7 +176,7 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
         else:
           plot_var_des_log = None                                                
     else:
-       print(colored("plotJopnt error: wrong input string", "red") )
+       print(colored("plotJoint error: wrong input string", "red") )
        return                                   
 
     
