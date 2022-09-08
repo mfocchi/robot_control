@@ -29,12 +29,12 @@ import rospkg
 import tf
 
 #other utils
-from utils.ros_publish import RosPub
-from utils.pidManager import PidManager
-from utils.utils import Utils
-from utils.math_tools import *
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.pidManager import PidManager
+from base_controllers.utils.utils import Utils
+from base_controllers.utils.math_tools import *
 from numpy import nan
-from utils.common_functions import getRobotModel
+from base_controllers.utils.common_functions import getRobotModel
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from termcolor import colored
 import matplotlib.pyplot as plt
