@@ -31,3 +31,5 @@ Kx = 600 * np.identity(3)
 Dx = 200 * np.identity(3)
 
 USER_TRAJECTORY = False
+# HOMING PROCEDURE
+v_des_homing = 0.2

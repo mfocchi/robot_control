@@ -446,15 +446,28 @@ def talker(p):
         while True:
             # homing procedure
             if p.homing_flag:
+                dt = conf.robot_params[p.robot_name]['dt']
+                v_des = lab_conf.v_des_homing
+                v_ref = 0.0
                 print(colored("STARTING HOMING PROCEDURE",'red'))
+                q_home = conf.robot_params[p.robot_name]['q_0']
+                p.q_des = np.copy(p.q)
+                print("Initial joint error = ", np.linalg.norm(p.q_des - q_home))
+                print("q = ", p.q.T)
+                print("Homing v des", v_des)
                 while True:
-                    joint_error = np.linalg.norm(p.q - conf.robot_params[p.robot_name]['q_0'])
-                    p.q_des = p.q*0.95 + 0.05*conf.robot_params[p.robot_name]['q_0']
-                    p.send_reduced_des_jstate(p.q_des)
+                    e = q_home - p.q_des
+                    e_norm = np.linalg.norm(e)
+                    if(e_norm!=0.0):
+                        v_ref += 0.005*(v_des-v_ref)
+                        p.q_des += dt*v_ref*e/e_norm
+                        p.send_reduced_des_jstate(p.q_des)
                     rate.sleep()
-                    if (joint_error<=0.001):
+                    if (e_norm<0.001):
                         p.homing_flag = False
                         print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
+                        # move_gripper(30)
+                        print(colored("GRIPPER CLOSED", 'red'))
                         break
 
             #update the kinematics
