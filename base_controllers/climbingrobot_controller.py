@@ -39,7 +39,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.MARCO_APPROACH = True
 
         self.rope_index = 2
-        self.leg_index = np.array([7,8])
+        self.leg_index = np.array([6, 7,8])
         self.base_passive_joints = np.array([3,4,5])
         self.anchor_passive_joints = np.array([0,1])
         self.mountain_thickness = 0.1
@@ -110,12 +110,12 @@ class ClimbingrobotController(BaseControllerFixed):
         self.anchor_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor')).translation
         self.base_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).translation
         self.w_R_b = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).rotation
-
         self.x_ee =  self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
 
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
         self.J = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
         self.Jleg = self.J[:, self.leg_index]
+        self.Jleg2 = self.J[:, 7:]
         self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
         w_R_wire = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire')).rotation
@@ -330,10 +330,17 @@ def talker(p):
                     rope_direction = (p.base_pos - p.anchor_pos) / np.linalg.norm(p.base_pos - p.anchor_pos)
                     p.ros_pub.add_arrow(p.base_pos, rope_direction * Fr / 100., "red", scale=2.5)
 
-                p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
-                p.tau_ffwd[p.leg_index] = - p.Jleg[:2,:].T.dot(p.w_Fu_xy)
+                #using all 3 leg joints to generate impulse
+                p.w_Fu = p.w_R_b.dot(np.hstack((p.b_Fu_xy, 0)))
+                p.tau_ffwd[p.leg_index] = - p.Jleg.T.dot(p.w_Fu)
+                p.ros_pub.add_arrow(p.x_ee, p.w_Fu / 100., "red")
+                # using only HP and KNEE joint   to generate impulse(no big difference)
+                # p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
+                # p.tau_ffwd[7:] = - p.Jleg2[:2,:].T.dot(p.w_Fu_xy)
+                # p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 100., "red")
+
+                # old
                 #p.tau_ffwd[p.rope_index] = - p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
-                p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 100., "red")
 
             if (p.time > p.end_thrusting):
                 print(colored("Stop Trhusting", "blue"))
@@ -342,8 +349,9 @@ def talker(p):
                 p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
                 # reenable  the PDs of default values for landing and reset the torque on the leg
                 p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
+                # reenable leg pd
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
-                p.tau_ffwd[p.leg_index] = np.zeros(2)
+                p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
                 print(colored("Start Flying", "blue"))
 
         if (p.stateMachine == 'flying'):
