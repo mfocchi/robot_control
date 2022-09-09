@@ -66,6 +66,8 @@ class BaseController(threading.Thread):
         self.verbose = conf.verbose
         self.custom_launch_file = False
         self.use_ground_truth_contacts = False
+        self.apply_external_wrench = False
+        self.time_external_wrench = 0.6
         self.broadcaster = tf.TransformBroadcaster()
 
         print("Initialized basecontroller---------------------------------------------------------------")
@@ -355,6 +357,22 @@ class BaseController(threading.Thread):
                 grf = np.zeros(3)
             self.u.setLegJointState(leg, grf, self.grForcesW)   
                                  
+    def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration):
+        from geometry_msgs.msg import Wrench, Point
+        wrench = Wrench()
+        wrench.force.x = Fx
+        wrench.force.y = Fy
+        wrench.force.z = Fz
+        wrench.torque.x = Mx
+        wrench.torque.y = My
+        wrench.torque.z = Mz
+        reference_frame = "world"  # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
+        reference_point = Point(x=0, y=0, z=0)
+        try:
+            self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame,
+                                   reference_point=reference_point, wrench=wrench, duration=ros.Duration(duration))
+        except:
+            pass
                                  
     def startupProcedure(self):
             ros.sleep(1.5)
@@ -531,6 +549,13 @@ def talker(p):
     p.deregister_node()   
     
     
+        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
+
+        if (p.apply_external_wrench and p.time > p.time_external_wrench):
+            print("START APPLYING EXTERNAL WRENCH")
+            p.applyForce(0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.05)
+            p.apply_external_wrench = False
+
 
     
 if __name__ == '__main__':
