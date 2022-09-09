@@ -24,16 +24,16 @@ import rospkg
 from rospy import Time
 
 #other utils
-from utils.math_tools import *
+from base_controllers.utils.math_tools import *
 from numpy import nan
 import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from six.moves import input # solves compatibility issue bw pyuthon 2.x and 3 for raw input that does exists in python 3
 from termcolor import colored
 import matplotlib.pyplot as plt
-from utils.common_functions import plotJoint, plotAdmittanceTracking, plotEndeff
+from base_controllers.utils.common_functions import plotJoint, plotAdmittanceTracking, plotEndeff
 
-import  params as conf
+import  base_controllers.params as conf
 import L8_conf as lab_conf
 robotName = "ur5"
 
@@ -46,9 +46,9 @@ from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryG
 from trajectory_msgs.msg import JointTrajectoryPoint
 import actionlib
 
-from obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
+from base_controllers.components.obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
 from base_controllers.base_controller_fixed import BaseControllerFixed
-from admittance_controller import AdmittanceControl
+from base_controllers.components.admittance_controller import AdmittanceControl
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 
 import tf

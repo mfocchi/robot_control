@@ -40,7 +40,7 @@ import rosgraph
 import rosnode
 import sys
 
-import  params as conf
+import  base_controllers.params as conf
 # robots can be ur5 and jumpleg to load ur5 you need to set this xacro path in loadModelAndPublishers
 robotName = "ur5"
 
