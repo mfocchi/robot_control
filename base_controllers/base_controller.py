@@ -58,8 +58,7 @@ class BaseController(threading.Thread):
                                      conf.robot_params[self.robot_name]['spawn_y'],
                                      conf.robot_params[self.robot_name]['spawn_z']])
 
-
-        self.joint_names = ""
+        self.joint_names = conf.robot_params[self.robot_name]['joint_names']
         self.u = Utils()
         self.math_utils = Math()
         # send data to param server
@@ -222,18 +221,12 @@ class BaseController(threading.Thread):
                                        ros.Time.now(), '/base_link', '/world')
 
     def _receive_jstate(self, msg):
-
-        q_ros = np.zeros(self.robot.na)
-        qd_ros = np.zeros(self.robot.na)
-        tau_ros = np.zeros(self.robot.na)
-        for i in range(self.robot.na):
-            q_ros[i] = msg.position[i]
-            qd_ros[i] = msg.velocity[i]
-            tau_ros[i] = msg.effort[i]
-        # map from ROS (alphabetical) to our  LF RF LH RH convention
-        self.q = self.u.mapFromRos(q_ros)
-        self.qd = self.u.mapFromRos(qd_ros)
-        self.tau = self.u.mapFromRos(tau_ros)
+        for msg_idx in range(len(msg.name)):
+            for joint_idx in range(len(self.joint_names)):
+                if self.joint_names[joint_idx] == msg.name[msg_idx]:
+                    self.q[joint_idx] = msg.position[msg_idx]
+                    self.qd[joint_idx] = msg.velocity[msg_idx]
+                    self.tau[joint_idx] = msg.effort[msg_idx]
 
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
@@ -375,14 +368,10 @@ class BaseController(threading.Thread):
             pass
                                  
     def startupProcedure(self):
-            ros.sleep(1.5)
+
             self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
             # set joint pdi gains
-            n_not_leg_joints = self.robot.na - 12
-            Kp = 12 * [conf.robot_params[self.robot_name]['kp']] + n_not_leg_joints * [0.]
-            Kd = 12 * [conf.robot_params[self.robot_name]['kd']] + n_not_leg_joints * [0.]
-            Ki = self.robot.na * [0.]
-            self.pid.setPDjoints(Kp, Kd, Ki)
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
 
             if (self.robot_name == 'hyq'):                        
                 # these torques are to compensate the leg gravity
