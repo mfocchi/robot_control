@@ -299,7 +299,10 @@ def talker(p):
             else:
                 p.end_orienting = p.startJump + p.orientTime
                 p.end_thrusting = p.startJump + p.orientTime + p.thrustDuration
+                # strategy 1 - orientation hip roll joint
                 p.q_des[7] = p.getImpulseAngle()
+                # strategy 2 -  align the body (keep HR to 1.57)
+                #p.q_des[5] = p.getImpulseAngle()
                 print(colored(f"Start orienting leg to  : {p.q_des[7]}", "blue"))
                 p.stateMachine = 'orienting_leg'
 
@@ -328,6 +331,11 @@ def talker(p):
                 else:
                     # in marco's approach these are vectors not scalars and I start to give the rope at the beginning
                     p.b_Fu_xy =  p.matvars['solution'].Fun[p.getIndex(p.time - p.end_orienting)], p.matvars['solution'].Fut[p.getIndex(p.time - p.end_orienting)]
+                    # required from strategy 2 -   with body aligned with impulse direction
+                    # Fu = np.array([  p.matvars['solution'].Fun[p.getIndex(p.time - p.end_orienting)],  p.matvars['solution'].Fut[p.getIndex(p.time - p.end_orienting) ]  ])
+                    # Fu_norm = np.linalg.norm(Fu)
+                    # p.b_Fu_xy = np.hstack((Fu_norm ,0.))
+
                     # start already to use the rope
                     Fr = p.matvars['solution'].Fr[p.getIndex(p.time - p.end_orienting)]
                     p.tau_ffwd[p.rope_index] = Fr
