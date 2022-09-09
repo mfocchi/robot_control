@@ -32,6 +32,7 @@ from gazebo_msgs.srv import GetPhysicsProperties
 import roslaunch
 import rospkg
 from gazebo_msgs.srv import ApplyBodyWrench
+import tf
 
 #other utils
 from base_controllers.utils.ros_publish import RosPub
@@ -65,6 +66,7 @@ class BaseController(threading.Thread):
         self.verbose = conf.verbose
         self.custom_launch_file = False
         self.use_ground_truth_contacts = False
+        self.broadcaster = tf.TransformBroadcaster()
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
@@ -213,7 +215,10 @@ class BaseController(threading.Thread):
       
         # compute orientation matrix                                
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
-   
+        self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                       self.quaternion,
+                                       ros.Time.now(), '/base_link', '/world')
+
     def _receive_jstate(self, msg):
 
         q_ros = np.zeros(self.robot.na)

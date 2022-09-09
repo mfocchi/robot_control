@@ -43,7 +43,6 @@ class RosPub():
         self.id = 0
         self.id_arrow = 0
 
-        self.broadcaster = tf.TransformBroadcaster()  
         self.fixedBaseRobot = False
         self.visual_frame = visual_frame
         print("Initialized ros pub---------------------------------------------------------------")
@@ -64,9 +63,6 @@ class RosPub():
         except:
             self.fixedBaseRobot = True
             
-        # if (self.fixedBaseRobot):
-        #     self.broadcaster.sendTransform((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')
-        #
         msg.name = all_names[-robot.na:] #remove universe joint that is not active
         msg.position = q                
         msg.velocity = qd                
