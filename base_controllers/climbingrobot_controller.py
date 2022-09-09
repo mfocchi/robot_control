@@ -225,8 +225,12 @@ class ClimbingrobotController(BaseControllerFixed):
     def getIndex(self,t):
         try:
             # get index
-            a_bool = self.matvars['solution'].time > (t)
-            return  min([i for (i, val) in enumerate(a_bool) if val])
+            a_bool = self.matvars['solution'].time >= t
+            idx = min([i for (i, val) in enumerate(a_bool) if val])-1
+            if idx == -1:
+                return 0
+            else:
+                return idx
         except:
             return  -1
 
@@ -269,7 +273,7 @@ def talker(p):
         p.targetPos = p.matvars['pf']
         p.thrustDuration  = p.matvars['T_th']
 
-    p.orientTime = 2.0
+    p.orientTime = 1.0
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
     p.numberOfJumps = len(p.jumps)
@@ -304,7 +308,7 @@ def talker(p):
             else:
                 p.start_logging = p.end_thrusting
 
-        if (p.stateMachine == 'orienting_leg') and (p.time > p.end_orienting):
+        if (p.stateMachine == 'orienting_leg') and (p.time >= p.end_orienting):
             print(colored(f"Start trusting Jump number : {p.jumpNumber}" , "blue"))
             p.tau_ffwd = np.zeros(p.robot.na)
             p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
@@ -394,7 +398,7 @@ def talker(p):
 
         # log variables
 
-        if (p.time > p.start_logging):
+        if (p.time >= p.start_logging):
             p.logData()
 
         # plot  rope bw base link and anchor
