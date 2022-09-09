@@ -152,9 +152,7 @@ class BaseController(threading.Thread):
             grf[0] = msg.states[0].wrenches[0].force.x
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
-            configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("lf_lower_leg") ).rotation.dot(grf)
-            self.u.setLegJointState(0, grf, self.grForcesW_gt)
+            self.u.setLegJointState(0, grf, self.grForcesLocal_gt)
         else:
             pass
     def _receive_contact_rf(self, msg):
@@ -163,9 +161,7 @@ class BaseController(threading.Thread):
             grf[0] = msg.states[0].wrenches[0].force.x
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
-            configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration,  self.robot.model.getFrameId("rf_lower_leg") ).rotation.dot(grf)
-            self.u.setLegJointState(1, grf, self.grForcesW_gt)
+            self.u.setLegJointState(1, grf, self.grForcesLocal_gt)
         else:
             pass
     def _receive_contact_lh(self, msg):
@@ -174,9 +170,7 @@ class BaseController(threading.Thread):
             grf[0] = msg.states[0].wrenches[0].force.x
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
-            configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("lh_lower_leg")).rotation.dot(grf)
-            self.u.setLegJointState(2, grf, self.grForcesW_gt)
+            self.u.setLegJointState(2, grf, self.grForcesLocal_gt)
         else:
             pass
     def _receive_contact_rh(self, msg):
@@ -185,9 +179,7 @@ class BaseController(threading.Thread):
             grf[0] = msg.states[0].wrenches[0].force.x
             grf[1] =  msg.states[0].wrenches[0].force.y
             grf[2] =  msg.states[0].wrenches[0].force.z
-            configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-            grf = self.robot.framePlacement(configuration, self.robot.model.getFrameId("rh_lower_leg")).rotation.dot(grf)
-            self.u.setLegJointState(3, grf, self.grForcesW_gt)
+            self.u.setLegJointState(3, grf, self.grForcesLocal_gt)
         else:
             pass
 
@@ -212,8 +204,7 @@ class BaseController(threading.Thread):
         self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
         self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
         self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
-        
-      
+
         # compute orientation matrix                                
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
         self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
@@ -329,8 +320,8 @@ class BaseController(threading.Thread):
         self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities) 
         self.h_joints = self.h[6:]  
         
-        #compute contact forces                        
-        self.estimateContactForces()  
+        #compute contact forces
+        self.estimateContactForces()
         
         # compute com / robot inertias
         self.comPoseW = copy.deepcopy(self.basePoseW)
@@ -348,8 +339,12 @@ class BaseController(threading.Thread):
                 grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.u.mapFromRos(self.h_joints)-self.tau ))
             except np.linalg.linalg.LinAlgError as error:
                 grf = np.zeros(3)
-            self.u.setLegJointState(leg, grf, self.grForcesW)   
-                                 
+            self.u.setLegJointState(leg, grf, self.grForcesW)
+            if self.use_ground_truth_contacts:
+                grfLocal_gt = p.u.getLegJointState(leg, p.grForcesLocal_gt)
+                grf_gt = pin.updateFramePlacement(self.robot.model, self.robot.data, self.lowerleg_index[leg]).rotation @ grfLocal_gt
+                self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
+
     def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration):
         from geometry_msgs.msg import Wrench, Point
         wrench = Wrench()
@@ -429,6 +424,7 @@ class BaseController(threading.Thread):
         self.gravity_comp = np.zeros(self.robot.na)
         self.b_R_w = np.eye(3)
         self.grForcesW = np.zeros(self.robot.na)
+        self.grForcesLocal_gt = np.zeros(self.robot.na)
         self.grForcesW_gt = np.zeros(self.robot.na)
         self.basePoseW = np.zeros(6)
         self.J = [np.zeros((6, self.robot.nv))] * 4
@@ -451,6 +447,18 @@ class BaseController(threading.Thread):
         
         self.time = 0.0
         self.log_counter = 0
+
+        # order: lf rf lh rh
+        self.lowerleg_index = [0]*4
+        self.lowerleg_frame_names = []
+        for f in self.robot.model.frames:
+            if 'lower' in f.name:
+                self.lowerleg_frame_names.append(f.name)
+        self.lowerleg_frame_names = self.u.mapLegListToRos(self.lowerleg_frame_names)
+
+        for legid in self.u.leg_map.keys():
+            leg = self.u.leg_map[legid]
+            self.lowerleg_index[leg] =  self.robot.model.getFrameId(self.lowerleg_frame_names[leg])
 
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
