@@ -56,9 +56,9 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
 
 
     #EXERCISE 3: Compute graviy wrench
-    Wg = np.zeros(6)   
+    Wg = np.zeros(6)
     if (params.gravityComp == True):
-        mg = params.robot.robotMass() * np.array([0, 0, conf['gravity']])
+        mg = params.robot.robotMass * np.array([0, 0, conf['gravity']])
         Wg[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = mg
         #in case you are closing the loop on base frame
         if (not params.isCoMControlled):  # act_state  = base position in this case
@@ -67,7 +67,7 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     # EXERCISE 4: Feed-forward wrench
     Wffwd = np.zeros(6)                                                                
     if (params.ffwdOn):    
-        ffdLinear = params.robot.robotMass() * des_state.accel.linear
+        ffdLinear = params.robot.robotMass * des_state.accel.linear
        # compute inertia in the WF  w_I = R' * B_I * R
         W_Inertia = np.dot(b_R_w.transpose(), np.dot(params.robotInertiaB, b_R_w))
         # compute w_des_omega_dot  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates

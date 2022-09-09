@@ -22,7 +22,8 @@ from base_controllers.utils.math_tools import motionVectorTransform
 from base_controllers.utils.common_functions import State
 import matplotlib.pyplot as plt
 
-import L6_conf as conf
+import base_controllers.params as conf
+import L6_conf as lab_conf
 robotName = "hyq"
 
 class Params:
@@ -32,32 +33,27 @@ act_state = State()
 
 class AdvancedController(BaseController): 
 
-    def __init__(self):  
-        BaseController.__init__(self, robot_name=robotName)
-       
-        #send data to param server
-        self.verbose = conf.verbose                                                                                                          
-        self.u.putIntoGlobalParamServer("verbose", self.verbose)	
-        
-    def initVars(self):
-        BaseController.initVars(self)	
+    def __init__(self, robot_name="hyq"):
+        super().__init__(robot_name=robot_name)
 
-        self.des_basePoseW_log = np.empty((6, conf.buffer_size))*nan
-        self.des_baseTwistW_log = np.empty((6,conf.buffer_size ))*nan        
-        self.des_baseAccW_log = np.empty((6,conf.buffer_size ))*nan        
-        self.des_forcesW_log = np.empty((12,conf.buffer_size ))*nan        
-        self.Wffwd_log = np.empty((6, conf.buffer_size ))*nan        
-        self.Wfbk_log = np.empty((6,conf.buffer_size ))*nan        
-        self.Wg_log = np.empty((6,conf.buffer_size))*nan        
-        self.constr_viol_log = np.empty((4,conf.buffer_size ))*nan               							
-        self.two_pi_f             = 2*np.pi*conf.freq   # 2 PI * frequency  
-        self.two_pi_f_amp         = np.multiply(p.two_pi_f, conf.amp) # A * 2 PI * frequency  
+    def initVars(self):
+        super().initVars()
+
+        self.des_basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
+        self.des_baseTwistW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.des_baseAccW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.des_forcesW_log = np.empty((12,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.Wffwd_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.Wfbk_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.Wg_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size']))*nan
+        self.constr_viol_log = np.empty((4,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.two_pi_f             = 2*np.pi*lab_conf.freq   # 2 PI * frequency
+        self.two_pi_f_amp         = np.multiply(p.two_pi_f, lab_conf.amp) # A * 2 PI * frequency
         self.two_pi_f_squared_amp = np.multiply(p.two_pi_f, p.two_pi_f_amp)  # A * (2 PI * frequency)^2
 
 
     def logData(self):
-        if (self.log_counter < conf.buffer_size):
-            BaseController.logData(self)
+        if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
             self.des_basePoseW_log[:, self.log_counter] = self.des_pose
             self.des_baseTwistW_log[:, self.log_counter] =  self.des_twist           
             self.des_baseAccW_log[:, self.log_counter] =  self.des_acc       
@@ -66,14 +62,16 @@ class AdvancedController(BaseController):
             self.Wfbk_log[:, self.log_counter] =  self.Wfbk            
             self.Wg_log[:, self.log_counter] =  self.Wg            
             self.constr_viol_log[:, self.log_counter] =  self.constr_viol
-        
+        super().logData()
 
 def talker(p):
-    
     p.start()
+    p.startSimulator()
+    p.loadModelAndPublishers()
     p.initVars()          
-    p.startupProcedure() 
-    rate = ros.Rate(1/conf.dt) # 10hz
+    p.startupProcedure()
+
+    rate = ros.Rate(1/lab_conf.dt) # 10hz
     
                                 
     # Reset reference to actual value  
@@ -83,15 +81,15 @@ def talker(p):
     p.des_acc = np.zeros(6)       
 
     # Control loop               
-    while (p.time  < conf.exp_duration) or conf.CONTINUOUS:
+    while (p.time  < lab_conf.exp_duration) or (lab_conf.CONTINUOUS and not ros.is_shutdown()):
         #update the kinematics
         p.updateKinematics()
                                 
         # EXERCISE 1: Sinusoidal Reference Generation
         # Reference Generation
-        p.des_pose  = p.x0 +  conf.amp*np.sin(p.two_pi_f*p.time + conf.phi)
-        p.des_twist  = p.two_pi_f_amp * np.cos(p.two_pi_f*p.time + conf.phi)
-        p.des_acc = - p.two_pi_f_squared_amp * np.sin(p.two_pi_f*p.time + conf.phi)
+        p.des_pose  = p.x0 +  lab_conf.amp*np.sin(p.two_pi_f*p.time + lab_conf.phi)
+        p.des_twist  = p.two_pi_f_amp * np.cos(p.two_pi_f*p.time + lab_conf.phi)
+        p.des_acc = - p.two_pi_f_squared_amp * np.sin(p.two_pi_f*p.time + lab_conf.phi)
         #use this to compute acceleration for a custom trajectory
         #des_acc = np.subtract(des_twist, p.des_twist_old)/p.Ts
         #p.des__twist_old = des_base_twist
@@ -119,29 +117,29 @@ def talker(p):
         params.W_base_to_com = p.u.linPart(p.comPoseW)   -   p.u.linPart(p.basePoseW) 
         params.robot = p.robot
         params.robotInertiaB = p.compositeRobotInertiaB
-        
-        #################################################################          
+
+        #################################################################
         # compute desired contact forces from the whole-body controller                      
         #################################################################
           
-        
-        # EXERCISE 2: Projection-based controller (base frame)        
+
+        # EXERCISE 2: Projection-based controller (base frame)
 #        params.isCoMControlled = False 
 #        params.gravityComp = False
 #        params.ffwdOn = False        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
 
         # EXERCISE 3: Add Gravity Compensation (base frame)        
 #        params.isCoMControlled = False 
 #        params.gravityComp = True
 #        params.ffwdOn = False                                       
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
 #     
         # EXERCISE 4: Add FFwd Term (base frame) 
 #        params.isCoMControlled = False 
 #        params.gravityComp = True
 #        params.ffwdOn = True        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
 #                                
 #        # EXERSISE 5: Projection-based controller (CoM)    
 #        # map from base to com frame (they are aligned)
@@ -151,7 +149,7 @@ def talker(p):
 #        params.robotInertiaB = p.centroidalInertiaB
 #        params.gravityComp = True
 #        params.ffwdOn = True 
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
 #        
         # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
         params.normals = [None]*4                 
@@ -167,11 +165,11 @@ def talker(p):
         params.ffwdOn = True    
         params.frictionCones = False
         
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
         
         # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
         #params.frictionCones = True       
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(conf, act_state, des_state, p.W_contacts, p.stance_legs, params)                                           
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
                                 
         #################################################################          
         # map desired contact forces into torques (missing gravity compensation)                      
@@ -186,39 +184,43 @@ def talker(p):
     
        # send desired command to the ros controller     
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        p.logData()    
-        p.time = p.time + conf.dt 
+        p.logData()
+        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),   3)  # to avoid issues of dt 0.0009999
+
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(5*p.robot.robotMass())),"green")        
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.des_forcesW/(5*p.robot.robotMass())),"blue")        
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(5*p.robot.robotMass)),"green")
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.des_forcesW/(5*p.robot.robotMass)),"blue")
         p.ros_pub.publishVisual()                        
                                 
         #wait for synconization of the control loop
         rate.sleep()       
-                # stops the while loop if  you prematurely hit CTRL+C                    
+                # stops the while loop if  you prematurely hit CTRL+C
         if ros.is_shutdown():
-            print ("Shutting Down")                    
-            break;                                                
-                             
-    # restore PD when finished        
-    p.pid.setPDs(400.0, 6.0, 0.0) 
-    ros.sleep(1.0)                
-    print ("Shutting Down")                 
-    ros.signal_shutdown("killed")           
-    p.deregister_node()        
-    
-    plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
-    #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
-    #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
-    #plotConstraitViolation(3,p.constr_viol_log)            
-    #plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
-    plt.show(block=True)
+            print ("Shutting Down")
+            break;
+
+    # restore PD when finished
+    p.pid.setPDs(400.0, 6.0, 0.0)
+    ros.sleep(1.0)
+    print ("Shutting Down")
+    ros.signal_shutdown("killed")
+    p.deregister_node()
+
+    # TODO fix the blocking console
+    if conf.plotting:
+        plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
+        #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
+        #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
+        #plotConstraitViolation(3,p.constr_viol_log)
+        #plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
+
+
 if __name__ == '__main__':
-    p = AdvancedController()
+    p = AdvancedController(robotName)
     try:
         talker(p)
     except ros.ROSInterruptException:
         pass
-    
+
         
