@@ -379,8 +379,8 @@ def talker(p):
 
             #wait for synconization of the control loop
             rate.sleep()
+            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)  # to avoid issues of dt 0.0009999
 
-            p.time = p.time + conf.robot_params[p.robot_name]['dt']
            # stops the while loop if  you prematurely hit CTRL+C
             if ros.is_shutdown():
                 print ("Shutting Down")

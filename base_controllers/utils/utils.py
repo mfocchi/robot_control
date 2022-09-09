@@ -67,7 +67,7 @@ class Utils:
         """
         code, msg, val = args
         if code != 1:
-            raise ROSParamException(msg)
+            raise ros.ROSException(msg)
         return val
 
     def get_caller_id(self):
