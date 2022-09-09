@@ -68,6 +68,7 @@ class BaseController(threading.Thread):
         self.apply_external_wrench = False
         self.time_external_wrench = 0.6
         self.broadcaster = tf.TransformBroadcaster()
+        self.use_torque_control = False
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
@@ -397,7 +398,8 @@ class BaseController(threading.Thread):
                     print("q err post grav comp", (self.q - self.q_des))
                                                         
                 print("starting com controller (no joint PD)...")                
-                self.pid.setPDs(0.0, 0.0, 0.0)                  
+                self.pid.setPDs(0.0, 0.0, 0.0)
+                self.use_torque_control = True
             
             if (self.robot_name == 'solo' or self.robot_name == 'aliengo'):
                 start_t = ros.get_time()
@@ -500,10 +502,12 @@ def talker(p):
         #update the kinematics
         p.updateKinematics()    
 
-        # controller                             
-        #p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp
-        #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:] 
-        p.tau_ffwd = np.zeros(p.robot.na)
+        # controller
+        if p.use_torque_control:
+            p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp
+            #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:]
+        else:
+            p.tau_ffwd = np.zeros(p.robot.na)
         
         
         #        p.q_des[14] += omega *conf.robot_params[p.robot_name_]['dt']		
