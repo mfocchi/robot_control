@@ -11,6 +11,7 @@ from utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import matplotlib.pyplot as plt
 from base_controller import BaseController
+from base_controllers.utils.common_functions import plotCoM, plotJoint
 
 import  params as conf
 robotName = "solo"
@@ -44,7 +45,7 @@ def talker(p):
 
     p.q_des = np.copy(p.q_des_q0)
 
-    while True:
+    while not ros.is_shutdown():
         # update the kinematics
         p.updateKinematics()
         p.tau_ffwd = np.zeros(p.robot.na)
@@ -83,11 +84,11 @@ if __name__ == '__main__':
     p = StarbotController(robotName)
     try:
         talker(p)
-    except ros.ROSInterruptException:
-        from utils.common_functions import plotCoM, plotJoint
-
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
         if conf.plotting:
             plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-                      p.tau_ffwd_log)
-            plotCoM('position', 1, p.time_log, None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
-            plt.show(block=True)
+                      p.tau_ffwd_log, p.joint_names)
+
+

@@ -465,7 +465,7 @@ def talker(p):
         traj_completed = False
 
         #control loop
-        while True:
+        while not ros.is_shutdown():
             # homing procedure
             if p.homing_flag:
                 dt = conf.robot_params[p.robot_name]['dt']
@@ -611,16 +611,6 @@ def talker(p):
             #wait for synconization of the control loop
             rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
-           # stops the while loop if  you prematurely hit CTRL+C
-            if ros.is_shutdown():
-                p.plotStuff()
-                print ("Shutting Down")
-                break
-
-    print("Shutting Down")
-    ros.signal_shutdown("killed")
-    p.deregister_node()
-
 
 
 if __name__ == '__main__':
@@ -629,8 +619,11 @@ if __name__ == '__main__':
 
     try:
         talker(p)
-    except ros.ROSInterruptException:
-        # these plots are for simulated robot
-        p.plotStuff()
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
+        if   conf.plotting:
+            p.plotStuff()
+
     
         

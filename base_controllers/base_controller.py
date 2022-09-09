@@ -40,7 +40,7 @@ from base_controllers.utils.pidManager import PidManager
 from base_controllers.utils.math_tools import *
 from numpy import nan
 import matplotlib.pyplot as plt
-
+from base_controllers.utils.common_functions import plotCoM, plotJoint
 import pinocchio as pin
 from base_controllers.utils.common_functions import getRobotModel
 
@@ -498,7 +498,7 @@ def talker(p):
 #    omega = 5000*RPM2RAD
 
     #control loop
-    while True:  
+    while not ros.is_shutdown():
         #update the kinematics
         p.updateKinematics()    
 
@@ -536,20 +536,6 @@ def talker(p):
         #wait for synconization of the control loop
         rate.sleep()     
        
-        p.time = p.time + conf.robot_params[p.robot_name]['dt']			
-	   # stops the while loop if  you prematurely hit CTRL+C                    
-        if ros.is_shutdown():
-            print ("Shutting Down")                    
-            break
-                             
-    # restore PD when finished        
-    p.pid.setPDs(conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.0) 
-    ros.sleep(1.0)                
-    print ("Shutting Down")                 
-    ros.signal_shutdown("killed")           
-    p.deregister_node()   
-    
-    
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
         if (p.apply_external_wrench and p.time > p.time_external_wrench):
@@ -558,18 +544,16 @@ def talker(p):
             p.apply_external_wrench = False
 
 
-    
 if __name__ == '__main__':
-
     p = BaseController(robotName)
     try:
         talker(p)
-    except ros.ROSInterruptException:
-        from utils.common_functions import plotCoM,  plotJoint
-        
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
         if conf.plotting:
-            plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
+            plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
             plotCoM('position', 1, p.time_log, None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
-            plt.show(block=True)
-    
-        
+
+
+

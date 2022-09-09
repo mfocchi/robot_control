@@ -6,8 +6,6 @@ Created on 3 May  2022
 """
 
 from __future__ import print_function
-
-
 import os
 import rospy as ros
 import threading
@@ -26,7 +24,6 @@ from gazebo_msgs.srv import GetPhysicsProperties
 # ros utils
 import roslaunch
 import rospkg
-import tf
 
 #other utils
 from base_controllers.utils.ros_publish import RosPub
@@ -50,6 +47,7 @@ robotName = "ur5"
 from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
 from base_controllers.utils.math_tools import Math
 from gazebo_msgs.srv import ApplyBodyWrench
+from base_controllers.utils.common_functions import plotCoM, plotJoint
 
 class BaseControllerFixed(threading.Thread):
     
@@ -230,7 +228,7 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
     #control loop
-    while True:
+    while not ros.is_shutdown():
         p.q_des = np.copy(p.q_des_q0)
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -240,25 +238,19 @@ def talker(p):
         #wait for synconization of the control loop
         rate.sleep()
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
-       # stops the while loop if  you prematurely hit CTRL+C
-        if ros.is_shutdown():
-            print ("Shutting Down")
-            break
-
-    print("Shutting Down")
-    ros.signal_shutdown("killed")
-    p.deregister_node()
 
 if __name__ == '__main__':
     p = BaseControllerFixed(robotName)
 
     try:
         talker(p)
-    except ros.ROSInterruptException:
-        #  plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-        #               p.tau_ffwd_log, p.joint_names)
-        #  plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
-        #            p.tau_ffwd_log, p.joint_names)
-         plt.show(block=True)
-    
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
+        if    conf.plotting:
+            plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                       p.tau_ffwd_log, p.joint_names)
+            plotJoint('torque', 1, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+                    p.tau_ffwd_log, p.joint_names)
+
         

@@ -381,42 +381,24 @@ def talker(p):
             rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)  # to avoid issues of dt 0.0009999
 
-           # stops the while loop if  you prematurely hit CTRL+C
-            if ros.is_shutdown():
-                print ("Shutting Down")
-                break
-
-    print("Shutting Down")
-    ros.signal_shutdown("killed")
-    p.deregister_node()
-
-    plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-    plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-    plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log,  p.qd_log, p.qd_des_log,  p.qdd_des_log, None, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-              joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-              joint_names=conf.robot_params[p.robot_name]['joint_names'])
-    plt.show(block=True)
-
-
 
 if __name__ == '__main__':
     p = JumpLegController(robotName)
 
     try:
         talker(p)
-    except ros.ROSInterruptException:
-        print("PLOTTING")
-        plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-        plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-        plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plt.show(block=True)
-
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
+        if conf.plotting:
+            print("PLOTTING")
+            plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+            plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+            plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
 
         
