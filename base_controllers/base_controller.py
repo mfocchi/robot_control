@@ -305,7 +305,8 @@ class BaseController(threading.Thread):
     def updateKinematics(self):
         # q is continuously updated
         # to compute in the base frame  you should put neutral base
-        gen_velocities  = np.hstack((self.baseTwistW,self.u.mapToRos(self.qd)))
+        b_X_w = motionVectorTransform(np.zeros(3), self.b_R_w)
+        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.u.mapToRos(self.qd)))
         neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))
         pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate, gen_velocities)
         pin.computeJointJacobians(self.robot.model, self.robot.data)  
@@ -322,7 +323,7 @@ class BaseController(threading.Thread):
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
 
        # Pinocchio Update the joint and frame placements
-        gen_velocities  = np.hstack((self.baseTwistW,self.qd))
+        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.qd))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
 
         self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities) 
