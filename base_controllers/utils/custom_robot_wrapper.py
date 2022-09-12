@@ -218,28 +218,27 @@ class RobotWrapper(PinocchioRobotWrapper):
 
     @property
     def getEndEffectorsFrameId(self):
+        ee_frames = self.getEndEffectorsFrames
         idx = []
-        for f in self.model.frames:
-            if 'foot' in f.name and 'joint' not in f.name:
-                idx.append(self.model.getFrameId(f.name))
+        for f in ee_frames:
+            idx.append(self.model.getFrameId(f.name))
         return idx
 
     @property
     def getEndEffectorsFrameNames(self):
+        ee_frames = self.getEndEffectorsFrames
         names = []
-        for f in self.model.frames:
-            if 'foot' in f.name:
-                names.append(f.name)
+        for f in ee_frames:
+            names.append(f.name)
         return names
 
     @property
     def getEndEffectorsFrames(self):
         frames = []
         for f in self.model.frames:
-            if 'foot' in f.name and 'joint' not in f.name:
+            if 'foot' in f.name and 'joint' not in f.name and 'fixed' not in f.name:
                 frames.append(f)
         return frames
-
 
     @property
     def nee(self):
