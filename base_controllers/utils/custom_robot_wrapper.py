@@ -244,6 +244,14 @@ class RobotWrapper(PinocchioRobotWrapper):
     def nee(self):
         return len(self.getEndEffectorsFrameId)
 
+    @property
+    def isFloatingBase(self):
+        list_of_joint_types = [i.shortname() for i in self.model.joints]
+        if pin.JointModelFreeFlyer().shortname() in list_of_joint_types:
+            return True
+        else:
+            return False
+
     def getEEStackJacobians(self, q, component='full', ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
         ee_idxs = self.getEndEffectorsFrameId
         nee = len(ee_idxs)
