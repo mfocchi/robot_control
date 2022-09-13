@@ -182,31 +182,6 @@ class Utils:
 
         return list
 
-class ZeroSE3_State:
-    def __init__(self, na):
-        self.na = na
-        self.conf = np.zeros(7+self.na)
-        self.conf[6] = 1.
-        self.vel = np.zeros(6+self.na)
-    def set_qj(self, qj):
-        self.conf[7:] = qj
-    def set_vj(self, vj):
-        self.vel[6:] = vj
 
-class ZeroLin_State(ZeroSE3_State):
-    def __init__(self, na):
-        super().__init__(na)
-    def set_quat(self, quat):
-        self.conf[3:7] = quat
-    def set_omega(self, omega):
-        self.vel[3:6] = omega
-
-class State(ZeroLin_State):
-    def __init__(self, na):
-        super().__init__(na)
-    def set_pos(self, pos):
-        self.conf[0:3] = pos
-    def set_linvel(self, linvel):
-        self.vel[0:3] = linvel
         
             
