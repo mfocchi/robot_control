@@ -148,41 +148,32 @@ class BaseController(threading.Thread):
                                                  tcp_nodelay=True)
 
     def _receive_contact_lf(self, msg):
-        if (self.use_ground_truth_contacts):
-            grf = np.zeros(3)
-            grf[0] = msg.states[0].wrenches[0].force.x
-            grf[1] =  msg.states[0].wrenches[0].force.y
-            grf[2] =  msg.states[0].wrenches[0].force.z
-            self.u.setLegJointState(0, grf, self.grForcesLocal_gt)
-        else:
-            pass
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] =  msg.states[0].wrenches[0].force.y
+        grf[2] =  msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(0, grf, self.grForcesLocal_gt)
+
     def _receive_contact_rf(self, msg):
-        if (self.use_ground_truth_contacts):
-            grf = np.zeros(3)
-            grf[0] = msg.states[0].wrenches[0].force.x
-            grf[1] =  msg.states[0].wrenches[0].force.y
-            grf[2] =  msg.states[0].wrenches[0].force.z
-            self.u.setLegJointState(1, grf, self.grForcesLocal_gt)
-        else:
-            pass
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] =  msg.states[0].wrenches[0].force.y
+        grf[2] =  msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(1, grf, self.grForcesLocal_gt)
+
     def _receive_contact_lh(self, msg):
-        if (self.use_ground_truth_contacts):
-            grf = np.zeros(3)
-            grf[0] = msg.states[0].wrenches[0].force.x
-            grf[1] =  msg.states[0].wrenches[0].force.y
-            grf[2] =  msg.states[0].wrenches[0].force.z
-            self.u.setLegJointState(2, grf, self.grForcesLocal_gt)
-        else:
-            pass
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] =  msg.states[0].wrenches[0].force.y
+        grf[2] =  msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(2, grf, self.grForcesLocal_gt)
+
     def _receive_contact_rh(self, msg):
-        if (self.use_ground_truth_contacts):
-            grf = np.zeros(3)
-            grf[0] = msg.states[0].wrenches[0].force.x
-            grf[1] =  msg.states[0].wrenches[0].force.y
-            grf[2] =  msg.states[0].wrenches[0].force.z
-            self.u.setLegJointState(3, grf, self.grForcesLocal_gt)
-        else:
-            pass
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] =  msg.states[0].wrenches[0].force.y
+        grf[2] =  msg.states[0].wrenches[0].force.z
+        self.u.setLegJointState(3, grf, self.grForcesLocal_gt)
 
     def _receive_pose(self, msg):
         
