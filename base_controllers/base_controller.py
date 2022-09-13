@@ -129,7 +129,6 @@ class BaseController(threading.Thread):
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
-        self.pid = PidManager(self.joint_names)
 
         self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
                                        queue_size=1, tcp_nodelay=True)
