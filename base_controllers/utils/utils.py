@@ -112,10 +112,9 @@ class Utils:
 
     def getLegJointState(self, legid,  jointState):
         if isinstance(legid, str):
-            jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3]
+            return jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3]
         elif isinstance(legid, int):
-            jointState[legid * 3:legid * 3 + 3]
-        return jointState[legid*3:legid*3+3]
+            return jointState[legid * 3:legid * 3 + 3]
 
     def spy(self, var):
         plt.spy(var)
