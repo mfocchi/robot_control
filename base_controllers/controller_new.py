@@ -15,6 +15,7 @@ from base_controllers.utils.pidManager import PidManager
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.utils import Utils
 from base_controllers.utils.math_tools import *
+from base_controllers.utils.common_functions import getRobotModel
 
 
 import base_controllers.params as conf
@@ -31,7 +32,6 @@ class Controller(BaseController):
         super(Controller, self).__init__(robot_name, launch_file)
         self.dt = conf.robot_params[self.robot_name]['dt']
         self.rate = ros.Rate(1 / self.dt)
-        self.model.na
         # some extra variables
         self.gen_config_neutral = pin.neutral(self.robot.model)
         self.qPin_base_oriented = pin.neutral(self.robot.model)
@@ -126,10 +126,6 @@ class Controller(BaseController):
     # initVars
     # logData
     # startupProcedure
-    # _receive_contact_lf
-    # _receive_contact_rf
-    # _receive_contact_lh
-    # _receive_contact_rh
 
     def initVars(self):
         self.comPosB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
@@ -296,6 +292,14 @@ class Controller(BaseController):
 
         self.time_log[:, self.log_counter] = self.time
 
+    def startController(self, xacro_path=None, world_name=None):
+        self.start()                            # as a thread
+        p.startSimulator(world_name)            # run ros
+        p.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
+        p.initVars()                            # overloaded method
+        p.startupProcedure()                    # overloaded method
+
+
 
     def log_policy(self, var):
         tmp = np.empty((var.shape[0], var.shape[1] + conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
@@ -375,22 +379,6 @@ class Controller(BaseController):
 
         return -com_torques
 
-    def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration):
-        from geometry_msgs.msg import Wrench, Point
-        wrench = Wrench()
-        wrench.force.x = Fx
-        wrench.force.y = Fy
-        wrench.force.z = Fz
-        wrench.torque.x = Mx
-        wrench.torque.y = My
-        wrench.torque.z = Mz
-        reference_frame = "world"  # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
-        reference_point = Point(x=0, y=0, z=0)
-        try:
-            self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame,
-                                   reference_point=reference_point, wrench=wrench, duration=ros.Duration(duration))
-        except:
-            pass
 
     def send_command(self, q_des=None, qd_des=None, tau_ffwd=None, tau_fb = None):
         # q_des, qd_des, and tau_ffwd have dimension 12
@@ -559,97 +547,31 @@ class Controller(BaseController):
 
 
     def startupProcedure(self):
-        ros.sleep(3.)  # wait for callback to fill in jointmnames
+        if self.robot_name == 'hyq':
+            super(Controller, self).startupProcedure()
+            return
 
         self.pid = PidManager(self.joint_names)
-        self.pid.setPDs(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], 0.0)
+        self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
+                             conf.robot_params[self.robot_name]['kd'],
+                             np.zeros(self.robot.na))
 
-        if (self.robot_name == 'hyq'):
-            # these torques are to compensate the leg gravity
-            self.gravity_comp = np.array(
-                [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
+        start_t = ros.get_time()
+        q_start = self.q.copy()
+        q_end = conf.robot_params[self.robot_name]['q_0']
+        self.qd_des = np.zeros(self.robot.na)
+        alpha = 0
 
-            print("reset posture...")
-            self.freezeBase(1)
-            start_t = ros.get_time()
-            while ros.get_time() - start_t < 1.0:
-                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-                ros.sleep(0.01)
-            if self.verbose:
-                print("q err prima freeze base", (self.q - self.q_des))
+        # run startup procedure if cumulative error is > 0.2 or if joint velocity is > 0.01
+        while np.linalg.norm(self.q-q_end)>0.2 or np.linalg.norm(self.qd-self.qd_des)>0.01:
+            self.q_des = alpha * q_end + (1-alpha) * q_start
+            self.tau_ffwd = self.gravityCompensation()+self.self_weightCompensation()
+            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+            if alpha < 1:
+                alpha = np.round(alpha+0.01, 2)
+            ros.sleep(0.01)
 
-            print("put on ground and start compensating gravity...")
-            self.freezeBase(0)
-            ros.sleep(0.5)
-            if self.verbose:
-                print("q err pre grav comp", (self.q - self.q_des))
-
-            start_t = ros.get_time()
-            while ros.get_time() - start_t < 1.0:
-                self.send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
-                ros.sleep(0.01)
-            if self.verbose:
-                print("q err post grav comp", (self.q - self.q_des))
-
-            print("starting com controller (no joint PD)...")
-            self.pid.setPDs(0.0, 0.0, 0.0)
-
-        if (self.robot_name == 'solo' or self.robot_name == 'aliengo'):
-            start_t = ros.get_time()
-            # fb_conf = np.hstack([pin.neutral(self.robot.model)[:7], self.q_des])
-            # self.gravity_comp = -self.robot.gravity(fb_conf)[6:]
-            q_start = self.q.copy()
-            q_end = conf.robot_params[self.robot_name]['q_0']
-            self.qd_des = np.zeros(self.robot.na)
-            # self.tau_ffwd = self.gravity_comp
-            alpha = 0
-
-            while np.linalg.norm(self.q-q_end)>0.2 or np.linalg.norm(self.qd-self.qd_des)>0.01:
-                self.q_des = alpha * q_end + (1-alpha) * q_start
-                self.tau_ffwd = self.gravityCompensation()+self.self_weightCompensation()
-                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-                if alpha < 1:
-                    alpha = np.round(alpha+0.01, 2)
-                ros.sleep(0.01)
-        #self.pid.setPDs(0.0, 0.0, 0.0)
-        #self.tau_ffwd[:] = 0.
         print("finished startup")
-
-    def computePID(self, q_des, qd_des):
-        tau_fb = conf.robot_params[self.robot_name]['kp']*(q_des-self.q) + conf.robot_params[self.robot_name]['kd']*(qd_des-self.qd)
-        return tau_fb
-
-
-
-    def _receive_contact_lf(self, msg):
-        grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] = msg.states[0].wrenches[0].force.y
-        grf[2] = msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(0, grf, self.grForcesLocal_gt)
-
-    def _receive_contact_rf(self, msg):
-        grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] = msg.states[0].wrenches[0].force.y
-        grf[2] = msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(1, grf, self.grForcesLocal_gt)
-
-    def _receive_contact_lh(self, msg):
-        grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] = msg.states[0].wrenches[0].force.y
-        grf[2] = msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(2, grf, self.grForcesLocal_gt)
-
-    def _receive_contact_rh(self, msg):
-        grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] = msg.states[0].wrenches[0].force.y
-        grf[2] = msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(3, grf, self.grForcesLocal_gt)
-
-
 
 
 
