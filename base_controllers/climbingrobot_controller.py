@@ -42,7 +42,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.leg_index = np.array([6, 7,8])
         self.base_passive_joints = np.array([3,4,5])
         self.anchor_passive_joints = np.array([0,1])
-        self.mountain_thickness = 0.1
+        self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
     def applyForce(self, Fx, Fy, Fz, interval):
@@ -66,6 +66,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
                                              callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
                                              tcp_nodelay=True)
+
+
 
     def rot2phi_theta(self, R):
         # this rotation is obtrained rotating phi about Z and theta about -Y axis as in Luigis convention
@@ -128,7 +130,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         # from ground truth
         self.com = self.base_pos + robotComB
-        mountain_pos = np.array([conf.robot_params[self.robot_name]['spawn_x'] -self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
+        mountain_pos = np.array([conf.robot_params[self.robot_name]['spawn_x'] - self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
 
@@ -170,6 +172,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def resetBase(self):
         # create the message
+
         req_reset_joints = SetModelConfigurationRequest()
         req_reset_joints.model_name = self.robot_name
         req_reset_joints.urdf_param_name = 'robot_description'
@@ -177,11 +180,12 @@ class ClimbingrobotController(BaseControllerFixed):
 
         req_reset_joints.joint_positions = conf.robot_params[self.robot_name]['q_0'].tolist()
         # recompute the theta angle to have the anchor attached to the wall
-        req_reset_joints.joint_positions[0] = math.atan2( 0.38, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
+        req_reset_joints.joint_positions[0] = math.atan2( 0.32, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
 
         # send request and get response (in this case none)
         self.reset_joints(req_reset_joints)
 
+        print(colored(f"---------Resetting Base", "blue"))
 
     def spawnMountain(self):
         package = 'gazebo_ros'
@@ -197,8 +201,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def startupProcedure(self):
         if not self.EXTERNAL_FORCE:
             p.resetBase()
-            p.spawnMountain() # I cannot apply body wrench if I spawn the mountain
-
+           # p.spawnMountain() # Deprecated, I cannot apply body wrench if I spawn the mountain, spawn the model in the ros_impedance_controller_climbingrobot.launch (need to hardcode mountain thickness)
         super().startupProcedure()
 
     def plotStuff(self):
@@ -219,7 +222,7 @@ class ClimbingrobotController(BaseControllerFixed):
                                         'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
 
 
-        plt.show(block=True)
+        #plt.show(block=True)
 
 
     def getIndex(self,t):
@@ -246,6 +249,7 @@ def talker(p):
     p.startSimulator("slow.world")
     #p.startSimulator()
     p.loadModelAndPublishers()
+
     p.startupProcedure()
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
@@ -256,7 +260,7 @@ def talker(p):
     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
-    p.startJump = 0.5
+    p.startJump = 1.5
 
     # p.targetPos = np.array([0, 5., -8.])
     # p.jumps = [{"Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
@@ -279,7 +283,7 @@ def talker(p):
     p.numberOfJumps = len(p.jumps)
     p.start_logging = np.inf
 
-    while True:
+    while not ros.is_shutdown():
 
         # update the kinematics
         p.updateKinematicsDynamics()
@@ -288,8 +292,9 @@ def talker(p):
         if ( p.stateMachine == 'idle') and (p.time >= p.startJump) and (p.jumpNumber<p.numberOfJumps):
             print(colored(f"---------Starting jump pipeline to target: {p.targetPos} ----------------------", "blue"))
             p.l_0 = p.l
+            p.resetBase()
             if (p.EXTERNAL_FORCE):
-                    p.resetBase()
+
                     print(colored("Start applying force", "red"))
                     p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.thrustDuration)
                     p.stateMachine = 'thrusting'
@@ -399,13 +404,13 @@ def talker(p):
                 # TODO for multiple jumps
                 #p.startJump = p.time
                 #p.pause_physics_client()
+
                 break
 
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
         # log variables
-
         if (p.time >= p.start_logging):
             p.logData()
 
@@ -421,19 +426,7 @@ def talker(p):
 
         # wait for synconization of the control loop
         rate.sleep()
-
-
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
-        # stops the while loop if  you prematurely hit CTRL+C
-        if ros.is_shutdown():
-            print("Shutting Down")
-            break
-
-    print("Shutting Down")
-    ros.signal_shutdown("killed")
-    p.deregister_node()
-    p.plotStuff()
-
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
     fig = plt.figure(figure_id)
@@ -468,9 +461,11 @@ if __name__ == '__main__':
 
     try:
         talker(p)
-    except ros.ROSInterruptException:
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
+    finally:
         p.plotStuff()
-        pass
 
 
         
