@@ -1,8 +1,6 @@
 import numpy as np
 import pinocchio as pin
 from base_controllers.utils.utils import Utils
-import os
-from base_controllers.utils.common_functions import getRobotModel
 
 # these macro are useful for choosing the solution (four are possible)
 # meanings:
@@ -170,6 +168,7 @@ class InverseKinematics:
 
 
 if __name__ == '__main__':
+    from base_controllers.utils.common_functions import getRobotModel
     # robot_name = 'solo'
     # qj = np.array([ 0.2,  np.pi / 4, -np.pi / 2,   # lf
     #                 0.2, -np.pi / 4,  np.pi / 2,   # lh
