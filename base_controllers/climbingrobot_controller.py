@@ -133,6 +133,7 @@ class ClimbingrobotController(BaseControllerFixed):
         mountain_pos = np.array([conf.robot_params[self.robot_name]['spawn_x'] - self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
+        self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar2', '/world')
 
     def _receive_contact(self, msg):
         grf = np.zeros(3)
@@ -205,30 +206,25 @@ class ClimbingrobotController(BaseControllerFixed):
         super().startupProcedure()
 
     def plotStuff(self):
-        print("PLOTTING")
-        # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-        # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-
-
-        traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame
-        time_gazebo = p.time_log - p.start_logging
-        plotJoint('position', 0, time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        #plotJoint('torque', 1, time_gazebo, None, None, None, None, None,None, p.tau_ffwd_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
-        plot3D('states', 3, ['theta', 'phi', 'l'], time_gazebo, p.simp_model_state_log)
-
-        mio.savemat('test_gazebo.mat', {'solution': p.matvars['solution'], 'T_th': p.matvars['T_th'], 'mu': p.matvars['mu'],
-                                        'Fun_max':p.matvars['Fun_max'], 'Fr_max':p.matvars['Fr_max'], 'p0':p.matvars['p0'],'pf': p.matvars['pf'],
-                                        'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
-
-
-        #plt.show(block=True)
+        if p.numberOfJumps < 2: # do plots only for one jump
+            print("PLOTTING")
+            # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+            # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+            traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame
+            time_gazebo = p.time_log - p.start_logging
+            plotJoint('position', 0, time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            #plotJoint('torque', 1, time_gazebo, None, None, None, None, None,None, p.tau_ffwd_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
+            plot3D('states', 3, ['theta', 'phi', 'l'], time_gazebo, p.simp_model_state_log)
+            mio.savemat('test_gazebo.mat', {'solution': p.matvars['solution'], 'T_th': p.matvars['T_th'], 'mu': p.matvars['mu'],
+                                            'Fun_max':p.matvars['Fun_max'], 'Fr_max':p.matvars['Fr_max'], 'p0':p.matvars['p0'],'pf': p.matvars['pf'],
+                                            'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
 
 
     def getIndex(self,t):
         try:
             # get index
-            a_bool = self.matvars['solution'].time >= t
+            a_bool = self.jumps[self.jumpNumber]["time"] >= t
             idx = min([i for (i, val) in enumerate(a_bool) if val])-1
             if idx == -1:
                 return 0
@@ -239,9 +235,11 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def getImpulseAngle(self):
         if p.MARCO_APPROACH:
-            angle = math.atan2(p.matvars['solution'].Fut[p.getIndex(p.thrustDuration/2)], p.matvars['solution'].Fun[p.getIndex(p.thrustDuration/2)])
+            angle = math.atan2(self.jumps[self.jumpNumber]["Fut"][self.getIndex(self.jumps[self.jumpNumber]["thrustDuration"]/2)],
+                               self.jumps[self.jumpNumber]["Fun"][self.getIndex(self.jumps[self.jumpNumber]["thrustDuration"]/2)])
         else:
-            angle =  math.atan2(p.jumps[p.jumpNumber]["Fut"], p.jumps[p.jumpNumber]["Fun"])
+            angle =  math.atan2(self.jumps[self.jumpNumber]["Fut"],
+                                self.jumps[self.jumpNumber]["Fun"])
         return angle
 def talker(p):
 
@@ -262,20 +260,25 @@ def talker(p):
     # jump parameters
     p.startJump = 1.5
 
-    # p.targetPos = np.array([0, 5., -8.])
-    # p.jumps = [{"Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
+    # with stiffness (does not reach target)
+    # p.jumps = [{"thrustDuration" : 0.05, "targetPos": np.array([0, 5., -8.]), "Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
     # # {"Fun": 115.9, "Fut": 73, "K_rope": 14.4, "Tf": 0.93}]
-    # p.thrustDuration = 0.05
 
     #override with matlab stuff
     if p.LOAD_MATLAB_TRAJ:
         if p.MARCO_APPROACH:
+            # single jump
             p.matvars = mio.loadmat('test_optim_marco.mat', squeeze_me=True,struct_as_record=False)
-        else:
+            p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['T_th'], "targetPos": p.matvars['pf'],  "Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut,  "Fr": p.matvars['solution'].Fr,  "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
+            #double jump
+            #p.matvars1 = mio.loadmat('test_optim_marco1.mat', squeeze_me=True, struct_as_record=False)
+            #p.matvars2 = mio.loadmat('test_optim_marco2.mat', squeeze_me=True, struct_as_record=False)
+            #p.jumps = [{"time": p.matvars1['solution'].time, "thrustDuration" : p.matvars1['T_th'], "targetPos": p.matvars1['pf'], "Fun": p.matvars1['solution'].Fun, "Fut": p.matvars1['solution'].Fut,  "Fr": p.matvars1['solution'].Fr, "K_rope": 0.0, "Tf": p.matvars1['solution'].Tf - p.matvars1['T_th']},
+            #            {"time": p.matvars2['solution'].time, "thrustDuration" : p.matvars2['T_th'], "targetPos": p.matvars2['pf'], "Fun": p.matvars2['solution'].Fun, "Fut": p.matvars2['solution'].Fut,  "Fr": p.matvars2['solution'].Fr, "K_rope": 0.0, "Tf": p.matvars2['solution'].Tf - p.matvars2['T_th']}]
+
+        else:#my approach
             p.matvars = mio.loadmat('test_optim.mat', squeeze_me=True, struct_as_record=False)
-        p.jumps = [{"Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut, "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
-        p.targetPos = p.matvars['pf']
-        p.thrustDuration  = p.matvars['T_th']
+            p.jumps = [{"thrustDuration" : p.matvars['T_th'], "targetPos": p.matvars['pf'], "Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut,  "Fr": p.matvars['solution'].Fr,  "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
 
     p.orientTime = 1.0
     p.stateMachine = 'idle'
@@ -290,20 +293,21 @@ def talker(p):
 
         #multiple jumps state machine
         if ( p.stateMachine == 'idle') and (p.time >= p.startJump) and (p.jumpNumber<p.numberOfJumps):
-            print(colored(f"---------Starting jump pipeline to target: {p.targetPos} ----------------------", "blue"))
+            print("\033[34m"+"---------Starting jump  number ", p.jumpNumber, " to target: ", p.jumps[p.jumpNumber]["targetPos"])
             p.l_0 = p.l
-            p.resetBase()
+            if p.jumpNumber == 0: # do only once
+                p.resetBase()
             if (p.EXTERNAL_FORCE):
 
                     print(colored("Start applying force", "red"))
-                    p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.thrustDuration)
+                    p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.jumps[p.jumpNumber]["thrustDuration"])
                     p.stateMachine = 'thrusting'
                     p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
-                    p.end_thrusting = p.startJump + p.thrustDuration
+                    p.end_thrusting = p.startJump + p.jumps[p.jumpNumber]["thrustDuration"]
                     print(colored("Start Thrusting with EXT FORCE", "blue"))
             else:
                 p.end_orienting = p.startJump + p.orientTime
-                p.end_thrusting = p.startJump + p.orientTime + p.thrustDuration
+                p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
                 # strategy 1 - orientation hip roll joint
                 p.q_des[7] = p.getImpulseAngle()
                 # strategy 2 -  align the body (keep HR to 1.57)
@@ -317,7 +321,7 @@ def talker(p):
                 p.start_logging = p.end_thrusting
 
         if (p.stateMachine == 'orienting_leg') and (p.time >= p.end_orienting):
-            print(colored(f"Start trusting Jump number : {p.jumpNumber}" , "blue"))
+            print(colored(f"Start trusting", "blue"))
             p.tau_ffwd = np.zeros(p.robot.na)
             p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
             p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
@@ -335,14 +339,14 @@ def talker(p):
                     p.b_Fu_xy = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"]])
                 else:
                     # in marco's approach these are vectors not scalars and I start to give the rope at the beginning
-                    p.b_Fu_xy =  p.matvars['solution'].Fun[p.getIndex(p.time - p.end_orienting)], p.matvars['solution'].Fut[p.getIndex(p.time - p.end_orienting)]
+                    p.b_Fu_xy =  p.jumps[p.jumpNumber]["Fun"][p.getIndex(p.time - p.end_orienting)], p.jumps[p.jumpNumber]["Fut"][p.getIndex(p.time - p.end_orienting)]
                     # required from strategy 2 -   with body aligned with impulse direction
-                    # Fu = np.array([  p.matvars['solution'].Fun[p.getIndex(p.time - p.end_orienting)],  p.matvars['solution'].Fut[p.getIndex(p.time - p.end_orienting) ]  ])
+                    # Fu = np.array([  p.jumps[p.jumpNumber]["Fun"][p.getIndex(p.time - p.end_orienting)],  p.jumps[p.jumpNumber]["Fut"][p.getIndex(p.time - p.end_orienting) ]  ])
                     # Fu_norm = np.linalg.norm(Fu)
                     # p.b_Fu_xy = np.hstack((Fu_norm ,0.))
 
                     # start already to use the rope
-                    Fr = p.matvars['solution'].Fr[p.getIndex(p.time - p.end_orienting)]
+                    Fr = p.jumps[p.jumpNumber]["Fr"][p.getIndex(p.time - p.end_orienting)]
                     p.tau_ffwd[p.rope_index] = Fr
                     rope_direction = (p.base_pos - p.anchor_pos) / np.linalg.norm(p.base_pos - p.anchor_pos)
                     p.ros_pub.add_arrow(p.base_pos, rope_direction * Fr / 100., "red", scale=2.5)
@@ -378,16 +382,16 @@ def talker(p):
                     delta_t = p.time - p.end_thrusting
                 else:
                     delta_t = p.time - p.end_orienting
-                Fr = p.matvars['solution'].Fr[p.getIndex(delta_t)]
+                Fr =  p.jumps[p.jumpNumber]["Fr"][p.getIndex(delta_t)]
             else:
                 Fr = -p.jumps[p.jumpNumber]["K_rope"] * (p.l - p.l_0)
             p.tau_ffwd[p.rope_index] = Fr
             rope_direction =  (p.base_pos - p.anchor_pos)/np.linalg.norm(p.base_pos - p.anchor_pos)
             p.ros_pub.add_arrow( p.base_pos, rope_direction*Fr/100., "red", scale=2.5)
             if (p.EXTERNAL_FORCE):
-                end_flying = p.startJump  + p.thrustDuration +  p.jumps[p.jumpNumber]["Tf"]
+                end_flying = p.startJump  + p.jumps[p.jumpNumber]["thrustDuration"]+  p.jumps[p.jumpNumber]["Tf"]
             else:
-                end_flying = p.startJump + p.orientTime + p.thrustDuration + p.jumps[p.jumpNumber]["Tf"]
+                end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"] + p.jumps[p.jumpNumber]["Tf"]
 
             if (p.time >= end_flying):
                 print(colored("Stop Flying", "blue"))
@@ -401,11 +405,13 @@ def talker(p):
                 p.tau_ffwd[p.rope_index] = 0
                 p.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'][p.rope_index], conf.robot_params[p.robot_name]['kd'][p.rope_index], 0.)
                 p.jumpNumber += 1
-                # TODO for multiple jumps
-                #p.startJump = p.time
-                #p.pause_physics_client()
 
-                break
+                if (p.jumpNumber < p.numberOfJumps):
+                    # reset for multiple jumps
+                    p.startJump = p.time
+                else:
+                    # p.pause_physics_client()
+                    break
 
         # send commands to gazebo
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -417,7 +423,7 @@ def talker(p):
         # plot  rope bw base link and anchor
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green")
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_marker(p.anchor_pos + p.targetPos, color="red", radius=0.5)
+        p.ros_pub.add_marker(p.anchor_pos + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.5)
         if (p.jumpNumber == p.numberOfJumps):
             p.ros_pub.add_marker(p.x_ee, color="green", radius=0.15)
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
