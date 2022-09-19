@@ -27,13 +27,12 @@ class RosPub():
             self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/visualize_"+robot_name+".launch"])
             self.launch.start()                                                    
             ros.loginfo("RVIZ started")
+            # set joint state publisher
+            self.joint_pub = ros.Publisher("/joint_states", JointState, queue_size=1)
 
-                               
-   
         #init ros node to publish joint states and vis topics
         ros.init_node('sub_pub_node_python', anonymous=False, log_level=ros.FATAL)
-        #set joint state publisher 
-        self.joint_pub = ros.Publisher("/joint_states", JointState, queue_size=1) 
+
         self.marker_pub = ros.Publisher('/vis' , MarkerArray, queue_size=1)
         self.arrow_pub = ros.Publisher('/arrow', MarkerArray, queue_size=1)
         self.markerArray = MarkerArray()
@@ -46,6 +45,7 @@ class RosPub():
         self.fixedBaseRobot = False
         self.visual_frame = visual_frame
         print("Initialized ros pub---------------------------------------------------------------")
+
     def publish(self,robot, q, qd = None, tau = None):
     
         if (qd is None ):
