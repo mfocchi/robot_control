@@ -295,10 +295,10 @@ class BaseController(threading.Thread):
         pin.updateFramePlacements(self.robot.model, self.robot.data)
         ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         for leg in range(4):
-            self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]) ).translation 
+            self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), update_kinematics=True ).translation
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
-    
-      
+            self.w_R_lowerleg[leg] = self.b_R_w.transpose().dot(self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
+
         for leg in range(4):
             leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
             self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
@@ -338,7 +338,7 @@ class BaseController(threading.Thread):
 
             if self.use_ground_truth_contacts:
                 grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
-                grf_gt = pin.updateFramePlacement(self.robot.model, self.robot.data, self.lowerleg_index[leg]).rotation @ grfLocal_gt
+                grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
                 self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
                 if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
                     self.contact_state_gt[leg] = True
@@ -435,6 +435,7 @@ class BaseController(threading.Thread):
         self.contact_state = np.array([False, False, False, False])
         self.contact_state_gt = np.array([False, False, False, False])
         self.contact_normal = [np.array([0., 0., 1.])]*4
+        self.w_R_lowerleg =  [np.eye(3)] * 4
 
         #log vars
         self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
