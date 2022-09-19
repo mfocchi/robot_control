@@ -94,6 +94,19 @@ class Math:
         
         # returns roll = psi, pitch = theta,  yaw = phi
         return np.array((psi, theta, phi))
+
+    #  from w_R_b returns the rpy angles into XYZ configuration about fixed axes
+
+    def rot2eulFixed(self, R):
+        phi = np.arctan2(R[1, 0], R[0, 0])
+        theta = np.arctan2(-R[2, 0], np.sqrt(pow(R[2, 1], 2) + pow(R[2, 2], 2)))
+        psi = np.arctan2(R[2, 1], R[2, 2])
+
+        # unit test should return roll = 0.5 pitch = 0.2  yaw = 0.3
+        # rot2eul(np.array([ [0.9363,   -0.1684,    0.3082], [0.2896 ,   0.8665  , -0.4065], [-0.1987 ,   0.4699  ,  0.8601]]))
+
+        # returns roll = psi, pitch = theta,  yaw = phi
+        return np.array((psi, theta, phi))
             
     # from the rpy angles into ZYX configuration returns w_R_b                            
     def eul2Rot(self, rpy):

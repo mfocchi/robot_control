@@ -331,10 +331,19 @@ class BaseController(threading.Thread):
             except np.linalg.linalg.LinAlgError as error:
                 grf = np.zeros(3)
             self.u.setLegJointState(leg, grf, self.grForcesW)
+            if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
+                self.contact_state[leg] = True
+            else:
+                self.contact_state[leg] = False
+
             if self.use_ground_truth_contacts:
-                grfLocal_gt = p.u.getLegJointState(leg, p.grForcesLocal_gt)
+                grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
                 grf_gt = pin.updateFramePlacement(self.robot.model, self.robot.data, self.lowerleg_index[leg]).rotation @ grfLocal_gt
                 self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
+                if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
+                    self.contact_state_gt[leg] = True
+                else:
+                    self.contact_state_gt[leg] = False
 
     def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration):
         from geometry_msgs.msg import Wrench, Point
@@ -423,6 +432,9 @@ class BaseController(threading.Thread):
         self.wJ = [np.eye(3)] * 4
         self.W_contacts = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
+        self.contact_state = np.array([False, False, False, False])
+        self.contact_state_gt = np.array([False, False, False, False])
+        self.contact_normal = [np.array([0., 0., 1.])]*4
 
         #log vars
         self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
@@ -514,9 +526,9 @@ def talker(p):
         
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg]*p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")
             if (p.use_ground_truth_contacts):
-                p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)), "red")
+                p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state_gt[leg]*p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)), "red")
         p.ros_pub.publishVisual()      				
   
 #        if (p.time>0.5): 
