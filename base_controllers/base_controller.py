@@ -304,6 +304,7 @@ class BaseController(threading.Thread):
             self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
 
+
        # Pinocchio Update the joint and frame placements
         gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.qd))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
@@ -340,10 +341,6 @@ class BaseController(threading.Thread):
                 grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
                 grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
                 self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
-                if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
-                    self.contact_state_gt[leg] = True
-                else:
-                    self.contact_state_gt[leg] = False
 
     def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration):
         from geometry_msgs.msg import Wrench, Point
@@ -433,7 +430,6 @@ class BaseController(threading.Thread):
         self.W_contacts = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
         self.contact_state = np.array([False, False, False, False])
-        self.contact_state_gt = np.array([False, False, False, False])
         self.contact_normal = [np.array([0., 0., 1.])]*4
         self.w_R_lowerleg =  [np.eye(3)] * 4
 
@@ -529,7 +525,7 @@ def talker(p):
         for leg in range(4):
             p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg]*p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")
             if (p.use_ground_truth_contacts):
-                p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state_gt[leg]*p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)), "red")
+                p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)), "red")
         p.ros_pub.publishVisual()      				
   
 #        if (p.time>0.5): 
