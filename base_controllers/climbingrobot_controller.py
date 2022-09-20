@@ -43,6 +43,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_passive_joints = np.array([3,4,5])
         self.anchor_passive_joints = np.array([0,1])
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
+        self.r_leg = 0.3
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
     def applyForce(self, Fx, Fy, Fz, interval):
@@ -67,7 +68,19 @@ class ClimbingrobotController(BaseControllerFixed):
                                              callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
                                              tcp_nodelay=True)
 
-
+    def computeRopeAngle(self, point):
+        rope_direction = (self.anchor_pos - point) / np.linalg.norm(self.anchor_pos  - point)
+        #angle of the point wrt the vertical line passing throught the anchor
+        alpha_anchor1 = math.acos(rope_direction[2])
+        beta = math.atan2(point[0] + 0.0001, point[1]) #added small amount to have normal1 perpendicular to wall  when 0, 0
+        normal1 = np.array([math.sin(beta), math.cos(beta), math.sin(alpha_anchor1)])
+        #now I need to further rotate  of alpha_anchor2 about an -Y (or -alpha_anchor2 about Y) axis perpendicular to normal1 (we neglect this effect)
+        #alpha_anchor2 = atan2(r_leg, norm(anchor - point));
+        # Ry= np.array([[cos(-alpha_anchor2),  0,      sin(-alpha_anchor2)],
+        #               [0,                   1,                          0],
+        #               [-sin(-alpha_anchor2), 0,  cos(-alpha_anchor2)]]
+        # normal2 = Ry.dot(normal1)
+        return beta, normal1
 
     def rot2phi_theta(self, R):
         # this rotation is obtrained rotating phi about Z and theta about -Y axis as in Luigis convention
@@ -156,6 +169,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
         self.time_jump_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
+        self.rope_normal = np.zeros(3)
+
+
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
                 self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
@@ -182,10 +198,14 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if p0 is None:
             # recompute the theta angle to have the anchor attached to the wall
-            req_reset_joints.joint_positions[0] = math.atan2( 0.35, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
+            req_reset_joints.joint_positions[0] = math.atan2(self.r_leg, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
         else: # do IK on p0
-            print(self.computeJointVariables(p0))
             req_reset_joints.joint_positions[0:3] = self.computeJointVariables(p0)
+            beta1, self.rope_normal = self.computeRopeAngle(p0)
+            beta2, max_Fut, max_Fun = self.getImpulseAngle()
+            print("\033[34m" + "impulses are: Fun : ", max_Fun, " and  Fut : ", max_Fut)
+            p.q_des[5] = (np.pi/2 - beta1) + beta2
+            req_reset_joints.joint_positions[5] = p.q_des[5]
 
         # send request and get response (in this case none)
         self.reset_joints(req_reset_joints)
@@ -239,12 +259,14 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def getImpulseAngle(self):
         if p.MARCO_APPROACH:
-            angle = math.atan2(self.jumps[self.jumpNumber]["Fut"][self.getIndex(self.jumps[self.jumpNumber]["thrustDuration"]/2)],
-                               self.jumps[self.jumpNumber]["Fun"][self.getIndex(self.jumps[self.jumpNumber]["thrustDuration"]/2)])
+            max_Fut = self.jumps[self.jumpNumber]["Fut"][self.getIndex(self.jumps[self.jumpNumber]["thrustDuration"]/2)]
+            max_Fun = self.jumps[self.jumpNumber]["Fun"][self.getIndex(self.jumps[self.jumpNumber]["thrustDuration"]/2)]
+            angle = math.atan2(max_Fut,max_Fun)
         else:
             angle =  math.atan2(self.jumps[self.jumpNumber]["Fut"],
                                 self.jumps[self.jumpNumber]["Fun"])
-        return angle
+
+        return angle, max_Fut, max_Fun
 
     def computeJointVariables(self, p):
         wire_base_prismatic = math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2] * p[2])
@@ -269,7 +291,7 @@ def talker(p):
     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
-    p.startJump = 1.5
+    p.startJump = 0.5
 
     # with stiffness (does not reach target)
     # p.jumps = [{"thrustDuration" : 0.05, "p0": np.array([0.377, 0., -3.]), "targetPos": np.array([0, 5., -8.]), "Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
@@ -279,10 +301,10 @@ def talker(p):
     if p.LOAD_MATLAB_TRAJ:
         if p.MARCO_APPROACH:
             # single jump
-            #p.matvars = mio.loadmat('test_optim_marco.mat', squeeze_me=True,struct_as_record=False)
-            p.matvars = mio.loadmat('exp4.mat', squeeze_me=True, struct_as_record=False)
+            p.matvars = mio.loadmat('test_optim_marco.mat', squeeze_me=True,struct_as_record=False)
+            #p.matvars = mio.loadmat('exp4.mat', squeeze_me=True, struct_as_record=False)
 
-            p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['T_th'], "p0": p.matvars['p0'], "targetPos": p.matvars['pf'],  "Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut,  "Fr": p.matvars['solution'].Fr,  "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
+            p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['T_th'], "p0": p.matvars['p0'], "targetPos": p.matvars['pf'],  "Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut,  "Fr": p.matvars['solution'].Fr,  "K_rope": 0.0, "Tf": p.matvars['solution'].Tf }]
             #double jump
             #p.matvars1 = mio.loadmat('test_optim_marco1.mat', squeeze_me=True, struct_as_record=False)
             #p.matvars2 = mio.loadmat('test_optim_marco2.mat', squeeze_me=True, struct_as_record=False)
@@ -293,7 +315,7 @@ def talker(p):
             p.matvars = mio.loadmat('test_optim.mat', squeeze_me=True, struct_as_record=False)
             p.jumps = [{"thrustDuration" : p.matvars['T_th'], "p0": p.matvars['p0'],  "targetPos": p.matvars['pf'], "Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut,  "Fr": p.matvars['solution'].Fr,  "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
 
-    p.orientTime = 1.0
+    p.orientTime = 0.5
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
     p.numberOfJumps = len(p.jumps)
@@ -306,7 +328,8 @@ def talker(p):
 
         #multiple jumps state machine
         if ( p.stateMachine == 'idle') and (p.time >= p.startJump) and (p.jumpNumber<p.numberOfJumps):
-            print("\033[34m"+"---------Starting jump  number ", p.jumpNumber, " to target: ", p.jumps[p.jumpNumber]["targetPos"], " from p0 : ", p.jumps[p.jumpNumber]["p0"])#, " with Fun : ", p.jumps[p.jumpNumber]["Fun"]," and  Fut : ", p.jumps[p.jumpNumber]["Fut"])
+            print("\033[34m"+"---------Starting jump  number ", p.jumpNumber, " to target: ", p.jumps[p.jumpNumber]["targetPos"], " from p0 : ", p.jumps[p.jumpNumber]["p0"])
+
             p.l_0 = p.l
             if p.jumpNumber == 0: # do only once
                 p.resetBase(p.jumps[p.jumpNumber]["p0"])
@@ -319,14 +342,16 @@ def talker(p):
                     p.end_thrusting = p.startJump + p.jumps[p.jumpNumber]["thrustDuration"]
                     print(colored("Start Thrusting with EXT FORCE", "blue"))
             else:
+
+                # strategy 1 - orientation hip roll joint
+                #p.q_des[7] = p.getImpulseAngle()[0]
+                # strategy 2 -  align the body (keep HR to 1.57)
+                #p.q_des[5] = p.getImpulseAngle()[0]
+                print(colored(f"Start orienting leg to  : {p.getImpulseAngle()[0]}", "blue"))
+                p.stateMachine = 'orienting_leg'
+                #set the end of orienting
                 p.end_orienting = p.startJump + p.orientTime
                 p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
-                # strategy 1 - orientation hip roll joint
-                p.q_des[7] = p.getImpulseAngle()
-                # strategy 2 -  align the body (keep HR to 1.57)
-                #p.q_des[5] = p.getImpulseAngle()
-                print(colored(f"Start orienting leg to  : {p.q_des[7]}", "blue"))
-                p.stateMachine = 'orienting_leg'
 
             if p.MARCO_APPROACH:
                 p.start_logging = p.end_orienting
@@ -352,11 +377,11 @@ def talker(p):
                     p.b_Fu_xy = np.array([p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"]])
                 else:
                     # in marco's approach these are vectors not scalars and I start to give the rope at the beginning
-                    p.b_Fu_xy =  p.jumps[p.jumpNumber]["Fun"][p.getIndex(p.time - p.end_orienting)], p.jumps[p.jumpNumber]["Fut"][p.getIndex(p.time - p.end_orienting)]
+                    #p.b_Fu_xy =  p.jumps[p.jumpNumber]["Fun"][p.getIndex(p.time - p.end_orienting)], p.jumps[p.jumpNumber]["Fut"][p.getIndex(p.time - p.end_orienting)]
                     # required from strategy 2 -   with body aligned with impulse direction
-                    # Fu = np.array([  p.jumps[p.jumpNumber]["Fun"][p.getIndex(p.time - p.end_orienting)],  p.jumps[p.jumpNumber]["Fut"][p.getIndex(p.time - p.end_orienting) ]  ])
-                    # Fu_norm = np.linalg.norm(Fu)
-                    # p.b_Fu_xy = np.hstack((Fu_norm ,0.))
+                    Fu = np.array([  p.jumps[p.jumpNumber]["Fun"][p.getIndex(p.time - p.end_orienting)],  p.jumps[p.jumpNumber]["Fut"][p.getIndex(p.time - p.end_orienting) ]  ])
+                    Fu_norm = np.linalg.norm(Fu)
+                    p.b_Fu_xy = np.hstack((Fu_norm ,0.))
 
                     # start already to use the rope
                     Fr = p.jumps[p.jumpNumber]["Fr"][p.getIndex(p.time - p.end_orienting)]
@@ -434,14 +459,17 @@ def talker(p):
             p.logData()
 
         # plot  rope bw base link and anchor
-        p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale = 3.)# rope
-        p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_marker(p.anchor_pos, radius=0.8, color= "green")
+        p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale = 3.)# arope, already in gazebo
+        #p.ros_pub.add_marker(p.anchor_pos, radius=0.8, color= "green") #already in gazebo
         p.ros_pub.add_marker(p.anchor_pos + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.8)
+
+        # p.ros_pub.add_arrow(p.x_ee, p.rope_normal, color=[0, 0, 0], scale=4.5)
+        p.ros_pub.add_marker(p.x_ee, radius=0.05)
         if (p.jumpNumber == p.numberOfJumps):
             p.ros_pub.add_marker(p.x_ee, color="green", radius=0.15)
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 100., "blue")
+        # commented because it no longer a  nice impulse when I changed orientation strategy
+        #p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 50., "blue", scale = 4.5)
         p.ros_pub.publishVisual()
 
         # wait for synconization of the control loop
