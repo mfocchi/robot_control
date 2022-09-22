@@ -47,8 +47,8 @@ robot_params['solo_fw'] ={'dt': 0.002,
                         'buffer_size': 1501} # note the frames are all aligned with base for joints = 0
 
 robot_params['aliengo'] ={'dt': 0.002,
-                        'kp': [5., 5., 5., 5., 5., 5., 5., 5., 5., 5., 5., 5., 0, 0],
-                        'kd': [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0, 0],
+                        'kp': 50.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]),
+                        'kd': 5.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]),
                         'q_0':  np.array([0.2, 0.7, -1.4, -0.2, 0.7, -1.4, 0.2, 0.7, -1.4, -0.2, 0.7, -1.4]),
                         'joint_names': ['lf_haa_joint', 'lf_hfe_joint', 'lf_kfe_joint', 'rf_haa_joint',  'rf_hfe_joint',
                                           'rf_kfe_joint', 'lh_haa_joint', 'lh_hfe_joint', 'lh_kfe_joint',  'rh_haa_joint',

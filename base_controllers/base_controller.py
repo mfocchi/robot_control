@@ -477,7 +477,7 @@ class BaseController(threading.Thread):
 	
 def talker(p):
     p.start()
-    if (p.robot_name == 'aliengo') or (p.robot_name == 'solo_fw'):
+    if  (p.robot_name == 'solo_fw'):
         p.custom_launch_file = True
     p.startSimulator()
     p.loadModelAndPublishers()
