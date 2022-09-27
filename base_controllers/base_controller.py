@@ -227,7 +227,7 @@ class BaseController(threading.Thread):
       
  
     def get_contact(self):
-        return self.contactsW
+        return self.W_contacts
     def get_pose(self):
         return self.basePoseW
     def get_jstate(self):
