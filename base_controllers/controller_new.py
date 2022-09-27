@@ -14,6 +14,7 @@ from base_controllers.utils.pidManager import PidManager
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.math_tools import *
 
+from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics
 from termcolor import colored
 
 import base_controllers.params as conf
@@ -428,31 +429,133 @@ class Controller(BaseController):
 
 
     def startupProcedure(self):
+        ros.sleep(.5)
+        print(colored("Starting up", "blue"))
         if self.robot_name == 'hyq':
             super(Controller, self).startupProcedure()
             return
-
+        
+        # the robot must start in fold configuration
+        self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
         self.pid = PidManager(self.joint_names)
         self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
                              conf.robot_params[self.robot_name]['kd'],
                              np.zeros(self.robot.na))
 
-        start_t = ros.get_time()
-        q_start = self.q.copy()
-        q_end = conf.robot_params[self.robot_name]['q_0']
-        self.qd_des = np.zeros(self.robot.na)
-        alpha = 0
-
-        # run startup procedure if cumulative error is > 0.2 or if joint velocity is > 0.01
-        while np.linalg.norm(self.q-q_end)>0.2 or np.linalg.norm(self.qd-self.qd_des)>0.01:
-            self.q_des = alpha * q_end + (1-alpha) * q_start
-            self.tau_ffwd = self.gravityCompensation()+self.self_weightCompensation()
+        for i in range(10):
             self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-            if alpha < 1:
-                alpha = np.round(alpha+0.01, 2)
             ros.sleep(0.01)
 
-        print("finished startup")
+        # IK initialization
+        IK = InverseKinematics(self.robot)
+        legConfig = {}
+        if 'solo' in self.robot_name:  # either solo or solo_fw
+            legConfig['lf'] = ['HipDown', 'KneeInward']
+            legConfig['lh'] = ['HipDown', 'KneeInward']
+            legConfig['rf'] = ['HipDown', 'KneeInward']
+            legConfig['rh'] = ['HipDown', 'KneeInward']
+
+        elif self.robot_name == 'aliengo' or self.robot_name == 'go1':
+            legConfig['lf'] = ['HipDown', 'KneeInward']
+            legConfig['lh'] = ['HipDown', 'KneeOutward']
+            legConfig['rf'] = ['HipDown', 'KneeInward']
+            legConfig['rh'] = ['HipDown', 'KneeOutward']
+
+        else:
+            assert False, 'Robot name is not valid'
+
+        # initial feet position
+        B_feet_pose = [np.zeros(3)] * 4
+        neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], conf.robot_params[self.robot_name]['q_fold']))
+        pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate)
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
+
+        for leg in range(4):
+            foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
+            foot_id = self.robot.model.getFrameId(foot)
+            B_feet_pose[leg] = self.robot.data.oMf[foot_id].translation.copy()
+
+        # desired final height
+        neutral_fb_jointstate[7:] = self.u.mapToRos(conf.robot_params[self.robot_name]['q_0'])
+
+        self.robot.forwardKinematics(neutral_fb_jointstate)
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
+        robot_height = 0.
+        for id in self.robot.getEndEffectorsFrameId:
+            robot_height += self.robot.data.oMf[id].translation[2]
+        robot_height /= -4.
+
+        # increase of the motion
+        delta_z = 0.001
+        ########################
+        # FINITE STATE MACHINE #
+        ########################
+        # state = -1: initialize pid
+        # state = 0: not all the contacts are active, move the feet in order to activate all the contacts (use IK+PD)
+        # state = 1: apply gravity compensation for 1 second
+        # state = 2: apply PD + gravity compensation
+        # state = 3: exit
+        state = 0
+        print(colored("[startupProcedure] searching contacts", "green"))
+        while state != 3:
+
+            self.updateKinematics()
+            self.visualizeContacts()
+            if state == 0:
+                if not self.contact_state.all(): # if at least one is not in contact
+                    for leg in range(4):
+                        if not self.contact_state[leg]:
+                            # update feet task
+                            # if a leg is in contact, it must keep the same reference (waiting for the others)
+                            foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
+                            foot_id = self.robot.model.getFrameId(foot)
+                            leg_name = foot[:2]
+                            print(leg_name)
+                            B_feet_pose[leg][2] -= delta_z
+                            q_des_leg = IK.ik_leg(B_feet_pose[leg], foot_id, legConfig[leg_name][0],legConfig[leg_name][1])[0].flatten()
+                            self.u.setLegJointState(leg, q_des_leg, self.q_des)
+                    self.tau_ffwd[:] = 0.
+                else:
+                    print(colored("[startupProcedure] appling gravity compensation", "green"))
+                    state = 1
+                    GCStartTime = self.time
+                    alpha = 0.
+
+            if state == 1:
+                if (self.time-GCStartTime) <= 1.5:
+                    if alpha < 1:
+                        alpha = np.round(alpha + 10*np.array([conf.robot_params[self.robot_name]['dt']]), 3)
+                    self.tau_ffwd = alpha * self.gravityCompensation()
+                else:
+                    print(colored("[startupProcedure] moving to desired height", "green"))
+                    state = 2
+
+            if state == 2:
+                if np.abs(self.basePoseW[2] - robot_height) > 0.005:
+                    # set reference
+                    for leg in range(4):
+                        foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
+                        foot_id = self.robot.model.getFrameId(foot)
+                        leg_name = foot[:2]
+                        print(leg, B_feet_pose[leg])
+                        B_feet_pose[leg][2] -= delta_z
+                        if -B_feet_pose[leg][2] <= robot_height:
+                            q_des_leg = IK.ik_leg(B_feet_pose[leg], foot_id, legConfig[leg_name][0], legConfig[leg_name][1])[
+                                0].flatten()
+                            self.u.setLegJointState(leg, q_des_leg, self.q_des)
+                    self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
+                else:
+                    print(colored("[startupProcedure] completed", "green"))
+                    state = 3
+
+            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+            # wait for synchronization of the control loop
+            self.rate.sleep()
+            self.time = np.round(self.time + np.array([conf.robot_params[self.robot_name]['dt']]), 3)
+            # self.logData()
+
+        # reset time before return (I don't want that my simulations start with time > 0)
+        self.time = 0.
 
 
 
