@@ -14,6 +14,7 @@ from base_controllers.utils.pidManager import PidManager
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.math_tools import *
 
+from termcolor import colored
 
 import base_controllers.params as conf
 
@@ -25,8 +26,16 @@ import datetime
 class Controller(BaseController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(Controller, self).__init__(robot_name, launch_file)
+        self.qj_0 = conf.robot_params[self.robot_name]['q_0']
         self.dt = conf.robot_params[self.robot_name]['dt']
-        self.rate = ros.Rate(1 / self.dt)
+
+
+        now = datetime.datetime.now()
+        date_string = now.strftime("%Y%m%d%H%M")
+
+        self.sensors_bag = rosbag.Bag(os.environ['PYSOLO_FROSCIA'] + '/bags/' + date_string + '.bag', 'w')
+
+        self.use_ground_truth_contacts = True
 
 
     #####################
@@ -228,13 +237,17 @@ class Controller(BaseController):
         self.comVelW_leg_odom_log[:, self.log_counter] = self.comVelW_leg_odom
         self.time_log[:, self.log_counter] = self.time
 
-    def startController(self, xacro_path=None, world_name=None):
-        self.start()                            # as a thread
-        p.startSimulator(world_name)            # run ros
-        p.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
-        p.initVars()                            # overloaded method
-        p.startupProcedure()                    # overloaded method
 
+    def startController(self, xacro_path=None, world_name=None, use_real_robot=False):
+        self.start()                               # as a thread
+        if not use_real_robot:
+            self.startSimulator(world_name)        # run gazebo
+        self.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
+        #self.resetGravity(True)
+        self.initVars()                            # overloaded method
+        self.rate = ros.Rate(1 / self.dt)
+        self.startupProcedure()                    # overloaded method
+        print(colored("Started controller", "blue"))
 
 
     def log_policy(self, var):
