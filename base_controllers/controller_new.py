@@ -575,27 +575,90 @@ class Controller(BaseController):
 
 if __name__ == '__main__':
     p = Controller('solo')
-
-    p.startupProcedure()
-    from pysolo.controllers.simple_controllers import PushUpReference
-    reference_push_up = PushUpReference(q0=p.q, amplitude=np.pi / 18, frequency=1)
-    start_time = p.time
     try:
+        p.startController(world_name='slow.world')
+
+
 
         while not ros.is_shutdown():
-            task_time = p.time - start_time
-            p.estimateContacts()
-            p.visualizeContacts()
-            q_des, qd_des = reference_push_up.compute(task_time)
-            tau_ffwd = p.gravityCompensation()+p.self_weightCompensation()
-            tau_fb = p.computePID(q_des, qd_des)
-            p.send_command(q_des, qd_des, tau_ffwd, tau_fb)
+            #p.tau_ffwd = p.gravityCompensation() + p.self_weightCompensation()
+            #p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+
+            p.logData()
 
 
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
+
+        import matplotlib
+
+        matplotlib.use('TkAgg')
+        from base_controllers.utils.common_functions import plotJoint, plotCoM, plotGRFs
+
+        plotJoint('position', 0, p.time_log.flatten(), p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None,
+                  p.tau_log,
+                  p.tau_ffwd_log, p.joint_names)
+        plotJoint('torque', 1, p.time_log.flatten(), p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None,
+                  p.tau_log,
+                  p.tau_ffwd_log, p.joint_names)
+        #plotCoM('position', 1, p.time_log.flatten(), None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
         # stats = pstats.Stats(profiler).sort_stats('cumtime')
         # stats.print_stats()
 
+#
+# def talker(p):
+#     p.start()
+#     if (p.robot_name == 'aliengo') or (p.robot_name == 'solo_fw'):
+#         p.custom_launch_file = True
+#     p.startSimulator("slow.world")
+#     p.loadModelAndPublishers()
+#     p.initVars()
+#     p.startupProcedure()
+#
+#     # loop frequency
+#     rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
+#
+#     firstTime = True
+#     # control loop
+#     while not ros.is_shutdown():
+#         # update the kinematics
+#         p.updateKinematics()
+#         p.visualizeContacts()
+#         #print(p.q)
+#         p.tau_ffwd = p.gravityCompensation() #+ p.u.mapFromRos(p.h_joints)
+#
+#         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+#
+#         # log variables
+#         p.logData()
+#
+#         if firstTime and (p.time > 3.0):
+#             print("AAAAAAAAAAAAAAAAAAAAAAA")
+#             p.q_des = np.copy(p.q)
+#             firstTime = False
+#
+#         # wait for synconization of the control loop
+#         rate.sleep()
+#         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
+#
+#
+#
+# if __name__ == '__main__':
+#     p = Controller('go1')
+#     try:
+#         talker(p)
+#     except (ros.ROSInterruptException, ros.service.ServiceException):
+#         ros.signal_shutdown("killed")
+#         p.deregister_node()
+#         if conf.plotting:
+#             import matplotlib
+#             matplotlib.use('TkAgg')
+#             from base_controllers.utils.common_functions import plotJoint, plotCoM, plotGRFs
+#             plotJoint('position', 0, p.time_log.flatten(), p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
+#                       p.tau_ffwd_log, p.joint_names)
+#             plotCoM('position', 1, p.time_log.flatten(), None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
+#             plotGRFs(2, p.time_log.flatten(), p.grForcesW_gt_log, p.grForcesW_log)
+#
+#
