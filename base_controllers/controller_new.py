@@ -362,106 +362,48 @@ class Controller(BaseController):
         # log variables
         self.rate.sleep()
         self.logData()
+        self.time = np.round(self.time + np.array([conf.robot_params[self.robot_name]['dt']]), 3)
 
 
 
-    def estimateContacts_KKT(self):
-        q_ros = self.u.mapToRos(self.q)
-        v_ros = self.u.mapToRos(self.qd)
-        tau_ros = self.u.mapToRos(self.tau)
-
-        B_R_W = pin.Quaternion(self.quaternion).toRotationMatrix().T
-
-        full_conf = np.hstack((self.basePoseW[0:3], self.quaternion, q_ros))
-        full_vel  = np.hstack((self.baseTwistW[0:6], v_ros))
-
-        full_tau = np.hstack(([0.]*6, tau_ros))
-        full_h = self.robot.nle(full_conf, full_vel)
-
-        C_qd = full_h - self.robot.gravity(full_conf)
-
-        self.tau_minus_h = full_tau - full_h
-        self.C_qd = C_qd
-        bias = np.hstack((self.tau_minus_h, [0., 0., 0.] * 4))
-
-        dJdq = np.zeros(12)
-        for leg in range(0, 4):
-            dJdq[3*leg:3*(leg+1)] = self.robot.dJdq(full_conf, full_vel, self.robot.model.getFrameId(self.ee_frame_names[leg]), 'linear')
-        bias[self.robot.nv:] = self.u.mapToRos(dJdq)
-
-        KKT_inv = self.robot.KKTMatrixAtEndEffectorsInv(full_conf, 'linear')
-        tmp = KKT_inv @ bias
-        full_a = tmp[0:self.robot.nv]
-        full_grfW = -tmp[self.robot.nv:]
-
-        self.grForcesW = self.u.mapToRos(full_grfW)
-        self.base_acc_W = full_a[:6]
-        self.qdd = self.u.mapToRos(full_a[6:])
-
-        for leg in range(4):
-
-            self.grForcesB[3*leg:3*(leg+1)] = B_R_W @ self.grForcesW[3*leg:3*(leg+1)]
-
-            self.contacts_state[leg] = self.grForcesW[3*(leg+1)-1] > self.force_th
-
-
-    def estimateContacts(self):
-        q_ros = self.u.mapToRos(self.q)
-        v_ros = self.u.mapToRos(self.qd)
-
-        # Pinocchio Update the joint and frame placements
-        configuration = np.hstack(([0,0,0], self.quaternion, q_ros))
-        neutral_configuration = np.hstack((pin.neutral(self.robot.model)[0:7], q_ros))
-        velocity = np.hstack(([0,0,0], self.baseTwistW[3:6], v_ros))
-
-        pin.forwardKinematics(self.robot.model, self.robot.data, neutral_configuration)
-        pin.computeJointJacobians(self.robot.model, self.robot.data)
-        pin.updateFramePlacements(self.robot.model, self.robot.data)
-
-        #gravity_torques = self.robot.gravity(configuration)
-        gravity_torques = self.robot.nle(configuration, velocity)
-        joint_gravity_torques = gravity_torques[6:]
-
-        self.contacts_state[:] = False
-
-
-        self.robot.forwardKinematics(neutral_configuration)
-        # leg index represents lf rf lh rh
-        for legid in self.u.leg_map.keys():
-            leg = self.u.leg_map[legid]
-            index = self.robot.model.getFrameId(self.ee_frame_names[leg])
-            self.B_contacts[leg] = pin.updateFramePlacement(self.robot.model, self.robot.data, index).translation
-            leg_joints = range(6 + self.u.mapIndexToRos(leg) * 3, 6 + self.u.mapIndexToRos(leg) * 3 + 3)
-            self.bJ[leg] = self.robot.frameJacobian(neutral_configuration,
-                                                       self.robot.model.getFrameId(self.ee_frame_names[leg]),
-                                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, leg_joints]
-            try:
-                grf = np.linalg.inv(self.bJ[leg].T).dot(self.u.getLegJointState(leg, joint_gravity_torques - self.tau))
-                grf_ffwd = np.linalg.inv(self.bJ[leg].T).dot(self.u.getLegJointState(leg, joint_gravity_torques - self.tau_ffwd))
-                grf_ddp = np.linalg.inv(self.bJ[leg].T).dot(self.u.getLegJointState(leg, joint_gravity_torques - self.tau_ddp))
-            except np.linalg.LinAlgError as e:
-                grf = np.zeros(3)
-
-            R = pin.rpy.rpyToMatrix(self.basePoseW[3:6])
-            self.u.setLegJointState(leg, grf, self.grForcesB)
-            self.u.setLegJointState(leg, grf_ffwd, self.grForcesB_ffwd)
-            self.u.setLegJointState(leg, grf_ddp, self.grForcesB_ddp)
-            self.u.setLegJointState(leg, R @ grf, self.grForcesW) # TODO: R or R.T?
-            self.contacts_state[leg] = grf[2] > self.force_th
-
-        full_configuration = np.hstack((self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-        self.robot.forwardKinematics(full_configuration)
-        for legid in self.u.leg_map.keys():
-            leg = self.u.leg_map[legid]
-            foot_index = self.robot.model.getFrameId(self.ee_frame_names[leg])
-            lowerleg_index =  self.robot.model.getFrameId(self.lowerleg_frame_names[leg])
-
-            self.W_contacts[leg] = pin.updateFramePlacement(self.robot.model, self.robot.data, foot_index).translation
-
-            if self.use_ground_truth_contacts:
-                grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
-                grf_gt = pin.updateFramePlacement(self.robot.model, self.robot.data, lowerleg_index).rotation @ grfLocal_gt
-                self.u.setLegJointState(legid, grf_gt, self.grForcesW_gt)
+    # def estimateContacts_KKT(self): # TODO
+    #     q_ros = self.u.mapToRos(self.q)
+    #     v_ros = self.u.mapToRos(self.qd)
+    #     tau_ros = self.u.mapToRos(self.tau)
+    #
+    #     B_R_W = pin.Quaternion(self.quaternion).toRotationMatrix().T
+    #
+    #     full_conf = np.hstack((self.basePoseW[0:3], self.quaternion, q_ros))
+    #     full_vel  = np.hstack((self.baseTwistW[0:6], v_ros))
+    #
+    #     full_tau = np.hstack(([0.]*6, tau_ros))
+    #     full_h = self.robot.nle(full_conf, full_vel)
+    #
+    #     C_qd = full_h - self.robot.gravity(full_conf)
+    #
+    #     self.tau_minus_h = full_tau - full_h
+    #     self.C_qd = C_qd
+    #     bias = np.hstack((self.tau_minus_h, [0., 0., 0.] * 4))
+    #
+    #     dJdq = np.zeros(12)
+    #     for leg in range(0, 4):
+    #         dJdq[3*leg:3*(leg+1)] = self.robot.dJdq(full_conf, full_vel, self.robot.model.getFrameId(self.ee_frame_names[leg]), 'linear')
+    #     bias[self.robot.nv:] = self.u.mapToRos(dJdq)
+    #
+    #     KKT_inv = self.robot.KKTMatrixAtEndEffectorsInv(full_conf, 'linear')
+    #     tmp = KKT_inv @ bias
+    #     full_a = tmp[0:self.robot.nv]
+    #     full_grfW = -tmp[self.robot.nv:]
+    #
+    #     self.grForcesW = self.u.mapToRos(full_grfW)
+    #     self.base_acc_W = full_a[:6]
+    #     self.qdd = self.u.mapToRos(full_a[6:])
+    #
+    #     for leg in range(4):
+    #
+    #         self.grForcesB[3*leg:3*(leg+1)] = B_R_W @ self.grForcesW[3*leg:3*(leg+1)]
+    #
+    #         self.contact_state[leg] = self.grForcesW[3*(leg+1)-1] > self.force_th
 
 
 
