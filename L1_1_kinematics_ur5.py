@@ -4,7 +4,7 @@ import time as tm
 
 from base_controllers.utils.common_functions import *
 from base_controllers.utils.ros_publish import RosPub
-from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics
+from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics
 import L1_conf as conf
 
 os.system("killall rosmaster rviz")

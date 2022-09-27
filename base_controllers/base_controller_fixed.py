@@ -44,7 +44,7 @@ import  base_controllers.params as conf
 # robots can be ur5 and jumpleg to load ur5 you need to set this xacro path in loadModelAndPublishers
 robotName = "ur5"
 
-from base_controllers.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
+from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics
 from base_controllers.utils.math_tools import Math
 from gazebo_msgs.srv import ApplyBodyWrench
 from base_controllers.utils.common_functions import plotCoM, plotJoint
