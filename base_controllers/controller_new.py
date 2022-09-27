@@ -410,24 +410,20 @@ class Controller(BaseController):
 
     def visualizeContacts(self):
         for legid in self.u.leg_map.keys():
+
             leg = self.u.leg_map[legid]
-            # self.ros_pub.add_arrow(self.W_contacts[leg],
-            #                        self.u.getLegJointState(leg, self.grForcesB/ (6*self.robot.robot_mass )),
-            #                        "green", alpha = 0.5)
-            self.ros_pub.add_arrow(self.W_contacts[leg],
-                                   self.u.getLegJointState(leg, self.grForcesB_ffwd / (6 * self.robot.robot_mass)),
-                                   "blue", alpha=0.5)
-            self.ros_pub.add_arrow(self.W_contacts[leg],
-                                   self.u.getLegJointState(leg, self.grForcesB_ddp / (6 * self.robot.robot_mass)),
-                                   "black", alpha=0.5)
-            # if (self.use_ground_truth_contacts):
-            #     self.ros_pub.add_arrow(self.W_contacts[leg],
-            #                         self.u.getLegJointState(leg, self.grForcesW_gt / (6*self.robot.robot_mass)),
-            #                         "red", alpha = 0.5)
-            if self.contacts_state[leg]:
+            if self.contact_state[leg]:
+                self.ros_pub.add_arrow(self.W_contacts[leg],
+                                       self.u.getLegJointState(leg, self.grForcesW/ (6*self.robot.robot_mass)),
+                                       "green")
                 self.ros_pub.add_marker(self.W_contacts[leg], radius=0.1)
             else:
                 self.ros_pub.add_marker(self.W_contacts[leg], radius=0.001)
+
+            if (self.use_ground_truth_contacts):
+                self.ros_pub.add_arrow(self.W_contacts[leg],
+                                       self.u.getLegJointState(leg, self.grForcesW_gt / (6 * self.robot.robot_mass)),
+                                       "red")
         self.ros_pub.publishVisual()
 
 
