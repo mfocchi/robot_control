@@ -258,29 +258,23 @@ class Controller(BaseController):
     # feedforward controllers
 
     def self_weightCompensation(self):
-        self.qPin_base_oriented[3:7] = self.quaternion
-        self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
-        gravity_torques = self.u.mapToRos(self.robot.gravity(self.qPin_base_oriented))[6:]
+        # require the call to updateKinematics
+        gravity_torques = self.h_joints
         return gravity_torques
 
     def gravityCompensation(self):
+        # require the call to updateKinematics
         # to simplyfy, all the feet are assumed to be in contact
-        fb_config = np.hstack((0.,0.,0.,0., 0., 0., 1., self.u.mapFromRos(self.q)))
-
-        com_B = self.robot.com(fb_config)
-
-        self.robot.forwardKinematics(fb_config)
-        pin.updateFramePlacements(self.robot.model, self.robot.data)
-
-        for i, index in enumerate(self.robot.getEndEffectorsFrameId):
-            foot_pos_B = self.robot.data.oMf[index].translation
-            S = pin.skew(foot_pos_B - com_B)
-            self.contact_matrix[3:, 3 * i:3 * (i + 1)] = S
+        contact_torques = np.zeros(self.robot.na)
+        for leg in range(4):
+            S = pin.skew(self.B_contacts[leg] - self.comB )
+            self.contact_matrix[3:, 3 * leg:3 * (leg + 1)] = S
         C_pinv = np.linalg.pinv(self.contact_matrix)
-        self.gravityB[0:3] = pin.Quaternion(self.quaternion).toRotationMatrix().T @ self.gravityW[0:3]
+        self.gravityB[0:3] = self.b_R_w @ self.gravityW[0:3]
         feet_forces_gravity = C_pinv @ self.gravityB
-        J = self.robot.getEEStackJacobians(fb_config, 'linear')[:, 6:]
-        contact_torques = -self.u.mapToRos(J.T @ feet_forces_gravity)
+        for leg in range(4):
+            tau_leg  = -self.J[leg].T  @ self.u.getLegJointState(leg, feet_forces_gravity)
+            self.u.setLegJointState(leg, tau_leg, contact_torques)
         return contact_torques
 
     # TODO: To be tested
