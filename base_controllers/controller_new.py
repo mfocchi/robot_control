@@ -354,10 +354,10 @@ class Controller(BaseController):
 
         self.send_des_jstate(self.q_des, self.qd_des, self.tau_des)
 
-        if (self.APPLY_EXTERNAL_WRENCH and self.time > self.TIME_EXTERNAL_WRENCH):
-            print("START APPLYING EXTERNAL WRENCH")
-            self.applyForce(0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.05)
-            self.APPLY_EXTERNAL_WRENCH = False
+        # if (self.APPLY_EXTERNAL_WRENCH and self.time > self.TIME_EXTERNAL_WRENCH):
+        #     print("START APPLYING EXTERNAL WRENCH")
+        #     self.applyForce(0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.05)
+        #     self.APPLY_EXTERNAL_WRENCH = False
 
         # log variables
         self.rate.sleep()
