@@ -15,7 +15,7 @@ from numpy import nan
 import copy
 
 # L5 Controller specific
-from base_controllers.utils.controlRoutines import projectionBasedController, QPController
+from base_controllers.components.controlRoutines import projectionBasedController, QPController
 from base_controllers.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
 from scipy.linalg import block_diag
 from base_controllers.utils.math_tools import motionVectorTransform

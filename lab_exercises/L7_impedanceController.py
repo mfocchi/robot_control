@@ -97,11 +97,11 @@ while True:
     J = J6[:3,:]
     
     # Moore-penrose pseudoinverse  A^# = (A^TA)^-1 * A^T with A = J^T
-    JTpinv = np.linalg.inv(J*J.T)*J       
+    JTpinv = np.linalg.inv(J.dot(J.T)).dot(J)
     
     # compute frame end effector position and velocity in the WF   
     x = robot.framePlacement(q, frame_ee).translation                      
-    xd = J*qd    
+    xd = J.dot(qd)
     
      # ---------------------- DISTURBANCES ---------------------- 
    
@@ -110,7 +110,7 @@ while True:
         #Torque disturbance        
 #        tauExt = np.multiply(conf.ampJS, np.sin(two_pi_f_JS*time + conf.phiJS)) #Sine
 #        tauExt = np.matrix([0.0, 0.0, 20.0, 0.0, 0.0, 0.0]).T                   #Step
-#        extForce = JTpinv*tauExt                                                #mapping torques -> forces
+#        extForce = JTpinv.dot(tauExt)                                                #mapping torques -> forces
 
     # ---------------------- CONTROLLERS ---------------------- 
                    
@@ -171,11 +171,6 @@ while True:
             break;
             
 ros_pub.deregister_node()
-        
-# plot joint variables                                                                              
-#plotJoint('position', 0, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-#plotJoint('velocity', 1, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
-#plotJoint('acceleration', 2, time_log, q_log, q_des_log, qd_log, qd_des_log, qdd_log, qdd_des_log, tau_log)
 
 # plot joint impedances
 plotJointImpedance('position', q_log, q_des_log, tauExt_log)
