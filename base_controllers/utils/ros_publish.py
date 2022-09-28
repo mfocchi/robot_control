@@ -7,14 +7,11 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
 from geometry_msgs.msg import Point
-import math
 import numpy as np
 
 import roslaunch
 import os
-import time as tm
-import tf
-from rospy import Time
+import rospkg
 
 class RosPub():
     def __init__(self, robot_name="solo", only_visual = False, visual_frame = "world"):
@@ -24,8 +21,12 @@ class RosPub():
             #launch rviz node if not yet done will start roscore too
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
             roslaunch.configure_logging(uuid)
-            self.launch = roslaunch.parent.ROSLaunchParent(uuid, [os.environ['LOCOSIM_DIR'] + "/ros_impedance_controller/launch/visualize_"+robot_name+".launch"])
-            self.launch.start()                                                    
+            package = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/visualize.launch'
+            cli_args = [package, 'robot_name:='+robot_name, 'test_joints:=false']
+            roslaunch_args = cli_args[1:]
+            roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
+            parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
+            parent.start()
             ros.loginfo("RVIZ started")
             # set joint state publisher
             self.joint_pub = ros.Publisher("/joint_states", JointState, queue_size=1)
