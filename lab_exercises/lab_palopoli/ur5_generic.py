@@ -104,6 +104,9 @@ class Ur5Generic(BaseControllerFixed):
 
         #  different controllers are available from the real robot and in simulation
         if self.real_robot:
+            # specific publisher for joint_group_pos_controller that publishes only position
+            self.pub_reduced_des_jstate = ros.Publisher("/" + self.robot_name + "/joint_group_pos_controller/command",
+                                                        Float64MultiArray, queue_size=10)
             self.available_controllers = [
                 "joint_group_pos_controller",
                 "scaled_pos_joint_traj_controller" ]
@@ -194,6 +197,11 @@ class Ur5Generic(BaseControllerFixed):
         self.switch_controller_srv(srv)
         self.active_controller = target_controller
 
+    def send_reduced_des_jstate(self, q_des):
+        msg = Float64MultiArray()
+        msg.data = q_des
+        self.pub_reduced_des_jstate.publish(msg)
+
     def deregister_node(self):
         super().deregister_node()
         if not self.real_robot:
@@ -249,8 +257,7 @@ def talker(p):
                 if (e_norm<0.001):
                     p.homing_flag = False
                     print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
-                    p.move_gripper(30)
-                    print(colored("GRIPPER CLOSED", 'red'))
+
                     break
         p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
         # log variables

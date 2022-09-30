@@ -51,7 +51,7 @@ def talker(p):
     if p.real_robot:
         print("Robot is REAL")
     p.pub_des_jstate_sim = ros.Publisher("/command", JointState, queue_size=1)
-    p.pub_des_jstate_robot = ros.Publisher("/command", Float64MultiArray, queue_size=1)
+    p.pub_des_jstate_robot = ros.Publisher("/ur5/joint_group_pos_controller/command", Float64MultiArray, queue_size=1)
     p.sub_jstate = ros.Subscriber("/ur5/joint_states", JointState, callback = p.receive_jstate, queue_size=1)
 
     ros.sleep(2.)

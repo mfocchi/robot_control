@@ -36,6 +36,7 @@ class JointStatePublisher():
 def talker(p):
     ros.init_node('custom_joint_pub_node', anonymous=True)
     p.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1)
+    p.pub_des_jstate_robot = ros.Publisher("/command", JointState, queue_size=1)
 
     loop_frequency = 1000.
     loop_rate = ros.Rate(loop_frequency)  # 1000hz
@@ -52,12 +53,12 @@ def talker(p):
     while not ros.is_shutdown():
         # generate reference
         # 1 -fixed
-        # if time < 2.:
-        #     p.q_des =  q_des0
-        # else:
-        #     #p.q_des = q_des0 + np.array([0., 0.4, 0., 0., 0., 0])
-        #     # 2- filtered
-        #     p.q_des = q_des0 + p.secondOrderFilter(q_des0 + np.array([0., 0.6, 0., 0., 0., 0]), loop_frequency, 5.)
+        if time < 2.:
+             p.q_des =  q_des0
+        else:
+             #p.q_des = q_des0 + np.array([0., 0.4, 0., 0., 0., 0])
+             # 2- filtered
+             p.q_des =  p.secondOrderFilter(q_des0 + np.array([0., 0.6, 0., 0., 0., 0]), loop_frequency, 5.)
 
         # 3- sine
         #p.q_des = q_des0 + np.multiply(amp, np.sin(2*np.pi*freq*time))
