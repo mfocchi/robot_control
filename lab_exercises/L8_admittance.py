@@ -50,6 +50,8 @@ from base_controllers.components.obstacle_avoidance.obstacle_avoidance import Ob
 from base_controllers.base_controller_fixed import BaseControllerFixed
 from base_controllers.components.admittance_controller import AdmittanceControl
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
+from sensor_msgs.msg import JointState
+from base_controllers.components.filter import SecondOrderFilter
 
 import tf
 from rospy import Time
@@ -75,8 +77,6 @@ class LabAdmittanceController(BaseControllerFixed):
         else:
             self.use_torque_control = 0
 
-
-
         if (lab_conf.obstacle_avoidance):
             self.world_name = 'tavolo_obstacles.world'
             if (not self.use_torque_control):
@@ -94,6 +94,12 @@ class LabAdmittanceController(BaseControllerFixed):
                 "ERRORS: unfortunately...you cannot use ur5 in torque control mode, talk with your course coordinator to buy a better robot...:))",
                 'red'))
             sys.exit()
+
+        if conf.robot_params[self.robot_name]['gripper']:
+            self.gripper = True
+        else:
+            self.gripper = False
+
 
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
@@ -233,6 +239,7 @@ class LabAdmittanceController(BaseControllerFixed):
         super().initVars()
 
         # log variables relative to admittance controller
+        self.q_des_gripper = np.array([1.8, 1.8,1.8])
         self.q_des_adm_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.x_ee_des_adm_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.EXTERNAL_FORCE = False
@@ -243,6 +250,8 @@ class LabAdmittanceController(BaseControllerFixed):
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
         self.obs_avoidance.setCylinderParameters(0.125, 0.3, np.array([0.6, 0.25, 1.0]))
         self.admit = AdmittanceControl(self.ikin, lab_conf.Kx, lab_conf.Dx, conf.robot_params[self.robot_name])
+        self.SO_filter = SecondOrderFilter(3)
+        self.SO_filter.initFilter(self.q_des_gripper,conf.robot_params[p.robot_name]['dt'])
 
         if lab_conf.USER_TRAJECTORY:
             self.Q_ref = []
@@ -370,10 +379,10 @@ class LabAdmittanceController(BaseControllerFixed):
 
     def move_gripper(self, diameter):
         if not self.real_robot:
+            gain = 1/60*1.8
+            self.q_des_gripper = np.array([diameter*gain, diameter*gain, diameter*gain])
             return
 
-        import os
-        import sys
         import socket
 
         HOST = "192.168.0.100"  # The UR IP address
@@ -422,13 +431,26 @@ class LabAdmittanceController(BaseControllerFixed):
         resend_robot_program()
         return
 
+    def send_des_jstate(self, q_des, qd_des, tau_ffwd):
+         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
+         msg = JointState()
+         if self.gripper:
+             msg.position = np.append(q_des, self.SO_filter.filter(self.q_des_gripper, 5.))
+             msg.velocity = np.append(qd_des, np.array([0., 0., 0.]))
+             msg.effort = np.append(tau_ffwd, np.array([0., 0., 0.]))
+         else:
+             msg.position = q_des
+             msg.velocity = qd_des
+             msg.effort = tau_ffwd
+         self.pub_des_jstate.publish(msg)
 
 def talker(p):
     p.start()
     if p.real_robot:
         p.startRealRobot()
     else:
-        p.startSimulator(p.world_name, p.use_torque_control)
+        additional_args = 'gripper:=' + str(p.gripper)
+        p.startSimulator(p.world_name, p.use_torque_control, additional_args)
 
     # specify xacro location
     xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -517,7 +539,11 @@ def talker(p):
             # EXE L8-1.1: set constant joint reference
             #p.q_des = np.copy(p.q_des_q0)
 
-
+            # test gripper in sim
+            if p.time>4.0:
+                p.move_gripper(30)
+            if p.time>8.0:
+                p.move_gripper(80)
 
             # EXE L8-1.2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
@@ -610,6 +636,7 @@ def talker(p):
             #wait for synconization of the control loop
             rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
+
 
 
 if __name__ == '__main__':
