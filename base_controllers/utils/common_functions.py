@@ -136,12 +136,13 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
             os.system("rosrun xacro xacro "+args)  
             #os.system("rosparam get /robot_description > "+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf')  
             #urdf = URDF.from_parameter_server()
-            print ("URDF generated")
-            urdf      = path + "/robot_urdf/generated_urdf/" + robot_name+ ".urdf"  
-            robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])       
-            
+            print("URDF generated")
+            urdf      = path + "/robot_urdf/generated_urdf/" + robot_name+ ".urdf"
+            print(urdf)
+            robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
+            print("URDF loaded in Pinocchio")
         except:
-            print (robot_name+'_description not present')
+            print ('Issues in URDF generation for Pinocchio, did not succeed')
     else:
 
         urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"
