@@ -81,7 +81,7 @@ def talker(p):
     p.des_acc = np.zeros(6)       
 
     # Control loop               
-    while (p.time  < lab_conf.exp_duration) or (lab_conf.CONTINUOUS and not ros.is_shutdown()):
+    while  (p.time  < lab_conf.exp_duration) or (lab_conf.CONTINUOUS and not ros.is_shutdown()):
         #update the kinematics
         p.updateKinematics()
                                 
@@ -195,10 +195,7 @@ def talker(p):
                                 
         #wait for synconization of the control loop
         rate.sleep()       
-                # stops the while loop if  you prematurely hit CTRL+C
-        if ros.is_shutdown():
-            print ("Shutting Down")
-            break;
+
 
     # restore PD when finished
     p.pid.setPDs(400.0, 6.0, 0.0)
@@ -208,19 +205,20 @@ def talker(p):
     p.deregister_node()
 
     # TODO fix the blocking console
-    if conf.plotting:
-        plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
-        #plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
-        #plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
-        #plotConstraitViolation(3,p.constr_viol_log)
-        #plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
 
 
 if __name__ == '__main__':
     p = AdvancedController(robotName)
     try:
         talker(p)
-    except ros.ROSInterruptException:
-        pass
-
-        
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
+    finally:
+        if conf.plotting:
+            plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log,
+                    p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log + p.Wfbk_log + p.Wg_log)
+            # plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
+            # plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
+            # plotConstraitViolation(3,p.constr_viol_log)
+            # plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
