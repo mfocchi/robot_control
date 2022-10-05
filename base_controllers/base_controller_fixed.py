@@ -68,7 +68,7 @@ class BaseControllerFixed(threading.Thread):
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None, use_torque_control = True, additional_args = None):
+    def startSimulator(self, world_name = None, use_torque_control = True,  additional_args = None, launch_file = None):
         # needed to be able to load a custom world file
         print(colored('Adding gazebo model path!', 'blue'))
         custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
@@ -77,6 +77,8 @@ class BaseControllerFixed(threading.Thread):
         else:
             os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
 
+        if launch_file is None:
+            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
 
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
@@ -84,7 +86,7 @@ class BaseControllerFixed(threading.Thread):
             print(colored("This file only works with distribution from ROS lunar (I.e. ubuntu 17.04 or later) ", "red"))
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
-        cli_args = [rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch',
+        cli_args = [launch_file,
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
