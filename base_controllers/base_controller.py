@@ -297,7 +297,8 @@ class BaseController(threading.Thread):
         for leg in range(4):
             self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), update_kinematics=True ).translation
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
-            self.w_R_lowerleg[leg] = self.b_R_w.transpose().dot(self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
+            if self.use_ground_truth_contacts:
+                self.w_R_lowerleg[leg] = self.b_R_w.transpose().dot(self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
 
         for leg in range(4):
             leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
@@ -451,16 +452,17 @@ class BaseController(threading.Thread):
         self.log_counter = 0
 
         # order: lf rf lh rh
-        self.lowerleg_index = [0]*4
-        self.lowerleg_frame_names = []
-        for f in self.robot.model.frames:
-            if 'lower' in f.name:
-                self.lowerleg_frame_names.append(f.name)
-        self.lowerleg_frame_names = self.u.mapLegListToRos(self.lowerleg_frame_names)
+        if self.use_ground_truth_contacts:
+            self.lowerleg_index = [0]*4
+            self.lowerleg_frame_names = []
+            for f in self.robot.model.frames:
+                if 'lower' in f.name:
+                    self.lowerleg_frame_names.append(f.name)
+            self.lowerleg_frame_names = self.u.mapLegListToRos(self.lowerleg_frame_names)
 
-        for legid in self.u.leg_map.keys():
-            leg = self.u.leg_map[legid]
-            self.lowerleg_index[leg] =  self.robot.model.getFrameId(self.lowerleg_frame_names[leg])
+            for legid in self.u.leg_map.keys():
+                leg = self.u.leg_map[legid]
+                self.lowerleg_index[leg] =  self.robot.model.getFrameId(self.lowerleg_frame_names[leg])
 
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
