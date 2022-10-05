@@ -52,6 +52,7 @@ from base_controllers.components.admittance_controller import AdmittanceControl
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 from sensor_msgs.msg import JointState
 from base_controllers.components.filter import SecondOrderFilter
+from geometry_msgs.msg import Pose
 
 import tf
 from rospy import Time
@@ -150,6 +151,8 @@ class LabAdmittanceController(BaseControllerFixed):
 
         self.zero_sensor = ros.ServiceProxy("/" + self.robot_name + "/ur_hardware_interface/zero_ftsensor", Trigger)
 
+        self.pub_ee_pose = ros.Publisher("/" + self.robot_name + "/ee_pose", Pose, queue_size=10)
+
         #  different controllers are available from the real robot and in simulation
         if self.real_robot:
             self.available_controllers = [
@@ -207,10 +210,16 @@ class LabAdmittanceController(BaseControllerFixed):
         #gravity terms
         self.g = self.robot.gravity(self.q)
         #compute ee position  in the world frame
-        frame_name = conf.robot_params[self.robot_name]['ee_frame']
+
         # this is expressed in a workdframe with the origin attached to the base frame origin
-        self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
-        self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).rotation
+        frame_name = conf.robot_params[self.robot_name]['ee_frame']
+        self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(conf.robot_params[self.robot_name]['ee_frame'])).rotation
+        if not self.gripper:
+             self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
+        else:
+            # shift 0.12 alonz Z axis of tool0
+             self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation + self.w_R_tool0[:,2]*0.12
+
         # compute jacobian of the end effector in the world frame
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
@@ -291,7 +300,12 @@ class LabAdmittanceController(BaseControllerFixed):
     def send_reduced_des_jstate(self, q_des):     
         msg = Float64MultiArray()
         msg.data = q_des             
-        self.pub_reduced_des_jstate.publish(msg) 
+        self.pub_reduced_des_jstate.publish(msg)
+
+    def send_ee_pose(self):
+        msg = Pose()
+        msg.position = self.x_ee + self.base_offset
+        self.pub_ee_pose.publish(msg)
 
     def send_joint_trajectory(self):
         # Creates a trajectory and sends it using the selected action server
@@ -540,10 +554,10 @@ def talker(p):
             #p.q_des = np.copy(p.q_des_q0)
 
             # test gripper in sim
-            if p.time>4.0:
-                p.move_gripper(30)
-            if p.time>8.0:
-                p.move_gripper(80)
+            # if p.time>4.0:
+            #     p.move_gripper(30)
+            # if p.time>8.0:
+            #     p.move_gripper(100)
 
             # EXE L8-1.2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
@@ -632,6 +646,7 @@ def talker(p):
             # plot end-effector
             p.ros_pub.add_marker(p.x_ee + p.base_offset)
             p.ros_pub.publishVisual()
+            p.send_ee_pose()
 
             #wait for synconization of the control loop
             rate.sleep()
