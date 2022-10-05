@@ -25,7 +25,7 @@ import roslaunch
 from geometry_msgs.msg import Wrench, Point
 from gazebo_msgs.msg import ContactsState
 import scipy.io.matlab as mio
-
+import rospkg
 
 import  params as conf
 robotName = "climbingrobot"
@@ -38,10 +38,23 @@ class ClimbingrobotController(BaseControllerFixed):
         self.LOAD_MATLAB_TRAJ = True
         self.MARCO_APPROACH = True
 
-        self.rope_index = 2
-        self.leg_index = np.array([6, 7,8])
-        self.base_passive_joints = np.array([3,4,5])
-        self.anchor_passive_joints = np.array([0,1])
+        if self.robot_name == 'climbingrobot':
+            self.rope_index = 2
+            self.wire_yaw_joint = 5
+            self.hip_roll_joint = 7
+            self.leg_index = np.array([6, 7,8])
+            self.base_passive_joints = np.array([3,4,5])
+            self.anchor_passive_joints = np.array([0,1])
+
+        if self.robot_name == 'climbingrobot_slider':
+            self.rope_index = 3
+            self.slider_index = 0
+            self.wire_yaw_joint = 6
+            self.hip_roll_joint = 8
+            self.leg_index = np.array([7, 8,9])
+            self.base_passive_joints = np.array([4,5,6])
+            self.anchor_passive_joints = np.array([1,2])
+
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
         self.r_leg = 0.3
         print("Initialized climbingrobot controller---------------------------------------------------------------")
@@ -59,7 +72,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point, wrench=wrench, start_time=ros.Time(),  duration=ros.Duration(interval))
 
     def loadModelAndPublishers(self, xacro_path=None):
-        super().loadModelAndPublishers()
+        super().loadModelAndPublishers(xacro_path=xacro_path)
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
         self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
@@ -130,7 +143,7 @@ class ClimbingrobotController(BaseControllerFixed):
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
         self.J = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
         self.Jleg = self.J[:, self.leg_index]
-        self.Jleg2 = self.J[:, 7:]
+        #self.Jleg2 = self.J[:, 7:]
         self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
         w_R_wire = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire')).rotation
@@ -198,14 +211,15 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if p0 is None:
             # recompute the theta angle to have the anchor attached to the wall
-            req_reset_joints.joint_positions[0] = math.atan2(self.r_leg, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
+            req_reset_joints.joint_positions[self.anchor_passive_joints[0]] = math.atan2(self.r_leg, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
         else: # do IK on p0
-            req_reset_joints.joint_positions[0:3] = self.computeJointVariables(p0)
+            req_reset_joints.joint_positions[self.anchor_passive_joints[0]], req_reset_joints.joint_positions[self.anchor_passive_joints[1]], req_reset_joints.joint_positions[self.rope_index] = self.computeJointVariables(p0)
             beta1, self.rope_normal = self.computeRopeAngle(p0)
             beta2, max_Fut, max_Fun = self.getImpulseAngle()
             print("\033[34m" + "impulses are: Fun : ", max_Fun, " and  Fut : ", max_Fut)
-            p.q_des[5] = (np.pi/2 - beta1) + beta2
-            req_reset_joints.joint_positions[5] = p.q_des[5]
+            # set on wire yaw joint
+            p.q_des[self.wire_yaw_joint] = (np.pi/2 - beta1) + beta2
+            req_reset_joints.joint_positions[self.wire_yaw_joint] = p.q_des[self.wire_yaw_joint]
 
         # send request and get response (in this case none)
         self.reset_joints(req_reset_joints)
@@ -277,13 +291,22 @@ class ClimbingrobotController(BaseControllerFixed):
 def talker(p):
 
     p.start()
-    p.startSimulator("slow.world")
-    #p.startSimulator()
-    p.loadModelAndPublishers()
+    if p.robot_name == 'climbingrobot_slider':
+        launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_climbingrobot.launch'
+        xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
+        additional_args = 'robot_name:='+p.robot_name
+    else:
+        launch_file = None
+        xacro_path = None
+        additional_args = None
+    p.startSimulator("slow.world",  additional_args = additional_args, launch_file=launch_file)
+    p.loadModelAndPublishers(xacro_path = xacro_path)
 
     p.startupProcedure()
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
+
+
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
@@ -292,6 +315,7 @@ def talker(p):
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
     p.startJump = 0.5
+
 
     # with stiffness (does not reach target)
     # p.jumps = [{"thrustDuration" : 0.05, "p0": np.array([0.377, 0., -3.]), "targetPos": np.array([0, 5., -8.]), "Fun": 4.5578, "Fut": 458.8895, "K_rope": 0.1000, "Tf": 1.0560}]
@@ -309,6 +333,7 @@ def talker(p):
             #p.matvars1 = mio.loadmat('test_optim_marco1.mat', squeeze_me=True, struct_as_record=False)
             #p.matvars2 = mio.loadmat('test_optim_marco2.mat', squeeze_me=True, struct_as_record=False)
             #p.jumps = [{"time": p.matvars1['solution'].time, "thrustDuration" : p.matvars1['T_th'], "p0": p.matvars['p0'], "targetPos": p.matvars1['pf'], "Fun": p.matvars1['solution'].Fun, "Fut": p.matvars1['solution'].Fut,  "Fr": p.matvars1['solution'].Fr, "K_rope": 0.0, "Tf": p.matvars1['solution'].Tf - p.matvars1['T_th']},
+            #            {"time": p.matvars2['solution'].time, "thrustDuration" : p.matvars2['T_th'], "p0": p.matvars['p0'], "targetPos": p.matvars2['pf'], "Fun": p.matvars2['solution'].Fun, "Fut": p.matvars2['solution'].Fut,  "Fr": p.matvars2['solution'].Fr, "K_rope": 0.0, "Tf": p.matvars2['solution'].Tf - p.matvars2['T_th']}]
             #            {"time": p.matvars2['solution'].time, "thrustDuration" : p.matvars2['T_th'], "p0": p.matvars['p0'], "targetPos": p.matvars2['pf'], "Fun": p.matvars2['solution'].Fun, "Fut": p.matvars2['solution'].Fut,  "Fr": p.matvars2['solution'].Fr, "K_rope": 0.0, "Tf": p.matvars2['solution'].Tf - p.matvars2['T_th']}]
 
         else:#my approach
@@ -344,9 +369,9 @@ def talker(p):
             else:
 
                 # strategy 1 - orientation hip roll joint
-                #p.q_des[7] = p.getImpulseAngle()[0]
+                #p.q_des[self.hip_roll_joint] = p.getImpulseAngle()[0]
                 # strategy 2 -  align the body (keep HR to 1.57)
-                #p.q_des[5] = p.getImpulseAngle()[0]
+                #p.q_des[self.wire_yaw_joint] = p.getImpulseAngle()[0]
                 print(colored(f"Start orienting leg to  : {p.getImpulseAngle()[0]}", "blue"))
                 p.stateMachine = 'orienting_leg'
                 #set the end of orienting
@@ -395,7 +420,7 @@ def talker(p):
                 p.ros_pub.add_arrow(p.x_ee, p.w_Fu / 50., "red", scale = 4.5)
                 # using only HP and KNEE joint   to generate impulse(no big difference)
                 # p.w_Fu_xy = p.w_R_b[:2, :2].dot(p.b_Fu_xy)
-                # p.tau_ffwd[7:] = - p.Jleg2[:2,:].T.dot(p.w_Fu_xy)
+                # p.tau_ffwd[self.hip_roll_joint:] = - p.Jleg2[:2,:].T.dot(p.w_Fu_xy)
                 # p.ros_pub.add_arrow( p.x_ee, np.hstack((p.w_Fu_xy, 0))/ 100., "red")
 
                 # old
@@ -426,6 +451,10 @@ def talker(p):
             p.tau_ffwd[p.rope_index] = Fr
             rope_direction =  (p.base_pos - p.anchor_pos)/np.linalg.norm(p.base_pos - p.anchor_pos)
             p.ros_pub.add_arrow( p.base_pos, rope_direction*Fr/50., "red", scale=4.5)
+
+            if p.robot_name == 'climbingrobot_slider':
+                p.q_des[p.slider_index] += 0.001
+
             if (p.EXTERNAL_FORCE):
                 end_flying = p.startJump  + p.jumps[p.jumpNumber]["thrustDuration"]+  p.jumps[p.jumpNumber]["Tf"]
             else:
@@ -459,7 +488,12 @@ def talker(p):
             p.logData()
 
         # plot  rope bw base link and anchor
-        p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale = 3.)# arope, already in gazebo
+        if p.robot_name == 'climbingrobot_slider':
+            rope_attach_point = p.robot.framePlacement(p.q, p.robot.model.getFrameId('sliding_anchor')).translation
+        else:
+            rope_attach_point = p.anchor_pos
+
+        p.ros_pub.add_arrow(rope_attach_point, (p.base_pos - rope_attach_point), "green", scale = 3.)# arope, already in gazebo
         #p.ros_pub.add_marker(p.anchor_pos, radius=0.8, color= "green") #already in gazebo
         p.ros_pub.add_marker(p.anchor_pos + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.8)
 
