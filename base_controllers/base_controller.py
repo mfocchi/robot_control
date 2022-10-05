@@ -307,7 +307,7 @@ class BaseController(threading.Thread):
 
 
        # Pinocchio Update the joint and frame placements
-        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.qd))
+        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.u.mapToRos(self.qd)))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
 
         self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities) 
