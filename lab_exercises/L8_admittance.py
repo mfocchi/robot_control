@@ -56,6 +56,7 @@ from geometry_msgs.msg import Pose
 
 import tf
 from rospy import Time
+import time
 
 def resend_robot_program():
     ros.sleep(1.5)
@@ -350,7 +351,64 @@ class LabAdmittanceController(BaseControllerFixed):
 
         result = trajectory_client.get_result()
         print("Trajectory execution finished in state {}".format(result.error_code))
-        
+
+    def send_joint_trajectory_2(self):
+        # Creates a trajectory and sends it using the selected action server
+        trajectory_client = actionlib.SimpleActionClient("{}/follow_joint_trajectory".format("/" + self.robot_name + "/"+self.active_controller), FollowJointTrajectoryAction)
+        # Create and fill trajectory goal
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory.joint_names = self.joint_names
+
+        # The following list are arbitrary positions
+        # Change to your own needs if desired q0 [ 0.5, -0.7, 1.0, -1.57, -1.57, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
+        print(colored("JOINTS ARE: ", 'blue'), self.q.transpose())
+        p.move_gripper(80)
+
+        self.q0 = conf.robot_params[p.robot_name]['q_0']
+        dq1 = np.array([0.2, 0,0,0,0,0]) # 1 - approach brick 1
+        dq2 = np.array([0.2, -0.2, 0, 0, 0, 0]) # 2 - move vertically  to grasp brick 1 and close grasp
+        dq3 = np.array([0.2, -0.2, 0.4, 0, 0, 0]) # 3 - move brick 1 on top of btick 2
+        dq4 = np.array([0.2, -0.2, 0.8, 0, 0, 0])  # 4- attach vertically brick 1 on top of btick 2 and
+
+        position_list = [self.q0 + dq1]  # limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
+        position_list.append(self.q0 + dq2)
+        position_list.append(self.q0 + dq3)
+        position_list.append(self.q0 + dq4)
+        print(colored("List of targets for joints: ",'blue'))
+        print(position_list[0])
+        print(position_list[1])
+        print(position_list[2])
+        print(position_list[3])
+
+        duration_list = [5.0, 5.0, 10.0, 10.0]
+        gripper_state = ['open', 'close', 'none', 'open']
+        self.ask_confirmation(position_list)
+
+        # set a different goal with gripper closed or opened
+        for i, position in enumerate(position_list):
+            point = JointTrajectoryPoint()
+            point.positions = position
+            point.time_from_start = ros.Duration(duration_list[i])
+            # add a single goal and execute it
+            goal.trajectory.points = [point]
+
+            print("reaching position: ", position)
+            trajectory_client.send_goal(goal)
+            trajectory_client.wait_for_result()
+            # while not trajectory_client.get_state() == 3:
+            #     ros.sleep(1)
+            #     print("reaching position: ", position)
+            result = trajectory_client.get_result()
+            print("Target Reached {}".format(result.error_code))
+            if (gripper_state[i] == 'close'):
+                print("closing gripper")
+                p.move_gripper(30)
+            if (gripper_state[i] == 'open'):
+                print("opening gripper")
+                p.move_gripper(80)
+
+            time.sleep(2.5)
+
     def ask_confirmation(self, waypoint_list):
         """Ask the user for confirmation. This function is obviously not necessary, but makes sense
         in a testing script when you know nothing about the user's setup."""
@@ -487,7 +545,8 @@ def talker(p):
             p.switch_controller("scaled_pos_joint_traj_controller")
         else:
             p.switch_controller("pos_joint_traj_controller")
-        p.send_joint_trajectory()
+        p.send_joint_trajectory_2()
+
     else:
         if not p.use_torque_control:            
             p.switch_controller("joint_group_pos_controller")
