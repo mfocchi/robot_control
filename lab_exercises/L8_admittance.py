@@ -106,25 +106,27 @@ class LabAdmittanceController(BaseControllerFixed):
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
     def startRealRobot(self):
-        os.system("killall rviz gzserver gzclient")
+        os.system("killall rosmaster rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
 
-        # PREPARE TO LAUNCH ur_hardware_interface through launch file
-        # cli_args = ['ur_robot_driver', 'ur5e_bringup.launch', "headless_mode:=true", "robot_ip:=192.168.0.100",
-        #                  "kinematics_config:=/home/laboratorio/my_robot_calibration_1.yaml"]
-        # roslaunch_args = cli_args[1:]
-        # self.roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
-        # self.uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-        # roslaunch.configure_logging(self.uuid)
-        # self.parent = roslaunch.parent.ROSLaunchParent(self.uuid, self.roslaunch_file)
+        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        roslaunch.configure_logging(uuid)
+        launch_file = rospkg.RosPack().get_path('ur_robot_driver') + '/launch/ur5e_bringup.launch'
+        cli_args = [launch_file,
+                    'headless_mode:=true',
+                    'robot_ip:=192.168.0.100',
+                    'kinematics_config:=/home/laboratorio/my_robot_calibration_1.yaml']
 
-        if (not rosgraph.is_master_online()) or (
-                "/" + self.robot_name + "/ur_hardware_interface" not in rosnode.get_node_names()):
-            print(colored('ERROR: You should first launch the ur driver!', 'red'))
-            sys.exit()
-            # print(colored('Launching the ur driver!', 'green'))
-            # self.parent.start()
-            # ros.sleep(5.0)
+        roslaunch_args = cli_args[1:]
+        roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
+        parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
+
+        if (not rosgraph.is_master_online()) or ("/" + self.robot_name + "/ur_hardware_interface" not in rosnode.get_node_names()):
+            #print(colored('ERROR: You should first launch the ur driver!', 'red'))
+            #sys.exit()
+            print(colored('Launching the ur driver!', 'blue'))
+            parent.start()
+            ros.sleep(2.0)
 
         # run rviz
         package = 'rviz'
