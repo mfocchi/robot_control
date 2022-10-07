@@ -362,26 +362,23 @@ class LabAdmittanceController(BaseControllerFixed):
         # The following list are arbitrary positions
         # Change to your own needs if desired q0 [ 0.5, -0.7, 1.0, -1.57, -1.57, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
         print(colored("JOINTS ARE: ", 'blue'), self.q.transpose())
-        p.move_gripper(80)
 
-        self.q0 = conf.robot_params[p.robot_name]['q_0']
-        dq1 = np.array([0.2, 0,0,0,0,0]) # 1 - approach brick 1
-        dq2 = np.array([0.2, -0.2, 0, 0, 0, 0]) # 2 - move vertically  to grasp brick 1 and close grasp
-        dq3 = np.array([0.2, -0.2, 0.4, 0, 0, 0]) # 3 - move brick 1 on top of btick 2
-        dq4 = np.array([0.2, -0.2, 0.8, 0, 0, 0])  # 4- attach vertically brick 1 on top of btick 2 and
+        position_list = [[-0.4253643194781702,  -0.9192648094943543, -2.162015914916992,-1.621634145776266, -1.5201204458819788, -2.2737816015826624]] #go on 1 brick
+        position_list.append([-0.42451507249941045,  -0.9235735100558777, -1.975731611251831,-1.8549186191954554, -1.534570042287008, -2.1804688612567347]) # approach 1 brick and grasp
+        position_list.append([-0.2545421759234827, -1.2628285449794312, -2.049499988555908,  -1.3982257705977936, -1.4819391409503382, -2.4832173029529017] ) # move 2 second brick
+        position_list.append([-0.2545355002032679,  -1.2625364822200318,  -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646] ) # approach 2 brick and release
+        position_list.append([ -0.2544291655169886,-1.277967320089676, -2.1508238315582275,  -1.2845929724029084, -1.465815846120016, -2.445918385182516]) # evadi
 
-        position_list = [self.q0 + dq1]  # limits([0,-pi], [-pi/2,pi/2],  [0, -pi])
-        position_list.append(self.q0 + dq2)
-        position_list.append(self.q0 + dq3)
-        position_list.append(self.q0 + dq4)
-        print(colored("List of targets for joints: ",'blue'))
-        print(position_list[0])
-        print(position_list[1])
-        print(position_list[2])
-        print(position_list[3])
+        # print(colored("List of targets for joints: ",'blue'))
+        # print(position_list[0])
+        # print(position_list[1])
+        # print(position_list[2])
+        # print(position_list[3])
+        # print(position_list[4])
 
-        duration_list = [5.0, 5.0, 10.0, 10.0]
-        gripper_state = ['open', 'close', 'none', 'open']
+        duration_list = [5.0, 5.0, 5.0, 5.0, 5]
+        gripper_state = ['open', 'close', 'idle', 'open', 'open']
+        gripper_diameter = [130, 55, 55, 65, 130]
         self.ask_confirmation(position_list)
 
         # set a different goal with gripper closed or opened
@@ -402,12 +399,12 @@ class LabAdmittanceController(BaseControllerFixed):
             print("Target Reached {}".format(result.error_code))
             if (gripper_state[i] == 'close'):
                 print("closing gripper")
-                p.move_gripper(30)
+                p.move_gripper(gripper_diameter[i])
             if (gripper_state[i] == 'open'):
                 print("opening gripper")
-                p.move_gripper(80)
+                p.move_gripper(gripper_diameter[i])
 
-            time.sleep(2.5)
+            time.sleep(2.)
 
     def ask_confirmation(self, waypoint_list):
         """Ask the user for confirmation. This function is obviously not necessary, but makes sense
