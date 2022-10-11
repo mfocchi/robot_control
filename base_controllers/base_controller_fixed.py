@@ -20,6 +20,8 @@ from gazebo_msgs.srv import SetModelState
 #gazebo services
 from gazebo_msgs.srv import SetPhysicsProperties
 from gazebo_msgs.srv import GetPhysicsProperties
+from gazebo_msgs.srv import SetModelConfiguration
+from gazebo_msgs.srv import SetModelConfigurationRequest
 
 # ros utils
 import roslaunch
@@ -124,6 +126,7 @@ class BaseControllerFixed(threading.Thread):
         self.get_physics_client = ros.ServiceProxy('/gazebo/get_physics_properties', GetPhysicsProperties)
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
+        self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
 
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
 
@@ -215,6 +218,18 @@ class BaseControllerFixed(threading.Thread):
             self.contactForceW_log[:,self.log_counter] =  self.contactForceW
             self.time_log[self.log_counter] = self.time
             self.log_counter+=1
+    def reset_joints(self, q0, joint_names = None):
+        # create the message
+        req_reset_joints = SetModelConfigurationRequest()
+        req_reset_joints.model_name = self.robot_name
+        req_reset_joints.urdf_param_name = 'robot_description'
+        if joint_names == None:
+            req_reset_joints.joint_names = self.joint_names
+        else:
+            req_reset_joints.joint_names = joint_names
+        req_reset_joints.joint_positions = q0
+        self.reset_joints_client(req_reset_joints)
+        print(colored(f"---------Resetting Joints to: "+str(q0), "blue"))
 
     
 def talker(p):
