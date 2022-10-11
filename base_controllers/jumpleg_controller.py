@@ -6,6 +6,8 @@ Created on Fri Nov  2 16:52:08 2018
 """
 
 from __future__ import print_function
+
+import rospy
 import rospy as ros
 from utils.math_tools import *
 import pinocchio as pin
@@ -15,23 +17,65 @@ from numpy import nan
 from utils.common_functions import plotJoint, plotCoMLinear
 from termcolor import colored
 import os
+import roslaunch
+from gazebo_msgs.msg import ContactsState
+from gazebo_msgs.srv import SetModelConfiguration
+from gazebo_msgs.srv import SetModelConfigurationRequest
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
 
 from base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.ros_publish import RosPub
 from base_controllers.utils.common_functions import getRobotModel
 from utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
 
-from jumpleg_rl.srv import get_action
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.srv import SetModelStateRequest
+from gazebo_msgs.msg import ModelState
 
-from jumpleg_rl.srv import get_actionResponse
-from jumpleg_rl.srv import get_actionRequest
-
-from jumpleg_rl.srv import get_target
-from jumpleg_rl.srv import set_reward
+from jumpleg_rl.srv import *
 
 
 import  params as conf
 robotName = "jumpleg"
+
+
+class Cost():
+    def __init__(self):
+        self.unilateral = 0
+        self.friction = 0
+        self.singularity = 0
+        self.joint_range = 0
+        self.joint_torques = 0
+        self.error_vel_liftoff = 0
+        self.target = 0
+
+        self.weights = np.array([0., 0., 0., 0., 0., 0., 0.])
+    def reset(self):
+        self.unilateral = 0
+        self.friction = 0
+        self.singularity = 0
+        self.joint_range = 0
+        self.joint_torques = 0
+        self.error_vel_liftoff = 0
+        self.target = 0
+    def printCosts(self):
+        return f"unil:{self.unilateral}  " \
+               f"friction:{self.friction}  " \
+               f"sing: {self.singularity} " \
+               f"jointkin:{self.joint_range} " \
+               f"torques:{self.joint_torques} " \
+               f"error_vel_liftoff:{self.error_vel_liftoff} " \
+               f"target:{self.target}"
+
+    def printWeightedCosts(self):
+        return f"unil:{self.weights[0]*self.unilateral}  " \
+               f"friction:{self.weights[1]*self.friction}  " \
+               f"sing: {self.weights[2]*self.singularity} " \
+               f"jointkin:{self.weights[3]*self.joint_range} " \
+               f"torques:{self.weights[4]*self.joint_torques} " \
+               f"error_vel_liftoff:{self.weights[5]*self.error_vel_liftoff} " \
+               f"target:{self.weights[6]*self.target}"
 
 class JumpLegController(BaseControllerFixed):
     
@@ -41,7 +85,13 @@ class JumpLegController(BaseControllerFixed):
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
         self.no_gazebo = False
+        self.use_ground_truth_contacts = True
+
+        if self.use_ground_truth_contacts:
+            self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
+                                                 callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,tcp_nodelay=True)
         print("Initialized jump leg controller---------------------------------------------------------------")
+
 
     def applyForce(self):
         from geometry_msgs.msg import Wrench, Point
@@ -84,7 +134,7 @@ class JumpLegController(BaseControllerFixed):
         self.dJdq = self.robot.frameClassicAcceleration(self.q , self.qd , None,  self.robot.model.getFrameId(frame_name), False).linear
 
         # compute com variables accordint to a frame located at the foot
-        robotComB = pin.centerOfMass(self.robot.model, self.robot.data)
+        robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q_fixed)
 
         # only for real robot
         #self.com = -self.x_ee + robotComB
@@ -99,11 +149,26 @@ class JumpLegController(BaseControllerFixed):
         self.estimateContactForces()
 
     def estimateContactForces(self):
-        if not  self.inverseDynamicsFlag:
+        if not  self.inverseDynamicsFlag and not self.use_ground_truth_contacts:
             self.contactForceW = np.linalg.inv(self.J.T).dot( (self.h-self.tau)[3:] )
+
+    def _receive_contact_lf(self, msg):
+        if (self.use_ground_truth_contacts):
+            grf = np.zeros(3)
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] = msg.states[0].wrenches[0].force.y
+            grf[2] = msg.states[0].wrenches[0].force.z
+            self.contactForceW = self.robot.framePlacement(self.q, self.robot.model.getFrameId("lf_lower_leg")).rotation.dot(grf)
+        else:
+            pass
 
     def initVars(self):
         super().initVars()
+        self.a = np.empty((3, 6))
+        self.cost = Cost()
+        self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.]) #unil  friction sing jointrange torques target
+        self.mu = 0.8
+
         self.qdd_des =  np.zeros(self.robot.na)
         self.base_accel = np.zeros(3)
         # init new logged vars here
@@ -114,8 +179,20 @@ class JumpLegController(BaseControllerFixed):
 
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
 
+        self.joint_names = conf.robot_params[self.robot_name]['joint_names']
+
+        self.x_reward = []
+        self.y_reward = []
+        self.episode_counter = 1
+
         if self.no_gazebo:
             self.q = conf.robot_params[self.robot_name]['q_0']
+
+        self.set_state= ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
+        print("JumplegAgent services ready")
+        self.action_service = ros.ServiceProxy('JumplegAgent/get_action', get_action)
+        self.target_service = ros.ServiceProxy('JumplegAgent/get_target', get_target)
+        self.reward_service = ros.ServiceProxy('JumplegAgent/set_reward', set_reward)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -125,11 +202,24 @@ class JumpLegController(BaseControllerFixed):
                 self.qdd_des_log[:, self.log_counter] = self.qdd_des
             super().logData()
 
+    def resetBase(self):
+        # create the message
+        req_reset_joints = SetModelConfigurationRequest()
+        req_reset_joints.model_name = self.robot_name
+        req_reset_joints.urdf_param_name = 'robot_description'
+        req_reset_joints.joint_names = self.joint_names
+
+        req_reset_joints.joint_positions = self.q_des_q0
+        # send request and get response (in this case none)
+        for i in range(10):
+            self.reset_joints(req_reset_joints)
+        return True
+
     def freezeBase(self, flag):
         if not self.no_gazebo:
             if (self.freezeBaseFlag):
                 self.freezeBaseFlag = flag
-                print("releasing base")
+                #print(colored("releasing base", "red"))
                 self.tau_ffwd[2] = 0.
                 #set base joints PD to zero
                 self.pid.setPDjoint(0, 0., 0., 0.)
@@ -143,14 +233,15 @@ class JumpLegController(BaseControllerFixed):
                     self.pid.setPDjoint(5, 0., 0., 0.)
 
             if (not self.freezeBaseFlag) and (flag):
+                #print(colored("freezing base", "red"))
+                #print(colored(f"resetting base: {p.resetBase()}", "magenta"))
+                p.resetBase()
                 self.freezeBaseFlag = flag
-                print("freezing base")
-                self.q_des = np.copy(self.q_des_q0)
-                self.qd_des = np.copy(np.zeros(self.robot.na))
-                self.tau_ffwd = np.copy(np.zeros(self.robot.na))
+                self.q_des = self.q_des_q0.copy()
+                self.qd_des = np.zeros(self.robot.na).copy()
+                self.tau_ffwd = np.zeros(self.robot.na).copy()
                 self.tau_ffwd[2] = self.g[2] # compensate gravitu in the virtual joint to go exactly there
-                self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],
-                                     np.zeros(self.robot.na))
+                self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],  np.zeros(self.robot.na))
 
     def thirdOrderPolynomialTrajectory(self, tf, q0, qf):
         # Matrix used to solve the linear system of equations for the polynomial trajectory
@@ -208,28 +299,254 @@ class JumpLegController(BaseControllerFixed):
         print(x)
         return x[:3], x[3:]
 
+
     def detectApex(self):
-        if not self.detectedApexFlag:
-            if (self.qd[2] <= 0.0):
+        foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
+        #foot tradius is 0.015
+        foot_lifted_off = (foot_pos_w[2] > 0.017 )
+        if not self.detectedApexFlag and foot_lifted_off:
+            if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
+                p.contactForceW = np.zeros(3)
                 print(colored("APEX detected", "red"))
-                # reset joints at q0
                 self.q_des[3:] = self.q_des_q0[3:]
 
+    def computeHeuristicSolution(self, com_0, com_f, comd_f, T_th):
+        # TODO write a generic inverse kinematic function to map com into joints
+        # boundary conditions
+        # position
+        q_0_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com_0,
+                                                                          conf.robot_params[p.robot_name]['ee_frame'],
+                                                                          p.q_des_q0[3:].copy(), verbose=False)
+        q_f_leg, ik_success, final_out_of_workspace = p.ikin.invKinFoot(-com_f,
+                                                                        conf.robot_params[p.robot_name]['ee_frame'],
+                                                                        p.q_des_q0[3:].copy(), verbose=False)
+
+        # print(q_0_leg,q_f_leg)
+
+        # we need to recompute the jacobian  for the final joint position
+        J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)),
+                                        p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,
+                                        pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+
+        if (initial_out_of_workspace) or final_out_of_workspace:
+            # put seuper high reward here
+            print(colored("initial or final value out of workspace!!!!!!", "red"))
+
+        # velocity
+        qd_0_leg = np.zeros(3)
+        qd_f_leg = np.linalg.inv(J_final).dot(-comd_f)
+        # accelerations ( we neglect Jd qd)
+        qdd_0_leg = np.zeros(3)
+        # we assume it stops decelerating
+        Jdqd_f = self.robot.frameClassicAcceleration(np.hstack((np.zeros(3), q_f_leg)), np.hstack((comd_f, qd_f_leg)), None, self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).linear
+        comdd_f = np.zeros(3) #stops accelerating at the end
+        qdd_f_leg = np.linalg.inv(J_final).dot(comdd_f - Jdqd_f)  # np.array([0.,0.,-9.81]
+
+        # a = np.empty((3, 4))
+        # for i in range(3):
+        #      a[i,:] = p.thirdOrderPolynomialTrajectory(T_th, q_0_leg[i], q_f_leg[i])
+        poly_coeff = np.empty((3, 6))
+        for i in range(3):
+            poly_coeff[i, :] = fifthOrderPolynomialTrajectory(T_th, q_0_leg[i], q_f_leg[i], qd_0_leg[i], qd_f_leg[i], qdd_0_leg[i], qdd_f_leg[i])
+
+
+        return poly_coeff
+
+    def computeHeuristicSolutionBezier(self, com_0, com_f, comd_f):
+        self.bezier_weights= np.zeros([3,4])
+        self.bezier_weights_der = np.zeros([3, 3])
+        comd_0 = np.zeros(3)
+        self.bezier_weights[:, 0] = com_0
+        self.bezier_weights[:, 1] = comd_0 / 3. + com_0
+        self.bezier_weights[:, 2] = com_f - comd_f / 3.
+        self.bezier_weights[:, 3] = com_f
+        self.bezier_weights_der[:, 0] = 3 * (self.bezier_weights[:, 1] - self.bezier_weights[:, 0])
+        self.bezier_weights_der[:, 1] = 3 * (self.bezier_weights[:, 2] - self.bezier_weights[:, 1])
+        self.bezier_weights_der[:, 2] = 3 * (self.bezier_weights[:, 3] - self.bezier_weights[:, 2])
+        # print(com_0)
+        # print(com_f)
+        # print(comd_f)
+        
+    def evalBezier(self, t_, T_th):
+        t = t_ /T_th
+        com = self.Bezier3(t, self.bezier_weights)
+        comd = self.Bezier2(t, self.bezier_weights_der)
+        q_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com,  conf.robot_params[p.robot_name]['ee_frame'],  p.q_des_q0[3:].copy(), verbose=False)
+        # we need to recompute the jacobian  for the final joint position
+        J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_leg)),   p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,   pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+        qd_leg = np.linalg.inv(J_final).dot(-comd)
+        # we assume it stops decelerating
+        Jdqd = self.robot.frameClassicAcceleration(np.hstack((np.zeros(3), q_leg)), np.hstack((comd, qd_leg)), None, self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).linear
+        comdd_f = np.zeros(3)  # stops accelerating at the end
+        qdd_leg = np.linalg.inv(J_final).dot(comdd_f - Jdqd)
+        qdd_leg = np.zeros(3)
+        return q_leg, qd_leg, qdd_leg
+
+    def plotTrajectory(self, T_th, poly_coeff):
+        number_of_blobs = 10
+        t = np.linspace(0, T_th, number_of_blobs)
+        self.intermediate_com_position = []
+
+        for blob in range(number_of_blobs):
+            q_traj = np.zeros(3)
+            for i in range(3):
+                q_traj[i] = poly_coeff[i, 0] + poly_coeff[i, 1] * t[blob] +poly_coeff[i, 2] * pow(t[blob], 2) + poly_coeff[i, 3] * pow(t[blob], 3) + poly_coeff[i, 4] * pow(t[blob], 4) + poly_coeff[i, 5] * pow(t[blob], 5)
+            self.intermediate_com_position.append(-self.robot.framePlacement(np.hstack((np.zeros(3), q_traj)), self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).translation)
+
+    def plotTrajectoryBezier(self, T_th):
+        self.number_of_blobs = 10
+        t = np.linspace(0, T_th, self.number_of_blobs)
+        self.intermediate_com_position = []
+        for blob in range(self.number_of_blobs):
+            self.intermediate_com_position.append(self.Bezier3(t[blob]/T_th, self.bezier_weights))
+
+    # 2 order bezier
+    def Bezier2(self, t, weights):
+        t2 = t * t
+        mt = 1 - t
+        mt2 = mt * mt
+        return weights[:, 0] * mt2 + weights[:, 1] * 2 * mt * t + weights[:, 2] * t2
+
+    def Bezier3(self, t, weights):
+        t2 = t * t
+        t3 = t2 * t
+        mt = 1 - t
+        mt2 = mt * mt
+        mt3 = mt2 * mt
+        return weights[:, 0] * mt3 + 3 * weights[:, 1] * mt2 * t + 3 * weights[:, 2] * mt * t2 + weights[:, 3] * t3
 
     def detectTouchDown(self):
-        foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
-        if (foot_pos_w[2] <= 0.025 ):
+        # foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
+        # if (foot_pos_w[2] <= 0.017 ):
+        # print(p.contactForceW)
+        contact_force = np.linalg.norm(p.contactForceW)
+        if contact_force > 0:
             print(colored("TOUCHDOWN detected","red"))
             return True
         else:
             return False
+
+    def loadRLAgent(self, mode = 'train'):
+        print(colored(f"Starting RLagent in  {mode} mode","red"))
+        package = 'jumpleg_rl'
+        executable = 'agent.py'
+        name = 'rlagent'
+        namespace = '/'
+        args = '--mode '+mode
+        node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
+        self.launch = roslaunch.scriptapi.ROSLaunch()
+        self.launch.start()
+        process = self.launch.launch(node)
+
+        # wait for agent service to start
+        print("Waiting for JumplegAgent services")
+        ros.wait_for_service('JumplegAgent/get_action')
+        ros.wait_for_service('JumplegAgent/get_target')
+        ros.wait_for_service('JumplegAgent/set_reward')
+
+    def computeActivationFunction(self, activationType, value ,lower, upper):
+
+        if (activationType == 'linear'):
+            return abs( min(value - lower, 0) + max(value-upper, 0))
+
+        if (activationType == 'quadratic'):
+            return pow( min(value - lower, 0) ,2)/2.0 + pow(max(value-upper, 0), 2)/2.0
+
+    def evaluateRunningCosts(self):
+
+        singularity = False
+        cumsum_joint_range = 0
+        cumsum_joint_torque = 0
+
+        #only for joint variables
+        for i in range(3):
+            cumsum_joint_range += self.computeActivationFunction('linear', self.q_des[3 + i], self.robot.model.lowerPositionLimit[3 + i], self.robot.model.upperPositionLimit[3+i])
+            cumsum_joint_torque += self.computeActivationFunction('linear', self.tau_ffwd[3 + i], -self.robot.model.effortLimit[3 + i], self.robot.model.effortLimit[3 + i])
+        self.cost.joint_range +=cumsum_joint_range
+        self.cost.joint_torques += cumsum_joint_torque
+
+        # debug
+        # for i in range(3):
+        #     if (self.q_des[3 + i] >= self.robot.model.upperPositionLimit[3+i]):
+        #         print(colored("upper end-stop limit hit in "+str(i)+"-th leg joint","red"))
+        #     if (self.q_des[3 + i] <= self.robot.model.lowerPositionLimit[3 + i]):
+        #         print(colored("lower end-stop limit hit in " + str(i) + "-th leg joint", "red"))
+        #     if (self.tau_ffwd[3 + i] >= self.robot.model.effortLimit[3 + i]):
+        #         print(colored("upper torque limit hit in " + str(i) + "-th leg joint", "red"))
+        #     if (self.tau_ffwd[3 + i] <= -self.robot.model.effortLimit[3 + i]):
+        #         print(colored("lower torque limit hit in " + str(i) + "-th leg joint", "red"))
+
+        #friction constraints
+        residual = np.linalg.norm(p.contactForceW[:2]) - p.mu*p.contactForceW[2]
+        self.cost.friction += self.computeActivationFunction('linear', residual, -np.inf, 0.0)
+
+        # unilateral constraints
+        min_uloading_force = 0.
+        self.cost.unilateral += self.computeActivationFunction('linear', p.contactForceW[2], min_uloading_force, np.inf)
+
+        # singularity
+        # the lower singular value is also achieved when the leg squats which is not what we want
+        #smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
+        #if smallest_svalue <= 0.035:
+        if  np.linalg.norm(self.x_ee) > 0.32:
+            #self.cost.singularity = 1./(1e-05 + smallest_svalue)
+            self.cost.singularity = 100
+            singularity = True
+            print(colored("Getting singular configuration", "red"))
+        return singularity
+
+    def evalTotalReward(self, comd_f):
+        colored("Evaluating costs", "blue")
+        # evaluate final target cost
+        self.cost.target = np.linalg.norm(self.com - self.target_CoM)
+        target_cost = 1/((50*self.cost.target) + 1e-15)
+        target_cost = np.log(1+target_cost)*1000
+        # evaluate final com velocity error at lift off cost
+        self.cost.error_vel_liftoff = np.linalg.norm(self.comd_lo - comd_f)
+
+        msg = set_rewardRequest()
+        print(colored("Costs: " + self.cost.printCosts(), "green"))
+        print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
+
+        #unil  friction sing jointrange torques target
+        msg.reward = self.cost.weights[6] * target_cost\
+                     -(self.cost.weights[0]*self.cost.unilateral +
+                       self.cost.weights[1]*self.cost.friction   +
+                       self.cost.weights[2] * self.cost.singularity +
+                       self.cost.weights[3]*self.cost.joint_range +
+                       self.cost.weights[4] * self.cost.joint_torques +
+                       self.cost.weights[5] * self.cost.error_vel_liftoff)
+        msg.next_state = np.concatenate((self.com, self.target_CoM))
+        if (msg.reward<0):
+            msg.reward = 0
+        self.x_reward = np.arange(0,self.episode_counter,1)
+        self.y_reward.append(msg.reward)
+        self.reward_service(msg)
 
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
         os.system(" rosnode kill /gzserver /gzclient")
         os.system(" pkill rosmaster")
+
+
+    def setJumpPlatformPosition(self, target):
+        # create the message
+        set_platform_position = SetModelStateRequest()
+        # create model state
+        model_state = ModelState()
+        model_state.model_name = 'jump_platform'
+        model_state.pose.position.x = -0.95+target[0]
+        model_state.pose.position.y = target[1]
+        model_state.pose.position.z = target[2]-0.25
+        model_state.pose.orientation.w = 1.0
+        model_state.pose.orientation.x = 0.0
+        model_state.pose.orientation.y = 0.0
+        model_state.pose.orientation.z = 0.0
+        set_platform_position.model_state = model_state
+        # send request and get response (in this case none)
+        self.set_state(set_platform_position)
 
 def talker(p):
 
@@ -239,10 +556,13 @@ def talker(p):
         p.ros_pub = RosPub("jumpleg")
         p.robot = getRobotModel("jumpleg")
     else:
-        p.startSimulator("slow.world")
+        p.startSimulator("jump_platform.world")
         #p.startSimulator()
         p.loadModelAndPublishers()
+        p.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         p.startupProcedure()
+
+    p.loadRLAgent(mode='train')
 
     p.initVars()
     ros.sleep(1.0)
@@ -253,106 +573,106 @@ def talker(p):
 
     # compute coeff first time
     p.updateKinematicsDynamics()
+
     # initial com posiiton
-    T_f = 0.5
-    com_0 = np.array([0., 0., 0.25])
-    # final com position /velocity
-    com_f = np.array([0.1, 0., 0.3])
-    #com_f = np.array([0.15, 0., 0.28]) #hits joint limits!! screws up!
-    comd_f = np.array([0.0, 0., 0.5])
+    com_0 = np.array([-0.01303,  0.00229,  0.25252])
 
-    # boundary conditions
-    #position
-    q_0_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com_0, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
-    q_f_leg, ik_success, final_out_of_workspace = p.ikin.invKinFoot(-com_f, conf.robot_params[p.robot_name]['ee_frame'], p.q_des_q0[3:].copy(), verbose = False)
-    # we need to recompute the jacobian  for the final joint position
-    J_final = p.robot.frameJacobian(np.hstack((np.zeros(3), q_f_leg)), p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,
-                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
-
-    if (initial_out_of_workspace) or final_out_of_workspace:
-        # put seuper high reward here
-        print(colored("initial or final value out of workspace!!!!!!","red"))
-    #velocity
-    qd_0_leg = np.zeros(3)
-    qd_f_leg = -np.linalg.inv(J_final).dot(comd_f)
-    #accelerations
-    qdd_0_leg = np.zeros(3)
-    qdd_f_leg = -np.linalg.inv(J_final).dot(np.zeros(3)) #np.array([0.,0.,-9.81]
-
-    # a = np.empty((3, 4))
-    # for i in range(3):
-    #      a[i,:] = p.thirdOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i])
-    a = np.empty((3, 6))
-    for i in range(3):
-         a[i,:] = fifthOrderPolynomialTrajectory(T_f, q_0_leg[i], q_f_leg[i], qd_0_leg[i],  qd_f_leg[i],  qdd_0_leg[i],  qdd_f_leg[i])
+    plt.ion()
+    figure = plt.figure(figsize=(15, 10))
 
     # here the RL loop...
     while True:
-
-        # TODO call the rl agent to get the action
-        p.time = 0
-        startTrust = 0.5
+        p.time = 0.
+        startTrust = 0.2
+        max_episode_time = 1.5
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
+        p.trustPhaseFlag = False
+        p.intermediate_com_position = []
+        p.comd_lo = np.zeros(3)
 
+        # TODO: extend the target on Z
+        p.target_CoM = (p.target_service()).target_CoM
+        for i in range(10):
+            p.setJumpPlatformPosition(p.target_CoM)
 
-        #control loop
-        while True:# p.time < (startTrust + T_f):
+        state = np.concatenate((com_0, p.target_CoM))
+        action = p.action_service(state).action
+        #print("Action from agent:", action)
+
+        p.T_th = action[0]
+        com_f = np.array(action[1:4])
+        comd_f = np.array(action[4:])
+        # OLD way
+        # p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
+        # print(f"Actor action:\n"
+        #       f"T_th: {p.T_th}\n"
+        #       f"haa: {p.a[0, :]}\n"
+        #       f"hfe: {p.a[1, :]}\n"
+        #       f"kfe: {p.a[2, :]}\n")
+
+        p.computeHeuristicSolutionBezier(com_0, com_f, comd_f)
+        p.plotTrajectoryBezier(p.T_th)
+
+        #Control loop
+        while True:
             #update the kinematics
             p.updateKinematicsDynamics()
             if (p.time > startTrust):
+                if (p.time > startTrust + max_episode_time):
+                    # max episode time elapsed
+                    print(colored("--Max time elapsed!--", "blue"))
+                    break
+                # release base
                 if p.firstTime:
                     p.firstTime = False
                     p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
-                #plot com target
-                p.ros_pub.add_marker(com_f, color="blue", radius=0.1)
+                    print("\n\n")
+                    print(colored("STARTING A NEW EPISODE---------------------------------------------------------",   "red"))
+                    print("Target position from agent:", p.target_CoM)
+                    print(f"Actor action:\n"
+                      f"T_th: {p.T_th}\n"
+                      f"com_f: {com_f}\n"
+                      f"comd_f: {comd_f}")
+                    p.trustPhaseFlag = True
 
                 #compute joint reference
-                if   (p.time < startTrust + T_f):
+                if   (p.trustPhaseFlag):
                     t = p.time - startTrust
-                    for i in range(3):
-                        # third order
-                        # p.q_des[3+i] = a[i, 0] + a[i,1] * t + a[i,2] * pow(t, 2) + a[i,3] * pow(t, 3)
-                        # p.qd_des[3+i] = a[i, 1] + 2 * a[i,2] * t + 3 * a[i,3] * pow(t, 2)
-                        #fifth order
-                        p.q_des[3 + i] = a[i, 0] + a[i, 1] * t + a[i, 2] * pow(t, 2) + a[i, 3] * pow(t, 3) +  a[i,4] *pow(t, 4) + a[i,5] *pow(t, 5)
-                        p.qd_des[3 + i] = a[i, 1] + 2 * a[i, 2] * t + 3 * a[i, 3] * pow(t, 2) + 4 * a[i,4] * pow(t, 3) + 5 * a[i,5] * pow(t, 4)
-                        p.qdd_des[3 + i] = 2 * a[i,2] + 6 * a[i,3] * t + 12 * a[i,4] * pow(t, 2) + 20 * a[i,5] * pow(t, 3)
-                        if (p.q_des[3 + i] >= p.robot.model.upperPositionLimit[3+i]):
-                            #put negative reward here
-                            print(colored("upper end-stop limit hit in "+str(3+i)+"-th joint","red"))
-                        if (p.q_des[3 + i] <= p.robot.model.lowerPositionLimit[3 + i]):
-                            # put negative reward here
-                            print(colored("lower end-stop limit hit in " + str(3 + i) + "-th joint", "red"))
-                        if (p.tau_ffwd[3 + i] >= p.robot.model.effortLimit[3 + i]):
-                            # put negative reward here
-                            print(colored("upper torque limit hit in " + str(3 + i) + "-th joint", "red"))
-                        if (p.tau_ffwd[3 + i] <= -p.robot.model.effortLimit[3 + i]):
-                            # put negative reward here
-                            print(colored("lower torque limit hit in " + str(3 + i) + "-th joint", "red"))
-                        # singularity
-                        if (np.linalg.norm(p.com) >= 0.7):
-                            print(p.com)
-                            print(colored("Getting singular configuration", "red"))
+                    # for i in range(3):
+                    #     # third order
+                    #     # p.q_des[3+i] = p.a[i, 0] + p.a[i,1] * t + p.a[i,2] * pow(t, 2) + p.a[i,3] * pow(t, 3)
+                    #     # p.qd_des[3+i] = p.a[i, 1] + 2 * p.a[i,2] * t + 3 * p.a[i,3] * pow(t, 2)
+                    #     #fifth order
+                    #     p.q_des[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) +  p.a[i,4] *pow(t, 4) + p.a[i,5] *pow(t, 5)
+                    #     p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
+                    #     p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
+                    p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] =  p.evalBezier(t, p.T_th)
+
+                    if p.evaluateRunningCosts():
+                        break
+                    if p.time > (startTrust + p.T_th):
+                        p.trustPhaseFlag = False
+                        #sample actual com velocity
+                        p.comd_lo = np.copy(p.comd)
+                    #singluarity = p.evaluateRunningCosts()
 
                 else:
                     # apex detection
                     p.detectApex()
                     if (p.detectedApexFlag):
                         if p.detectTouchDown():
-                            # TODO Evaluate rewards
                             break
 
                 # compute control action
                 if p.inverseDynamicsFlag: # TODO fix this
                     p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
                 else:
-                    if (p.time < startTrust + T_f):
-                        p.tau_ffwd[3:] = -p.J.T.dot(p.g[:3])
+                    if (p.time < startTrust + p.T_th):
+                        p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3]) #add gravity compensation
                     else:
                         p.tau_ffwd[3:] = np.zeros(3)
-
 
                 # send commands to gazebo
                 if p.no_gazebo:
@@ -373,13 +693,54 @@ def talker(p):
             # plot end-effector and contact force
             p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
             p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
+            p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, 0.05, color="blue")
+            #p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
+            p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
 
+            p.ros_pub.add_marker(com_f, color="red", radius=0.1)
+            #reachabe space
+            p.ros_pub.add_marker([0,0,0], color="green", radius=0.64)
+            p.ros_pub.add_arrow(com_f, comd_f, "red")
+            # plot com intermediate positions
+            for blob in range(len(p.intermediate_com_position)):
+                p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[blob*1./p.number_of_blobs, blob*1./p.number_of_blobs, blob*1./p.number_of_blobs], radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:,0], color=[0.,1.,0.],  radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:, 1], color=[0., 1., 0.], radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:, 2], color=[0., 1., 0.], radius=0.02)
+            p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[0., 1., 0.], radius=0.02)
+
+            if (not p.trustPhaseFlag):
+                p.ros_pub.add_arrow(com_f, p.comd_lo, "green")
 
             p.ros_pub.publishVisual()
 
             #wait for synconization of the control loop
             rate.sleep()
-            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)  # to avoid issues of dt 0.0009999
+
+            p.time = p.time + conf.robot_params[p.robot_name]['dt']
+           # stops the while loop if  you prematurely hit CTRL+C
+            if ros.is_shutdown():
+                print ("Shutting Down")
+                break
+
+        #eval rewards
+        p.evalTotalReward(comd_f)
+        p.cost.reset()
+        plt.cla()
+
+        plt.title("Jumpleg RL reward")
+        plt.xlabel("Epoch")
+        plt.ylabel("Reward")
+        # plt.yscale("symlog") #allow to deal with negative numbers
+        plt.plot(p.x_reward, p.y_reward, color="orange")
+        figure.canvas.draw()
+        figure.canvas.flush_events()
+        p.episode_counter+=1
+
+
+    print("Shutting Down")
+    ros.signal_shutdown("killed")
+    p.deregister_node()
 
 
 if __name__ == '__main__':
@@ -387,9 +748,7 @@ if __name__ == '__main__':
 
     try:
         talker(p)
-    except (ros.ROSInterruptException, ros.service.ServiceException):
-        ros.signal_shutdown("killed")
-        p.deregister_node()
+    except ros.ROSInterruptException:
         if conf.plotting:
             print("PLOTTING")
             plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
@@ -400,5 +759,7 @@ if __name__ == '__main__':
                       joint_names=conf.robot_params[p.robot_name]['joint_names'])
             plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
                       joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plt.show(block=True)
+
 
         
