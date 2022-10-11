@@ -349,6 +349,7 @@ class LabAdmittanceController(BaseControllerFixed):
         self.ask_confirmation(position_list)     
         print("Executing trajectory using the {}".format("pos_joint_traj_controller"))
         trajectory_client.send_goal(goal)
+
         trajectory_client.wait_for_result()
 
         result = trajectory_client.get_result()
@@ -359,54 +360,81 @@ class LabAdmittanceController(BaseControllerFixed):
         trajectory_client = actionlib.SimpleActionClient("{}/follow_joint_trajectory".format("/" + self.robot_name + "/"+self.active_controller), FollowJointTrajectoryAction)
         # Create and fill trajectory goal
         goal = FollowJointTrajectoryGoal()
-        goal.trajectory.joint_names = self.joint_names
 
         # The following list are arbitrary positions
         # Change to your own needs if desired q0 [ 0.5, -0.7, 1.0, -1.57, -1.57, 0.5]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
         print(colored("JOINTS ARE: ", 'blue'), self.q.transpose())
 
-        position_list = [[-0.4253643194781702,  -0.9192648094943543, -2.162015914916992,-1.621634145776266, -1.5201204458819788, -2.2737816015826624]] #go on 1 brick
-        position_list.append([-0.42451507249941045,  -0.9235735100558777, -1.975731611251831,-1.8549186191954554, -1.534570042287008, -2.1804688612567347]) # approach 1 brick and grasp
-        position_list.append([-0.2545421759234827, -1.2628285449794312, -2.049499988555908,  -1.3982257705977936, -1.4819391409503382, -2.4832173029529017] ) # move 2 second brick
-        position_list.append([-0.2545355002032679,  -1.2625364822200318,  -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646] ) # approach 2 brick and release
-        position_list.append([ -0.2544291655169886,-1.277967320089676, -2.1508238315582275,  -1.2845929724029084, -1.465815846120016, -2.445918385182516]) # evadi
+        if p.real_robot:
+            goal.trajectory.joint_names = self.joint_names
+            position_list = [[-0.4253643194781702,  -0.9192648094943543, -2.162015914916992,-1.621634145776266, -1.5201204458819788, -2.2737816015826624]] #go on 1 brick
+            position_list.append([-0.42451507249941045,  -0.9235735100558777, -1.975731611251831,-1.8549186191954554, -1.534570042287008, -2.1804688612567347]) # approach 1 brick and grasp
+            position_list.append([-0.2545421759234827, -1.2628285449794312, -2.049499988555908,  -1.3982257705977936, -1.4819391409503382, -2.4832173029529017] ) # move 2 second brick
+            position_list.append([-0.2545355002032679,  -1.2625364822200318,  -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646] ) # approach 2 brick and release
+            position_list.append([ -0.2544291655169886,-1.277967320089676, -2.1508238315582275,  -1.2845929724029084, -1.465815846120016, -2.445918385182516]) # evade and open gripper
 
-        # print(colored("List of targets for joints: ",'blue'))
-        # print(position_list[0])
-        # print(position_list[1])
-        # print(position_list[2])
-        # print(position_list[3])
-        # print(position_list[4])
+            # print(colored("List of targets for joints: ",'blue'))
+            # print(position_list[0])
+            # print(position_list[1])
+            # print(position_list[2])
+            # print(position_list[3])
+            # print(position_list[4])
 
-        duration_list = [5.0, 5.0, 5.0, 5.0, 5]
-        gripper_state = ['open', 'close', 'idle', 'open', 'open']
-        gripper_diameter = [130, 55, 55, 65, 130]
-        self.ask_confirmation(position_list)
+            duration_list = [5.0, 5.0, 5.0, 5.0, 5]
+            gripper_state = ['open', 'close', 'idle', 'open', 'open']
+            gripper_diameter = [130, 55, 55, 65, 130]
+            self.ask_confirmation(position_list)
 
-        # set a different goal with gripper closed or opened
-        for i, position in enumerate(position_list):
-            point = JointTrajectoryPoint()
-            point.positions = position
-            point.time_from_start = ros.Duration(duration_list[i])
-            # add a single goal and execute it
-            goal.trajectory.points = [point]
+            # set a different goal with gripper closed or opened
+            for i, position in enumerate(position_list):
+                point = JointTrajectoryPoint()
+                point.positions = position
+                point.time_from_start = ros.Duration(duration_list[i])
+                # add a single goal and execute it
+                goal.trajectory.points = [point]
 
-            print("reaching position: ", position)
-            trajectory_client.send_goal(goal)
-            trajectory_client.wait_for_result()
-            # while not trajectory_client.get_state() == 3:
-            #     ros.sleep(1)
-            #     print("reaching position: ", position)
-            result = trajectory_client.get_result()
-            print("Target Reached {}".format(result.error_code))
-            if (gripper_state[i] == 'close'):
-                print("closing gripper")
-                p.move_gripper(gripper_diameter[i])
-            if (gripper_state[i] == 'open'):
-                print("opening gripper")
-                p.move_gripper(gripper_diameter[i])
+                print("reaching position: ", position)
+                trajectory_client.send_goal(goal)
+                trajectory_client.wait_for_result()
+                # while not trajectory_client.get_state() == 3:
+                #     ros.sleep(1)
+                #     print("reaching position: ", position)
+                result = trajectory_client.get_result()
+                print("Target Reached error code {}".format(result.error_code))
+                if (gripper_state[i] == 'close'):
+                    print("closing gripper")
+                    p.move_gripper(gripper_diameter[i])
+                if (gripper_state[i] == 'open'):
+                    print("opening gripper")
+                    p.move_gripper(gripper_diameter[i])
+                time.sleep(2.)
+        else: # simulation need to manage gripper as desjoints
+            goal.trajectory.joint_names = self.joint_names + ['hand_1_joint', 'hand_2_joint', 'hand_3_joint']
+            position_list = [conf.robot_params[p.robot_name]['q_0'].tolist() + [self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)] ] # go home
+            position_list.append( [-0.4253643194781702, -0.9192648094943543, -2.162015914916992, -1.621634145776266, -1.5201204458819788, -2.2737816015826624, self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)])  # go on 1 brick
+            position_list.append([-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008, -2.1804688612567347, self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)])  # approach 1 brick
+            position_list.append( [-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008,  -2.1804688612567347, self.mapToGripperJoints(55), self.mapToGripperJoints(55), self.mapToGripperJoints(55)])  # close gripper
+            position_list.append( [-0.2545421759234827, -1.2628285449794312, -2.049499988555908, -1.3982257705977936, -1.4819391409503382, -2.4832173029529017,self.mapToGripperJoints(55), self.mapToGripperJoints(55), self.mapToGripperJoints(55)])  # move 2 second brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(55), self.mapToGripperJoints(55), self.mapToGripperJoints(55)])  # approach 2 brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(65), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # open gripper
+            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.mapToGripperJoints(65), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # evade
+            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)])  # open gripper
 
-            time.sleep(2.)
+            duration_list = [5., 5.0, 5.0, 2., 5.0, 5.0, 2., 5., 2.]
+            self.ask_confirmation(position_list)
+
+            # set a different goal with gripper closed or opened
+            for i, position in enumerate(position_list):
+                point = JointTrajectoryPoint()
+                point.positions = position
+                point.time_from_start = ros.Duration(duration_list[i])
+                # add a single goal and execute it
+                goal.trajectory.points = [point]
+                print("reaching position: ", position)
+                trajectory_client.send_goal(goal)
+                trajectory_client.wait_for_result()
+                result = trajectory_client.get_result()
+                print("Target Reached error code {}".format(result.error_code))
 
     def ask_confirmation(self, waypoint_list):
         """Ask the user for confirmation. This function is obviously not necessary, but makes sense
@@ -448,10 +476,14 @@ class LabAdmittanceController(BaseControllerFixed):
                       self.tau_ffwd_log, self.joint_names)
             plotEndeff('force', 1, p.time_log, p.contactForceW_log)
 
+    def mapToGripperJoints(self, diameter):
+        return (diameter - 22) / (130 - 22) * (-np.pi) + np.pi  # D = 130-> q = 0, D = 22 -> q = 3.14
+
     def move_gripper(self, diameter):
+
         if not self.real_robot:
-            gain = 1/60*1.8
-            self.q_des_gripper = np.array([diameter*gain, diameter*gain, diameter*gain])
+            q_finger = self.mapToGripperJoints(diameter)
+            self.q_des_gripper = np.array([q_finger, q_finger, q_finger])
             return
 
         import socket
