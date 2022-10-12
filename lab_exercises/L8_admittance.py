@@ -126,7 +126,7 @@ class LabAdmittanceController(BaseControllerFixed):
             #sys.exit()
             print(colored('Launching the ur driver!', 'blue'))
             parent.start()
-            ros.sleep(2.0)
+
 
         # run rviz
         package = 'rviz'
@@ -561,7 +561,7 @@ def talker(p):
     p.initVars()
     p.startupProcedure()
 
-
+    time.sleep(3.)
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     p.q_des = np.copy(p.q_des_q0)
     p.admit.setPosturalTask(np.copy(p.q_des_q0))
@@ -641,7 +641,7 @@ def talker(p):
                         ext_traj_counter = 0
 
             # EXE L8-1.1: set constant joint reference
-            #p.q_des = np.copy(p.q_des_q0)
+            p.q_des = np.copy(p.q_des_q0)
 
             # test gripper in sim
             # if p.time>4.0:
