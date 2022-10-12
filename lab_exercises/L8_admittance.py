@@ -85,8 +85,9 @@ class LabAdmittanceController(BaseControllerFixed):
                 print(colored("ERRORS: you can use obstacle avoidance only on torque control mode", 'red'))
                 sys.exit()
         else:
+            #self.world_name = 'tavolo_brick.world'
             self.world_name = None
-
+            
         if lab_conf.admittance_control and ((not self.real_robot) and (not self.use_torque_control)):
             print(colored("ERRORS: you can use admittance control only on torque control mode or in real robot (need contact force estimation or measurement)", 'red'))
             sys.exit()
@@ -101,7 +102,10 @@ class LabAdmittanceController(BaseControllerFixed):
             self.gripper = True
         else:
             self.gripper = False
-
+            
+        if self.gripper and not self.use_torque_control and not self.real_robot:
+            print(colored("ERRORS: gripper can be used either in torque or trajectory mode not implemented yet for position mode", 'red'))
+            sys.exit()
 
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
@@ -410,14 +414,14 @@ class LabAdmittanceController(BaseControllerFixed):
                 time.sleep(2.)
         else: # simulation need to manage gripper as desjoints
             goal.trajectory.joint_names = self.joint_names + ['hand_1_joint', 'hand_2_joint', 'hand_3_joint']
-            position_list = [conf.robot_params[p.robot_name]['q_0'].tolist() + [self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)] ] # go home
-            position_list.append( [-0.4253643194781702, -0.9192648094943543, -2.162015914916992, -1.621634145776266, -1.5201204458819788, -2.2737816015826624, self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)])  # go on 1 brick
-            position_list.append([-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008, -2.1804688612567347, self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)])  # approach 1 brick
-            position_list.append( [-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008,  -2.1804688612567347, self.mapToGripperJoints(55), self.mapToGripperJoints(55), self.mapToGripperJoints(55)])  # close gripper
-            position_list.append( [-0.2545421759234827, -1.2628285449794312, -2.049499988555908, -1.3982257705977936, -1.4819391409503382, -2.4832173029529017,self.mapToGripperJoints(55), self.mapToGripperJoints(55), self.mapToGripperJoints(55)])  # move 2 second brick
-            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(55), self.mapToGripperJoints(55), self.mapToGripperJoints(55)])  # approach 2 brick
-            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(65), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # open gripper
-            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.mapToGripperJoints(65), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # evade
+            position_list = [conf.robot_params[p.robot_name]['q_0'].tolist() + [self.mapToGripperJoints(40), self.mapToGripperJoints(40), self.mapToGripperJoints(40)] ] # go home
+            position_list.append( [-0.4253643194781702, -0.9192648094943543, -2.162015914916992, -1.621634145776266, -1.5201204458819788, -2.2737816015826624, self.mapToGripperJoints(110), self.mapToGripperJoints(110), self.mapToGripperJoints(110)])  # go on 1 brick
+            position_list.append([-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008, -2.1804688612567347, self.mapToGripperJoints(110), self.mapToGripperJoints(110), self.mapToGripperJoints(110)])  # approach 1 brick
+            position_list.append( [-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008,  -2.1804688612567347, self.mapToGripperJoints(55), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # close gripper
+            position_list.append( [-0.2545421759234827, -1.2628285449794312, -2.049499988555908, -1.3982257705977936, -1.4819391409503382, -2.4832173029529017,self.mapToGripperJoints(55), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # move 2 second brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(55), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # approach 2 brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(65), self.mapToGripperJoints(90), self.mapToGripperJoints(90)])  # open gripper
+            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.mapToGripperJoints(65), self.mapToGripperJoints(90), self.mapToGripperJoints(90)])  # evade
             position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)])  # open gripper
 
             duration_list = [5., 5.0, 5.0, 2., 5.0, 5.0, 2., 5., 2.]
