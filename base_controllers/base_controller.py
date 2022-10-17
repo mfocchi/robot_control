@@ -51,8 +51,10 @@ robotName = "solo"
 
 class BaseController(threading.Thread):
     
-    def __init__(self, robot_name="hyq", launch_file=None):
+    def __init__(self, robot_name="hyq", launch_file=None, external_conf = None):
         threading.Thread.__init__(self)
+        if (external_conf is not None):
+            conf.robot_params = external_conf.robot_params
         self.robot_name = robot_name
         self.base_offset = np.array([conf.robot_params[self.robot_name]['spawn_x'],
                                      conf.robot_params[self.robot_name]['spawn_y'],
