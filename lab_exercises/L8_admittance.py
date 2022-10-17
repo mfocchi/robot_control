@@ -86,8 +86,9 @@ class LabAdmittanceController(BaseControllerFixed):
                 sys.exit()
         else:
             #self.world_name = 'tavolo_brick.world'
+            #self.world_name = 'palopoli.world'
             self.world_name = None
-            
+
         if lab_conf.admittance_control and ((not self.real_robot) and (not self.use_torque_control)):
             print(colored("ERRORS: you can use admittance control only on torque control mode or in real robot (need contact force estimation or measurement)", 'red'))
             sys.exit()
