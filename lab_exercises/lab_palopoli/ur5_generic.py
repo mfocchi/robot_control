@@ -54,7 +54,8 @@ class Ur5Generic(BaseControllerFixed):
                 "ERRORS: unfortunately...you cannot use ur5 in torque control mode, talk with your course coordinator to buy a better robot...:))",
                 'red'))
             sys.exit()
-        self.world_name = 'empty.world'
+        self.world_name = None # only the workbench
+        #self.world_name = 'empty.world'
         #self.world_name = 'palopoli.world'
 
         print("Initialized L8 admittance  controller---------------------------------------------------------------")

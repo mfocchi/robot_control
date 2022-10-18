@@ -61,8 +61,8 @@ def talker(p):
     # init variables
     time = 0.
     print("init q: ",p.q)
-    q_des0 = np.copy(p.q)
-    p.initFilter(p.q)
+    q0 = np.copy(p.q)
+    p.initFilter(q0)
 
     amp = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])  # amplitude
     freq = np.array([0.2, 0.0, 0.0, 0.0, 0., 0.0]) # frequency
@@ -71,9 +71,9 @@ def talker(p):
     while not ros.is_shutdown():
         # 1 - generate step reference
         if time < 4.:
-            p.q_des =  q_des0
+            p.q_des =  q0
         else:
-            p.q_des = p.secondOrderFilter(q_des0 + np.array([0., -0.4, 0., 0., 0., 0]), loop_frequency, 5.)
+            p.q_des = p.secondOrderFilter(q0 + np.array([0., -0.4, 0., 0., 0., 0]), loop_frequency, 5.)
 
         p.qd_des = np.zeros(6)
         p.tau_ffwd = np.zeros(6)

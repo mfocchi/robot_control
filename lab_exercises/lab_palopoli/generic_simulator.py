@@ -2,7 +2,7 @@
 """
 Created on Fri Nov  2 16:52:08 2018
 
-@author: rorsolino
+@author: mfocchi
 """
 
 from __future__ import print_function
@@ -21,7 +21,7 @@ class GenericSimulator(BaseController):
     def __init__(self, robot_name="myrobot"):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.freezeBaseFlag = False
-        print("Initialized starbot controller---------------------------------------------------------------")
+        print("Initialized murobot controller---------------------------------------------------------------")
 
     def initVars(self):
         super().initVars()
