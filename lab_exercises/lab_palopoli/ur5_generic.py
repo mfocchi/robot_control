@@ -54,6 +54,8 @@ class Ur5Generic(BaseControllerFixed):
                 "ERRORS: unfortunately...you cannot use ur5 in torque control mode, talk with your course coordinator to buy a better robot...:))",
                 'red'))
             sys.exit()
+        self.world_name = 'empty.world'
+        #self.world_name = 'palopoli.world'
 
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
@@ -155,16 +157,10 @@ class Ur5Generic(BaseControllerFixed):
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
         self.J = self.J6[:3,:] 
-        #compute contact forces                        
-        self.estimateContactForces()
         # broadcast base world TF
         self.broadcaster.sendTransform(self.base_offset, (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')
 
-    def estimateContactForces(self):  
-        # estimate ground reaction forces from torques tau
-        if self.use_torque_control:
-            self.contactForceW = np.linalg.inv(self.J6.T).dot(self.h-self.tau)[:3]
-                                 
+
     def startupProcedure(self):
         if (self.use_torque_control):
             #set joint pdi gains
@@ -216,7 +212,7 @@ def talker(p):
     if p.real_robot:
         p.startRealRobot()
     else:
-        p.startSimulator(use_torque_control=p.use_torque_control)
+        p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control)
 
     # specify xacro location
     xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -259,7 +255,8 @@ def talker(p):
                     print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
 
                     break
-        p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
+        if p.real_robot:
+            p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
         # log variables
         if (p.time > 1.0):
             p.logData()
