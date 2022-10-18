@@ -104,9 +104,10 @@ class LabAdmittanceController(BaseControllerFixed):
         else:
             self.gripper = False
             
-        if self.gripper and not self.use_torque_control and not self.real_robot:
-            print(colored("ERRORS: gripper can be used either in torque or trajectory mode not implemented yet for position mode", 'red'))
-            sys.exit()
+        if self.gripper and not self.real_robot:
+            if self.use_torque_control and not (conf.robot_params[self.robot_name]['control_type'] == "point"):
+                print(colored("ERRORS: gripper can be simulated either in point/torque or trajectory/position mode", 'red'))
+                sys.exit()
 
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
