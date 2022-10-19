@@ -52,7 +52,45 @@ from gazebo_msgs.srv import ApplyBodyWrench
 from base_controllers.utils.common_functions import plotCoM, plotJoint
 
 class BaseControllerFixed(threading.Thread):
-    
+    """
+        This Class can be used to simulate floating base robots that
+        have an under-actuated base (e.g. like quadrupeds, mobile robots)
+
+        ...
+
+        Attributes
+        ----------
+        q, q_des : numpy array
+           actual /desired joint positions
+        qd, qd_des : numpy array
+            actual /desired joint velocities
+        tau, tau_ffwd :  numpy array
+            actual /feed-forward torques
+        x_ee  : numpy array
+            position of the end-effector expressed in the base_link frame
+        contactForceW : numpy array
+            contact force at the end-effector expressed in the world frame
+        contactMomentW : numpy array
+            contact moment at the end-effector expressed in the world frame
+
+        Methods
+        -------
+        loadModelAndPublishers(xacro_path=None)
+           loads publishers for visual features (ros_pub), joint commands and declares subscriber to /ground_truth and /joint_states
+        startSimulator(world_name = None)
+           Starts gazebo simulator with ros_impedance_controller
+        send_des_jstate(self, q_des, qd_des, tau_ffwd)
+            publishes /command topic with set-points for joint positions, velocities and feed-forward torques
+        startupProcedure():
+            initialize PD gains
+        initVars()
+            initializes class variables
+        logData()
+            fill in the X_log variables for plotting purposes, it needs to be called at every loop
+        _receive_jstate(msg)
+            callback associated to the joint state subscriber, fills in q, qd, tau arrays
+
+    """
     def __init__(self, robot_name="ur5", external_conf = None):
         threading.Thread.__init__(self)
 
@@ -222,6 +260,22 @@ class BaseControllerFixed(threading.Thread):
             self.contactForceW_log[:,self.log_counter] =  self.contactForceW
             self.time_log[self.log_counter] = self.time
             self.log_counter+=1
+  # if self.log_counter > 0 and (self.log_counter % conf.robot_params[self.robot_name]['buffer_size']) == 0:
+  #       self.q_des_log = self.log_policy(self.q_des_log)
+  #       self.q_log = self.log_policy(self.q_log)
+  #       self.qd_des_log = self.log_policy(self.qd_des_log)
+  #       self.qd_log = self.log_policy(self.qd_log)
+  #       self.tau_ffwd_log = self.log_policy(self.tau_ffwd_log)
+  #       self.tau_log = self.log_policy(self.tau_log)
+  #       self.x_ee_log = self.log_policy(self.x_ee_log)
+  #       self.x_ee_des_log = self.log_policy(self.x_ee_des_log)
+  #       self.contactForceW_log = self.log_policy(self.contactForceW_log)
+  #       self.time_log = self.log_policy(self.time_log)
+  #   def log_policy(self, var):
+  #       tmp = np.empty((var.shape[0], var.shape[1] + conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+  #       tmp[:var.shape[0], :var.shape[1]] = var
+  #       return tmp
+
     def reset_joints(self, q0, joint_names = None):
         # create the message
         req_reset_joints = SetModelConfigurationRequest()
@@ -235,7 +289,6 @@ class BaseControllerFixed(threading.Thread):
         self.reset_joints_client(req_reset_joints)
         print(colored(f"---------Resetting Joints to: "+str(q0), "blue"))
 
-    
 def talker(p):
     p.start()
     p.startSimulator()

@@ -47,9 +47,55 @@ from base_controllers.utils.common_functions import getRobotModel
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
-robotName = "solo"
+robotName = "go1"
+
 
 class BaseController(threading.Thread):
+    """
+        This Class can be used to simulate floating base robots that
+        have an under-actuated base (e.g. like quadrupeds, mobile robots)
+
+        ...
+
+        Attributes
+        ----------
+        q, q_des : numpy array
+           actual /desired joint positions
+        qd, qd_des : numpy array
+            actual /desired joint velocities
+        tau, tau_ffwd :  numpy array
+            actual /feed-forward torques
+        basePoseW : numpy array
+            base position (slice [0:3]) and orientation in Euler angles (slice [3:6])
+        baseTwistW : numpy array
+            base velocity linear (slice [0:3]) and angular (slice [3:6])
+        b_R_w : numpy 2D array
+            rotation matrix from world frame to base_link frame
+        W_contacts : list of numpy arrays
+            position of the feet expressed in the world frame
+        grForcesW :  list of numpy arrays
+
+        Methods
+        -------
+        loadModelAndPublishers(xacro_path=None)
+           loads publishers for visual features (ros_pub), joint commands and declares subscriber to /ground_truth and /joint_states
+        startSimulator(world_name = None)
+           Starts gazebo simulator with ros_impedance_controller
+        send_des_jstate(self, q_des, qd_des, tau_ffwd)
+            publishes /command topic with set-points for joint positions, velocities and feed-forward torques
+        startupProcedure():
+            initialize PD gains
+        initVars()
+            initializes class variables
+        logData()
+            fill in the X_log variables for plotting purposes, it needs to be called at every loop
+        _receive_jstate(msg)
+            callback associated to the joint state subscriber, fills in q, qd, tau arrays
+        _receive_pose(msg)
+            callback associated to the ground truth subscriber, fills in base pose, orientation
+            (quaternion, Euler angles), and base velocity (twist), and publishes the fixed transform between world and base_link
+
+    """
     
     def __init__(self, robot_name="hyq", launch_file=None, external_conf = None):
         threading.Thread.__init__(self)
