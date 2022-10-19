@@ -10,11 +10,15 @@ import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import matplotlib.pyplot as plt
+import rospkg
 from base_controllers.base_controller import BaseController
+from base_controllers.base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.common_functions import plotCoM, plotJoint
 
 import params as conf
-robotName = "myrobot"
+robotName = "myrobot" # needs to inherit BaseController
+#robotName = "ur5"  # needs to inherit BaseControllerFixed
+
 
 class GenericSimulator(BaseController):
     
@@ -37,6 +41,8 @@ class GenericSimulator(BaseController):
 def talker(p):
     p.start()
     p.startSimulator()
+    #xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
+    #p.loadModelAndPublishers(xacro_path)
     p.loadModelAndPublishers()
     p.initVars()
     p.startupProcedure()
