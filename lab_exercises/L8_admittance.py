@@ -566,7 +566,7 @@ def talker(p):
     p.loadModelAndPublishers(xacro_path)
     p.initVars()
     p.startupProcedure()
-
+    # sleep to avoid that the real robot crashes on the table
     time.sleep(3.)
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     p.q_des = np.copy(p.q_des_q0)

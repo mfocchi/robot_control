@@ -26,7 +26,7 @@ import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from termcolor import colored
 from base_controllers.utils.common_functions import plotJoint, plotEndeff
-import  base_controllers.params as conf
+import  params as conf
 robotName = "ur5"
 
 # controller manager management
@@ -36,14 +36,14 @@ from std_msgs.msg import Float64MultiArray
 from base_controllers.base_controller_fixed import BaseControllerFixed
 import tf
 from rospy import Time
-
+import time
 
 class Ur5Generic(BaseControllerFixed):
     
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
         self.real_robot = conf.robot_params[self.robot_name]['real_robot']
-        self.homing_flag = self.real_robot
+        self.homing_flag = True
         if (conf.robot_params[self.robot_name]['control_type'] == "torque"):
             self.use_torque_control = 1
         else:
@@ -208,6 +208,26 @@ class Ur5Generic(BaseControllerFixed):
     def plotStuff(self):
         plotJoint('position', 0, self.time_log, self.q_log)
 
+    def homing_procedure(self, dt, v_des, q_home, rate):
+        v_ref = 0.0
+        print(colored("STARTING HOMING PROCEDURE", 'red'))
+        self.q_des = np.copy(self.q)
+        print("Initial joint error = ", np.linalg.norm(self.q_des - q_home))
+        print("q = ", self.q.T)
+        print("Homing v des", v_des)
+        while True:
+            e = q_home - self.q_des
+            e_norm = np.linalg.norm(e)
+            if (e_norm != 0.0):
+                v_ref += 0.005 * (v_des - v_ref)
+                self.q_des += dt * v_ref * e / e_norm
+                self.send_reduced_des_jstate(self.q_des)
+            rate.sleep()
+            if (e_norm < 0.001):
+                self.homing_flag = False
+                print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
+                break
+
 def talker(p):
     p.start()
     if p.real_robot:
@@ -220,12 +240,16 @@ def talker(p):
     p.loadModelAndPublishers(xacro_path)
     p.initVars()
     p.startupProcedure()
+    # sleep to avoid that the robot crashes on the table
+    time.sleep(3.)
+
     # loop frequency
     rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
 
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     p.q_des = np.copy(p.q_des_q0)
 
+    # use the point to point position controller
     if not p.use_torque_control:
         p.switch_controller("joint_group_pos_controller")
 
@@ -234,28 +258,11 @@ def talker(p):
         p.updateKinematicsDynamics()
         # homing procedure
         if p.homing_flag:
-            dt = conf.robot_params[p.robot_name]['dt']
-            v_des = 0.2
-            v_ref = 0.0
-            print(colored("STARTING HOMING PROCEDURE",'red'))
-            q_home = conf.robot_params[p.robot_name]['q_0']
-            p.q_des = np.copy(p.q)
-            print("Initial joint error = ", np.linalg.norm(p.q_des - q_home))
-            print("q = ", p.q.T)
-            print("Homing v des", v_des)
-            while True:
-                e = q_home - p.q_des
-                e_norm = np.linalg.norm(e)
-                if(e_norm!=0.0):
-                    v_ref += 0.005*(v_des-v_ref)
-                    p.q_des += dt*v_ref*e/e_norm
-                    p.send_reduced_des_jstate(p.q_des)
-                rate.sleep()
-                if (e_norm<0.001):
-                    p.homing_flag = False
-                    print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
+            p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
 
-                    break
+        # set joints here
+        #p.q_des = ...
+
         if p.real_robot:
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
         # log variables
