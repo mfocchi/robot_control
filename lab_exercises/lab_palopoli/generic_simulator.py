@@ -41,7 +41,7 @@ class GenericSimulator(BaseController):
 def talker(p):
     p.start()
     p.startSimulator()
-    #xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
+    #xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'
     #p.loadModelAndPublishers(xacro_path)
     p.loadModelAndPublishers()
     p.initVars()

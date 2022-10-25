@@ -105,7 +105,7 @@ class LabAdmittanceController(BaseControllerFixed):
             self.gripper = False
             
         if self.gripper and not self.real_robot:
-            if self.use_torque_control and not (conf.robot_params[self.robot_name]['control_type'] == "point"):
+            if self.use_torque_control and not (conf.robot_params[self.robot_name]['control_mode'] == "point"):
                 print(colored("ERRORS: gripper can be simulated either in point/torque or trajectory/position mode", 'red'))
                 sys.exit()
 
@@ -562,7 +562,7 @@ def talker(p):
         p.startSimulator(p.world_name, p.use_torque_control, additional_args)
 
     # specify xacro location
-    xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
+    xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'
     p.loadModelAndPublishers(xacro_path)
     p.initVars()
     p.startupProcedure()
@@ -650,10 +650,10 @@ def talker(p):
             p.q_des = np.copy(p.q_des_q0)
 
             # test gripper in sim
-            # if p.time>4.0:
-            #     p.move_gripper(30)
-            # if p.time>8.0:
-            #     p.move_gripper(100)
+            if p.time>4.0:
+                p.move_gripper(30)
+            if p.time>8.0:
+                p.move_gripper(100)
 
             # EXE L8-1.2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)

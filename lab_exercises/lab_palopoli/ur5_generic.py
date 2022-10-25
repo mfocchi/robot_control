@@ -236,7 +236,7 @@ def talker(p):
         p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control)
 
     # specify xacro location
-    xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro'
+    xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'
     p.loadModelAndPublishers(xacro_path)
     p.initVars()
     p.startupProcedure()

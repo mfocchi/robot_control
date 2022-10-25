@@ -293,7 +293,7 @@ def talker(p):
     p.start()
     p.startSimulator()
     if ( robotName == 'ur5'):
-        p.loadModelAndPublishers(rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.xacro')
+        p.loadModelAndPublishers(rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro')
     else:
         p.loadModelAndPublishers()
     p.initVars()     
