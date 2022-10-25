@@ -223,11 +223,7 @@ class LabAdmittanceController(BaseControllerFixed):
         # this is expressed in a workdframe with the origin attached to the base frame origin
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
         self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(conf.robot_params[self.robot_name]['ee_frame'])).rotation
-        if not self.gripper:
-             self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
-        else:
-            # shift 0.12 alonz Z axis of tool0
-             self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation + self.w_R_tool0[:,2]*0.12
+        self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
 
         # compute jacobian of the end effector in the world frame
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
