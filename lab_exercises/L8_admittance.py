@@ -384,7 +384,7 @@ class LabAdmittanceController(BaseControllerFixed):
 
             duration_list = [5.0, 5.0, 5.0, 5.0, 5]
             gripper_state = ['open', 'close', 'idle', 'open', 'open']
-            gripper_diameter = [130, 55, 55, 65, 130]
+            gripper_diameter = [130, 45, 45, 65, 130]
             self.ask_confirmation(position_list)
 
             # set a different goal with gripper closed or opened
@@ -646,10 +646,10 @@ def talker(p):
             p.q_des = np.copy(p.q_des_q0)
 
             # test gripper in sim
-            if p.time>4.0:
-                p.move_gripper(30)
-            if p.time>8.0:
-                p.move_gripper(100)
+            # if p.time>4.0:
+            #     p.move_gripper(30)
+            # if p.time>8.0:
+            #     p.move_gripper(100)
 
             # EXE L8-1.2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)

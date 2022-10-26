@@ -54,32 +54,32 @@ class Ur5Generic(BaseControllerFixed):
                 "ERRORS: unfortunately...you cannot use ur5 in torque control mode, talk with your course coordinator to buy a better robot...:))",
                 'red'))
             sys.exit()
-        self.world_name = None # only the workbench
-        #self.world_name = 'empty.world'
+        #self.world_name = None # only the workbench
+        self.world_name = 'empty.world'
         #self.world_name = 'palopoli.world'
 
-        print("Initialized L8 admittance  controller---------------------------------------------------------------")
+        print("Initialized ur5 generic  controller---------------------------------------------------------------")
 
     def startRealRobot(self):
-        os.system("killall rviz gzserver gzclient")
+        os.system("killall rosmaster rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
 
-        # PREPARE TO LAUNCH ur_hardware_interface through launch file
-        # cli_args = ['ur_robot_driver', 'ur5e_bringup.launch', "headless_mode:=true", "robot_ip:=192.168.0.100",
-        #                  "kinematics_config:=/home/laboratorio/my_robot_calibration_1.yaml"]
-        # roslaunch_args = cli_args[1:]
-        # self.roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
-        # self.uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-        # roslaunch.configure_logging(self.uuid)
-        # self.parent = roslaunch.parent.ROSLaunchParent(self.uuid, self.roslaunch_file)
+        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        roslaunch.configure_logging(uuid)
+        launch_file = rospkg.RosPack().get_path('ur_robot_driver') + '/launch/ur5e_bringup.launch'
+        cli_args = [launch_file,
+                    'headless_mode:=true',
+                    'robot_ip:=192.168.0.100',
+                    'kinematics_config:=/home/laboratorio/my_robot_calibration_1.yaml']
+
+        roslaunch_args = cli_args[1:]
+        roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
+        parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
 
         if (not rosgraph.is_master_online()) or (
                 "/" + self.robot_name + "/ur_hardware_interface" not in rosnode.get_node_names()):
-            print(colored('ERROR: You should first launch the ur driver!', 'red'))
-            sys.exit()
-            # print(colored('Launching the ur driver!', 'green'))
-            # self.parent.start()
-            # ros.sleep(5.0)
+            print(colored('Launching the ur driver!', 'blue'))
+            parent.start()
 
         # run rviz
         package = 'rviz'
@@ -166,8 +166,6 @@ class Ur5Generic(BaseControllerFixed):
         if (self.use_torque_control):
             #set joint pdi gains
             self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
-            #only torque loop
-            #self.pid.setPDs(0.0, 0.0, 0.0)
         if (self.real_robot):
             self.zero_sensor()
         self.u.putIntoGlobalParamServer("real_robot",  self.real_robot)
@@ -233,6 +231,7 @@ def talker(p):
     if p.real_robot:
         p.startRealRobot()
     else:
+        #additional_args = 'gui:=false'
         p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control)
 
     # specify xacro location
@@ -261,16 +260,17 @@ def talker(p):
             p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
 
         # set joints here
-        #p.q_des = ...
+        # p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
+        # p.send_reduced_des_jstate(p.q_des)
 
         if p.real_robot:
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
+
         # log variables
         if (p.time > 1.0):
             p.logData()
         # plot end-effector
         p.ros_pub.add_marker(p.x_ee + p.base_offset)
-        p.ros_pub.publishVisual()
         #wait for synconization of the control loop
         rate.sleep()
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
