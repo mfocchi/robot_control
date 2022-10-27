@@ -231,8 +231,8 @@ def talker(p):
     if p.real_robot:
         p.startRealRobot()
     else:
-        #additional_args = 'gui:=false'
-        p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control)
+        additional_args = None # 'gui:=false'
+        p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control, additional_args =additional_args)
 
     # specify xacro location
     xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'

@@ -120,7 +120,7 @@ class BaseController(threading.Thread):
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None):
+    def startSimulator(self, world_name = None, additional_args = None):
         # needed to be able to load a custom world file
         print(colored('Adding gazebo model path!', 'blue'))
         custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
@@ -147,7 +147,8 @@ class BaseController(threading.Thread):
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
             cli_args.append('world_name:=' + str(world_name))
-
+        if additional_args is not None:
+            cli_args.append(additional_args)
         roslaunch_args = cli_args[1:]
         roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
         parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
