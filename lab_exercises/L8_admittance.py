@@ -49,24 +49,14 @@ import actionlib
 from base_controllers.components.obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
 from base_controllers.base_controller_fixed import BaseControllerFixed
 from base_controllers.components.admittance_controller import AdmittanceControl
+from base_controllers.components.gripper_manager import GripperManager
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
 from sensor_msgs.msg import JointState
-from base_controllers.components.filter import SecondOrderFilter
 from geometry_msgs.msg import Pose
 
 import tf
 from rospy import Time
 import time
-
-def resend_robot_program():
-    ros.sleep(1.5)
-    ros.wait_for_service("/ur5/ur_hardware_interface/resend_robot_program")
-    sos_service = ros.ServiceProxy('/ur5/ur_hardware_interface/resend_robot_program', Trigger)
-    sos = TriggerRequest()
-    result = sos_service(sos)
-    # print(result)
-    ros.sleep(0.1)
-
 
 class LabAdmittanceController(BaseControllerFixed):
     
@@ -101,14 +91,10 @@ class LabAdmittanceController(BaseControllerFixed):
 
         if conf.robot_params[self.robot_name]['gripper']:
             self.gripper = True
+            self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
         else:
             self.gripper = False
             
-        if self.gripper and not self.real_robot:
-            if self.use_torque_control and not (conf.robot_params[self.robot_name]['control_mode'] == "point"):
-                print(colored("ERRORS: gripper can be simulated either in point/torque or trajectory/position mode", 'red'))
-                sys.exit()
-
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
     def startRealRobot(self):
@@ -143,7 +129,7 @@ class LabAdmittanceController(BaseControllerFixed):
         launch.start()
         process = launch.launch(node)
 
-        resend_robot_program()
+        self.gm.resend_robot_program()
 
     def loadModelAndPublishers(self, xacro_path):
         super().loadModelAndPublishers(xacro_path)
@@ -253,7 +239,6 @@ class LabAdmittanceController(BaseControllerFixed):
         super().initVars()
 
         # log variables relative to admittance controller
-        self.q_des_gripper = np.array([1.8, 1.8,1.8])
         self.q_des_adm_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.x_ee_des_adm_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.EXTERNAL_FORCE = False
@@ -264,8 +249,7 @@ class LabAdmittanceController(BaseControllerFixed):
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
         self.obs_avoidance.setCylinderParameters(0.125, 0.3, np.array([0.6, 0.25, 1.0]))
         self.admit = AdmittanceControl(self.ikin, lab_conf.Kx, lab_conf.Dx, conf.robot_params[self.robot_name])
-        self.SO_filter = SecondOrderFilter(3)
-        self.SO_filter.initFilter(self.q_des_gripper,conf.robot_params[p.robot_name]['dt'])
+
 
         if lab_conf.USER_TRAJECTORY:
             self.Q_ref = []
@@ -305,7 +289,7 @@ class LabAdmittanceController(BaseControllerFixed):
     def send_reduced_des_jstate(self, q_des):     
         msg = Float64MultiArray()
         if self.gripper:
-            msg.data = np.append(q_des, self.SO_filter.filter(self.q_des_gripper, 5.))
+            msg.data = np.append(q_des, self.gm.getDesGripperJoints())
         else:
             msg.data = q_des
         self.pub_reduced_des_jstate.publish(msg)
@@ -408,22 +392,22 @@ class LabAdmittanceController(BaseControllerFixed):
                 print("Target Reached error code {}".format(result.error_code))
                 if (gripper_state[i] == 'close'):
                     print("closing gripper")
-                    p.move_gripper(gripper_diameter[i])
+                    p.gm.move_gripper(gripper_diameter[i])
                 if (gripper_state[i] == 'open'):
                     print("opening gripper")
-                    p.move_gripper(gripper_diameter[i])
+                    p.gm.move_gripper(gripper_diameter[i])
                 time.sleep(2.)
         else: # simulation need to manage gripper as desjoints
             goal.trajectory.joint_names = self.joint_names + ['hand_1_joint', 'hand_2_joint', 'hand_3_joint']
-            position_list = [conf.robot_params[p.robot_name]['q_0'].tolist() + [self.mapToGripperJoints(40), self.mapToGripperJoints(40), self.mapToGripperJoints(40)] ] # go home
-            position_list.append( [-0.4253643194781702, -0.9192648094943543, -2.162015914916992, -1.621634145776266, -1.5201204458819788, -2.2737816015826624, self.mapToGripperJoints(110), self.mapToGripperJoints(110), self.mapToGripperJoints(110)])  # go on 1 brick
-            position_list.append([-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008, -2.1804688612567347, self.mapToGripperJoints(110), self.mapToGripperJoints(110), self.mapToGripperJoints(110)])  # approach 1 brick
-            position_list.append( [-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008,  -2.1804688612567347, self.mapToGripperJoints(55), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # close gripper
-            position_list.append( [-0.2545421759234827, -1.2628285449794312, -2.049499988555908, -1.3982257705977936, -1.4819391409503382, -2.4832173029529017,self.mapToGripperJoints(55), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # move 2 second brick
-            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(55), self.mapToGripperJoints(65), self.mapToGripperJoints(65)])  # approach 2 brick
-            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.mapToGripperJoints(65), self.mapToGripperJoints(90), self.mapToGripperJoints(90)])  # open gripper
-            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.mapToGripperJoints(65), self.mapToGripperJoints(90), self.mapToGripperJoints(90)])  # evade
-            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.mapToGripperJoints(130), self.mapToGripperJoints(130), self.mapToGripperJoints(130)])  # open gripper
+            position_list = [conf.robot_params[p.robot_name]['q_0'].tolist() + [self.gm.mapToGripperJoints(40), self.gm.mapToGripperJoints(40), self.gm.mapToGripperJoints(40)] ] # go home
+            position_list.append( [-0.4253643194781702, -0.9192648094943543, -2.162015914916992, -1.621634145776266, -1.5201204458819788, -2.2737816015826624, self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110)])  # go on 1 brick
+            position_list.append([-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008, -2.1804688612567347, self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110)])  # approach 1 brick
+            position_list.append( [-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008,  -2.1804688612567347, self.gm.mapToGripperJoints(55), self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(65)])  # close gripper
+            position_list.append( [-0.2545421759234827, -1.2628285449794312, -2.049499988555908, -1.3982257705977936, -1.4819391409503382, -2.4832173029529017,self.gm.mapToGripperJoints(55), self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(65)])  # move 2 second brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.gm.mapToGripperJoints(55), self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(65)])  # approach 2 brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(90), self.gm.mapToGripperJoints(90)])  # open gripper
+            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(90), self.gm.mapToGripperJoints(90)])  # evade
+            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.gm.mapToGripperJoints(130), self.gm.mapToGripperJoints(130), self.gm.mapToGripperJoints(130)])  # open gripper
 
             duration_list = [5., 5.0, 5.0, 2., 5.0, 5.0, 2., 5., 2.]
             self.ask_confirmation(position_list)
@@ -481,69 +465,12 @@ class LabAdmittanceController(BaseControllerFixed):
                       self.tau_ffwd_log, self.joint_names)
             plotEndeff('force', 1, p.time_log, p.contactForceW_log)
 
-    def mapToGripperJoints(self, diameter):
-        return (diameter - 22) / (130 - 22) * (-np.pi) + np.pi  # D = 130-> q = 0, D = 22 -> q = 3.14
-
-    def move_gripper(self, diameter):
-
-        if not self.real_robot:
-            q_finger = self.mapToGripperJoints(diameter)
-            self.q_des_gripper = np.array([q_finger, q_finger, q_finger])
-            return
-
-        import socket
-
-        HOST = "192.168.0.100"  # The UR IP address
-        PORT = 30002  # UR secondary client
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        sock.settimeout(0.5)
-        try:
-            sock.connect((HOST, PORT))
-        except:
-            raise Exception("Cannot connect to end-effector socket") from None
-        sock.settimeout(None)
-        scripts_path = rospkg.RosPack().get_path('ur_description') + '/gripper/scripts'
-
-        onrobot_script = scripts_path + "/onrobot_superminimal.script"
-        file = open(onrobot_script, "rb")  # Robotiq Gripper
-        lines = file.readlines()
-        file.close()
-
-        tool_index = 0
-        blocking = True
-        cmd_string = f"tfg_release({diameter},  tool_index={tool_index}, blocking={blocking})"
-
-        line_number_to_add = 446
-
-        new_lines = lines[0:line_number_to_add]
-        new_lines.insert(line_number_to_add + 1, str.encode(cmd_string))
-        new_lines += lines[line_number_to_add::]
-
-        offset = 0
-        buffer = 2024
-        file_to_send = b''.join(new_lines)
-
-        if len(file_to_send) < buffer:
-            buffer = len(file_to_send)
-        data = file_to_send[0:buffer]
-        while data:
-            sock.send(data)
-            offset += buffer
-            if len(file_to_send) < offset + buffer:
-                buffer = len(file_to_send) - offset
-            data = file_to_send[offset:offset + buffer]
-        sock.close()
-
-        print("Gripper moved, now resend robot program")
-        resend_robot_program()
-        return
 
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
          if self.gripper:
-             msg.position = np.append(q_des, self.SO_filter.filter(self.q_des_gripper, 5.))
+             msg.position = np.append(q_des, self.gm.getDesGripperJoints())
              msg.velocity = np.append(qd_des, np.array([0., 0., 0.]))
              msg.effort = np.append(tau_ffwd, np.array([0., 0., 0.]))
          else:
@@ -618,7 +545,7 @@ def talker(p):
                     if (e_norm<0.001):
                         p.homing_flag = False
                         print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
-                        p.move_gripper(30)
+                        p.gm.move_gripper(30)
                         print(colored("GRIPPER CLOSED", 'red'))
                         break
 
@@ -633,14 +560,14 @@ def talker(p):
                     if(ext_traj_counter < len(p.Q_ref)-1):
                         print(colored("TRAJECTORY %d COMPLETED"%ext_traj_counter, 'blue'))
                         if(ext_traj_counter==0):
-                            p.move_gripper(65)
+                            p.gm.move_gripper(65)
                         if (ext_traj_counter == 1):
-                            p.move_gripper(30)
+                            p.gm.move_gripper(30)
                         ext_traj_counter += 1
                         ext_traj_t = 0
                     elif(not traj_completed):
                         print(colored("LAST TRAJECTORY COMPLETED", 'red'))
-                        p.move_gripper(60)
+                        p.gm.move_gripper(60)
                         traj_completed = True
                         ext_traj_t = 0
                         ext_traj_counter = 0

@@ -37,6 +37,7 @@ from base_controllers.base_controller_fixed import BaseControllerFixed
 import tf
 from rospy import Time
 import time
+from base_controllers.components.gripper_manager import GripperManager
 
 class Ur5Generic(BaseControllerFixed):
     
@@ -54,6 +55,13 @@ class Ur5Generic(BaseControllerFixed):
                 "ERRORS: unfortunately...you cannot use ur5 in torque control mode, talk with your course coordinator to buy a better robot...:))",
                 'red'))
             sys.exit()
+
+        if conf.robot_params[self.robot_name]['gripper']:
+            self.gripper = True
+            self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
+        else:
+            self.gripper = False
+
         #self.world_name = None # only the workbench
         self.world_name = 'empty.world'
         #self.world_name = 'palopoli.world'
@@ -195,6 +203,11 @@ class Ur5Generic(BaseControllerFixed):
     def send_reduced_des_jstate(self, q_des):
         msg = Float64MultiArray()
         msg.data = q_des
+        if self.gripper:
+            msg.data = np.append(q_des, self.gm.getDesGripperJoints())
+
+        else:
+            msg.data = q_des
         self.pub_reduced_des_jstate.publish(msg)
 
     def deregister_node(self):
@@ -231,7 +244,7 @@ def talker(p):
     if p.real_robot:
         p.startRealRobot()
     else:
-        additional_args = None # 'gui:=false'
+        additional_args = 'gripper:=' + str(p.gripper) # +'gui:=false'
         p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control, additional_args =additional_args)
 
     # specify xacro location
@@ -261,6 +274,12 @@ def talker(p):
 
         # set joints here
         # p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
+        # test gripper
+        # if p.gripper:
+        #     if p.time>4.0:
+        #         p.gm.move_gripper(30)
+        #     if p.time>8.0:
+        #         p.gm.move_gripper(100)
         # p.send_reduced_des_jstate(p.q_des)
 
         if p.real_robot:
