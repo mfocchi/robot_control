@@ -6,6 +6,9 @@ import rospkg
 import socket
 import numpy as np
 from base_controllers.components.filter import SecondOrderFilter
+import rospy as ros
+from std_srvs.srv import Trigger, TriggerRequest
+
 
 class GripperManager():
     def __init__(self, real_robot_flag = False, dt = 0.001, gripping_duration = 5.):

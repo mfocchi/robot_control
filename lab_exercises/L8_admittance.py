@@ -14,7 +14,7 @@ import sys
 from docutils.nodes import label
 from geometry_msgs.msg import WrenchStamped
 from geometry_msgs.msg import Wrench, Point
-from std_srvs.srv import Trigger, TriggerRequest
+from std_srvs.srv import Trigger
 
 # ros utils
 import roslaunch
@@ -288,7 +288,7 @@ class LabAdmittanceController(BaseControllerFixed):
 
     def send_reduced_des_jstate(self, q_des):     
         msg = Float64MultiArray()
-        if self.gripper:
+        if self.gripper and not self.real_robot:
             msg.data = np.append(q_des, self.gm.getDesGripperJoints())
         else:
             msg.data = q_des
@@ -521,6 +521,7 @@ def talker(p):
         ext_traj_t = 0          # counter for the time inside a trajectory
         traj_completed = False
 
+        gripper_on = 0
         #control loop
         while not ros.is_shutdown():
             # homing procedure
@@ -545,7 +546,7 @@ def talker(p):
                     if (e_norm<0.001):
                         p.homing_flag = False
                         print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
-                        p.gm.move_gripper(30)
+                        p.gm.move_gripper(100)
                         print(colored("GRIPPER CLOSED", 'red'))
                         break
 
@@ -575,11 +576,16 @@ def talker(p):
             # EXE L8-1.1: set constant joint reference
             p.q_des = np.copy(p.q_des_q0)
 
-            # test gripper in sim
-            # if p.time>4.0:
-            #     p.move_gripper(30)
-            # if p.time>8.0:
-            #     p.move_gripper(100)
+            # test gripper
+            # if p.gripper:
+            #     if p.time > 5.0 and (gripper_on == 0):
+            #         print("gripper 30")
+            #         p.gm.move_gripper(30)
+            #         gripper_on = 1
+            #     if (gripper_on == 1) and p.time > 10.0:
+            #         print("gripper 100")
+            #         p.gm.move_gripper(100)
+            #         gripper_on = 2
 
             # EXE L8-1.2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)

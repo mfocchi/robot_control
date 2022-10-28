@@ -203,9 +203,8 @@ class Ur5Generic(BaseControllerFixed):
     def send_reduced_des_jstate(self, q_des):
         msg = Float64MultiArray()
         msg.data = q_des
-        if self.gripper:
+        if self.gripper and not self.real_robot:
             msg.data = np.append(q_des, self.gm.getDesGripperJoints())
-
         else:
             msg.data = q_des
         self.pub_reduced_des_jstate.publish(msg)
@@ -237,6 +236,8 @@ class Ur5Generic(BaseControllerFixed):
             if (e_norm < 0.001):
                 self.homing_flag = False
                 print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
+                if self.gripper:
+                    p.gm.move_gripper(100)
                 break
 
 def talker(p):
@@ -265,6 +266,7 @@ def talker(p):
     if not p.use_torque_control:
         p.switch_controller("joint_group_pos_controller")
 
+    gripper_on = 0
     #control loop
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
@@ -273,13 +275,18 @@ def talker(p):
             p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
 
         # set joints here
-        # p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
-        # test gripper
+        #p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
+        #test gripper
         # if p.gripper:
-        #     if p.time>4.0:
+        #     if p.time>5.0 and (gripper_on == 0):
+        #         print("gripper 30")
         #         p.gm.move_gripper(30)
-        #     if p.time>8.0:
+        #         gripper_on = 1
+        #     if (gripper_on == 1) and p.time>10.0:
+        #         print("gripper 100")
         #         p.gm.move_gripper(100)
+        #         gripper_on = 2
+
         # p.send_reduced_des_jstate(p.q_des)
 
         if p.real_robot:
