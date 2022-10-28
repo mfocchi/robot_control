@@ -304,7 +304,10 @@ class LabAdmittanceController(BaseControllerFixed):
 
     def send_reduced_des_jstate(self, q_des):     
         msg = Float64MultiArray()
-        msg.data = q_des             
+        if self.gripper:
+            msg.data = np.append(q_des, self.SO_filter.filter(self.q_des_gripper, 5.))
+        else:
+            msg.data = q_des
         self.pub_reduced_des_jstate.publish(msg)
 
     def send_ee_pose(self):
