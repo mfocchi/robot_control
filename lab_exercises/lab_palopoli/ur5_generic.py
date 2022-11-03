@@ -56,11 +56,11 @@ class Ur5Generic(BaseControllerFixed):
                 'red'))
             sys.exit()
 
-        if conf.robot_params[self.robot_name]['gripper']:
+        if conf.robot_params[self.robot_name]['gripper_sim']:
             self.gripper = True
-            self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
         else:
             self.gripper = False
+        self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
 
         #self.world_name = None # only the workbench
         self.world_name = 'empty.world'
@@ -274,20 +274,20 @@ def talker(p):
         if p.homing_flag:
             p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
 
-        # set joints here
+        ## set joints here
         #p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
-        #test gripper
-        # if p.gripper:
-        #     if p.time>5.0 and (gripper_on == 0):
-        #         print("gripper 30")
-        #         p.gm.move_gripper(30)
-        #         gripper_on = 1
-        #     if (gripper_on == 1) and p.time>10.0:
-        #         print("gripper 100")
-        #         p.gm.move_gripper(100)
-        #         gripper_on = 2
-
-        # p.send_reduced_des_jstate(p.q_des)
+        ##test gripper
+        # in Simulation remember to set gripper_sim : True in params.yaml!
+        # if p.time>5.0 and (gripper_on == 0):
+        #     print("gripper 30")
+        #     p.gm.move_gripper(30)
+        #     gripper_on = 1
+        # if (gripper_on == 1) and p.time>10.0:
+        #     print("gripper 100")
+        #     p.gm.move_gripper(100)
+        #     gripper_on = 2
+        # need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
+        #p.send_reduced_des_jstate(p.q_des)
 
         if p.real_robot:
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")

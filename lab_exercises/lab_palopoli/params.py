@@ -30,7 +30,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'control_mode': 'point', # 'trajectory','point'
                        'real_robot': False,
                        'control_type': 'position', # 'position', 'torque'
-                       'gripper': False,
+                       'gripper_sim': True,
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
                        'spawn_z' : 1.75,

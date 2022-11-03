@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import rospy as ros
 import numpy as np
-from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray
 
 
 class JointStatePublisher():
@@ -14,11 +14,8 @@ class JointStatePublisher():
         self.filter_2 = np.zeros(6)
 
     def send_des_jstate(self):
-        # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
-        msg = JointState()
-        msg.position = self.q_des
-        msg.velocity = self.qd_des
-        msg.effort = self.tau_ffwd
+        msg = Float64MultiArray()
+        msg.data = self.q_des
         self.pub_des_jstate.publish(msg)
 
     def initFilter(self, q):
@@ -35,8 +32,7 @@ class JointStatePublisher():
 
 def talker(p):
     ros.init_node('custom_joint_pub_node', anonymous=True)
-    p.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1)
-
+    p.pub_des_jstate = ros.Publisher("/ur5/joint_group_pos_controller/command", Float64MultiArray, queue_size=1)
     loop_frequency = 1000.
     loop_rate = ros.Rate(loop_frequency)  # 1000hz
 

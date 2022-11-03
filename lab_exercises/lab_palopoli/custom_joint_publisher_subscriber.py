@@ -23,16 +23,9 @@ class JointStatePublisher():
                     self.q[joint_idx] = msg.position[msg_idx]
 
     def send_des_jstate(self):
-        if self.real_robot:
-            msg = Float64MultiArray()
-            msg.data = self.q_des
-            self.pub_des_jstate_robot.publish(msg)
-        else:
-            msg = JointState()
-            msg.position = self.q_des
-            msg.velocity = self.qd_des
-            msg.effort = self.tau_ffwd
-            self.pub_des_jstate_sim.publish(msg)
+        msg = Float64MultiArray()
+        msg.data = self.q_des
+        self.pub_des_jstate.publish(msg)
 
     def initFilter(self, q):
         self.filter_1 = np.copy(q)
@@ -50,8 +43,8 @@ def talker(p):
     p.real_robot = ros.get_param("real_robot")
     if p.real_robot:
         print("Robot is REAL")
-    p.pub_des_jstate_sim = ros.Publisher("/command", JointState, queue_size=1)
-    p.pub_des_jstate_robot = ros.Publisher("/ur5/joint_group_pos_controller/command", Float64MultiArray, queue_size=1)
+
+    p.pub_des_jstate = ros.Publisher("/ur5/joint_group_pos_controller/command", Float64MultiArray, queue_size=1)
     p.sub_jstate = ros.Subscriber("/ur5/joint_states", JointState, callback = p.receive_jstate, queue_size=1)
 
     ros.sleep(2.)
