@@ -89,11 +89,12 @@ class LabAdmittanceController(BaseControllerFixed):
                 'red'))
             sys.exit()
 
-        if conf.robot_params[self.robot_name]['gripper']:
+        if conf.robot_params[self.robot_name]['gripper_sim']:
             self.gripper = True
-            self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
+
         else:
             self.gripper = False
+        self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
             
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
@@ -254,7 +255,7 @@ class LabAdmittanceController(BaseControllerFixed):
         if lab_conf.USER_TRAJECTORY:
             self.Q_ref = []
             for name in lab_conf.traj_file_name:
-                data = np.load(name + '.npz')
+                data = np.load(lab_conf.traj_folder + name + '.npz')
                 self.Q_ref.append(data['q'])
 
 
@@ -570,11 +571,11 @@ def talker(p):
                         print(colored("LAST TRAJECTORY COMPLETED", 'red'))
                         p.gm.move_gripper(60)
                         traj_completed = True
-                        ext_traj_t = 0
-                        ext_traj_counter = 0
+                        #ext_traj_t = 0
+                        #ext_traj_counter = 0
 
             # EXE L8-1.1: set constant joint reference
-            p.q_des = np.copy(p.q_des_q0)
+            #p.q_des = np.copy(p.q_des_q0)
 
             # test gripper
             # if p.gripper:

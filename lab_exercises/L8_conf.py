@@ -36,6 +36,7 @@ v_des_homing = 0.2
 # Trajectory tracking
 USER_TRAJECTORY = False
 # list of trajectories file names to track in sequence
+traj_folder = "/home/laboratorio/ros_ws/src/trento_lab_framework/locosim/robot_control/base_controllers/"
 traj_file_name = ['home_2_table_robot', 'table_2_belt_robot', 'belt_2_home_robot']
 # traj_file_name = 'home_2_table_2_belt_2_home_robot'
-traj_slow_down_factor = 1 # how many times the reference trajectory has to be slowed down
+traj_slow_down_factor = 2 # how many times the reference trajectory has to be slowed down
