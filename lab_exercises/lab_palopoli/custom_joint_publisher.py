@@ -2,20 +2,23 @@
 import rospy as ros
 import numpy as np
 from std_msgs.msg import Float64MultiArray
+from base_controllers.components.gripper_manager import GripperManager
+import params as conf
 
+#TODO doesn't use the filter
 
 class JointStatePublisher():
 
     def __init__(self):
         self.q_des =np.zeros(6)
-        self.qd_des = np.zeros(6)
-        self.tau_ffwd = np.zeros(6)
+        self.time = 0
         self.filter_1 = np.zeros(6)
         self.filter_2 = np.zeros(6)
+        self.gm = GripperManager(False, conf.robot_params['ur5']['dt'])
 
     def send_des_jstate(self):
         msg = Float64MultiArray()
-        msg.data = self.q_des
+        msg.data = np.append(self.q_des, self.gm.getDesGripperJoints())
         self.pub_des_jstate.publish(msg)
 
     def initFilter(self, q):
@@ -37,32 +40,15 @@ def talker(p):
     loop_rate = ros.Rate(loop_frequency)  # 1000hz
 
     # init variables
-    time = 0
-    q_des0 = np.array([-0.3223527113543909, -0.7805794638446351, -2.5675506591796875, -1.6347843609251917, -1.5715253988849085, -1.0017417112933558])
-    p.initFilter(q_des0)
-
-    amp = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])  # amplitude
-    freq = np.array([0.2, 0.0, 0.0, 0.0, 0., 0.0]) # frequency
-
+    q_des0 = np.array([-0.3223527113543909, 1.7805794638446351, -2.5675506591796875, -1.6347843609251917, -3.5715253988849085, -2.0017417112933558])
+    # p.initFilter(q_des0)
 
     while not ros.is_shutdown():
-        # 1 - generate step reference
-        if time < 4.:
-            p.q_des = q_des0
-        else:
-            p.q_des = q_des0 + np.array([0., 0.4, 0., 0., 0., 0])
-            # 3- generate filtered step reference
-            #p.q_des = p.secondOrderFilter(q_des0 + np.array([0., 0.4, 0., 0., 0., 0]), loop_frequency, 5.)
-
-        # 2 - generate sine reference
-        #p.q_des = q_des0 + np.multiply(amp, np.sin(2*np.pi*freq*time))
-
-        p.qd_des = np.zeros(6)
-        p.tau_ffwd = np.zeros(6)
-
+        p.q_des = q_des0 + 0.1 * np.sin(2 * np.pi * 0.5* p.time)
+        p.gm.move_gripper(50)
         p.send_des_jstate()
         print(p.q_des)
-        time = np.round(time + np.array([1/loop_frequency]), 3)
+        p.time = np.round(p.time + np.array([conf.robot_params['ur5']['dt']]),  3)
         loop_rate.sleep()
 
 if __name__ == '__main__':
