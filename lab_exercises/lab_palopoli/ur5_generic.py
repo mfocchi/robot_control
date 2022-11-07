@@ -159,10 +159,10 @@ class Ur5Generic(BaseControllerFixed):
         self.g = self.robot.gravity(self.q)
         #compute ee position  in the world frame
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
-        # this is expressed in a workdframe with the origin attached to the base frame origin
+        # this is expressed in the base frame
         self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
         self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).rotation
-        # compute jacobian of the end effector in the world frame
+        # compute jacobian of the end effector in the base or world frame (they are aligned so in terms of velocity they are the same)
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
         self.J = self.J6[:3,:] 
@@ -271,6 +271,7 @@ def talker(p):
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
         # homing procedure
+
         if p.homing_flag:
             p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
 
@@ -297,6 +298,8 @@ def talker(p):
             p.logData()
         # plot end-effector
         p.ros_pub.add_marker(p.x_ee + p.base_offset)
+        p.ros_pub.publishVisual()
+
         #wait for synconization of the control loop
         rate.sleep()
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
