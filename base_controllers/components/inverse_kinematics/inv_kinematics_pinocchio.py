@@ -38,6 +38,9 @@ class robotKinematics():
 
         return idx
 
+    '''
+    This is a service function needed for the quadruped IK computation that return the position of a foot
+    '''
     def computeFootForwardKinematics(self, q_leg, frame_name):
         q = np.zeros((self.robot.na)) #these are actuated joints
         frame_id = self.robot.model.getFrameId(frame_name)
@@ -49,7 +52,9 @@ class robotKinematics():
         pinocchio.forwardKinematics(self.robot.model, self.robot.data, q_floating)
         pinocchio.framesForwardKinematics(self.robot.model, self.robot.data, q_floating)
         return  self.robot.data.oMf[frame_id].translation
-        
+    '''
+    This is a service function needed for the quadruped IK computation that returns the Jacobian of a foot 
+    '''
     def computeFootJacobian(self, q_leg, frame_name):
         q = np.zeros((self.robot.na)) #these are actuated joints
         frame_id = self.robot.model.getFrameId(frame_name)
@@ -64,6 +69,8 @@ class robotKinematics():
 
     '''
     This function is specific for a 3 DoFs leg of a quadruped robot
+    The input is the Cartesian position of the foot of a leg
+    Computes as output the set of joints of a leg relative to the foot position  
     '''
     def footInverseKinematicsFixedBaseLineSearch(self, foot_pos_des, frame_name, q0_leg = np.zeros(3),  verbose = False):
 
@@ -143,6 +150,9 @@ class robotKinematics():
 
     '''
     This function is a 6 DoFs manipulator, the input is the endeffector position
+    The end-effector position should be specified in the BASE FRAME
+    The output is the set of joints relative to the end-effector position
+    The redundancy (you are not providying an orientation) is solved by setting a postural task configuration
     '''
     def endeffectorInverseKinematicsLineSearch(self, ee_pos_des, frame_name, q0=np.zeros(6), verbose=False, 
                                                use_error_as_termination_criteria = False, 
@@ -260,6 +270,8 @@ class robotKinematics():
 
     '''
       This function is a 6 DoFs manipulator, the input is the endeffector position AND orientation
+      The end-effector position should be specified in the BASE FRAME
+      The output is the set of joints relative to the end-effector position
     '''
     def endeffectorFrameInverseKinematicsLineSearch(self, ee_pos_des, w_R_e_des, frame_name, q0=np.zeros(6), verbose=False, wrap = False):
 
@@ -350,6 +362,9 @@ class robotKinematics():
 
         return q0, IKsuccess, out_of_workspace
 
+    '''
+    This is the IK for a quadruped robot
+    '''
     def leggedRobotInverseKinematics(self, feetPosDes, q0, verbose = False):
 
         no_of_feet = len(self.urdf_feet_names)
@@ -394,8 +409,9 @@ class robotKinematics():
         
         return out
 
-
-
+    '''
+    This function is deprecated
+    '''
     def invKinFoot(self, ee_pos_des_BF, frame_name, q0_leg=np.zeros(3), verbose = False):
         # Error initialization
         niter = 0
