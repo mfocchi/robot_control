@@ -12,30 +12,31 @@ from termcolor import colored
 from base_controllers.utils.math_tools import Math
 
 math_utils = Math()
-#use a reasonable guess
-q_guess = np.array([0.5, -0.7, 1.0, -1.57, -1.57, 0.5])
+#if you use a reasonable guess it will converge quicker
+q_guess = np.array([0.4, -1.1,  1.0, -6.,  1,  1.0])
+#q_guess = np.zeros(6)
 robot_name = "ur5"
-xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/ur5.xacro'
+xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/ur5.urdf.xacro'
 robot = getRobotModel(robot_name, generate_urdf=True, xacro_path=xacro_path)
-robot = getRobotModel(robot_name)
+
 ee_frame = 'tool0'
 
 ## IMPORTANT these value is reasonable only for ur_description urdf ! not for the one in example robot data! they have base frames rotated!
-ee_pos_des = np.array([0.58281, 0.48628, 0.08333])
+ee_pos_des = np.array([-0.52636,  0.48073, -0.491 ])
 #This is the result it should get close (not that there are infinite solutions without the postural task!)
-qtest = np.array([ 0.55053, -0.65785,  1.05608, -1.55222, -1.56608,  0.5])
+qtest = np.array([ 0.76689, -1.17447,  1.08174, -6.18935,  2.33769,  1.57316])
 
 #orient reference
-rpy_des = np.array([np.pi/2, 0.1 , 0.2])
+rpy_des = np.array([0, -1.57 , 0])
 # compute rotation matrix representing the desired orientation from Euler Angles
 w_R_e_des = math_utils.eul2Rot(rpy_des)   
 print(w_R_e_des)
 kin = robotKinematics(robot, ee_frame)
 start_time = time.time()
-q, ik_success, out_of_workspace = kin.endeffectorFrameInverseKinematicsLineSearch(ee_pos_des, w_R_e_des, ee_frame, q_guess, verbose = True)
+q, ik_success, out_of_workspace = kin.endeffectorFrameInverseKinematicsLineSearch(ee_pos_des, w_R_e_des, ee_frame, q_guess, verbose = True, wrap = True)
 
 #chek orient
-#print( robot.framePlacement(q, robot.model.getFrameId(ee_frame)).rotation)
+print( robot.framePlacement(q, robot.model.getFrameId(ee_frame)).rotation)
 
 print('total time is ',time.time()-start_time)
 #print('q is:\n', q)

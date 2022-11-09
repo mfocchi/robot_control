@@ -304,7 +304,7 @@ class robotKinematics():
             # computed error
             e_bar = np.hstack((ee_pos_des - ee_pos0, w_R_e0.dot(self.errorInSO3(w_R_e0, w_R_e_des)   )    ))
             grad = J6.T.dot(e_bar)
-            dq = np.linalg.inv(J6).dot(e_bar)
+            dq = np.linalg.inv(J6 + 1e-06* np.identity(6)).dot(e_bar)
 
             if np.linalg.norm(grad) < epsilon:
                 IKsuccess = True
