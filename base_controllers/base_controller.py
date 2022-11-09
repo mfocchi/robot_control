@@ -43,6 +43,7 @@ import matplotlib.pyplot as plt
 from base_controllers.utils.common_functions import plotCoM, plotJoint
 import pinocchio as pin
 from base_controllers.utils.common_functions import getRobotModel
+from ros_impedance_controller.msg import EffortPid
 
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
@@ -117,6 +118,7 @@ class BaseController(threading.Thread):
         self.time_external_wrench = 0.6
         self.broadcaster = tf.TransformBroadcaster()
         self.use_torque_control = False
+        self.real_robot = conf.robot_params[self.robot_name].get('real_robot', False)
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
@@ -143,7 +145,8 @@ class BaseController(threading.Thread):
                     'robot_name:=' + self.robot_name,
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
-                    'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
+                    'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z']),
+                    'real_robot:=' + str(self.real_robot)]
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
             cli_args.append('world_name:=' + str(world_name))
@@ -169,6 +172,7 @@ class BaseController(threading.Thread):
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
         self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)
+        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid, callback = self._receive_pid_effort, queue_size = 1, tcp_nodelay = True)
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
         # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -259,14 +263,20 @@ class BaseController(threading.Thread):
                     self.qd[joint_idx] = msg.velocity[msg_idx]
                     self.tau[joint_idx] = msg.effort[msg_idx]
 
+    def _receive_pid_effort(self, msg):
+        for msg_idx in range(len(msg.name)):
+            for joint_idx in range(len(self.joint_names)):
+                if self.joint_names[joint_idx] == msg.name[msg_idx]:
+                    self.tau_fb[joint_idx] = msg.effort_pid[msg_idx]
+
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
+         msg.name = self.joint_names
          msg.position = q_des
          msg.velocity = qd_des
          msg.effort = tau_ffwd                
-         self.pub_des_jstate.publish(msg)     
-
+         self.pub_des_jstate.publish(msg)
 
     def deregister_node(self):
         print( "deregistering nodes"     )
@@ -282,7 +292,7 @@ class BaseController(threading.Thread):
     def get_jstate(self):
         return self.q
         
-    def resetGravity(self, flag):
+    def setGravity(self, value):
         # get actual configs
         physics_props = self.get_physics_client()         
        
@@ -292,17 +302,14 @@ class BaseController(threading.Thread):
         req_reset_gravity.max_update_rate = physics_props.max_update_rate           
         req_reset_gravity.ode_config =physics_props.ode_config
         req_reset_gravity.gravity =  physics_props.gravity
-       
-        
-        if (flag):
-            req_reset_gravity.gravity.z =  -0.2
-        else:
-            req_reset_gravity.gravity.z = -9.81                
+        req_reset_gravity.gravity.z =  value
         self.set_physics_client(req_reset_gravity)
         
     def freezeBase(self, flag):
-        
-        self.resetGravity(flag) 
+        if flag:
+            self.setGravity(0.)
+        else:
+            self.setGravity(-9.81)
         # create the message
         req_reset_world = SetModelStateRequest()
         #create model state
@@ -355,10 +362,10 @@ class BaseController(threading.Thread):
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
 
 
-       # Pinocchio Update the joint and frame placements
+        # Pinocchio Update the joint and frame placements
         gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.u.mapToRos(self.qd)))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
-
+        self.M = self.robot.mass(configuration)
         self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities) 
         self.h_joints = self.h[6:]  
         
@@ -479,7 +486,9 @@ class BaseController(threading.Thread):
         self.J = [np.zeros((6, self.robot.nv))] * 4
         self.wJ = [np.eye(3)] * 4
         self.W_contacts = [np.zeros((3))] * 4
+        self.W_contacts_des = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
+        self.B_contacts_des = [np.zeros((3))] * 4
         self.contact_state = np.array([False, False, False, False])
         self.contact_normal = [np.array([0., 0., 1.])]*4
         self.w_R_lowerleg =  [np.eye(3)] * 4
