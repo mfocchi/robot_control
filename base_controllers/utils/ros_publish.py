@@ -7,6 +7,7 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
 from geometry_msgs.msg import Point
+from geometry_msgs.msg import Polygon
 import numpy as np
 
 import roslaunch
@@ -36,12 +37,20 @@ class RosPub():
 
         self.marker_pub = ros.Publisher('/vis' , MarkerArray, queue_size=1)
         self.arrow_pub = ros.Publisher('/arrow', MarkerArray, queue_size=1)
+        self.polygon_pub = ros.Publisher('/support_polygon', MarkerArray, queue_size=1)
+        self.marker_fixed_pub = ros.Publisher('/point_fixed', MarkerArray, queue_size=1)
         self.markerArray = MarkerArray()
         self.markerArray.markers = []
         self.markerArray_arrows = MarkerArray()
         self.markerArray_arrows.markers = []
+        self.markerArray_polygon = MarkerArray()
+        self.markerArray_arrows.markers = []
+        self.markerArrayFixed = MarkerArray()
+        self.markerArrayFixed.markers = []
         self.id = 0
         self.id_arrow = 0
+        self.id_polygon = 0
+        self.id_fixed = 0
 
         self.fixedBaseRobot = False
         self.visual_frame = visual_frame
@@ -85,7 +94,18 @@ class RosPub():
             self.markerArray_arrows.markers.clear()
             self.id_arrow = 0
 
-        self.delete_all_markers()
+        if len(self.markerArray_polygon.markers) > 0:
+            self.polygon_pub.publish(self.markerArray_polygon)
+            self.markerArray_polygon.markers.clear()
+            self.id_polygon = 0
+
+        if len(self.markerArrayFixed.markers) > 0:
+            self.marker_fixed_pub.publish(self.markerArrayFixed)
+
+
+
+
+        # self.delete_all_markers()
                                 
     def add_marker(self, pos, radius = 0.1, color = "red"):
        marker = Marker()
@@ -120,6 +140,40 @@ class RosPub():
        marker.id = self.id       
        self.id += 1                                        
        self.markerArray.markers.append(marker)
+
+    def add_marker_fixed(self, pos, radius=0.01, color="red"):
+        marker = Marker()
+        marker.header.frame_id = self.visual_frame
+        marker.type = marker.SPHERE
+        marker.action = marker.ADD
+        marker.scale.x = radius
+        marker.scale.y = radius
+        marker.scale.z = radius
+        marker.color.a = 0.5
+        if (color == "red"):
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+        if (color == "blue"):
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+        if (color == "green"):
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+        marker.pose.orientation.x = 0.
+        marker.pose.orientation.y = 0.
+        marker.pose.orientation.z = 0.
+        marker.pose.orientation.w = 1.0
+        marker.pose.position.x = pos[0]
+        marker.pose.position.y = pos[1]
+        marker.pose.position.z = pos[2]
+        marker.lifetime = ros.Duration(0.0)
+
+        marker.id = self.id_fixed
+        self.id_fixed += 1
+        self.markerArrayFixed.markers.append(marker)
                             
     def add_arrow(self, start, vector, color = "green", scale = 1.):
        marker = Marker()
@@ -153,6 +207,46 @@ class RosPub():
        marker.id = self.id_arrow
        self.id_arrow += 1
        self.markerArray_arrows.markers.append(marker)
+
+    def add_polygon(self, points, color = "green", scale = 1., visual_frame = 'world'):
+        # list of points to connect:
+        # a line connect points[0] - points[1]
+        # a line connect points[1] - points[2]
+        # ...
+        marker = Marker()
+        if (color == "green"):
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+        if (color == "blue"):
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+        if (color == "red"):
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+        marker.color.a = 1.0
+        if visual_frame is None:
+            marker.header.frame_id = self.visual_frame
+        else:
+            marker.header.frame_id = visual_frame
+        marker.type = marker.LINE_STRIP
+        marker.action = marker.ADD
+        for p in points:
+            marker.points.append(Point(p[0], p[1], p[2]))
+        marker.scale.x = 0.01 * scale
+        marker.scale.y = 0.01 * scale
+        marker.scale.z = 0.01 * scale
+        marker.lifetime = ros.Duration(0.0)
+        marker.pose.orientation.x = 0.
+        marker.pose.orientation.y = 0.
+        marker.pose.orientation.z = 0.
+        marker.pose.orientation.w = 1.
+        marker.id = self.id_polygon
+        self.id_polygon += 1
+        self.markerArray_polygon.markers.append(marker)
+
 
     def delete_all_markers(self):
         marker_array_msg = MarkerArray()
