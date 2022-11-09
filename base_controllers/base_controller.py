@@ -43,11 +43,13 @@ import matplotlib.pyplot as plt
 from base_controllers.utils.common_functions import plotCoM, plotJoint
 import pinocchio as pin
 from base_controllers.utils.common_functions import getRobotModel
+from ros_impedance_controller.msg import EffortPid
 
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
-robotName = "solo"
+robotName = "go1"
+
 
 class BaseController(threading.Thread):
     
@@ -69,6 +71,8 @@ class BaseController(threading.Thread):
         self.time_external_wrench = 0.6
         self.broadcaster = tf.TransformBroadcaster()
         self.use_torque_control = False
+        self.real_robot = False
+
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
@@ -95,7 +99,9 @@ class BaseController(threading.Thread):
                     'robot_name:=' + self.robot_name,
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
-                    'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
+                    'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z']),
+                    'real_robot:=' + str(self.real_robot)]
+        print('***************************************************************', world_name)
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
             cli_args.append('world_name:=' + str(world_name))
@@ -120,6 +126,8 @@ class BaseController(threading.Thread):
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
         self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)
+        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid,
+                                             callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
         # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -210,9 +218,17 @@ class BaseController(threading.Thread):
                     self.qd[joint_idx] = msg.velocity[msg_idx]
                     self.tau[joint_idx] = msg.effort[msg_idx]
 
+    def _receive_pid_effort(self, msg):
+        for msg_idx in range(len(msg.name)):
+            for joint_idx in range(len(self.joint_names)):
+                if self.joint_names[joint_idx] == msg.name[msg_idx]:
+                    self.tau_fb[joint_idx] = msg.effort_pid[msg_idx]
+
+
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
+         msg.name = self.joint_names
          msg.position = q_des
          msg.velocity = qd_des
          msg.effort = tau_ffwd                
@@ -246,7 +262,7 @@ class BaseController(threading.Thread):
        
         
         if (flag):
-            req_reset_gravity.gravity.z =  -0.2
+            req_reset_gravity.gravity.z =  -0.
         else:
             req_reset_gravity.gravity.z = -9.81                
         self.set_physics_client(req_reset_gravity)
@@ -306,8 +322,10 @@ class BaseController(threading.Thread):
 
 
        # Pinocchio Update the joint and frame placements
-        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.qd))
+        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.u.mapToRos(self.qd)))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+
+        self.M = self.robot.mass(configuration)
 
         self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities) 
         self.h_joints = self.h[6:]  
@@ -429,7 +447,9 @@ class BaseController(threading.Thread):
         self.J = [np.zeros((6, self.robot.nv))] * 4
         self.wJ = [np.eye(3)] * 4
         self.W_contacts = [np.zeros((3))] * 4
+        self.W_contacts_des = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
+        self.B_contacts_des = [np.zeros((3))] * 4
         self.contact_state = np.array([False, False, False, False])
         self.contact_normal = [np.array([0., 0., 1.])]*4
         self.w_R_lowerleg =  [np.eye(3)] * 4
@@ -443,7 +463,7 @@ class BaseController(threading.Thread):
         self.qd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan                                  
         self.tau_ffwd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
         self.tau_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan                                  
-        self.grForcesW_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan 
+        self.grForcesW_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan
         self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.constr_viol_log = np.empty((4,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         
