@@ -50,6 +50,45 @@ class Controller(BaseController):
     # logData
     # startupProcedure
 
+    def _receive_pose(self, msg):
+
+        self.quaternion[0] = msg.pose.pose.orientation.x
+        self.quaternion[1] = msg.pose.pose.orientation.y
+        self.quaternion[2] = msg.pose.pose.orientation.z
+        self.quaternion[3] = msg.pose.pose.orientation.w
+        self.euler = euler_from_quaternion(self.quaternion)
+
+        if self.real_robot:
+            self.basePoseW[self.u.sp_crd["LX"]] = self.w_p_b_legOdom[0]
+            self.basePoseW[self.u.sp_crd["LY"]] = self.w_p_b_legOdom[1]
+            self.basePoseW[self.u.sp_crd["LZ"]] = self.w_p_b_legOdom[2]
+        else:
+            self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
+            self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
+            self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
+        self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
+        self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
+        self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
+
+        if self.real_robot:
+            self.baseTwistW[self.u.sp_crd["LX"]] = self.w_v_b_legOdom[0]
+            self.baseTwistW[self.u.sp_crd["LY"]] = self.w_v_b_legOdom[1]
+            self.baseTwistW[self.u.sp_crd["LZ"]] = self.w_v_b_legOdom[2]
+        else:
+            self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
+            self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
+            self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.twist.linear.z
+        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
+        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
+        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
+
+        # compute orientation matrix
+        self.b_R_w = self.math_utils.rpyToRot(self.euler)
+
+        self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                       self.quaternion,
+                                       ros.Time.now(), '/base_link', '/world')
+
     def initVars(self):
         super().initVars()
         # some extra variables
@@ -73,8 +112,8 @@ class Controller(BaseController):
         self.comPosB = np.zeros(3) * np.nan
         self.comVelB = np.zeros(3) * np.nan
 
-        self.w_p_b_legOdom = np.zeros(3) * np.nan
-        self.w_v_b_legOdom = np.zeros(3) * np.nan
+        self.w_p_b_legOdom = np.zeros(3) #* np.nan
+        self.w_v_b_legOdom = np.zeros(3) #* np.nan
 
         self.contact_state = np.array([False] * 4)
 
