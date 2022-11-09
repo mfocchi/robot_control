@@ -88,11 +88,26 @@ class InverseKinematics:
         self.KneeOutward = KNEE_OUTWARD
 
     def ik_leg(self, foot_pos, foot_idx, hip=HIP_DOWN, knee=KNEE_INWARD):
+        # import warnings
+        # warnings.filterwarnings("error")
         leg = self.robot.model.frames[foot_idx].name[:2]
+
 
         HAA_foot_x = foot_pos[0] - self.measures[leg]['base_2_HAA_x']
         HAA_foot_y = foot_pos[1] - self.measures[leg]['base_2_HAA_y']
-        HAA_foot_z = np.sqrt(foot_pos[2] ** 2 + HAA_foot_y ** 2 - self.measures[leg]['HAA_2_FOOT_y'] ** 2)
+
+        sq = foot_pos[2] ** 2 + HAA_foot_y ** 2 - self.measures[leg]['HAA_2_FOOT_y'] ** 2
+        # if sq < 0.:
+        #     print('foot_idx', foot_idx)
+        #     print('foot_pos', foot_pos)
+        #     print('HAA_foot_x', HAA_foot_x)
+        #     print('HAA_foot_y', HAA_foot_y)
+        #     print("self.measures[leg]['HAA_2_FOOT_y']", self.measures[leg]['HAA_2_FOOT_y'])
+        #     print('sq', sq)
+
+        HAA_foot_z = np.sqrt(sq)
+        if sq < 0:
+            eeeeeeeeee
 
         if hip == HIP_DOWN:
             HAA_foot_z *= -1
@@ -143,8 +158,7 @@ class InverseKinematics:
         c_num0 = - self.measures[leg]['KFE_2_FOOT_z'] * sin_qKFE * HAA_foot_x
         c_num1 = -(self.measures[leg]['HFE_2_KFE_z'] + self.measures[leg]['KFE_2_FOOT_z'] * cos_qKFE) * HAA_foot_z
         den = -(self.measures[leg]['KFE_2_FOOT_z'] ** 2 + self.measures[leg]['HFE_2_KFE_z'] ** 2 + 2 *
-                self.measures[leg][
-                    'KFE_2_FOOT_z'] * self.measures[leg]['HFE_2_KFE_z'] * cos_qKFE)
+                self.measures[leg]['KFE_2_FOOT_z'] * self.measures[leg]['HFE_2_KFE_z'] * cos_qKFE)
 
         cos_qHFE = (c_num0 + c_num1) / den
         cos_qHFE = np.round(cos_qHFE, 10)
