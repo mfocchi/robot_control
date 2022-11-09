@@ -40,7 +40,7 @@ class LegOdometry:
         assuming feet haven't changed position
         args: contacts_state, qj, and vj uses ros convention [LF, LH, RF, RH]
         '''
-        assert not self._reset_has_been_called_once, "Please call reset funcion after initializing LegOdometry"
+        assert self._reset_has_been_called_once, "Please call reset funcion after initializing LegOdometry"
         w_R_b = pin.Quaternion(quat).toRotationMatrix().T
         w_omega_b = ang_vel
         self._b_conf_neutral[7:] = self.u.mapFromRos(qj)
@@ -73,9 +73,9 @@ class LegOdometry:
                 self.w_p_b_update += w_p_b
                 self.w_v_b_update += w_v_b
 
-        assert nc!=0, "Cannot compute leg odometry if no contact is active"
-        self.w_p_b_update/=nc
-        self.w_v_b_update/=nc
+        if nc != 0:
+            self.w_p_b_update/=nc
+            self.w_v_b_update/=nc
 
         return self.w_p_b_update, self.w_v_b_update
 
