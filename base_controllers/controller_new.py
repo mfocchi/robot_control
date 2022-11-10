@@ -240,6 +240,7 @@ class Controller(BaseController):
         self.W_lin_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
         self.zmp = np.zeros(3)
+        self.zmp_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
 
 
@@ -340,6 +341,7 @@ class Controller(BaseController):
         self.W_contacts_des_log[:, self.log_counter] = np.array(self.W_contacts_des).flatten()
 
         self.W_lin_vel_log[:, self.log_counter] = self.imu_utils.W_lin_vel
+        self.zmp_log[:, self.log_counter] = self.zmp
 
 
         self.time_log[:, self.log_counter] = self.time
