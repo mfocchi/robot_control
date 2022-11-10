@@ -171,8 +171,7 @@ class BaseController(threading.Thread):
 
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
-        self.sub_jstate = ros.Subscriber("/"+self.robot_name+"/joint_states", JointState, callback=self._receive_jstate, queue_size=1,  tcp_nodelay=True)
-        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid, callback = self._receive_pid_effort, queue_size = 1, tcp_nodelay = True)
+
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
         # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -183,6 +182,13 @@ class BaseController(threading.Thread):
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
+
+
+    def initSubscribers(self):
+        self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
+                                         callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid,
+                                             callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
         self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
                                        queue_size=1, tcp_nodelay=True)
         if self.use_ground_truth_contacts:
@@ -233,7 +239,7 @@ class BaseController(threading.Thread):
         self.quaternion[1]=    msg.pose.pose.orientation.y
         self.quaternion[2]=    msg.pose.pose.orientation.z
         self.quaternion[3]=    msg.pose.pose.orientation.w
-        self.euler = euler_from_quaternion(self.quaternion)
+        self.euler = np.array(euler_from_quaternion(self.quaternion))
 
         self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
         self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
@@ -304,37 +310,57 @@ class BaseController(threading.Thread):
         req_reset_gravity.gravity =  physics_props.gravity
         req_reset_gravity.gravity.z =  value
         self.set_physics_client(req_reset_gravity)
-        
-    def freezeBase(self, flag):
+
+    def freezeBase(self, flag, basePoseW=None, baseTwistW=None):
         if flag:
-            self.setGravity(0.)
+            self.setGravity(0)
         else:
             self.setGravity(-9.81)
         # create the message
         req_reset_world = SetModelStateRequest()
-        #create model state
-        model_state = ModelState()        
+        # create model state
+        model_state = ModelState()
         model_state.model_name = self.robot_name
-        model_state.pose.position.x = 0.0
-        model_state.pose.position.y = 0.0        
-        model_state.pose.position.z = 0.8
+        if basePoseW is None:
+            model_state.pose.position.x = self.u.linPart(self.basePoseW)[0]
+            model_state.pose.position.y = self.u.linPart(self.basePoseW)[1]
+            model_state.pose.position.z = self.u.linPart(self.basePoseW)[2]
 
-        model_state.pose.orientation.w = 1.0
-        model_state.pose.orientation.x = 0.0       
-        model_state.pose.orientation.y = 0.0
-        model_state.pose.orientation.z = 0.0                
-                                
-        model_state.twist.linear.x = 0.0
-        model_state.twist.linear.y = 0.0        
-        model_state.twist.linear.z = 0.0
-             
-        model_state.twist.angular.x = 0.0
-        model_state.twist.angular.y = 0.0        
-        model_state.twist.angular.z = 0.0
-             
+            model_state.pose.orientation.x = self.quaternion[0]
+            model_state.pose.orientation.y = self.quaternion[1]
+            model_state.pose.orientation.z = self.quaternion[2]
+            model_state.pose.orientation.w = self.quaternion[3]
+        else:
+            model_state.pose.position.x = self.u.linPart(basePoseW)[0]
+            model_state.pose.position.y = self.u.linPart(basePoseW)[1]
+            model_state.pose.position.z = self.u.linPart(basePoseW)[2]
+
+            quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.u.angPart(basePoseW)))
+            model_state.pose.orientation.x = quaternion.x
+            model_state.pose.orientation.y = quaternion.y
+            model_state.pose.orientation.z = quaternion.z
+            model_state.pose.orientation.w = quaternion.w
+
+        if baseTwistW is None:
+            model_state.twist.linear.x = self.u.linPart(self.baseTwistW)[0]
+            model_state.twist.linear.y = self.u.linPart(self.baseTwistW)[1]
+            model_state.twist.linear.z = self.u.linPart(self.baseTwistW)[2]
+
+            model_state.twist.angular.x = self.u.angPart(self.baseTwistW)[0]
+            model_state.twist.angular.y = self.u.angPart(self.baseTwistW)[1]
+            model_state.twist.angular.z = self.u.angPart(self.baseTwistW)[2]
+        else:
+            model_state.twist.linear.x = self.u.linPart(baseTwistW)[0]
+            model_state.twist.linear.y = self.u.linPart(baseTwistW)[1]
+            model_state.twist.linear.z = self.u.linPart(baseTwistW)[2]
+
+            model_state.twist.angular.x = self.u.angPart(baseTwistW)[0]
+            model_state.twist.angular.y = self.u.angPart(baseTwistW)[1]
+            model_state.twist.angular.z = self.u.angPart(baseTwistW)[2]
+
         req_reset_world.model_state = model_state
         # send request and get response (in this case none)
-        self.reset_world(req_reset_world) 
+        self.reset_world(req_reset_world)
 
     def mapBaseToWorld(self, B_var):
         W_var = self.b_R_w.transpose().dot(B_var) + self.u.linPart(self.basePoseW)                            
@@ -507,6 +533,7 @@ class BaseController(threading.Thread):
         self.constr_viol_log = np.empty((4,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         
         self.time = 0.0
+        self.loop_time = conf.robot_params[self.robot_name]['dt']
         self.log_counter = 0
 
         # order: lf rf lh rh
@@ -535,6 +562,14 @@ class BaseController(threading.Thread):
             self.grForcesW_log[:,self.log_counter] =  self.grForcesW
             self.time_log[self.log_counter] = self.time
             self.log_counter+=1
+
+    def sync_check(self):
+        new_time = ros.Time.now().to_sec()
+        if  hasattr(self, 'ros_time'):
+            self.loop_time = new_time-self.ros_time
+            #if  self.loop_time> conf.robot_params[self.robot_name]['dt']*1.05:
+                #print('Out of loop frequency')
+        self.ros_time = new_time
 	
 def talker(p):
     p.start()
@@ -542,7 +577,8 @@ def talker(p):
         p.custom_launch_file = True
     p.startSimulator()
     p.loadModelAndPublishers()
-    p.initVars()           
+    p.initVars()
+    p.initSubscribers()
     p.startupProcedure()
 
     #loop frequency       
@@ -595,8 +631,8 @@ def talker(p):
 
         #wait for synconization of the control loop
         rate.sleep()     
-       
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
+        p.sync_check()
+        p.time = np.round(p.time + np.array([p.loop_time]), 3) # to avoid issues of dt 0.0009999
 
         if (p.apply_external_wrench and p.time > p.time_external_wrench):
             print("START APPLYING EXTERNAL WRENCH")
