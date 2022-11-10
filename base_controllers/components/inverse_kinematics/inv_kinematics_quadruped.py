@@ -105,9 +105,10 @@ class InverseKinematics:
         #     print("self.measures[leg]['HAA_2_FOOT_y']", self.measures[leg]['HAA_2_FOOT_y'])
         #     print('sq', sq)
 
-        HAA_foot_z = np.sqrt(sq)
         if sq < 0:
-            eeeeeeeeee
+            raise ValueError('foot is higher that hip!')
+        HAA_foot_z = np.sqrt(sq)
+
 
         if hip == HIP_DOWN:
             HAA_foot_z *= -1
