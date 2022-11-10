@@ -25,6 +25,11 @@ from scipy.io import savemat
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.msg import ModelState
 
+from geometry_msgs.msg import Vector3
+from sensor_msgs.msg import Imu
+from base_controllers.components.imu_utils import IMU_utils
+
+
 import rosbag
 import datetime
 
@@ -42,6 +47,7 @@ class Controller(BaseController):
 
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
 
+        self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
 
     #####################
     # OVERRIDEN METHODS #
@@ -49,6 +55,30 @@ class Controller(BaseController):
     # initVars
     # logData
     # startupProcedure
+
+    def initSubscribers(self):
+        super().initSubscribers()
+        if self.real_robot:
+            self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
+                                                 callback=self._recieve_imu_acc_real, queue_size=1, tcp_nodelay=True)
+        else:
+            self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,
+                                                  callback=self._recieve_imu_acc, queue_size=1, tcp_nodelay=True)
+
+    def _recieve_imu_acc_real(self, msg):
+        self.B_imu_lin_acc[0] = msg.x
+        self.B_imu_lin_acc[1] = msg.y
+        self.B_imu_lin_acc[2] = msg.z
+
+        self.W_base_lin_acc = self.b_R_w.T @ (self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
+
+    def _recieve_imu_acc(self, msg):
+        self.B_imu_lin_acc[0] = msg.linear_acceleration.x
+        self.B_imu_lin_acc[1] = msg.linear_acceleration.y
+        self.B_imu_lin_acc[2] = msg.linear_acceleration.z
+
+        self.W_base_lin_acc = self.b_R_w.T @ (self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
+
 
     def _receive_pose(self, msg):
 
@@ -71,9 +101,14 @@ class Controller(BaseController):
         self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
 
         if self.real_robot:
-            self.baseTwistW[self.u.sp_crd["LX"]] = self.w_v_b_legOdom[0]
-            self.baseTwistW[self.u.sp_crd["LY"]] = self.w_v_b_legOdom[1]
-            self.baseTwistW[self.u.sp_crd["LZ"]] = self.w_v_b_legOdom[2]
+            if all(self.contact_state) == True:
+                self.baseTwistW[self.u.sp_crd["LX"]] = self.w_v_b_legOdom[0]
+                self.baseTwistW[self.u.sp_crd["LY"]] = self.w_v_b_legOdom[1]
+                self.baseTwistW[self.u.sp_crd["LZ"]] = self.w_v_b_legOdom[2]
+            else:
+                self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.W_lin_vel[0]
+                self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.W_lin_vel[1]
+                self.baseTwistW[self.u.sp_crd["LZ"]] = self.imu_utils.W_lin_vel[2]
         else:
             self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
             self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
@@ -137,6 +172,10 @@ class Controller(BaseController):
         except KeyError:
             self.force_th = 0.
 
+        # imu
+        self.B_imu_lin_acc = np.empty(3) * np.nan
+        self.W_base_lin_acc = np.empty(3) * np.nan
+
 
         self.comPosB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.comVelB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
@@ -198,6 +237,8 @@ class Controller(BaseController):
 
         self.T_v_com_ref_lc = np.zeros(3)
         self.T_v_base_leg_odom_lc = np.zeros(3)
+
+        self.W_lin_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
         self.zmp = np.zeros(3)
 
@@ -299,12 +340,13 @@ class Controller(BaseController):
         self.W_contacts_log[:, self.log_counter] = np.array(self.W_contacts).flatten()
         self.W_contacts_des_log[:, self.log_counter] = np.array(self.W_contacts_des).flatten()
 
+        self.W_lin_vel_log[:, self.log_counter] = self.imu_utils.W_lin_vel
+
 
         self.time_log[:, self.log_counter] = self.time
 
 
-    def startController(self, world_name=None, xacro_path=None, real_robot=False, use_ground_truth_contacts=True):
-        self.real_robot = real_robot
+    def startController(self, world_name=None, xacro_path=None, use_ground_truth_contacts=True):
 
         if self.real_robot == False:
             self.use_ground_truth_contacts = use_ground_truth_contacts
@@ -316,6 +358,7 @@ class Controller(BaseController):
         self.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
         #self.resetGravity(True)
         self.initVars()                            # overloaded method
+        self.initSubscribers()
         self.rate = ros.Rate(1 / self.dt)
         print(colored("Started controller", "blue"))
 
@@ -425,11 +468,12 @@ class Controller(BaseController):
         # log variables
         self.rate.sleep()
         self.logData()
-        self.time = np.round(self.time + np.array([conf.robot_params[self.robot_name]['dt']]), 3)
+        self.sync_check()
+        self.time = np.round(self.time + np.array([self.loop_time]), 3)
 
 
 
-    # def estimateContacts_KKT(self): # TODO
+        # def estimateContacts_KKT(self): # TODO
     #     q_ros = self.u.mapToRos(self.q)
     #     v_ros = self.u.mapToRos(self.qd)
     #     tau_ros = self.u.mapToRos(self.tau)
@@ -544,8 +588,8 @@ class Controller(BaseController):
         self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
         self.pid = PidManager(self.joint_names)
         if self.real_robot:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
-                                 conf.robot_params[self.robot_name]['kd_real'],
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real']/2,
+                                 conf.robot_params[self.robot_name]['kd_real']/2,
                                  np.zeros(self.robot.na))
         else:
             self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
@@ -556,6 +600,10 @@ class Controller(BaseController):
             self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
             ros.sleep(0.01)
 
+        if self.real_robot:
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
+                                 conf.robot_params[self.robot_name]['kd_real'],
+                                 np.zeros(self.robot.na))
 
         # try:
         #     while not ros.is_shutdown():
@@ -568,6 +616,8 @@ class Controller(BaseController):
         #     p.deregister_node()
         # finally:
         #     sys.exit(-1)
+
+
 
         if check_contacts:
             self._startupWithContacts()
@@ -582,18 +632,18 @@ class Controller(BaseController):
                     self.updateKinematics()
                     self.visualizeContacts()
 
-                    self.send_des_jstate(self.q_des, self.qd_des, self.self_weightCompensation())
+                    self.send_command(self.q_des, self.qd_des, self.self_weightCompensation())
 
-                    # wait for synchronization of the control loop
-                    self.rate.sleep()
-                    self.time = np.round(self.time + np.array([conf.robot_params[self.robot_name]['dt']]), 3)
-                    self.logData()
-
-                    # reset time before return (I don't want that my simulations start with time > 0)
 
             except (ros.ROSInterruptException, ros.service.ServiceException):
                 ros.signal_shutdown("killed")
                 self.deregister_node()
+
+        # IMU BIAS ESTIMATION
+        while self.imu_utils.counter < self.imu_utils.timeout:
+            self.updateKinematics()
+            self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+            self.send_command(self.q_des, self.qd_des, self.gravityCompensation()+self.self_weightCompensation())
 
 
 
@@ -730,69 +780,13 @@ class Controller(BaseController):
                         print(colored("[startupProcedure] completed", "green"))
                         state = 4
 
-
-                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-
-                # wait for synchronization of the control loop
-                self.rate.sleep()
-                self.time = np.round(self.time + np.array([conf.robot_params[self.robot_name]['dt']]), 3)
-                self.logData()
-
-                # reset time before return (I don't want that my simulations start with time > 0)
+                self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
         except (ros.ROSInterruptException, ros.service.ServiceException):
             ros.signal_shutdown("killed")
             self.deregister_node()
 
         #self.time = 0.
-
-    def freezeBase(self, flag, basePoseW=None, baseTwistW=None):
-        self.resetGravity(flag)
-        # create the message
-        req_reset_world = SetModelStateRequest()
-        # create model state
-        model_state = ModelState()
-        model_state.model_name = self.robot_name
-        if basePoseW is None:
-            model_state.pose.position.x = self.u.linPart(self.basePoseW)[0]
-            model_state.pose.position.y = self.u.linPart(self.basePoseW)[1]
-            model_state.pose.position.z = self.u.linPart(self.basePoseW)[2]
-
-            model_state.pose.orientation.x = self.quaternion[0]
-            model_state.pose.orientation.y = self.quaternion[1]
-            model_state.pose.orientation.z = self.quaternion[2]
-            model_state.pose.orientation.w = self.quaternion[3]
-        else:
-            model_state.pose.position.x = self.u.linPart(basePoseW)[0]
-            model_state.pose.position.y = self.u.linPart(basePoseW)[1]
-            model_state.pose.position.z = self.u.linPart(basePoseW)[2]
-
-            quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.u.angPart(basePoseW)))
-            model_state.pose.orientation.x = quaternion.x
-            model_state.pose.orientation.y = quaternion.y
-            model_state.pose.orientation.z = quaternion.z
-            model_state.pose.orientation.w = quaternion.w
-
-        if baseTwistW is None:
-            model_state.twist.linear.x = self.u.linPart(self.baseTwistW)[0]
-            model_state.twist.linear.y = self.u.linPart(self.baseTwistW)[1]
-            model_state.twist.linear.z = self.u.linPart(self.baseTwistW)[2]
-
-            model_state.twist.angular.x = self.u.angPart(self.baseTwistW)[0]
-            model_state.twist.angular.y = self.u.angPart(self.baseTwistW)[1]
-            model_state.twist.angular.z = self.u.angPart(self.baseTwistW)[2]
-        else:
-            model_state.twist.linear.x = self.u.linPart(baseTwistW)[0]
-            model_state.twist.linear.y = self.u.linPart(baseTwistW)[1]
-            model_state.twist.linear.z = self.u.linPart(baseTwistW)[2]
-
-            model_state.twist.angular.x = self.u.angPart(baseTwistW)[0]
-            model_state.twist.angular.y = self.u.angPart(baseTwistW)[1]
-            model_state.twist.angular.z = self.u.angPart(baseTwistW)[2]
-
-        req_reset_world.model_state = model_state
-        # send request and get response (in this case none)
-        self.reset_world(req_reset_world)
 
 
 
