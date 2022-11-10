@@ -372,8 +372,10 @@ class Controller(BaseController):
     # feedforward controllers
 
     def self_weightCompensation(self):
+        # it seems that self weight compensation degrates the control performances: do not use it!
         # require the call to updateKinematics
-        gravity_torques = self.h_joints
+        # gravity_torques = self.u.mapFromRos(self.h_joints)
+        gravity_torques = np.zeros(12)
         return gravity_torques
 
     def gravityCompensation(self):
@@ -627,7 +629,6 @@ class Controller(BaseController):
             try:
                 while True:
                     n = np.linalg.norm(self.q - self.q_des)
-                    print(n)
                     if n < 0.06:
                         break
                     self.updateKinematics()
