@@ -163,7 +163,6 @@ class Controller(BaseController):
         self.grForcesB_ffwd = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesB_ddp = np.empty(3 * self.robot.nee) * np.nan
 
-        self.bJ = [np.eye(3)] * 4
 
         self.grForcesLocal_gt_tmp = np.zeros(3)
 
