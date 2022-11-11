@@ -11,6 +11,10 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress
 from termcolor import colored
 from base_controllers.utils.math_tools import Math
 
+'''
+Unit test for Ur5 fixed base robot inverse kinematics, considering as inputs the position end effector and its orientation
+'''
+
 math_utils = Math()
 #if you use a reasonable guess it will converge quicker
 q_guess = np.array([0.4, -1.1,  1.0, -6.,  1,  1.0])
