@@ -1,7 +1,6 @@
 
 import pinocchio as pin
 import numpy as np
-import example_robot_data
 from pinocchio.utils import * #rand
 from base_controllers.utils.common_functions import getRobotModel
 
@@ -17,7 +16,10 @@ robot = getRobotModel('solo', generate_urdf = True)
 #start configuration
 v  = np.array([0.0   ,  0.0 , 0.0,  0.0,  0.0,       0.0, #underactuated 	
 		     0.0,  0.0,  0.0,  0.0,     0.0,  0.0,  0.0,  0.0,  0.0,    0.0,  0.0,  0.0]) #actuated
-q = example_robot_data.load('hyq').q0
+# set base position
+q = pin.neutral(robot.model)
+# set joint positions
+q[7:] = np.array([-0.2, 0.7, -1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4, -0.2, -0.7, 1.4])
 
 #q[:3] = np.array([1,1,1])
 Q = pin.Quaternion(pin.rpy.rpyToMatrix(0.1,0.1,0))
