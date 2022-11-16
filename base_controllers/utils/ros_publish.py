@@ -256,7 +256,7 @@ class RosPub():
         marker_array_msg.markers.append(marker)
         self.arrow_pub.publish(marker_array_msg)
 
-    def add_cone(self,  origin, normal, friction_coeff, color = "green"):     
+    def add_cone(self,  origin, normal, friction_coeff, height=0.05, color = "green"):
         
        height = 0.2;
        radius = friction_coeff* height
