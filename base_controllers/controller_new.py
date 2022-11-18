@@ -676,24 +676,6 @@ class Controller(BaseController):
 
 
     def _startupWithContacts(self):
-        # IK initialization
-        IK = InverseKinematics(self.robot)
-        legConfig = {}
-        if 'solo' in self.robot_name:  # either solo or solo_fw
-            legConfig['lf'] = ['HipDown', 'KneeInward']
-            legConfig['lh'] = ['HipDown', 'KneeInward']
-            legConfig['rf'] = ['HipDown', 'KneeInward']
-            legConfig['rh'] = ['HipDown', 'KneeInward']
-
-        elif self.robot_name == 'aliengo' or self.robot_name == 'go1':
-            legConfig['lf'] = ['HipDown', 'KneeInward']
-            legConfig['lh'] = ['HipDown', 'KneeOutward']
-            legConfig['rf'] = ['HipDown', 'KneeInward']
-            legConfig['rh'] = ['HipDown', 'KneeOutward']
-
-        else:
-            assert False, 'Robot name is not valid'
-
         # initial feet position
         B_feet_pose = [np.zeros(3)] * 4
         neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))#conf.robot_params[self.robot_name]['q_fold']))
@@ -749,7 +731,7 @@ class Controller(BaseController):
                                 foot_id = self.robot.model.getFrameId(foot)
                                 leg_name = foot[:2]
                                 B_feet_pose[leg][2] -= delta_z
-                                q_des_leg = IK.ik_leg(B_feet_pose[leg], foot_id, legConfig[leg_name][0],legConfig[leg_name][1])[0].flatten()
+                                q_des_leg = self.IK.ik_leg(B_feet_pose[leg], foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
                         # if self.log_counter != 0:
                         #     self.qd_des = (self.q_des - self.q_des_log[:, self.log_counter]) / self.dt
@@ -790,7 +772,7 @@ class Controller(BaseController):
                             B_feet_pose[leg][2] -= delta_z
                             if current_robot_height <= robot_height:
                                 B_foot = B_feet_pose[leg] # self.b_R_w.T @ b_R_w_init @ B_feet_pose[leg]
-                                q_des_leg = IK.ik_leg(B_foot, foot_id, legConfig[leg_name][0], legConfig[leg_name][1])[0].flatten()
+                                q_des_leg = self.IK.ik_leg(B_foot, foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
 
                         self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
