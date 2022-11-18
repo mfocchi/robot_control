@@ -105,41 +105,41 @@ class RosPub():
 
 
 
-        # self.delete_all_markers()
+        self.delete_all_markers()
                                 
     def add_marker(self, pos, radius = 0.1, color = "red"):
-       marker = Marker()
-       marker.header.frame_id = self.visual_frame
-       marker.type = marker.SPHERE
-       marker.action = marker.ADD
-       marker.scale.x = radius
-       marker.scale.y = radius
-       marker.scale.z = radius
-       marker.color.a = 0.5
-       if (color == "red"):
+        marker = Marker()
+        marker.header.frame_id = self.visual_frame
+        marker.type = marker.SPHERE
+        marker.action = marker.ADD
+        marker.scale.x = radius
+        marker.scale.y = radius
+        marker.scale.z = radius
+        marker.color.a = 0.5
+        if (color == "red"):
            marker.color.r = 1.0
            marker.color.g = 0.0
            marker.color.b = 0.0
-       if (color == "blue"):
+        if (color == "blue"):
            marker.color.r = 0.0
            marker.color.g = 0.0
            marker.color.b = 1.0
-       if (color == "green"):
+        if (color == "green"):
            marker.color.r = 0.0
            marker.color.g = 1.0
            marker.color.b = 0.0
-       marker.pose.orientation.x = 0.
-       marker.pose.orientation.y = 0.
-       marker.pose.orientation.z = 0.
-       marker.pose.orientation.w = 1.0
-       marker.pose.position.x = pos[0]
-       marker.pose.position.y = pos[1] 
-       marker.pose.position.z = pos[2]
-       marker.lifetime = ros.Duration(0.0)
+        marker.pose.orientation.x = 0.
+        marker.pose.orientation.y = 0.
+        marker.pose.orientation.z = 0.
+        marker.pose.orientation.w = 1.0
+        marker.pose.position.x = pos[0]
+        marker.pose.position.y = pos[1]
+        marker.pose.position.z = pos[2]
+        marker.lifetime = ros.Duration(0.0)
        
-       marker.id = self.id       
-       self.id += 1                                        
-       self.markerArray.markers.append(marker)
+        marker.id = self.id
+        self.id += 1
+        self.markerArray.markers.append(marker)
 
     def add_marker_fixed(self, pos, radius=0.01, color="red"):
         marker = Marker()
@@ -256,7 +256,7 @@ class RosPub():
         marker_array_msg.markers.append(marker)
         self.arrow_pub.publish(marker_array_msg)
 
-    def add_cone(self,  origin, normal, friction_coeff, color = "green"):     
+    def add_cone(self,  origin, normal, friction_coeff, height=0.05, color = "green"):
         
        height = 0.2;
        radius = friction_coeff* height

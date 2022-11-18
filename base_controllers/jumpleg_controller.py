@@ -220,6 +220,7 @@ class JumpLegController(BaseControllerFixed):
             if (self.freezeBaseFlag):
                 self.freezeBaseFlag = flag
                 #print(colored("releasing base", "red"))
+                # gravity compensation
                 self.tau_ffwd[2] = 0.
                 #set base joints PD to zero
                 self.pid.setPDjoint(0, 0., 0., 0.)
@@ -628,6 +629,7 @@ def talker(p):
                 if p.firstTime:
                     p.firstTime = False
                     p.freezeBase(False) # to debug the trajectory comment this and set q0[2] = 0.3 om the param file
+
                     print("\n\n")
                     print(colored("STARTING A NEW EPISODE---------------------------------------------------------",   "red"))
                     print("Target position from agent:", p.target_CoM)
@@ -693,7 +695,7 @@ def talker(p):
             # plot end-effector and contact force
             p.ros_pub.add_arrow(p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
             p.ros_pub.add_marker( p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
-            p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, 0.05, color="blue")
+            p.ros_pub.add_cone(p.base_offset + p.q[:3] + p.x_ee, np.array([0,0,1.]), p.mu, height=0.01, color="blue")
             #p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
 
