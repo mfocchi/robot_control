@@ -706,6 +706,35 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     plt.grid()
     # plt.ylim((0,450))
 
+
+def plotFeet(figure_id, time_log, des_feet=None, act_feet=None, contact_states=None):
+    # %% Input plots
+
+    fig = plt.figure(figure_id)
+    fig.suptitle("Feet", fontsize=20)
+
+    legs = ['LF', 'RF', 'LH', 'RH']
+    axes = ['x', 'y', 'z']
+
+    positions = [1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]
+
+    for l in range(4):
+        for a in range(3):
+            i = 3*l+a
+            plt.subplot(6, 2, positions[3*l+a])
+            plt.ylabel("$"+legs[l]+"_"+axes[a]+"$", fontsize=10)
+            if des_feet is not None:
+                plt.plot(time_log, des_feet[i, :], linestyle='-', lw=lw_des, color='red')
+            if act_feet is not None:
+                plt.plot(time_log, act_feet[i, :], linestyle='-', lw=lw_act, color='blue')
+            if des_feet is not None and act_feet is not None and contact_states is not None:
+                coeff =  max(np.nanmax(des_feet[i, :]), np.nanmax(act_feet[0, :]))
+                plt.plot(time_log, coeff*contact_states[l, :], linestyle='-', lw=lw_act/2, color='black')
+            plt.grid()
+    # plt.ylim((-100,100))
+
+
+
 def plotConstraitViolation(figure_id,constr_viol_log):
     fig = plt.figure(figure_id)            
     plt.plot(constr_viol_log[0,:],label="LF")
