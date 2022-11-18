@@ -615,11 +615,14 @@ class Controller(BaseController):
         #     if input('press ENTER to continue/any key to STOP') != '':
         #         exit(0)
         # the robot must start in fold configuration
-        self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
+        if self.real_robot:
+            self.q_des = self.q.copy()
+        else:
+            self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
         self.pid = PidManager(self.joint_names)
         if self.real_robot:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real']/2,
-                                 conf.robot_params[self.robot_name]['kd_real']/2,
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
+                                 conf.robot_params[self.robot_name]['kd_real'],
                                  np.zeros(self.robot.na))
         else:
             self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
@@ -630,10 +633,6 @@ class Controller(BaseController):
             self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
             ros.sleep(0.01)
 
-        if self.real_robot:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
-                                 conf.robot_params[self.robot_name]['kd_real'],
-                                 np.zeros(self.robot.na))
 
         # try:
         #     while not ros.is_shutdown():
@@ -646,7 +645,6 @@ class Controller(BaseController):
         #     p.deregister_node()
         # finally:
         #     sys.exit(-1)
-
 
 
         if check_contacts:
