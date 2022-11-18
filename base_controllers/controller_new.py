@@ -667,10 +667,11 @@ class Controller(BaseController):
                 self.deregister_node()
 
         # IMU BIAS ESTIMATION
-        while self.imu_utils.counter < self.imu_utils.timeout:
-            self.updateKinematics()
-            self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
-            self.send_command(self.q_des, self.qd_des, self.gravityCompensation()+self.self_weightCompensation())
+        if self.real_robot == 'go1':
+            while self.imu_utils.counter < self.imu_utils.timeout:
+                self.updateKinematics()
+                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+                self.send_command(self.q_des, self.qd_des, self.gravityCompensation()+self.self_weightCompensation())
 
 
 
