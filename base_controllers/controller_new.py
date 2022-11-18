@@ -165,11 +165,11 @@ class Controller(BaseController):
         self.basePoseW_des = np.zeros(6) * np.nan
         self.baseTwistW_des = np.zeros(6) * np.nan
 
-        self.comPosW = np.zeros(6) * np.nan
-        self.comVelW = np.zeros(6) * np.nan
+        self.comPoseW = np.zeros(6) * np.nan
+        self.comTwistW = np.zeros(6) * np.nan
 
-        self.comPosW_des = np.zeros(6) * np.nan
-        self.comVelW_des = np.zeros(6) * np.nan
+        self.comPoseW_des = np.zeros(6) * np.nan
+        self.comTwistW_des = np.zeros(6) * np.nan
 
         self.comPosB = np.zeros(3) * np.nan
         self.comVelB = np.zeros(3) * np.nan
@@ -206,10 +206,10 @@ class Controller(BaseController):
         self.comPosB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.comVelB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
-        self.comPosW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.comVelW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.comPosW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.comVelW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.comPoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.comTwistW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.comPoseW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.comTwistW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
         self.comVelW_leg_odom = np.empty((3)) * np.nan
         self.comVelW_leg_odom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
@@ -324,10 +324,10 @@ class Controller(BaseController):
         # Fill with new values
         self.comPosB_log[:, self.log_counter] = self.comB
         self.comVelB_log[:, self.log_counter] = self.comVelB
-        self.comPosW_log[:, self.log_counter] = self.comPoseW
-        self.comVelW_log[:, self.log_counter] = self.comTwistW
-        self.comPosW_des_log[:, self.log_counter] = self.comPosW_des
-        self.comVelW_des_log[:, self.log_counter] = self.comVelW_des
+        self.comPoseW_log[:, self.log_counter] = self.comPoseW
+        self.comTwistW_log[:, self.log_counter] = self.comTwistW
+        self.comPoseW_des_log[:, self.log_counter] = self.comPoseW_des
+        self.comTwistW_des_log[:, self.log_counter] = self.comTwistW_des
         self.basePoseW_log[:, self.log_counter] = self.basePoseW
         self.baseTwistW_log[:, self.log_counter] = self.baseTwistW
         self.basePoseW_des_log[:, self.log_counter] = self.basePoseW_des
