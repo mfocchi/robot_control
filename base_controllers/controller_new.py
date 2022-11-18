@@ -61,6 +61,8 @@ class Controller(BaseController):
         if self.real_robot:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
                                                  callback=self._recieve_imu_acc_real, queue_size=1, tcp_nodelay=True)
+            self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,
+                                                 callback=self._recieve_euler, queue_size=1, tcp_nodelay=True)
         else:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,
                                                   callback=self._recieve_imu_acc, queue_size=1, tcp_nodelay=True)
@@ -79,14 +81,18 @@ class Controller(BaseController):
 
         self.W_base_lin_acc = self.b_R_w.T @ (self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
+    def _recieve_euler(self, msg):
+        self.euler[0] = msg.x
+        self.euler[1] = msg.y
+        self.euler[2] = msg.z
+
+
 
     def _receive_pose(self, msg):
-
         self.quaternion[0] = msg.pose.pose.orientation.x
         self.quaternion[1] = msg.pose.pose.orientation.y
         self.quaternion[2] = msg.pose.pose.orientation.z
         self.quaternion[3] = msg.pose.pose.orientation.w
-        self.euler = euler_from_quaternion(self.quaternion)
 
         if self.real_robot:
             self.basePoseW[self.u.sp_crd["LX"]] = self.w_p_b_legOdom[0]
@@ -96,6 +102,7 @@ class Controller(BaseController):
             self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
             self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
             self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
+
         self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
@@ -119,10 +126,11 @@ class Controller(BaseController):
 
         # compute orientation matrix
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
-
         self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
+
+
 
     def initVars(self):
         super().initVars()
@@ -143,6 +151,8 @@ class Controller(BaseController):
 
         else:
             assert False, 'Robot name is not valid'
+
+        self.euler = np.zeros(3)
         # some extra variables
         self.gen_config_neutral = pin.neutral(self.robot.model)
         self.qPin_base_oriented = pin.neutral(self.robot.model)
