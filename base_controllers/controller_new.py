@@ -126,6 +126,23 @@ class Controller(BaseController):
 
     def initVars(self):
         super().initVars()
+
+        self.IK = InverseKinematics(self.robot)
+        self.legConfig = {}
+        if 'solo' in self.robot_name:  # either solo or solo_fw
+            self.legConfig['lf'] = ['HipDown', 'KneeInward']
+            self.legConfig['lh'] = ['HipDown', 'KneeInward']
+            self.legConfig['rf'] = ['HipDown', 'KneeInward']
+            self.legConfig['rh'] = ['HipDown', 'KneeInward']
+
+        elif self.robot_name == 'aliengo' or self.robot_name == 'go1':
+            self.legConfig['lf'] = ['HipDown', 'KneeInward']
+            self.legConfig['lh'] = ['HipDown', 'KneeOutward']
+            self.legConfig['rf'] = ['HipDown', 'KneeInward']
+            self.legConfig['rh'] = ['HipDown', 'KneeOutward']
+
+        else:
+            assert False, 'Robot name is not valid'
         # some extra variables
         self.gen_config_neutral = pin.neutral(self.robot.model)
         self.qPin_base_oriented = pin.neutral(self.robot.model)
