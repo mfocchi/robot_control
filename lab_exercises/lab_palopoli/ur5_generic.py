@@ -245,7 +245,7 @@ def talker(p):
     if p.real_robot:
         p.startRealRobot()
     else:
-        additional_args = 'gripper:=' + str(p.gripper) # +'gui:=false'
+        additional_args = ['gripper:=' + str(p.gripper), 'gui:=false']
         p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control, additional_args =additional_args)
 
     # specify xacro location

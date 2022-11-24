@@ -136,7 +136,7 @@ class BaseControllerFixed(threading.Thread):
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
         cli_args.append('use_torque_control:=' + str(use_torque_control))
         if additional_args is not None:
-            cli_args.append(additional_args)
+            cli_args.extend(additional_args)
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
             cli_args.append('world_name:=' + str(world_name))
