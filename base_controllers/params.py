@@ -126,7 +126,35 @@ robot_params['climbingrobot'] ={'dt': 0.001,
                        'spawn_y' : 0.0,
                        'spawn_z' : 20.0, 
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
-                         
+
+robot_params['starbot'] ={'dt': 0.001,
+                       'kp': 50*np.array([10. ,   10.,    10.,  10. ,
+                       			10. ,   10.,    10.,  10. ,
+                                10. ,   10.,    10.,  10. ,
+                                10. ,   10.,    10.,  10. ,
+                       			10. ,   10.,    10.,  10.]),
+                       'kd':   0.5*np.array([1.,    1.,    1.,   1. ,
+                       			1.,    1.,    1.,   1. ,
+                                1.,    1.,    1.,   1. ,
+                                1.,    1.,    1.,   1. ,
+                       			1.,    1.,    1.,   1. ]),
+
+                       'q_0':  np.array([ 0.6, 0.6, 0.6, 0.6,
+                       			0., 0., 0., 0.0,
+                                0., 0., 0., 0.0,
+                                0., 0., 0., 0.0,
+                                0., 0., 0., 0.0 ]),
+                       'joint_names': ['lf_bs_joint', 'rf_bs_joint',  'lh_bs_joint', 'rh_bs_joint',
+                       			'lf_upper_leg_joint', 'rf_upper_leg_joint',  'lh_upper_leg_joint', 'rh_upper_leg_joint',
+                       			'lf_lower_leg_joint', 'rf_lower_leg_joint',  'lh_lower_leg_joint', 'rh_lower_leg_joint',
+                                'lf_pre_wheel_joint', 'rf_pre_wheel_joint',  'lh_pre_wheel_joint', 'rh_pre_wheel_joint',
+                                'lf_wheel_joint', 'rf_wheel_joint',  'lh_wheel_joint', 'rh_wheel_joint'],
+                       'ee_frames': ['lf_foot','rf_foot','lh_foot','rh_foot'],
+                       'spawn_x' : 0.0,
+                       'spawn_y' : 0.0,
+                       'spawn_z' : 1.0,
+                       'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
+
 verbose = False
 plotting = True
 

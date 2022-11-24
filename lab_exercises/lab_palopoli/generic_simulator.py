@@ -46,6 +46,7 @@ def talker(p):
     #p.loadModelAndPublishers(xacro_path)
     p.loadModelAndPublishers()
     p.initVars()
+    p.initSubscribers()
     p.startupProcedure()
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])

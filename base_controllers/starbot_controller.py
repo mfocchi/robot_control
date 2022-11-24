@@ -14,7 +14,7 @@ from base_controller import BaseController
 from base_controllers.utils.common_functions import plotCoM, plotJoint
 
 import  params as conf
-robotName = "solo"
+robotName = "starbot"
 
 class StarbotController(BaseController):
     
@@ -36,18 +36,22 @@ class StarbotController(BaseController):
 
 def talker(p):
     p.start()
+    #p.startSimulator(world_name = 'starbot_tunnel.world')
     p.startSimulator()
     p.loadModelAndPublishers()
     p.initVars()
+    p.initSubscribers()
     p.startupProcedure()
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
     p.q_des = np.copy(p.q_des_q0)
+    p.setGravity(0.)
 
     while not ros.is_shutdown():
         # update the kinematics
-        p.updateKinematics()
+        # TODO need to fix for different number of joints per leg
+        #p.updateKinematics()
         p.tau_ffwd = np.zeros(p.robot.na)
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
