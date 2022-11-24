@@ -62,8 +62,8 @@ class Ur5Generic(BaseControllerFixed):
             self.gripper = False
         self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
 
-        #self.world_name = None # only the workbench
-        self.world_name = 'empty.world'
+        self.world_name = None # only the workbench
+        #self.world_name = 'empty.world'
         #self.world_name = 'palopoli.world'
 
         print("Initialized ur5 generic  controller---------------------------------------------------------------")
@@ -266,14 +266,22 @@ def talker(p):
     if not p.use_torque_control:
         p.switch_controller("joint_group_pos_controller")
 
+    # homing procedure
+    if p.homing_flag:
+        p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
+
     gripper_on = 0
-    #control loop
+
+    # launch task planner node (implement the state machine)
+
+    # launch motion node (takes care of moving the end-effector, remember to add a rate.sleep!)
+
+    # launch vision node (visual pipelines to detect object, made with service call)
+
+    #control loop (runs every dt seconds)
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
-        # homing procedure
 
-        if p.homing_flag:
-            p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
 
         ## set joints here
         #p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
