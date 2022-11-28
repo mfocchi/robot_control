@@ -498,6 +498,7 @@ class BaseController(threading.Thread):
         self.q = np.zeros(self.robot.na)
         self.qd = np.zeros(self.robot.na)
         self.tau = np.zeros(self.robot.na)
+        self.tau_fb = np.zeros(self.robot.na)
         self.q_des = np.zeros(self.robot.na)
         self.quaternion = np.array([0., 0., 0., 1.])
         self.q_des = conf.robot_params[self.robot_name]['q_0']
