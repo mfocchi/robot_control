@@ -30,7 +30,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'control_mode': 'point', # 'trajectory','point'
                        'real_robot': False,
                        'control_type': 'position', # 'position', 'torque'
-                       'gripper_sim': True, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
+                       'gripper_sim': False, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
                        'spawn_z' : 1.75,
