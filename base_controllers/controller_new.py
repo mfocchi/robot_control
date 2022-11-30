@@ -158,8 +158,8 @@ class Controller(BaseController):
         self.basePoseW_des = np.zeros(6) * np.nan
         self.baseTwistW_des = np.zeros(6) * np.nan
 
-        self.comPoseW = np.zeros(6) * np.nan
-        self.comTwistW = np.zeros(6) * np.nan
+        # self.comPoseW = np.zeros(6) * np.nan
+        # self.comTwistW = np.zeros(6) * np.nan
 
         self.comPoseW_des = np.zeros(6) * np.nan
         self.comTwistW_des = np.zeros(6) * np.nan
@@ -239,8 +239,8 @@ class Controller(BaseController):
         self.qdd_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.qdd = np.zeros(self.robot.na)
 
-        self.base_acc_W_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.base_acc_W = np.zeros(6)
+        self.W_base_lin_acc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.W_base_lin_acc = np.zeros(3)
 
         self.C_qd_log = np.empty((self.robot.nv, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.C_qd = np.zeros(self.robot.nv)
@@ -344,7 +344,7 @@ class Controller(BaseController):
         self.contact_state_log[:, self.log_counter] = self.contact_state
         self.tau_minus_h_log[:, self.log_counter] = self.tau_minus_h
         self.qdd_log[:, self.log_counter] = self.qdd
-        self.base_acc_W_log[:, self.log_counter] = self.base_acc_W
+        self.W_base_lin_acc_log[:, self.log_counter] = self.W_base_lin_acc
         self.C_qd_log[:, self.log_counter] = self.C_qd
         self.T_p_com_ref_lc_log[:, self.log_counter] = self.T_p_com_ref_lc
         self.T_p_base_leg_odom_lc_log[:, self.log_counter] = self.T_p_base_leg_odom_lc
