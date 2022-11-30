@@ -367,7 +367,7 @@ class Controller(BaseController):
         self.time_log[:, self.log_counter] = self.time
 
 
-    def startController(self, world_name=None, xacro_path=None, use_ground_truth_contacts=True):
+    def startController(self, world_name=None, xacro_path=None, use_ground_truth_contacts=True, additional_args=None):
 
         if self.real_robot == False:
             self.use_ground_truth_contacts = use_ground_truth_contacts
@@ -375,7 +375,7 @@ class Controller(BaseController):
             self.use_ground_truth_contacts = False
 
         self.start()                               # as a thread
-        self.startSimulator(world_name)            # run gazebo
+        self.startSimulator(world_name, additional_args)            # run gazebo
         if world_name is None:
             self.world_name_str = ''
         else:
