@@ -282,7 +282,7 @@ class InverseKinematicsOptimization:
 
 
 if __name__ == '__main__':
-    from base_controllers.utils.common_functions import getRobotModel
+    from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
     # robot_name = 'solo'
     # qj = np.array([ 0.2,  np.pi / 4, -np.pi / 2,   # lf
     #                 0.2, -np.pi / 4,  np.pi / 2,   # lh
@@ -291,25 +291,26 @@ if __name__ == '__main__':
     # hip = [HIP_DOWN]*4
     # knee = [KNEE_INWARD] * 4
 
-    robot_name = 'aliengo'
-    qj = np.array([ 0.2, 0.7, -1.4,  # lf
-                    0.2, 0.7, -1.4,  # lh
-                   -0.2, 0.7, -1.4,  # rf
+    robot_name = 'go1'
+    qj = np.array([ 0.2, 0.7, -1.4,   # lf
+                   0.2, 0.7, -1.4,    # lh
+                   -0.2, 0.7, -1.4,   # rf
                    -0.2, 0.7, -1.4])  # rh
     hip = [HIP_DOWN] * 4
-    knee = [KNEE_INWARD, KNEE_OUTWARD] * 2
+    knee = [KNEE_INWARD] * 2 + [KNEE_OUTWARD] * 2
 
     robot = getRobotModel(robot_name, generate_urdf=True)
     q = pin.neutral(robot.model)
     q[7:12 + 7] = qj
 
     IK = InverseKinematics(robot)
+    IKOpt = InverseKinematicsOptimization(robot)
+    RK = robotKinematics(robot, ['lf_foot', 'rf_foot','lh_foot', 'rh_foot'])
     pin.forwardKinematics(robot.model, robot.data, q)
     pin.updateFramePlacements(robot.model, robot.data)
-    legs = ['lf', 'lh', 'rf', 'rh']
+    legs = ['lf', 'rf','lh', 'rh']
     feet_id = [robot.model.getFrameId(leg + '_foot') for leg in legs]
-    feet_pos = [robot.data.oMf[foot].translation for foot in feet_id]
-
+    feet_pos = [robot.data.oMf[foot].translation.copy() for foot in feet_id]
 
     #############################################
     # TEST 1: gives the feet positions, find qj #
@@ -323,36 +324,58 @@ if __name__ == '__main__':
     print('##########')
 
     for i, foot in enumerate(feet_id):
-        sol, inROM = IK.ik_leg(feet_pos[i], foot, hip[i], knee[i])
-        print('Leg:', legs[i])
+        print('EE name:', robot.model.frames[foot].name)
         print('\tPosition:', feet_pos[i])
-        print('\tIn Range of Motion:', inROM)
-        print('\tIK Solution:      ', sol)
         print('\tReal Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
 
+        start = time.time()
+        sol, inROM = IK.ik_leg(feet_pos[i], foot, hip[i], knee[i])
+        T = time.time() - start
+        print('\n\tAnalytics time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        print('\tIK Solution Analytics:', sol)
+
+        start = time.time()
+        solOpt = IKOpt.solve(feet_pos[i], robot.model.frames[foot].name, q0=np.array([0.0, 0.7, -1.4]))
+        T = time.time() - start
+        print('\n\tOptimization time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        print('\tIK Solution Optimization:', solOpt.x)
 
 
-    ##############################################################################################
-    # TEST 2: gives the feet positions, compute all the solutions and check if they are feasible #
-    ##############################################################################################
-    print('\n')
-    print('##########')
-    print('# TEST 2 #')
-    print('##########')
+        start = time.time()
+        solMic, IKsuccess = RK.footInverseKinematicsFixedBaseLineSearch(feet_pos[i], robot.model.frames[foot].name, q0_leg=np.array([0.0, 0.7, -1.4]))
+        T = time.time() - start
+        print('\n\tMichele time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        print('\tIK Solution Michele:      ', solMic)
 
-    from tabulate import tabulate
-    for i, foot in enumerate(feet_id):
-        rows = []
-        print('\nLeg:', legs[i])
-        print('Position:', feet_pos[i])
-        print('Real Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
-        for hip in [HIP_UP, HIP_DOWN]:
-            for knee in [KNEE_INWARD, KNEE_OUTWARD]:
-                sol, inROM = IK.ik_leg(feet_pos[i], foot, hip, knee)
-                ik_dict = {}
-                ik_dict['solution'] = sol
-                ik_dict['configuration'] = [hip, knee]
-                ik_dict['in range of motion'] = inROM
-                rows.append(ik_dict)
-        print(tabulate(rows, headers='keys', tablefmt='grid'), end='\n')
 
+
+
+
+
+
+    # ##############################################################################################
+    # # TEST 2: gives the feet positions, compute all the solutions and check if they are feasible #
+    # ##############################################################################################
+    # print('\n')
+    # print('##########')
+    # print('# TEST 2 #')
+    # print('##########')
+    #
+    # from tabulate import tabulate
+    # for i, foot in enumerate(feet_id):
+    #     rows = []
+    #     print('\nLeg:', legs[i])
+    #     print('Position:', feet_pos[i])
+    #     print('Real Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
+    #     for hip in [HIP_UP, HIP_DOWN]:
+    #         for knee in [KNEE_INWARD, KNEE_OUTWARD]:
+    #             # sol, inROM = IK.ik_leg(feet_pos[i], foot, hip, knee)
+    #             solOpt = IKOpt.solve(feet_pos[i], robot.model.frames[foot].name)
+    #             ik_dict = {}
+    #             # ik_dict['solutionAnalytics'] = sol
+    #             ik_dict['solutionOptimization'] = solOpt.x
+    #             ik_dict['configuration'] = [hip, knee]
+    #             # ik_dict['in range of motion'] = inROM
+    #             rows.append(ik_dict)
+    #     print(tabulate(rows, headers='keys', tablefmt='grid'), end='\n')
+    #
