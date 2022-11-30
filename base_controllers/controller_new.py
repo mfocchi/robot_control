@@ -823,6 +823,55 @@ class Controller(BaseController):
         print('Reference saved in', filename)
 
 
+    def save_video(self, path, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=True):
+        # only if camera_xxx.world has been used
+        # for details on commands, check https://ffmpeg.org/ffmpeg.html
+        if 'camera' not in self.world_name_str:
+            print(colored('Cannot create a video of a not camera world (world_name:'+self.world_name_str+')', 'red'), flush=True)
+            return
+        #
+        # # kill gazebo
+        # os.system("killall rosmaster rviz gzserver gzclient")
+
+        if '.' in filename:
+            filename=filename[:, filename.find('.')]
+        if path[-1] != '/':
+            path+='/'
+        videoname = path + filename + '.' + format
+        save_video_cmd = "ffmpeg -hide_banner -loglevel error -r "+str(fps)+" -pattern_type glob -i '/tmp/camera_save/default_camera_link_my_camera*.jpg' -c:v libx264 "+videoname
+        ret = os.system(save_video_cmd)
+        saved = ''
+        if ret == 0:
+            saved = ' saved'
+        else:
+            saved = ' did not saved'
+        print(colored('Video '+videoname+saved, 'blue'), flush=True)
+
+
+        if speedUpDown <= 0:
+            print(colored('speedUpDown must be greather than 0.0','red'))
+        else:
+            if speedUpDown != 1:
+                pts_multiplier = int(1 / speedUpDown)
+                videoname_speedUpDown = path + filename + str(speedUpDown).replace('.', '')+'x.'+format
+                speedUpDown_cmd = "ffmpeg -hide_banner -loglevel error -i "+videoname+" -filter:v 'setpts="+str(pts_multiplier)+"*PTS' "+videoname_speedUpDown
+                ret = os.system(speedUpDown_cmd)
+                saved = ''
+                if ret == 0:
+                    saved= ' saved'
+                else:
+                    saved = ' did not saved'
+                print(colored('Video ' + videoname_speedUpDown+saved, 'blue'), flush=True)
+
+        if remove_jpg:
+            remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
+            os.system(remove_jpg_cmd)
+            print(colored('Jpg files removed', 'blue'), flush=True)
+
+
+
+
+
 
 
 if __name__ == '__main__':
