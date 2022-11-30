@@ -215,6 +215,72 @@ class InverseKinematics:
         return qd_leg
 
 
+
+
+class InverseKinematicsOptimization:
+    def __init__(self, robot):
+        self.robot = robot
+        self.u = Utils()
+        self._q_floating = pin.neutral(self.robot.model)
+        self.frame_names = ['lf_foot', 'rf_foot', 'lh_foot', 'rh_foot']
+
+        self.q_range = {}
+        self.J_range = {}
+        self.frame_id = {}
+        self.bounds = {}
+
+        for leg, name in enumerate(self.frame_names):
+            self.q_range[name] = range(7 + self.u.mapIndexToRos(leg) * 3, 7 + self.u.mapIndexToRos(leg) * 3 + 3)
+            self.J_range[name] = range(6 + self.u.mapIndexToRos(leg) * 3, 6 + self.u.mapIndexToRos(leg) * 3 + 3)
+            self.frame_id[name] = self.robot.model.getFrameId(name)
+            self.bounds[name] = scipy.optimize.Bounds(self.robot.model.lowerPositionLimit[self.q_range[name]],
+                                                      self.robot.model.upperPositionLimit[self.q_range[name]])
+
+    def leg_forwardKinematcs(self, q_leg, frame_name, ret_J):
+        self._q_floating[7:] = 0.
+        self._q_floating[self.q_range[frame_name]] = q_leg
+
+        pin.forwardKinematics(self.robot.model, self.robot.data, self._q_floating)
+        pin.framesForwardKinematics(self.robot.model, self.robot.data, self._q_floating)
+
+        pos = self.robot.data.oMf[self.frame_id[frame_name]].translation
+        if ret_J:
+            J = pin.computeFrameJacobian(self.robot.model, self.robot.data, self._q_floating, self.frame_id[frame_name],
+                                         pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, self.J_range[frame_name]]
+            return pos, J
+
+        return pos
+
+    def cost(self, q_leg, pos_des, frame_name):
+        pos = self.leg_forwardKinematcs(q_leg, frame_name, ret_J=False)
+        err = pos-pos_des#).reshape(3,1)
+
+        return 0.5*err.T@err
+
+    def jac(self, q_leg, pos_des, frame_name):
+        pos, J = self.leg_forwardKinematcs(q_leg, frame_name, ret_J=True)
+        err = pos-pos_des
+
+        return err.T @ J
+
+
+
+    def solve(self, pos_des, frame_name, q0=np.zeros(3)):
+        bounds = self.bounds[frame_name]
+        sol = scipy.optimize.minimize(self.cost,
+                                      args=(pos_des, frame_name),
+                                      x0=q0,
+                                      method='SLSQP',
+                                      jac=self.jac,
+                                      bounds=self.bounds[frame_name])
+        return sol
+
+
+
+
+
+
+
 if __name__ == '__main__':
     from base_controllers.utils.common_functions import getRobotModel
     # robot_name = 'solo'
