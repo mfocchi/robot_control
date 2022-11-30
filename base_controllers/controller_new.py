@@ -788,12 +788,18 @@ class Controller(BaseController):
                         WTime = self.time
 
                 if state == 3:
-                    if (self.time - WTime) <= 0.5:
+                    #if (self.time - WTime) <= 0.5:
 
-                        self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
-                    else:
+                    if all(np.abs(self.qd) < 0.025) and (self.time - WTime) >0.5:
                         print(colored("[startupProcedure] completed", "green"))
                         state = 4
+                    else:
+                        # enter
+                        # if any of the joint position errors is larger than 0.02 or
+                        # if any of the joint velocities is larger than 0.02 or
+                        # if the watchdog timer is not expired (1 sec)
+                        self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
+
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
