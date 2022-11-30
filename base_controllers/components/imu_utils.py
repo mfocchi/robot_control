@@ -3,7 +3,7 @@ import pinocchio as pin
 
 class IMU_utils:
     def __init__(self, timeout = 1000, dt = 0.002):
-        self.counter = 0.
+        self.counter = 0
         self.timeout = timeout
         self.dt = dt
         self.IMU_accelerometer_bias = np.zeros(3)
