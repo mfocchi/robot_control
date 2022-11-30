@@ -30,7 +30,6 @@ from sensor_msgs.msg import Imu
 from base_controllers.components.imu_utils import IMU_utils
 
 
-import rosbag
 import datetime
 
 class Controller(BaseController):
@@ -38,12 +37,6 @@ class Controller(BaseController):
         super(Controller, self).__init__(robot_name, launch_file)
         self.qj_0 = conf.robot_params[self.robot_name]['q_0']
         self.dt = conf.robot_params[self.robot_name]['dt']
-
-
-        now = datetime.datetime.now()
-        date_string = now.strftime("%Y%m%d%H%M")
-
-        self.sensors_bag = rosbag.Bag(os.environ['PYSOLO_FROSCIA'] + '/bags/' + date_string + '.bag', 'w')
 
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
 
