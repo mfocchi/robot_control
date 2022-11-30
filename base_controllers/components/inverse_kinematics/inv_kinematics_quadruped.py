@@ -1,6 +1,12 @@
+import time
+
 import numpy as np
 import pinocchio as pin
 from base_controllers.utils.utils import Utils
+from base_controllers.utils.common_functions import getRobotModel
+
+import scipy.optimize
+import scipy.linalg
 
 # these macro are useful for choosing the solution (four are possible)
 # meanings:
@@ -45,7 +51,9 @@ class InverseKinematics:
         self._lowerleg_id_dict = {}
         self._foot_id_dict = {}
 
-        for leg in ['lf', 'rf', 'lh', 'rh']:
+        legs = ['lf', 'rf', 'lh', 'rh']
+
+        for leg in legs:
             self._hip_id_dict[leg] = self.robot.model.getFrameId(leg + '_hip')
             self._upperleg_id_dict[leg] = self.robot.model.getFrameId(leg + '_upperleg')
             self._lowerleg_id_dict[leg] = self.robot.model.getFrameId(leg + '_lowerleg')
@@ -56,7 +64,7 @@ class InverseKinematics:
         self.upper_limits = {}
         self.lower_limits = {}
 
-        for leg in ['lf', 'rf', 'lh', 'rh']:
+        for leg in legs:
             self.measures[leg] = {}
 
             self.measures[leg]['base_2_HAA_x'] = self.robot.data.oMf[self._hip_id_dict[leg]].translation[0]
@@ -83,6 +91,12 @@ class InverseKinematics:
             self.upper_limits[leg] = self.u.getLegJointState(leg.upper(), self.robot.model.upperPositionLimit[7:])
             self.lower_limits[leg] = self.u.getLegJointState(leg.upper(), self.robot.model.lowerPositionLimit[7:])
 
+        self._leg_joints={}
+
+        for i in range(4):
+            self._leg_joints[legs[i]] = range(6 + self.u.mapIndexToRos(i) * 3, 6 + self.u.mapIndexToRos(i) * 3 + 3)
+
+        self._q_neutral = pin.neutral(self.robot.model)
 
         self.KneeInward = KNEE_INWARD
         self.KneeOutward = KNEE_OUTWARD
@@ -90,8 +104,9 @@ class InverseKinematics:
     def ik_leg(self, foot_pos, foot_idx, hip=HIP_DOWN, knee=KNEE_INWARD):
         # import warnings
         # warnings.filterwarnings("error")
+        q = np.zeros(3)
+        inROM = False
         leg = self.robot.model.frames[foot_idx].name[:2]
-
 
         HAA_foot_x = foot_pos[0] - self.measures[leg]['base_2_HAA_x']
         HAA_foot_y = foot_pos[1] - self.measures[leg]['base_2_HAA_y']
@@ -106,7 +121,8 @@ class InverseKinematics:
         #     print('sq', sq)
 
         if sq < 0:
-            raise ValueError('foot is higher that hip!')
+            print('foot is higher that hip!')
+            return q, inROM
         HAA_foot_z = np.sqrt(sq)
 
 
@@ -115,7 +131,8 @@ class InverseKinematics:
         # Verify if the foot is inside the work space of the leg (WS1)
         if (HAA_foot_x ** 2 + HAA_foot_z ** 2) > (
                 self.measures[leg]['HFE_2_KFE_z'] + self.measures[leg]['KFE_2_FOOT_z']) ** 2:
-            raise ValueError('Foot position is out of the workspace')
+            print('Foot position is out of the workspace')
+            return q, inROM
 
         #################
         # Compute qHAA #
@@ -173,11 +190,18 @@ class InverseKinematics:
         qHFE = np.arctan2(sin_qHFE, cos_qHFE)
 
         # Save the solution
-        q = np.array([qHAA, qHFE, qKFE])
-        if (q < self.upper_limits[leg]).all() and (q > self.lower_limits[leg]).all():
+        q[0] = qHAA
+        q[1] = qHFE
+        q[2] = qKFE
+
+        cond_upper = q < self.upper_limits[leg]
+        cond_lower = q > self.lower_limits[leg]
+
+        if cond_upper.all() and cond_lower.all():
             inROM = True
         else:
-            inROM = False
+            outROMidx = np.hstack([np.where(cond_upper == False)[0],np.where(cond_lower == False)[0]])
+            print('IK produced a solution for leg '+ leg+ ' out of ROM for joint(s) '+str(outROMidx))
 
         return q, inROM
 
