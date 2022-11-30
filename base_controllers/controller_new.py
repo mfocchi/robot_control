@@ -647,6 +647,15 @@ class Controller(BaseController):
         # finally:
         #     sys.exit(-1)
 
+        # IMU BIAS ESTIMATION
+        if self.real_robot and self.robot_name == 'go1':
+            # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
+            while self.imu_utils.counter < self.imu_utils.timeout:
+                self.updateKinematics()
+                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+                self.tau_ffwd[:] = 0.
+                self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+
 
         if check_contacts:
             self._startupWithContacts()
@@ -667,12 +676,7 @@ class Controller(BaseController):
                 ros.signal_shutdown("killed")
                 self.deregister_node()
 
-        # IMU BIAS ESTIMATION
-        if self.real_robot == 'go1':
-            while self.imu_utils.counter < self.imu_utils.timeout:
-                self.updateKinematics()
-                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
-                self.send_command(self.q_des, self.qd_des, self.gravityCompensation()+self.self_weightCompensation())
+
 
 
 
