@@ -383,6 +383,15 @@ class Controller(BaseController):
 
         self.start()                               # as a thread
         self.startSimulator(world_name)            # run gazebo
+        if world_name is None:
+            self.world_name_str = ''
+        else:
+            self.world_name_str = world_name
+        if 'camera' in self.world_name_str:
+            remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
+            os.system(remove_jpg_cmd)
+            print(colored('Jpg files removed', 'blue'), flush=True)
+
         self.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
         #self.resetGravity(True)
         self.initVars()                            # overloaded method
