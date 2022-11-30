@@ -548,7 +548,6 @@ class Controller(BaseController):
 
 
     def visualizeContacts(self):
-        return
         for legid in self.u.leg_map.keys():
 
             leg = self.u.leg_map[legid]
@@ -560,7 +559,7 @@ class Controller(BaseController):
             else:
                 self.ros_pub.add_arrow(self.W_contacts[leg],
                                        np.zeros(3),
-                                       "green", scale=0)
+                                       "green", scale=0.0001)
                 #self.ros_pub.add_marker(self.W_contacts[leg], radius=0.001)
 
             if (self.use_ground_truth_contacts):
