@@ -24,7 +24,10 @@ class JointStatePublisher():
 
     def send_des_jstate(self):
         msg = Float64MultiArray()
-        msg.data = self.q_des
+        if (self.gripper_sim):
+            msg.data = np.append(self.q_des, np.array([0.0, 0.0 ,0.0]))
+        else:
+            msg.data = self.q_des
         self.pub_des_jstate.publish(msg)
 
     def initFilter(self, q):
@@ -56,6 +59,9 @@ def talker(p):
     print("init q: ",p.q)
     q0 = np.copy(p.q)
     p.initFilter(q0)
+
+    # check if gripper is actuated
+    p.gripper_sim = ros.get_param("/gripper_sim")
 
     amp = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])  # amplitude
     freq = np.array([0.2, 0.0, 0.0, 0.0, 0., 0.0]) # frequency

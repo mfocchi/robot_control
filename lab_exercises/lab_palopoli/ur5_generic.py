@@ -60,6 +60,7 @@ class Ur5Generic(BaseControllerFixed):
             self.gripper = True
         else:
             self.gripper = False
+
         self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
 
         self.world_name = None # only the workbench
@@ -127,6 +128,9 @@ class Ur5Generic(BaseControllerFixed):
         self.active_controller = self.available_controllers[0]
 
         self.broadcaster = tf.TransformBroadcaster()
+        # store in the param server to be used from other planners
+        self.utils = Utils()
+        self.utils.putIntoGlobalParamServer("gripper_sim", self.gripper)
 
     def _receive_ftsensor(self, msg):
         contactForceTool0 = np.zeros(3)
@@ -219,6 +223,8 @@ class Ur5Generic(BaseControllerFixed):
         plotJoint('position', 0, self.time_log, self.q_log)
 
     def homing_procedure(self, dt, v_des, q_home, rate):
+        # broadcast base world TF
+        self.broadcaster.sendTransform(self.base_offset, (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')
         v_ref = 0.0
         print(colored("STARTING HOMING PROCEDURE", 'red'))
         self.q_des = np.copy(self.q)
@@ -253,8 +259,10 @@ def talker(p):
     p.loadModelAndPublishers(xacro_path)
     p.initVars()
     p.startupProcedure()
-    # sleep to avoid that the robot crashes on the table
-    time.sleep(3.)
+
+    # sleep to avoid that the real robot crashes on the table
+    if p.real_robot:
+        time.sleep(3.)
 
     # loop frequency
     rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])

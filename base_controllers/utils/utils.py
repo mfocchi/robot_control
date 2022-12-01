@@ -8,7 +8,7 @@ import sys
 import os
 import numpy as np
 import rospy as ros
-
+from rospy.exceptions import ROSException
 
 class Utils:
 
@@ -83,7 +83,7 @@ class Utils:
             self.succeed(get_param_server().setParam(self.get_caller_id(),  "", data))
 
         except socket.error:
-            raise ROSParamIOException("Unable to communicate with master!")
+            raise ROSException("Unable to communicate with master!")
         print ("set parameter [%s] to [%s]" % ('hyq', data))
         eval(help( get_param_server().setParam()) )								
         pass
@@ -93,7 +93,7 @@ class Utils:
         try:
             ros.set_param(label, data)
         except socket.error:
-            raise ROSParamIOException("Unable to communicate with master!")
+            raise ROSException("Unable to communicate with master!")
         if (verbose):
             print ("set parameter %s into global param server" % label)
         pass
