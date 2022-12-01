@@ -1,6 +1,12 @@
+import time
+
 import numpy as np
 import pinocchio as pin
 from base_controllers.utils.utils import Utils
+from base_controllers.utils.common_functions import getRobotModel
+
+import scipy.optimize
+import scipy.linalg
 
 # these macro are useful for choosing the solution (four are possible)
 # meanings:
@@ -45,7 +51,9 @@ class InverseKinematics:
         self._lowerleg_id_dict = {}
         self._foot_id_dict = {}
 
-        for leg in ['lf', 'rf', 'lh', 'rh']:
+        legs = ['lf', 'rf', 'lh', 'rh']
+
+        for leg in legs:
             self._hip_id_dict[leg] = self.robot.model.getFrameId(leg + '_hip')
             self._upperleg_id_dict[leg] = self.robot.model.getFrameId(leg + '_upperleg')
             self._lowerleg_id_dict[leg] = self.robot.model.getFrameId(leg + '_lowerleg')
@@ -56,7 +64,7 @@ class InverseKinematics:
         self.upper_limits = {}
         self.lower_limits = {}
 
-        for leg in ['lf', 'rf', 'lh', 'rh']:
+        for leg in legs:
             self.measures[leg] = {}
 
             self.measures[leg]['base_2_HAA_x'] = self.robot.data.oMf[self._hip_id_dict[leg]].translation[0]
@@ -83,6 +91,12 @@ class InverseKinematics:
             self.upper_limits[leg] = self.u.getLegJointState(leg.upper(), self.robot.model.upperPositionLimit[7:])
             self.lower_limits[leg] = self.u.getLegJointState(leg.upper(), self.robot.model.lowerPositionLimit[7:])
 
+        self._leg_joints={}
+
+        for i in range(4):
+            self._leg_joints[legs[i]] = range(6 + self.u.mapIndexToRos(i) * 3, 6 + self.u.mapIndexToRos(i) * 3 + 3)
+
+        self._q_neutral = pin.neutral(self.robot.model)
 
         self.KneeInward = KNEE_INWARD
         self.KneeOutward = KNEE_OUTWARD
@@ -90,8 +104,9 @@ class InverseKinematics:
     def ik_leg(self, foot_pos, foot_idx, hip=HIP_DOWN, knee=KNEE_INWARD):
         # import warnings
         # warnings.filterwarnings("error")
+        q = np.zeros(3)
+        inROM = False
         leg = self.robot.model.frames[foot_idx].name[:2]
-
 
         HAA_foot_x = foot_pos[0] - self.measures[leg]['base_2_HAA_x']
         HAA_foot_y = foot_pos[1] - self.measures[leg]['base_2_HAA_y']
@@ -106,7 +121,8 @@ class InverseKinematics:
         #     print('sq', sq)
 
         if sq < 0:
-            raise ValueError('foot is higher that hip!')
+            print('foot is higher that hip!')
+            return q, inROM
         HAA_foot_z = np.sqrt(sq)
 
 
@@ -115,7 +131,8 @@ class InverseKinematics:
         # Verify if the foot is inside the work space of the leg (WS1)
         if (HAA_foot_x ** 2 + HAA_foot_z ** 2) > (
                 self.measures[leg]['HFE_2_KFE_z'] + self.measures[leg]['KFE_2_FOOT_z']) ** 2:
-            raise ValueError('Foot position is out of the workspace')
+            print('Foot position is out of the workspace')
+            return q, inROM
 
         #################
         # Compute qHAA #
@@ -173,17 +190,99 @@ class InverseKinematics:
         qHFE = np.arctan2(sin_qHFE, cos_qHFE)
 
         # Save the solution
-        q = np.array([qHAA, qHFE, qKFE])
-        if (q < self.upper_limits[leg]).all() and (q > self.lower_limits[leg]).all():
+        q[0] = qHAA
+        q[1] = qHFE
+        q[2] = qKFE
+
+        cond_upper = q < self.upper_limits[leg]
+        cond_lower = q > self.lower_limits[leg]
+
+        if cond_upper.all() and cond_lower.all():
             inROM = True
         else:
-            inROM = False
+            outROMidx = np.hstack([np.where(cond_upper == False)[0],np.where(cond_lower == False)[0]])
+            print('IK produced a solution for leg '+ leg+ ' out of ROM for joint(s) '+str(outROMidx))
 
         return q, inROM
 
 
+    def diff_ik_leg(self, q_des, B_v_foot, foot_idx, update=True, damp=np.diag([1e-6]*3)):
+        leg = self.robot.model.frames[foot_idx].name[:2]
+        self._q_neutral[7:] = self.u.mapToRos(q_des)
+        B_J_des = self.robot.frameJacobian(self._q_neutral, foot_idx, update, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, self._leg_joints[leg]]
+        B_J_dls = np.linalg.inv(B_J_des + damp)  # Jacobian in base frame!
+        qd_leg =  B_J_dls @ B_v_foot
+        return qd_leg
+
+
+
+
+class InverseKinematicsOptimization:
+    def __init__(self, robot):
+        self.robot = robot
+        self.u = Utils()
+        self._q_floating = pin.neutral(self.robot.model)
+        self.frame_names = ['lf_foot', 'rf_foot', 'lh_foot', 'rh_foot']
+
+        self.q_range = {}
+        self.J_range = {}
+        self.frame_id = {}
+        self.bounds = {}
+
+        for leg, name in enumerate(self.frame_names):
+            self.q_range[name] = range(7 + self.u.mapIndexToRos(leg) * 3, 7 + self.u.mapIndexToRos(leg) * 3 + 3)
+            self.J_range[name] = range(6 + self.u.mapIndexToRos(leg) * 3, 6 + self.u.mapIndexToRos(leg) * 3 + 3)
+            self.frame_id[name] = self.robot.model.getFrameId(name)
+            self.bounds[name] = scipy.optimize.Bounds(self.robot.model.lowerPositionLimit[self.q_range[name]],
+                                                      self.robot.model.upperPositionLimit[self.q_range[name]])
+
+    def leg_forwardKinematcs(self, q_leg, frame_name, ret_J):
+        self._q_floating[7:] = 0.
+        self._q_floating[self.q_range[frame_name]] = q_leg
+
+        pin.forwardKinematics(self.robot.model, self.robot.data, self._q_floating)
+        pin.framesForwardKinematics(self.robot.model, self.robot.data, self._q_floating)
+
+        pos = self.robot.data.oMf[self.frame_id[frame_name]].translation
+        if ret_J:
+            J = pin.computeFrameJacobian(self.robot.model, self.robot.data, self._q_floating, self.frame_id[frame_name],
+                                         pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, self.J_range[frame_name]]
+            return pos, J
+
+        return pos
+
+    def cost(self, q_leg, pos_des, frame_name):
+        pos = self.leg_forwardKinematcs(q_leg, frame_name, ret_J=False)
+        err = pos-pos_des#).reshape(3,1)
+
+        return 0.5*err.T@err
+
+    def jac(self, q_leg, pos_des, frame_name):
+        pos, J = self.leg_forwardKinematcs(q_leg, frame_name, ret_J=True)
+        err = pos-pos_des
+
+        return err.T @ J
+
+
+
+    def solve(self, pos_des, frame_name, q0=np.zeros(3)):
+        bounds = self.bounds[frame_name]
+        sol = scipy.optimize.minimize(self.cost,
+                                      args=(pos_des, frame_name),
+                                      x0=q0,
+                                      method='SLSQP',
+                                      jac=self.jac,
+                                      bounds=self.bounds[frame_name])
+        return sol
+
+
+
+
+
+
+
 if __name__ == '__main__':
-    from base_controllers.utils.common_functions import getRobotModel
+    from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import  robotKinematics
     # robot_name = 'solo'
     # qj = np.array([ 0.2,  np.pi / 4, -np.pi / 2,   # lf
     #                 0.2, -np.pi / 4,  np.pi / 2,   # lh
@@ -192,25 +291,26 @@ if __name__ == '__main__':
     # hip = [HIP_DOWN]*4
     # knee = [KNEE_INWARD] * 4
 
-    robot_name = 'aliengo'
-    qj = np.array([ 0.2, 0.7, -1.4,  # lf
-                    0.2, 0.7, -1.4,  # lh
-                   -0.2, 0.7, -1.4,  # rf
+    robot_name = 'go1'
+    qj = np.array([ 0.2, 0.7, -1.4,   # lf
+                   0.2, 0.7, -1.4,    # lh
+                   -0.2, 0.7, -1.4,   # rf
                    -0.2, 0.7, -1.4])  # rh
     hip = [HIP_DOWN] * 4
-    knee = [KNEE_INWARD, KNEE_OUTWARD] * 2
+    knee = [KNEE_INWARD] * 2 + [KNEE_OUTWARD] * 2
 
     robot = getRobotModel(robot_name, generate_urdf=True)
     q = pin.neutral(robot.model)
     q[7:12 + 7] = qj
 
     IK = InverseKinematics(robot)
+    IKOpt = InverseKinematicsOptimization(robot)
+    RK = robotKinematics(robot, ['lf_foot', 'rf_foot','lh_foot', 'rh_foot'])
     pin.forwardKinematics(robot.model, robot.data, q)
     pin.updateFramePlacements(robot.model, robot.data)
-    legs = ['lf', 'lh', 'rf', 'rh']
+    legs = ['lf', 'rf','lh', 'rh']
     feet_id = [robot.model.getFrameId(leg + '_foot') for leg in legs]
-    feet_pos = [robot.data.oMf[foot].translation for foot in feet_id]
-
+    feet_pos = [robot.data.oMf[foot].translation.copy() for foot in feet_id]
 
     #############################################
     # TEST 1: gives the feet positions, find qj #
@@ -224,36 +324,58 @@ if __name__ == '__main__':
     print('##########')
 
     for i, foot in enumerate(feet_id):
-        sol, inROM = IK.ik_leg(feet_pos[i], foot, hip[i], knee[i])
-        print('Leg:', legs[i])
+        print('EE name:', robot.model.frames[foot].name)
         print('\tPosition:', feet_pos[i])
-        print('\tIn Range of Motion:', inROM)
-        print('\tIK Solution:      ', sol)
         print('\tReal Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
 
+        start = time.time()
+        sol, inROM = IK.ik_leg(feet_pos[i], foot, hip[i], knee[i])
+        T = time.time() - start
+        print('\n\tAnalytics time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        print('\tIK Solution Analytics:', sol)
+
+        start = time.time()
+        solOpt = IKOpt.solve(feet_pos[i], robot.model.frames[foot].name, q0=np.array([0.0, 0.7, -1.4]))
+        T = time.time() - start
+        print('\n\tOptimization time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        print('\tIK Solution Optimization:', solOpt.x)
 
 
-    ##############################################################################################
-    # TEST 2: gives the feet positions, compute all the solutions and check if they are feasible #
-    ##############################################################################################
-    print('\n')
-    print('##########')
-    print('# TEST 2 #')
-    print('##########')
+        start = time.time()
+        solMic, IKsuccess = RK.footInverseKinematicsFixedBaseLineSearch(feet_pos[i], robot.model.frames[foot].name, q0_leg=np.array([0.0, 0.7, -1.4]))
+        T = time.time() - start
+        print('\n\tMichele time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        print('\tIK Solution Michele:      ', solMic)
 
-    from tabulate import tabulate
-    for i, foot in enumerate(feet_id):
-        rows = []
-        print('\nLeg:', legs[i])
-        print('Position:', feet_pos[i])
-        print('Real Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
-        for hip in [HIP_UP, HIP_DOWN]:
-            for knee in [KNEE_INWARD, KNEE_OUTWARD]:
-                sol, inROM = IK.ik_leg(feet_pos[i], foot, hip, knee)
-                ik_dict = {}
-                ik_dict['solution'] = sol
-                ik_dict['configuration'] = [hip, knee]
-                ik_dict['in range of motion'] = inROM
-                rows.append(ik_dict)
-        print(tabulate(rows, headers='keys', tablefmt='grid'), end='\n')
 
+
+
+
+
+
+    # ##############################################################################################
+    # # TEST 2: gives the feet positions, compute all the solutions and check if they are feasible #
+    # ##############################################################################################
+    # print('\n')
+    # print('##########')
+    # print('# TEST 2 #')
+    # print('##########')
+    #
+    # from tabulate import tabulate
+    # for i, foot in enumerate(feet_id):
+    #     rows = []
+    #     print('\nLeg:', legs[i])
+    #     print('Position:', feet_pos[i])
+    #     print('Real Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
+    #     for hip in [HIP_UP, HIP_DOWN]:
+    #         for knee in [KNEE_INWARD, KNEE_OUTWARD]:
+    #             # sol, inROM = IK.ik_leg(feet_pos[i], foot, hip, knee)
+    #             solOpt = IKOpt.solve(feet_pos[i], robot.model.frames[foot].name)
+    #             ik_dict = {}
+    #             # ik_dict['solutionAnalytics'] = sol
+    #             ik_dict['solutionOptimization'] = solOpt.x
+    #             ik_dict['configuration'] = [hip, knee]
+    #             # ik_dict['in range of motion'] = inROM
+    #             rows.append(ik_dict)
+    #     print(tabulate(rows, headers='keys', tablefmt='grid'), end='\n')
+    #

@@ -30,7 +30,6 @@ from sensor_msgs.msg import Imu
 from base_controllers.components.imu_utils import IMU_utils
 
 
-import rosbag
 import datetime
 
 class Controller(BaseController):
@@ -38,12 +37,6 @@ class Controller(BaseController):
         super(Controller, self).__init__(robot_name, launch_file)
         self.qj_0 = conf.robot_params[self.robot_name]['q_0']
         self.dt = conf.robot_params[self.robot_name]['dt']
-
-
-        now = datetime.datetime.now()
-        date_string = now.strftime("%Y%m%d%H%M")
-
-        self.sensors_bag = rosbag.Bag(os.environ['PYSOLO_FROSCIA'] + '/bags/' + date_string + '.bag', 'w')
 
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
 
@@ -165,8 +158,8 @@ class Controller(BaseController):
         self.basePoseW_des = np.zeros(6) * np.nan
         self.baseTwistW_des = np.zeros(6) * np.nan
 
-        self.comPoseW = np.zeros(6) * np.nan
-        self.comTwistW = np.zeros(6) * np.nan
+        # self.comPoseW = np.zeros(6) * np.nan
+        # self.comTwistW = np.zeros(6) * np.nan
 
         self.comPoseW_des = np.zeros(6) * np.nan
         self.comTwistW_des = np.zeros(6) * np.nan
@@ -246,8 +239,8 @@ class Controller(BaseController):
         self.qdd_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.qdd = np.zeros(self.robot.na)
 
-        self.base_acc_W_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.base_acc_W = np.zeros(6)
+        self.W_base_lin_acc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.W_base_lin_acc = np.zeros(3)
 
         self.C_qd_log = np.empty((self.robot.nv, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
         self.C_qd = np.zeros(self.robot.nv)
@@ -351,7 +344,7 @@ class Controller(BaseController):
         self.contact_state_log[:, self.log_counter] = self.contact_state
         self.tau_minus_h_log[:, self.log_counter] = self.tau_minus_h
         self.qdd_log[:, self.log_counter] = self.qdd
-        self.base_acc_W_log[:, self.log_counter] = self.base_acc_W
+        self.W_base_lin_acc_log[:, self.log_counter] = self.W_base_lin_acc
         self.C_qd_log[:, self.log_counter] = self.C_qd
         self.T_p_com_ref_lc_log[:, self.log_counter] = self.T_p_com_ref_lc
         self.T_p_base_leg_odom_lc_log[:, self.log_counter] = self.T_p_base_leg_odom_lc
@@ -374,7 +367,7 @@ class Controller(BaseController):
         self.time_log[:, self.log_counter] = self.time
 
 
-    def startController(self, world_name=None, xacro_path=None, use_ground_truth_contacts=True):
+    def startController(self, world_name=None, xacro_path=None, use_ground_truth_contacts=True, additional_args=None):
 
         if self.real_robot == False:
             self.use_ground_truth_contacts = use_ground_truth_contacts
@@ -382,7 +375,16 @@ class Controller(BaseController):
             self.use_ground_truth_contacts = False
 
         self.start()                               # as a thread
-        self.startSimulator(world_name)            # run gazebo
+        self.startSimulator(world_name, additional_args)            # run gazebo
+        if world_name is None:
+            self.world_name_str = ''
+        else:
+            self.world_name_str = world_name
+        if 'camera' in self.world_name_str:
+            remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
+            os.system(remove_jpg_cmd)
+            print(colored('Jpg files removed', 'blue'), flush=True)
+
         self.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
         #self.resetGravity(True)
         self.initVars()                            # overloaded method
@@ -546,7 +548,6 @@ class Controller(BaseController):
 
 
     def visualizeContacts(self):
-        return
         for legid in self.u.leg_map.keys():
 
             leg = self.u.leg_map[legid]
@@ -558,7 +559,7 @@ class Controller(BaseController):
             else:
                 self.ros_pub.add_arrow(self.W_contacts[leg],
                                        np.zeros(3),
-                                       "green", scale=0)
+                                       "green", scale=0.0001)
                 #self.ros_pub.add_marker(self.W_contacts[leg], radius=0.001)
 
             if (self.use_ground_truth_contacts):
@@ -646,6 +647,15 @@ class Controller(BaseController):
         # finally:
         #     sys.exit(-1)
 
+        # IMU BIAS ESTIMATION
+        if self.real_robot and self.robot_name == 'go1':
+            # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
+            while self.imu_utils.counter < self.imu_utils.timeout:
+                self.updateKinematics()
+                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+                self.tau_ffwd[:] = 0.
+                self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+
 
         if check_contacts:
             self._startupWithContacts()
@@ -666,12 +676,7 @@ class Controller(BaseController):
                 ros.signal_shutdown("killed")
                 self.deregister_node()
 
-        # IMU BIAS ESTIMATION
-        if self.real_robot == 'go1':
-            while self.imu_utils.counter < self.imu_utils.timeout:
-                self.updateKinematics()
-                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
-                self.send_command(self.q_des, self.qd_des, self.gravityCompensation()+self.self_weightCompensation())
+
 
 
 
@@ -783,12 +788,18 @@ class Controller(BaseController):
                         WTime = self.time
 
                 if state == 3:
-                    if (self.time - WTime) <= 0.5:
+                    #if (self.time - WTime) <= 0.5:
 
-                        self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
-                    else:
+                    if all(np.abs(self.qd) < 0.025) and (self.time - WTime) >0.5:
                         print(colored("[startupProcedure] completed", "green"))
                         state = 4
+                    else:
+                        # enter
+                        # if any of the joint position errors is larger than 0.02 or
+                        # if any of the joint velocities is larger than 0.02 or
+                        # if the watchdog timer is not expired (1 sec)
+                        self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
+
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
@@ -810,6 +821,55 @@ class Controller(BaseController):
         savemat(filename, DATA)
 
         print('Reference saved in', filename)
+
+
+    def save_video(self, path, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=True):
+        # only if camera_xxx.world has been used
+        # for details on commands, check https://ffmpeg.org/ffmpeg.html
+        if 'camera' not in self.world_name_str:
+            print(colored('Cannot create a video of a not camera world (world_name:'+self.world_name_str+')', 'red'), flush=True)
+            return
+        #
+        # # kill gazebo
+        # os.system("killall rosmaster rviz gzserver gzclient")
+
+        if '.' in filename:
+            filename=filename[:, filename.find('.')]
+        if path[-1] != '/':
+            path+='/'
+        videoname = path + filename + '.' + format
+        save_video_cmd = "ffmpeg -hide_banner -loglevel error -r "+str(fps)+" -pattern_type glob -i '/tmp/camera_save/default_camera_link_my_camera*.jpg' -c:v libx264 "+videoname
+        ret = os.system(save_video_cmd)
+        saved = ''
+        if ret == 0:
+            saved = ' saved'
+        else:
+            saved = ' did not saved'
+        print(colored('Video '+videoname+saved, 'blue'), flush=True)
+
+
+        if speedUpDown <= 0:
+            print(colored('speedUpDown must be greather than 0.0','red'))
+        else:
+            if speedUpDown != 1:
+                pts_multiplier = int(1 / speedUpDown)
+                videoname_speedUpDown = path + filename + str(speedUpDown).replace('.', '')+'x.'+format
+                speedUpDown_cmd = "ffmpeg -hide_banner -loglevel error -i "+videoname+" -filter:v 'setpts="+str(pts_multiplier)+"*PTS' "+videoname_speedUpDown
+                ret = os.system(speedUpDown_cmd)
+                saved = ''
+                if ret == 0:
+                    saved= ' saved'
+                else:
+                    saved = ' did not saved'
+                print(colored('Video ' + videoname_speedUpDown+saved, 'blue'), flush=True)
+
+        if remove_jpg:
+            remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
+            os.system(remove_jpg_cmd)
+            print(colored('Jpg files removed', 'blue'), flush=True)
+
+
+
 
 
 
