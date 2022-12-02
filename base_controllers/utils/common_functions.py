@@ -223,6 +223,7 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
         if (q_adm is not None):
             plt.plot(time_log, q_adm[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
         plt.grid()
+    return fig
                 
     
 
@@ -359,6 +360,7 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[5, :], linestyle='-', lw=lw_des, color='red')
     plt.grid()
+    return fig
 
 
 
@@ -732,6 +734,7 @@ def plotFeet(figure_id, time_log, des_feet=None, act_feet=None, contact_states=N
                 plt.plot(time_log, coeff*contact_states[l, :], linestyle='-', lw=lw_act/2, color='black')
             plt.grid()
     # plt.ylim((-100,100))
+    return fig
 
 
 
