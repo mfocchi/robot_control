@@ -738,7 +738,7 @@ class Controller(BaseController):
                                 foot_id = self.robot.model.getFrameId(foot)
                                 leg_name = foot[:2]
                                 B_feet_pose[leg][2] -= delta_z
-                                q_des_leg = self.IK.ik_leg(B_feet_pose[leg], foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
+                                q_des_leg = self.IK.ik_leg(self.b_R_w.T@B_feet_pose[leg], foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
                         # if self.log_counter != 0:
                         #     self.qd_des = (self.q_des - self.q_des_log[:, self.log_counter]) / self.dt
@@ -779,7 +779,7 @@ class Controller(BaseController):
                             B_feet_pose[leg][2] -= delta_z
                             if current_robot_height <= robot_height:
                                 B_foot = B_feet_pose[leg] # self.b_R_w.T @ b_R_w_init @ B_feet_pose[leg]
-                                q_des_leg = self.IK.ik_leg(B_foot, foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
+                                q_des_leg = self.IK.ik_leg(self.b_R_w.T@B_foot, foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
 
                         self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
