@@ -130,7 +130,7 @@ class Controller(BaseController):
 
     def initVars(self):
         super().initVars()
-
+        self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
         self.IK = InverseKinematics(self.robot)
         self.leg_odom = LegOdometry(self.robot)
         self.legConfig = {}
