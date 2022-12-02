@@ -84,7 +84,7 @@ robot_params['go1'] ={'dt': 0.002,
                         'force_th': 7.,
                         'spawn_x': 0.0,#0.3,
                         'spawn_y': 0.0,
-                        'spawn_z': .15,
+                        'spawn_z': .08,
                         'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 
 robot_params['ur5'] ={'dt': 0.001, 
