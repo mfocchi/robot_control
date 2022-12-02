@@ -105,7 +105,7 @@ class InverseKinematics:
         # import warnings
         # warnings.filterwarnings("error")
         q = np.zeros(3)
-        inROM = False
+        isFeasible = False
         leg = self.robot.model.frames[foot_idx].name[:2]
 
         HAA_foot_x = foot_pos[0] - self.measures[leg]['base_2_HAA_x']
@@ -122,7 +122,7 @@ class InverseKinematics:
 
         if sq < 0:
             print('foot is higher that hip!')
-            return q, inROM
+            return q, isFeasible
         HAA_foot_z = np.sqrt(sq)
 
 
@@ -132,7 +132,7 @@ class InverseKinematics:
         if (HAA_foot_x ** 2 + HAA_foot_z ** 2) > (
                 self.measures[leg]['HFE_2_KFE_z'] + self.measures[leg]['KFE_2_FOOT_z']) ** 2:
             print('Foot position is out of the workspace')
-            return q, inROM
+            return q, isFeasible
 
         #################
         # Compute qHAA #
@@ -198,12 +198,12 @@ class InverseKinematics:
         cond_lower = q > self.lower_limits[leg]
 
         if cond_upper.all() and cond_lower.all():
-            inROM = True
+            isFeasible = True
         else:
             outROMidx = np.hstack([np.where(cond_upper == False)[0],np.where(cond_lower == False)[0]])
             print('IK produced a solution for leg '+ leg+ ' out of ROM for joint(s) '+str(outROMidx))
 
-        return q, inROM
+        return q, isFeasible
 
 
     def diff_ik_leg(self, q_des, B_v_foot, foot_idx, update=True, damp=np.diag([1e-6]*3)):
@@ -329,7 +329,7 @@ if __name__ == '__main__':
         print('\tReal Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
 
         start = time.time()
-        sol, inROM = IK.ik_leg(feet_pos[i], foot, hip[i], knee[i])
+        sol, isFeasible = IK.ik_leg(feet_pos[i], foot, hip[i], knee[i])
         T = time.time() - start
         print('\n\tAnalytics time:', np.round(np.array([T*1000]),3)[0], 'ms')
         print('\tIK Solution Analytics:', sol)
@@ -369,13 +369,13 @@ if __name__ == '__main__':
     #     print('Real Joint config:', IK.u.getLegJointState(legs[i].upper(), qj))
     #     for hip in [HIP_UP, HIP_DOWN]:
     #         for knee in [KNEE_INWARD, KNEE_OUTWARD]:
-    #             # sol, inROM = IK.ik_leg(feet_pos[i], foot, hip, knee)
+    #             # sol, isFeasible = IK.ik_leg(feet_pos[i], foot, hip, knee)
     #             solOpt = IKOpt.solve(feet_pos[i], robot.model.frames[foot].name)
     #             ik_dict = {}
     #             # ik_dict['solutionAnalytics'] = sol
     #             ik_dict['solutionOptimization'] = solOpt.x
     #             ik_dict['configuration'] = [hip, knee]
-    #             # ik_dict['in range of motion'] = inROM
+    #             # ik_dict['in range of motion'] = isFeasible
     #             rows.append(ik_dict)
     #     print(tabulate(rows, headers='keys', tablefmt='grid'), end='\n')
     #
