@@ -37,6 +37,7 @@ from base_controllers.base_controller_fixed import BaseControllerFixed
 import tf
 from rospy import Time
 import time
+from base_controllers.components.controller_manager import ControllerManager
 from base_controllers.components.gripper_manager import GripperManager
 
 class Ur5Generic(BaseControllerFixed):
@@ -60,7 +61,8 @@ class Ur5Generic(BaseControllerFixed):
             self.gripper = True
         else:
             self.gripper = False
-        self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
+
+        self.controller_manager = ControllerManager(conf.robot_params[self.robot_name])
 
         self.world_name = None # only the workbench
         #self.world_name = 'empty.world'
@@ -112,7 +114,7 @@ class Ur5Generic(BaseControllerFixed):
                                                     Float64MultiArray, queue_size=10)
 
         self.zero_sensor = ros.ServiceProxy("/" + self.robot_name + "/ur_hardware_interface/zero_ftsensor", Trigger)
-
+        self.controller_manager.initPublishers(self.robot_name)
         #  different controllers are available from the real robot and in simulation
         if self.real_robot:
             # specific publisher for joint_group_pos_controller that publishes only position
@@ -127,6 +129,9 @@ class Ur5Generic(BaseControllerFixed):
         self.active_controller = self.available_controllers[0]
 
         self.broadcaster = tf.TransformBroadcaster()
+        # store in the param server to be used from other planners
+        self.utils = Utils()
+        self.utils.putIntoGlobalParamServer("gripper_sim", self.gripper)
 
     def _receive_ftsensor(self, msg):
         contactForceTool0 = np.zeros(3)
@@ -200,15 +205,6 @@ class Ur5Generic(BaseControllerFixed):
         self.switch_controller_srv(srv)
         self.active_controller = target_controller
 
-    def send_reduced_des_jstate(self, q_des):
-        msg = Float64MultiArray()
-        msg.data = q_des
-        if self.gripper and not self.real_robot:
-            msg.data = np.append(q_des, self.gm.getDesGripperJoints())
-        else:
-            msg.data = q_des
-        self.pub_reduced_des_jstate.publish(msg)
-
     def deregister_node(self):
         super().deregister_node()
         if not self.real_robot:
@@ -216,9 +212,11 @@ class Ur5Generic(BaseControllerFixed):
             os.system(" rosnode kill /gzserver /gzclient")
 
     def plotStuff(self):
-        plotJoint('position', 0, self.time_log, self.q_log)
+        plotJoint('position', 0, self.time_log, self.q_log, self.q_des_log)
 
     def homing_procedure(self, dt, v_des, q_home, rate):
+        # broadcast base world TF
+        self.broadcaster.sendTransform(self.base_offset, (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')
         v_ref = 0.0
         print(colored("STARTING HOMING PROCEDURE", 'red'))
         self.q_des = np.copy(self.q)
@@ -231,13 +229,13 @@ class Ur5Generic(BaseControllerFixed):
             if (e_norm != 0.0):
                 v_ref += 0.005 * (v_des - v_ref)
                 self.q_des += dt * v_ref * e / e_norm
-                self.send_reduced_des_jstate(self.q_des)
+                self.controller_manager.sendReference(self.q_des)
             rate.sleep()
             if (e_norm < 0.001):
                 self.homing_flag = False
                 print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
                 if self.gripper:
-                    p.gm.move_gripper(100)
+                    p.controller_manager.gm.move_gripper(100)
                 break
 
 def talker(p):
@@ -253,7 +251,8 @@ def talker(p):
     p.loadModelAndPublishers(xacro_path)
     p.initVars()
     p.startupProcedure()
-    # sleep to avoid that the robot crashes on the table
+
+    # sleep to avoid that the real robot crashes on the table
     time.sleep(3.)
 
     # loop frequency
@@ -284,26 +283,30 @@ def talker(p):
 
 
         ## set joints here
-        #p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
+        # p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
+        # p.qd_des = 0.1 * 2 * np.pi * 0.5* np.cos(2 * np.pi * 0.5 * p.time)*np.ones(p.robot.na)
+
         ##test gripper
         # in Simulation remember to set gripper_sim : True in params.yaml!
         # if p.time>5.0 and (gripper_on == 0):
         #     print("gripper 30")
-        #     p.gm.move_gripper(30)
+        #     p.controller_manager.gm.move_gripper(30)
         #     gripper_on = 1
         # if (gripper_on == 1) and p.time>10.0:
         #     print("gripper 100")
-        #     p.gm.move_gripper(100)
+        #     p.controller_manager.gm.move_gripper(100)
         #     gripper_on = 2
         # need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
-        #p.send_reduced_des_jstate(p.q_des)
+        # if p.time > 5.0 and not hasattr(p, 'PDset'):
+        #     p.pid.setPDjoint(0, 10, 0, 0)
+        #     p.PDset = True
+        #p.controller_manager.sendReference(p.q_des, p.qd_des, p.h)
 
         if p.real_robot:
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
 
         # log variables
-        if (p.time > 1.0):
-            p.logData()
+        p.logData()
         # plot end-effector
         p.ros_pub.add_marker(p.x_ee + p.base_offset)
         p.ros_pub.publishVisual()

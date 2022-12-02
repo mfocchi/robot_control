@@ -40,8 +40,6 @@ robotName = "ur5"
 # controller manager management
 from controller_manager_msgs.srv import SwitchControllerRequest, SwitchController
 from controller_manager_msgs.srv import LoadControllerRequest, LoadController
-from std_msgs.msg import Float64MultiArray
-
 from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryGoal
 from trajectory_msgs.msg import JointTrajectoryPoint
 import actionlib
@@ -49,9 +47,7 @@ import actionlib
 from base_controllers.components.obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
 from base_controllers.base_controller_fixed import BaseControllerFixed
 from base_controllers.components.admittance_controller import AdmittanceControl
-from base_controllers.components.gripper_manager import GripperManager
-from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
-from sensor_msgs.msg import JointState
+from base_controllers.components.controller_manager import ControllerManager
 from geometry_msgs.msg import Pose
 
 import tf
@@ -91,10 +87,10 @@ class LabAdmittanceController(BaseControllerFixed):
 
         if conf.robot_params[self.robot_name]['gripper_sim']:
             self.gripper = True
-
         else:
             self.gripper = False
-        self.gm = GripperManager(self.real_robot, conf.robot_params[self.robot_name]['dt'])
+        self.controller_manager = ControllerManager(conf.robot_params[self.robot_name])
+
             
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
@@ -130,7 +126,7 @@ class LabAdmittanceController(BaseControllerFixed):
         launch.start()
         process = launch.launch(node)
 
-        self.gm.resend_robot_program()
+        self.controller_manager.gripper_manager.resend_robot_program()
 
     def loadModelAndPublishers(self, xacro_path):
         super().loadModelAndPublishers(xacro_path)
@@ -141,14 +137,11 @@ class LabAdmittanceController(BaseControllerFixed):
             "/" + self.robot_name + "/controller_manager/switch_controller", SwitchController)
         self.load_controller_srv = ros.ServiceProxy("/" + self.robot_name + "/controller_manager/load_controller",
                                                     LoadController)
-        # specific publisher for joint_group_pos_controller that publishes only position
-        self.pub_reduced_des_jstate = ros.Publisher("/" + self.robot_name + "/joint_group_pos_controller/command",
-                                                    Float64MultiArray, queue_size=10)
 
         self.zero_sensor = ros.ServiceProxy("/" + self.robot_name + "/ur_hardware_interface/zero_ftsensor", Trigger)
 
         self.pub_ee_pose = ros.Publisher("/" + self.robot_name + "/ee_pose", Pose, queue_size=10)
-
+        self.controller_manager.initPublishers(self.robot_name)
         #  different controllers are available from the real robot and in simulation
         if self.real_robot:
             self.available_controllers = [
@@ -287,14 +280,6 @@ class LabAdmittanceController(BaseControllerFixed):
         self.switch_controller_srv(srv)
         self.active_controller = target_controller
 
-    def send_reduced_des_jstate(self, q_des):     
-        msg = Float64MultiArray()
-        if self.gripper and not self.real_robot:
-            msg.data = np.append(q_des, self.gm.getDesGripperJoints())
-        else:
-            msg.data = q_des
-        self.pub_reduced_des_jstate.publish(msg)
-
     def send_ee_pose(self):
         msg = Pose()
         msg.position = self.x_ee + self.base_offset
@@ -393,22 +378,23 @@ class LabAdmittanceController(BaseControllerFixed):
                 print("Target Reached error code {}".format(result.error_code))
                 if (gripper_state[i] == 'close'):
                     print("closing gripper")
-                    p.gm.move_gripper(gripper_diameter[i])
+                    p.controller_manager.gm.move_gripper(gripper_diameter[i])
                 if (gripper_state[i] == 'open'):
                     print("opening gripper")
-                    p.gm.move_gripper(gripper_diameter[i])
+                    p.controller_manager.gm.move_gripper(gripper_diameter[i])
                 time.sleep(2.)
         else: # simulation need to manage gripper as desjoints
             goal.trajectory.joint_names = self.joint_names + ['hand_1_joint', 'hand_2_joint', 'hand_3_joint']
-            position_list = [conf.robot_params[p.robot_name]['q_0'].tolist() + [self.gm.mapToGripperJoints(40), self.gm.mapToGripperJoints(40), self.gm.mapToGripperJoints(40)] ] # go home
-            position_list.append( [-0.4253643194781702, -0.9192648094943543, -2.162015914916992, -1.621634145776266, -1.5201204458819788, -2.2737816015826624, self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110)])  # go on 1 brick
-            position_list.append([-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008, -2.1804688612567347, self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110), self.gm.mapToGripperJoints(110)])  # approach 1 brick
-            position_list.append( [-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008,  -2.1804688612567347, self.gm.mapToGripperJoints(55), self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(65)])  # close gripper
-            position_list.append( [-0.2545421759234827, -1.2628285449794312, -2.049499988555908, -1.3982257705977936, -1.4819391409503382, -2.4832173029529017,self.gm.mapToGripperJoints(55), self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(65)])  # move 2 second brick
-            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.gm.mapToGripperJoints(55), self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(65)])  # approach 2 brick
-            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(90), self.gm.mapToGripperJoints(90)])  # open gripper
-            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.gm.mapToGripperJoints(65), self.gm.mapToGripperJoints(90), self.gm.mapToGripperJoints(90)])  # evade
-            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.gm.mapToGripperJoints(130), self.gm.mapToGripperJoints(130), self.gm.mapToGripperJoints(130)])  # open gripper
+            position_list = [conf.robot_params[p.robot_name]['q_0'].tolist() +
+                             [self.controller_manager.gm.mapToGripperJoints(40), self.controller_manager.gm.mapToGripperJoints(40), self.controller_manager.gm.mapToGripperJoints(40)] ] # go home
+            position_list.append( [-0.4253643194781702, -0.9192648094943543, -2.162015914916992, -1.621634145776266, -1.5201204458819788, -2.2737816015826624, self.controller_manager.gm.mapToGripperJoints(110), self.controller_manager.gm.mapToGripperJoints(110), self.controller_manager.gm.mapToGripperJoints(110)])  # go on 1 brick
+            position_list.append([-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008, -2.1804688612567347, self.controller_manager.gm.mapToGripperJoints(110), self.controller_manager.gm.mapToGripperJoints(110), self.controller_manager.gm.mapToGripperJoints(110)])  # approach 1 brick
+            position_list.append( [-0.42451507249941045, -0.9235735100558777, -1.975731611251831, -1.8549186191954554, -1.534570042287008,  -2.1804688612567347, self.controller_manager.gm.mapToGripperJoints(55), self.controller_manager.gm.mapToGripperJoints(65), self.controller_manager.gm.mapToGripperJoints(65)])  # close gripper
+            position_list.append( [-0.2545421759234827, -1.2628285449794312, -2.049499988555908, -1.3982257705977936, -1.4819391409503382, -2.4832173029529017,self.controller_manager.gm.mapToGripperJoints(55), self.controller_manager.gm.mapToGripperJoints(65), self.controller_manager.gm.mapToGripperJoints(65)])  # move 2 second brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.controller_manager.gm.mapToGripperJoints(55), self.controller_manager.gm.mapToGripperJoints(65), self.controller_manager.gm.mapToGripperJoints(65)])  # approach 2 brick
+            position_list.append( [-0.2545355002032679, -1.2625364822200318, -1.910099983215332, -1.5169030030122777, -1.4750459829913538, -2.4462133089648646,self.controller_manager.gm.mapToGripperJoints(65), self.controller_manager.gm.mapToGripperJoints(90), self.controller_manager.gm.mapToGripperJoints(90)])  # open gripper
+            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.controller_manager.gm.mapToGripperJoints(65), self.controller_manager.gm.mapToGripperJoints(90), self.controller_manager.gm.mapToGripperJoints(90)])  # evade
+            position_list.append( [-0.2544291655169886, -1.277967320089676, -2.1508238315582275, -1.2845929724029084, -1.465815846120016,  -2.445918385182516, self.controller_manager.gm.mapToGripperJoints(130), self.controller_manager.gm.mapToGripperJoints(130), self.controller_manager.gm.mapToGripperJoints(130)])  # open gripper
 
             duration_list = [5., 5.0, 5.0, 2., 5.0, 5.0, 2., 5., 2.]
             self.ask_confirmation(position_list)
@@ -467,25 +453,12 @@ class LabAdmittanceController(BaseControllerFixed):
             plotEndeff('force', 1, p.time_log, p.contactForceW_log)
 
 
-    def send_des_jstate(self, q_des, qd_des, tau_ffwd):
-         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
-         msg = JointState()
-         if self.gripper:
-             msg.position = np.append(q_des, self.gm.getDesGripperJoints())
-             msg.velocity = np.append(qd_des, np.array([0., 0., 0.]))
-             msg.effort = np.append(tau_ffwd, np.array([0., 0., 0.]))
-         else:
-             msg.position = q_des
-             msg.velocity = qd_des
-             msg.effort = tau_ffwd
-         self.pub_des_jstate.publish(msg)
-
 def talker(p):
     p.start()
     if p.real_robot:
         p.startRealRobot()
     else:
-        additional_args = 'gripper:=' + str(p.gripper)
+        additional_args = ['gripper:=' + str(p.gripper)]
         p.startSimulator(p.world_name, p.use_torque_control, additional_args)
 
     # specify xacro location
@@ -542,12 +515,12 @@ def talker(p):
                     if(e_norm!=0.0):
                         v_ref += 0.005*(v_des-v_ref)
                         p.q_des += dt*v_ref*e/e_norm
-                        p.send_reduced_des_jstate(p.q_des)
+                        p.controller_manager.sendReference(p.q_des)
                     rate.sleep()
                     if (e_norm<0.001):
                         p.homing_flag = False
                         print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
-                        p.gm.move_gripper(100)
+                        p.controller_manager.gm.move_gripper(100)
                         print(colored("GRIPPER CLOSED", 'red'))
                         break
 
@@ -562,14 +535,14 @@ def talker(p):
                     if(ext_traj_counter < len(p.Q_ref)-1):
                         print(colored("TRAJECTORY %d COMPLETED"%ext_traj_counter, 'blue'))
                         if(ext_traj_counter==0):
-                            p.gm.move_gripper(65)
+                            p.controller_manager.gm.move_gripper(65)
                         if (ext_traj_counter == 1):
-                            p.gm.move_gripper(30)
+                            p.controller_manager.gm.move_gripper(30)
                         ext_traj_counter += 1
                         ext_traj_t = 0
                     elif(not traj_completed):
                         print(colored("LAST TRAJECTORY COMPLETED", 'red'))
-                        p.gm.move_gripper(60)
+                        p.controller_manager.gm.move_gripper(60)
                         traj_completed = True
                         #ext_traj_t = 0
                         #ext_traj_counter = 0
@@ -578,15 +551,15 @@ def talker(p):
             #p.q_des = np.copy(p.q_des_q0)
 
             # test gripper
-            # if p.gripper:
-            #     if p.time > 5.0 and (gripper_on == 0):
-            #         print("gripper 30")
-            #         p.gm.move_gripper(30)
-            #         gripper_on = 1
-            #     if (gripper_on == 1) and p.time > 10.0:
-            #         print("gripper 100")
-            #         p.gm.move_gripper(100)
-            #         gripper_on = 2
+            if p.gripper:
+                if p.time > 5.0 and (gripper_on == 0):
+                    print("gripper 30")
+                    p.controller_manager.gm.move_gripper(30)
+                    gripper_on = 1
+                if (gripper_on == 1) and p.time > 10.0:
+                    print("gripper 100")
+                    p.controller_manager.gm.move_gripper(100)
+                    gripper_on = 2
 
             # EXE L8-1.2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
@@ -652,13 +625,10 @@ def talker(p):
             else:
                 q_to_send = p.q_des
 
+            if (lab_conf.obstacle_avoidance):
+                p.tau_ffwd = p.obs_avoidance.computeTorques(p,  lab_conf.des_ee_goal)
             # send commands to gazebo
-            if (p.use_torque_control):
-                if (lab_conf.obstacle_avoidance):
-                    p.tau_ffwd = p.obs_avoidance.computeTorques(p,  lab_conf.des_ee_goal)
-                p.send_des_jstate(q_to_send, p.qd_des, p.tau_ffwd)
-            else:
-                p.send_reduced_des_jstate(q_to_send)
+            p.controller_manager.sendReference(q_to_send, p.qd_des, p.tau_ffwd)
 
             if(not lab_conf.obstacle_avoidance):
                 p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")

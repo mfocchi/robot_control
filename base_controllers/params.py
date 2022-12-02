@@ -97,11 +97,11 @@ robot_params['ur5'] ={'dt': 0.001,
                        'control_mode': 'point', # 'trajectory','point'
                        'real_robot': False,
                        'control_type': 'torque', # 'position', 'torque'
-                       'gripper_sim': False,
+                       'gripper_sim': True,
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
                        'spawn_z' : 1.75,
-                       'buffer_size': 6000} # note the frames are all aligned with base for joints = 0
+                       'buffer_size': 50000} # note the frames are all aligned with base for joints = 0
 
 robot_params['jumpleg'] ={'dt': 0.001,
                        'kp': np.array([100, 100, 100, 10, 10, 10 ]),
