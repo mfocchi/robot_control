@@ -22,7 +22,13 @@ class PidManager:
         self.req_msg = set_pidsRequest()						
         print(colored("PID Manager initialized", "red"))
 
-    def setPDs(self, kp, kd, ki):              
+    def setPDs(self, kp, kd, ki = 0):
+        """
+         Set the same values of PID for all the joints of the robot
+         @kp: proportional gain (scalar)
+         @kd: derivative gain (scalar)
+         @kp: integral gain (scalar)
+         """
         # create the message
         self.req_msg.data = []
 								
@@ -38,9 +44,14 @@ class PidManager:
         # send request and get response (in this case none)
         self.set_pd_service(self.req_msg)
 															
-								
-  
+
     def setPDleg(self, legid, kp, kd, ki):
+        """
+        Set PDs the same values for the joints of a leg of a quadruped
+        @kp: proportional gain (scalar)
+        @kd: derivative gain (scalar)
+        @kp: integral gain (scalar)
+        """
         # create the message
         self.req_msg.data = []
 
@@ -93,6 +104,13 @@ class PidManager:
         
         
     def setPDjoint(self, joint_idx, kp, kd, ki):
+        """
+        Set value of PID for a specific joint or a set of joints
+        @joint_idx: (int) index of the joint /(array) of indices of the set of joints
+        @kp: proportional gain (int/array)
+        @kd: derivative gain (int/array)
+        @kp: integral gain (int/array)
+        """
         # create the message
         self.req_msg.data = []
         if isinstance(joint_idx, int):
@@ -127,6 +145,13 @@ class PidManager:
         self.set_pd_service(self.req_msg)
         
     def setPDjoints(self, kp, kd, ki):
+        """
+        Set array of values of PID for all joints
+        @joint_idx: (int) index of the joint /(array) of indices of the set of joints
+        @kp: proportional gain (array)
+        @kd: derivative gain (array)
+        @kp: integral gain (array)
+        """
         # create the message
         self.req_msg.data = []
         
