@@ -206,12 +206,13 @@ class InverseKinematics:
         return q, isFeasible
 
 
-    def diff_ik_leg(self, q_des, B_v_foot, foot_idx, update=True, damp=np.diag([1e-6]*3)):
+    def diff_ik_leg(self, q_des, B_v_foot, foot_idx, damp, update=True):
         leg = self.robot.model.frames[foot_idx].name[:2]
         self._q_neutral[7:] = self.u.mapToRos(q_des)
-        B_J_des = self.robot.frameJacobian(self._q_neutral, foot_idx, update, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, self._leg_joints[leg]]
-        B_J_dls = np.linalg.inv(B_J_des + damp)  # Jacobian in base frame!
-        qd_leg =  B_J_dls @ B_v_foot
+        B_J = self.robot.frameJacobian(self._q_neutral, foot_idx, update, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, self._leg_joints[leg]]
+        for i in range(3):
+            B_J[i,i] += damp
+        qd_leg =  np.linalg.inv(B_J) @ B_v_foot
         return qd_leg
 
 
