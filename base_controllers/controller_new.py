@@ -15,6 +15,7 @@ from base_controllers.base_controller import BaseController
 from base_controllers.utils.math_tools import *
 
 from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics
+from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
 from termcolor import colored
 
 import base_controllers.params as conf
@@ -129,6 +130,7 @@ class Controller(BaseController):
         super().initVars()
 
         self.IK = InverseKinematics(self.robot)
+        self.leg_odom = LegOdometry(self.robot)
         self.legConfig = {}
         if 'solo' in self.robot_name:  # either solo or solo_fw
             self.legConfig['lf'] = ['HipDown', 'KneeInward']
