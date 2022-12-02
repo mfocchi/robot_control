@@ -97,6 +97,8 @@ class Controller(BaseController):
             self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
             self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
 
+            self.euler = np.array(euler_from_quaternion(self.quaternion))
+
         self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
