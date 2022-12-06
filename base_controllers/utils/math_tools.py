@@ -11,6 +11,12 @@ import scipy as sp
 import math as math
 from base_controllers.utils.utils import Utils
 
+class LineCoeff2d:
+    def __init__(self):
+        self.p = 0.0
+        self.q = 0.0
+        self.r = 0.0
+
 class Math:
     def normalize(self, n):
         norm1 = np.linalg.norm(n)
@@ -168,7 +174,150 @@ class Math:
                            [ np.cos(pitch)*np.sin(yaw),       np.cos(yaw),                    0],
                            [ -np.sin(pitch),      0 ,                                         1]])
         return Tomega
-                                
+
+    ##################
+    # Geometry Utils
+    ###################
+
+    """
+     Computes the distance of a point from a line
+    
+     Parameters
+     ----------
+     v1 first 2D endpoint of linesegment
+     v2 second 2D endpoint of linesegment
+     p 2D point to find distance to
+    
+     Returns
+     ----------
+     distance of p from line
+     """
+
+    def distance_from_line(self, pt, v1, v2):
+        a = v1 - v2
+        b = pt - v2
+        distance = np.linalg.norm(np.cross(a, b)) / np.linalg.norm(a)
+        return distance
+
+    def point_is_right_of_line(self, p0, p1, p2):
+        utils = Utils()
+        return (p2[utils.crd["X"]] - p0[utils.crd["X"]]) * (p1[utils.crd["Y"]] - p0[utils.crd["Y"]]) \
+               - (p1[utils.crd["X"]] - p0[utils.crd["X"]]) * (p2[utils.crd["Y"]] - p0[utils.crd["Y"]])
+
+    def clock_wise_sort(self, vertices):
+        #  sort   clockwise assuming vertices are a list
+        for i in range(1, len(vertices) - 1):
+            for j in range(i + 1, len(vertices)):
+                # the point p2 should always be on the right to be cwise thus if it is on the left < 0 i swap
+                if (self.point_is_right_of_line(vertices[0], vertices[i], vertices[j]) < 0.0):
+                    tmp = vertices[i]
+                    vertices[i] = vertices[j]
+                    vertices[j] = tmp
+
+    def counter_clock_wise_sort(self, vertices):
+        # sort   clockwise assuming vertices are a list
+        for i in range(1, len(vertices) - 1):
+            for j in range(i + 1, len(vertices)):
+                # the point p2 should always be on the left of the line to be ccwise thus if it is on the right  >0  swap
+                if (self.point_is_right_of_line(vertices[0], vertices[i], vertices[j]) > 0.0):
+                    tmp = vertices[i]
+                    vertices[i] = vertices[j]
+                    vertices[j] = tmp
+
+    def margin_from_poly(self, point_to_test, stance_legs, actual_feetW):
+
+        distances = []
+        stance_idx = []
+        stance_feetW = []
+
+        # project test point on horizontal plane
+        pointXY = np.copy(point_to_test)
+        pointXY[2] = 0.0
+        # compute stance indexes and collect stance feet (projectoed on horizontal plane)
+        for leg in range(4):
+            if (stance_legs[leg]):
+                stance_idx.append(leg)
+                stance_feetW.append(np.array([actual_feetW[leg][0], actual_feetW[leg][1], 0.0]))
+
+        # sort them
+        stance_feetW_sorted = np.copy(stance_feetW)
+        self.clock_wise_sort(stance_feetW_sorted)
+
+        # compute distances from lines
+        for idx in range(len(stance_feetW_sorted)):
+            relative_distance = self.distance_from_line(pointXY, stance_feetW_sorted[idx],
+                                                        stance_feetW_sorted[(idx + 1) % len(stance_feetW_sorted)])
+            # print("stance_feetW_sorted", stance_feetW_sorted[idx].transpose())
+            # print("stance_feetW_sorted+1", stance_feetW_sorted[(idx + 1) % len(stance_feetW_sorted)].transpose())
+            # print(relative_distance)
+            distances.append(relative_distance)
+        # find the minimum
+        # print("distances", distances)
+        margin = min(distances)
+        return margin
+
+    """
+    Computes the halfplane description of the polygon
+
+    Parameters
+    ----------
+    vertices: numpy array of 3D vertices
+
+    Returns
+    ----------
+    A, b: Half space descriprion of the polygon (assuming created with vertex sorted in CCWise order)
+    """
+
+    def compute_half_plane_description(self, vertices):
+
+        number_of_constraints = np.size(vertices, 0)
+        # vertices_ccwise_sorted = np.zeros((number_of_constraints, 3-1))
+        A = np.zeros((number_of_constraints, 2))
+        b = np.zeros(number_of_constraints)
+
+        # for vertix in range(0, number_of_constraints):
+        # 	vertices_ccwise_sorted[vertix] = [vertices[vertix][0], vertices[vertix][1]]
+        vertices_ccwise_sorted = vertices
+
+        # Sort feet positions
+        self.counter_clock_wise_sort(vertices_ccwise_sorted)
+        print("vertices_ccwise_sorted feet : ", vertices_ccwise_sorted)
+
+        # cycle along the ordered vertices to compute the line coeff p*xcp + q*ycp  +r  > + stability_margin
+        for vertix in range(0, number_of_constraints):
+            # Compute the coeffs of the line between two vertices (normal p,q pointing on the left of (P1 - P0) vector
+            line_coeff = self.compute_line_coeff(vertices_ccwise_sorted[vertix],
+                                                 vertices_ccwise_sorted[(vertix + 1) % number_of_constraints])
+
+            print(vertices_ccwise_sorted[vertix], vertices_ccwise_sorted[(vertix + 1) % number_of_constraints])
+            if (not np.isfinite(line_coeff.p)) or (not np.isfinite(line_coeff.q)):
+                print(
+                    "There are two coincident vertices in the polygon, there could be NaNs in the HP description matrix")
+
+            A[vertix, 0] = line_coeff.p
+            A[vertix, 1] = line_coeff.q
+            # A[vertix, 2] = 0.0  # Z component is not considered
+            b[vertix] = line_coeff.r
+
+        return A, b
+
+    """
+    Compute the coefficients p,q of the line p*x + q*y + r = 0 (in 2D) passing through pt0 and pt1
+    """
+
+    def compute_line_coeff(self, pt0, pt1):
+        ret = LineCoeff2d()
+        ret.p = pt0[1] - pt1[1]
+        ret.q = pt1[0] - pt0[0]
+        ret.r = -ret.p * pt0[0] - ret.q * pt0[1]
+
+        # Normalize the equation in order to intuitively use stability margins (?)
+        norm = np.hypot(ret.p, ret.q)
+        ret.p /= norm
+        ret.q /= norm
+        ret.r /= norm
+
+        return ret
 
     def line(self, p1, p2):
         A = (p1[1] - p2[1])
@@ -297,8 +446,6 @@ def skew_simToVec(Ra):
     v[2] = 0.5*(Ra[1,0] - Ra[0,1])
 
     return v
-
-
 
 def rotMatToRotVec(Ra):
     c = 0.5 * (Ra[0, 0] + Ra[1, 1] + Ra[2, 2] - 1)
@@ -499,15 +646,7 @@ def forceVectorTransform(position, rotationMx):
     return b_X_a
 
 
-def tic():
-    #Homemade version of matlab tic and toc functions
-    import time
-    global startTime_for_tictoc
-    startTime_for_tictoc = time.time()
 
-def toc():
-    import time
-    if 'startTime_for_tictoc' in globals():
-        print("Elapsed time is " + str(time.time() - startTime_for_tictoc) + " seconds.")
-    else:
-        print("Toc: start time not set")
+
+
+
