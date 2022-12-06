@@ -60,15 +60,17 @@ class AdvancedController(BaseController):
             self.des_forcesW_log[:, self.log_counter] =  self.des_forcesW            
             self.Wffwd_log[:, self.log_counter] =  self.Wffwd            
             self.Wfbk_log[:, self.log_counter] =  self.Wfbk            
-            self.Wg_log[:, self.log_counter] =  self.Wg            
-            self.constr_viol_log[:, self.log_counter] =  self.constr_viol
+            self.Wg_log[:, self.log_counter] =  self.Wg
+            if hasattr(self,'constr_viol'):
+                self.constr_viol_log[:, self.log_counter] =  self.constr_viol
         super().logData()
 
 def talker(p):
     p.start()
     p.startSimulator()
     p.loadModelAndPublishers()
-    p.initVars()          
+    p.initVars()
+    p.initSubscribers()
     p.startupProcedure()
 
     rate = ros.Rate(1/lab_conf.dt) # 10hz
@@ -127,49 +129,49 @@ def talker(p):
 #        params.isCoMControlled = False 
 #        params.gravityComp = False
 #        params.ffwdOn = False        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
 
         # EXERCISE 3: Add Gravity Compensation (base frame)        
 #        params.isCoMControlled = False 
 #        params.gravityComp = True
 #        params.ffwdOn = False                                       
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
 #     
         # EXERCISE 4: Add FFwd Term (base frame) 
 #        params.isCoMControlled = False 
 #        params.gravityComp = True
 #        params.ffwdOn = True        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
 #                                
 #        # EXERSISE 5: Projection-based controller (CoM)    
 #        # map from base to com frame (they are aligned)
-#        act_state.act_pose = p.comPoseW
-#        act_state.act_twist = p.comTwistW 
-#        params.isCoMControlled = True 
-#        params.robotInertiaB = p.centroidalInertiaB
-#        params.gravityComp = True
-#        params.ffwdOn = True 
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
-#        
-        # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
-        params.normals = [None]*4                 
-        params.normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
-        params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
-        params.normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
-        params.normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])  
-        params.f_min = np.array([0.0,0.0,0.0, 0.0])    
-        params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])    
-   
-        params.isCoMControlled = False 
+        act_state.pose.set(p.comPoseW)
+        act_state.twist.set(p.comTwistW)
+        params.isCoMControlled = True
+        params.robotInertiaB = p.centroidalInertiaB
         params.gravityComp = True
-        params.ffwdOn = True    
-        params.frictionCones = False
-        
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
-        
+        params.ffwdOn = True
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+
+        # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
+        # params.normals = [None]*4
+        # params.normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
+        # params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
+        # params.normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
+        # params.normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])
+        # params.f_min = np.array([0.0,0.0,0.0, 0.0])
+        # params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])
+        #
+        # params.isCoMControlled = False
+        # params.gravityComp = True
+        # params.ffwdOn = True
+        # params.frictionCones = False
+        #
+        # p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+
         # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
         #params.frictionCones = True       
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf, act_state, des_state, p.W_contacts, p.stance_legs, params)
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
                                 
         #################################################################          
         # map desired contact forces into torques (missing gravity compensation)                      

@@ -404,8 +404,9 @@ class BaseController(threading.Thread):
         self.comPoseW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"]+3] = self.robot.robotComW(configuration) # + np.array([0.05, 0.0,0.0])
         W_base_to_com = self.u.linPart(self.comPoseW)  - self.u.linPart(self.basePoseW) 
         self.comTwistW = np.dot( motionVectorTransform( W_base_to_com, np.eye(3)),self.baseTwistW)
-        
+        # inertia w.r.t the com
         self.centroidalInertiaB = self.robot.centroidalInertiaB(configuration, gen_velocities)
+        # inertia w.r.t the base frame origin
         self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(configuration)
 
     def estimateContactForces(self):           
@@ -455,7 +456,7 @@ class BaseController(threading.Thread):
                     [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
                                                         
                 print("reset posture...")
-                self.freezeBase(1)
+                self.freezeBase(1, basePoseW=np.hstack( (self.base_offset, np.array([0.,0.,0.]))) )
                 start_t = ros.get_time()
                 while ros.get_time() - start_t < 1.0:
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
