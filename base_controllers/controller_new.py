@@ -187,8 +187,20 @@ class Controller(BaseController):
         self.grForcesB_ffwd = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesB_ddp = np.empty(3 * self.robot.nee) * np.nan
 
+        # virtual impedance wrench control
+        self.Kp_lin = np.diag(conf.robot_params[self.robot_name].get('Kp_lin', np.zeros(3)))
+        self.Kd_lin = np.diag(conf.robot_params[self.robot_name].get('Kd_lin', np.zeros(3)))
 
-        self.grForcesLocal_gt_tmp = np.zeros(3)
+        self.Kp_ang = np.diag(conf.robot_params[self.robot_name].get('Kp_ang', np.zeros(3)))
+        self.Kd_ang = np.diag(conf.robot_params[self.robot_name].get('Kd_ang', np.zeros(3)))
+
+        self.wrench_fbW  = np.zeros(6)
+        self.wrench_ffW  = np.zeros(6)
+        self.wrench_gW   = np.zeros(6)
+        self.wrench_gW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
+        self.wrench_desW = np.zeros(6)
+
+        self.NEMatrix = np.zeros([6, 3*self.robot.nee]) # Newton-Euler matrix
 
         try:
             self.force_th = conf.robot_params[self.robot_name]['force_th']
@@ -418,17 +430,18 @@ class Controller(BaseController):
     def gravityCompensation(self):
         # require the call to updateKinematics
         # to simplyfy, all the feet are assumed to be in contact
-        contact_torques = np.zeros(self.robot.na)
-        for leg in range(4):
-            S = pin.skew(self.B_contacts[leg] - self.comB )
-            self.contact_matrix[3:, 3 * leg:3 * (leg + 1)] = S
-        C_pinv = np.linalg.pinv(self.contact_matrix)
-        self.gravityB[0:3] = self.b_R_w @ self.gravityW[0:3]
-        self.grForcesW_des = C_pinv @ self.gravityB
-        for leg in range(4):
-            tau_leg  = -self.J[leg].T  @ self.u.getLegJointState(leg, self.grForcesW_des)
-            self.u.setLegJointState(leg, tau_leg, contact_torques)
-        return contact_torques
+        # contact_torques = np.zeros(self.robot.na)
+        # for leg in range(4):
+        #     S = pin.skew(self.B_contacts[leg] - self.comB )
+        #     self.contact_matrix[3:, 3 * leg:3 * (leg + 1)] = S
+        # C_pinv = np.linalg.pinv(self.contact_matrix)
+        # self.gravityB[0:3] = self.b_R_w @ self.gravityW[0:3]
+        # self.grForcesW_des = C_pinv @ self.gravityB
+        # for leg in range(4):
+        #     tau_leg  = -self.J[leg].T  @ self.u.getLegJointState(leg, self.grForcesW_des)
+        #     self.u.setLegJointState(leg, tau_leg, contact_torques)
+        # return contact_torques
+        return self.projectionWBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True)
 
     # TODO: To be tested
     # def gravityCompensation(self, legsInContact):
@@ -462,6 +475,97 @@ class Controller(BaseController):
     #     J = self.robot.getEEStackJacobians(fb_config, 'linear')[:, 6:]
     #     contact_torques = -self.u.mapToRos(J.T @ feet_forces_gravity)
     #     return contact_torques
+
+
+    def virtualImpedanceWrench(self, des_pose, des_twist, des_acc = None, comControlled = True):
+        if not(des_pose is None or des_twist is None):
+            if comControlled:
+                act_pose = self.comPoseW
+                act_twist = self.comTwistW
+            else:
+                act_pose = self.basePoseW
+                act_twist = self.baseTwistW
+            # FEEDBACK WRENCH
+            # ---> linear part
+            self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LZ"]+1] = self.Kp_lin @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
+                                                                       self.Kd_lin @ (self.u.linPart(des_twist) - self.u.linPart(act_twist))
+            # ---> angular part
+            # actual orientation: self.b_R_w
+            # Desired Orientation
+            b_Rdes_w = self.math_utils.rpyToRot(self.u.angPart(des_pose))
+
+            # compute orientation error
+            b_Re_w = b_Rdes_w @ self.b_R_w.T
+            # express orientation error in angle-axis form
+            b_err = rotMatToRotVec(b_Re_w)
+
+            # the orientation error is expressed in the base_frame so it should be rotated to have the wrench in the
+            # world frame
+            w_err = self.b_R_w.T @ b_err
+            # map des euler rates into des omega
+            Jomega = self.math_utils.Tomega(self.u.angPart(self.comPoseW))
+
+            # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an
+            # Euclidean space with Jomegaself.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1
+            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1] = self.Kp_ang @ w_err + \
+                                                                       self.Kd_ang @ ( Jomega @ (self.u.angPart(des_twist) - self.u.angPart(act_twist)))
+
+            # FEED-FORWARD WRENCH
+            if not (des_acc is None):
+                # ---> linear part
+                self.wrench_ffW[self.u.sp_crd["LX"]:self.u.sp_crd["LZ"] + 1] = self.robot.robotMass * self.u.linPart(
+                    des_acc)
+                # ---> angular part
+                # compute inertia in the world frame:  w_I = R' * B_I * R
+                w_I = self.b_R_w.T @ self.centroidalInertiaB @ self.b_R_w
+                # compute w_des_omega_dot =  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates (Jomega already computed, see above)
+                Jomega_dot = self.math_utils.Tomega_dot(self.u.angPart(self.comPoseW), self.u.angPart(self.comTwistW))
+                w_des_omega_dot = Jomega @ self.u.angPart(des_acc) + Jomega_dot @ self.u.angPart(des_twist)
+                self.wrench_ffW[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1] = w_I @ w_des_omega_dot
+
+        # GRAVITY WRENCH
+        # ---> linear part
+        # self.wrench_gW[self.u.sp_crd["LZ"]+1] = self.robot.robotMass * self.g_mag (to avoid unuseful repetition, this is in the definiton of wrench_gW)
+        # ---> angular part
+        if not comControlled:  # act_state  = base position in this case
+            W_base_to_com = self.u.linPart(self.comPoseW) - self.u.linPart(self.basePoseW)
+            self.wrench_gW[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1] = np.cross(W_base_to_com, self.wrench_gW[self.u.sp_crd["LX"]:self.u.sp_crd["LZ"]+1])
+        # else the angular wrench is zero
+
+
+    # Whole body controller that includes ffd wrench + fb Wrench (Virtual PD) + gravity compensation
+    # all vector is in the wf
+    def projectionWBC(self, des_pose, des_twist, des_acc = None, comControlled = True):
+        self.virtualImpedanceWrench(des_pose, des_twist, des_acc, comControlled)
+        self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
+
+        # clean the matrix
+        self.NEMatrix[:,:] = 0.
+        # wrench = NEMatrix @ grfs
+        for leg in range(self.robot.nee):
+            if self.contact_state[leg]:
+                start_col = 3 * leg
+                end_col = 3 * (leg+1)
+                # ---> linear part
+                # identity matrix (I avoid to rewrite zeros)
+                self.NEMatrix[self.u.sp_crd["LX"], start_col] = 1.
+                self.NEMatrix[self.u.sp_crd["LY"], start_col + 1] = 1.
+                self.NEMatrix[self.u.sp_crd["LZ"], start_col + 2] = 1.
+                # ---> angular part
+                # all in a function
+                self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1, start_col:end_col] = \
+                    pin.skew(self.W_contacts[leg] - self.u.linPart(self.comPoseW))
+
+        # Map the desired wrench to grf
+        self.grForcesW_des = np.linalg.pinv(self.NEMatrix, 1e-06) @ self.wrench_desW
+        WBC_torques = np.empty(12)
+        for leg in range(4):
+            tau_leg  = self.u.getLegJointState(leg, self.h_joints) - \
+                       self.wJ[leg].T  @ self.u.getLegJointState(leg, self.grForcesW_des)
+            self.u.setLegJointState(leg, tau_leg, WBC_torques)
+        return WBC_torques
+
+
 
     def comFeedforward(self, a_com):
         self.qPin_base_oriented[3:7] = self.quaternion
