@@ -10,6 +10,7 @@ import numpy as np
 import rospy as ros
 from rospy.exceptions import ROSException
 
+
 class Utils:
 
     def __init__(self):
@@ -182,6 +183,23 @@ class Utils:
 
         return list
 
+    def get_dict_keys(dict):
+        names=list(dict.keys())
+        names.sort()
+        return  names
 
-        
+
+    def tic():
+        # Homemade version of matlab tic and toc functions
+        import time
+        global startTime_for_tictoc
+        startTime_for_tictoc = time.time()
+
+
+    def toc():
+        import time
+        if 'startTime_for_tictoc' in globals():
+            print("Elapsed time is " + str(time.time() - startTime_for_tictoc) + " seconds.")
+        else:
+            print("Toc: start time not set")
             
