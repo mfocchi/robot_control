@@ -2,20 +2,29 @@
 # File contains some necessary control algorithms for HyQ
 # Author: Michele Focchi
 # Date: 23-10-2022
+import math
+
 import rospkg
 import socket
 import numpy as np
 from base_controllers.components.filter import SecondOrderFilter
 import rospy as ros
 from std_srvs.srv import Trigger, TriggerRequest
-
+from  termcolor import  colored
 
 class GripperManager():
     def __init__(self, real_robot_flag = False, dt = 0.001, gripping_duration = 5.):
-        self.q_des_gripper = np.array([1.8, 1.8,1.8])
         self.gripping_duration = gripping_duration
         self.real_robot = real_robot_flag
-        self.SO_filter = SecondOrderFilter(3)
+        self.soft_gripper = ros.get_param("soft_gripper")
+        if self.soft_gripper:
+            print(colored("Using soft gripper!", "blue"))
+            self.q_des_gripper = np.array([0., 0.])
+            self.number_of_fingers = 2
+        else:
+            self.q_des_gripper = np.array([1.8, 1.8, 1.8])
+            self.number_of_fingers = 3
+        self.SO_filter = SecondOrderFilter(self.number_of_fingers)
         self.SO_filter.initFilter(self.q_des_gripper,dt)
 
     def resend_robot_program(self):
@@ -28,7 +37,13 @@ class GripperManager():
         ros.sleep(0.1)
 
     def mapToGripperJoints(self, diameter):
-        return (diameter - 22) / (130 - 22) * (-np.pi) + np.pi  # D = 130-> q = 0, D = 22 -> q = 3.14
+        if self.soft_gripper:
+            D0 = 40
+            L = 60
+            delta =0.5*(diameter - D0)
+            return math.atan2(delta, L)
+        else:
+            return (diameter - 22) / (130 - 22) * (-np.pi) + np.pi  # D = 130-> q = 0, D = 22 -> q = 3.14
 
     def getDesGripperJoints(self):
         return self.SO_filter.filter(self.q_des_gripper, self.gripping_duration)
@@ -36,7 +51,7 @@ class GripperManager():
     def move_gripper(self, diameter):
         if not self.real_robot:
             q_finger = self.mapToGripperJoints(diameter)
-            self.q_des_gripper = np.array([q_finger, q_finger, q_finger])
+            self.q_des_gripper = q_finger * np.ones(self.number_of_fingers)
             return
 
         import socket

@@ -13,15 +13,16 @@ from termcolor import colored
 
 class ControllerManager():
     def __init__(self, conf):
+        self.conf = conf
         self.control_type = conf['control_type']
         self.gripper_sim = conf['gripper_sim']
         self.real_robot = conf['real_robot']
         self.number_of_joints = len(conf['joint_names'])
-        self.gm = GripperManager(self.real_robot, conf['dt'])
+
         if  (self.control_type == 'torque'):
-            colored("Controller Manager: torque", "blue")
+            print(colored("Controller Manager: torque", "blue"))
         if (self.control_type == 'position'):
-            colored("Controller Manager: position", "blue")
+            print(colored("Controller Manager: position", "blue"))
 
     def initPublishers(self, robot_name):
         # publisher for ros_impedance_controller
@@ -29,6 +30,8 @@ class ControllerManager():
         # specific publisher for joint_group_pos_controller that publishes only position
         self.pub_reduced_des_jstate = ros.Publisher("/" + robot_name + "/joint_group_pos_controller/command",
                                                     Float64MultiArray, queue_size=10)
+        # instantiate the gripper manager that will read soft gripper param from param server
+        self.gm = GripperManager(self.real_robot, self.conf['dt'])
 
 
 
