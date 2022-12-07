@@ -38,7 +38,6 @@ import tf
 from rospy import Time
 import time
 from base_controllers.components.controller_manager import ControllerManager
-from base_controllers.components.gripper_manager import GripperManager
 
 class Ur5Generic(BaseControllerFixed):
     
@@ -243,7 +242,7 @@ def talker(p):
     if p.real_robot:
         p.startRealRobot()
     else:
-        additional_args = ['gripper:=' + str(p.gripper)]#, 'gui:=false']
+        additional_args = ['gripper:=' + str(p.gripper), 'soft_gripper:=true']#, 'gui:=false']
         p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control, additional_args =additional_args)
 
     # specify xacro location
@@ -290,16 +289,13 @@ def talker(p):
         # in Simulation remember to set gripper_sim : True in params.yaml!
         # if p.time>5.0 and (gripper_on == 0):
         #     print("gripper 30")
-        #     p.controller_manager.gm.move_gripper(30)
+        #     p.controller_manager.gm.move_gripper(10)
         #     gripper_on = 1
         # if (gripper_on == 1) and p.time>10.0:
         #     print("gripper 100")
         #     p.controller_manager.gm.move_gripper(100)
         #     gripper_on = 2
-        # need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
-        # if p.time > 5.0 and not hasattr(p, 'PDset'):
-        #     p.pid.setPDjoint(0, 10, 0, 0)
-        #     p.PDset = True
+        #need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
         #p.controller_manager.sendReference(p.q_des, p.qd_des, p.h)
 
         if p.real_robot:
