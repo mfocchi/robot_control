@@ -6,6 +6,9 @@ Created on Fri Nov  2 16:52:08 2018
 """
 
 from __future__ import print_function
+
+import time
+
 import rospy as ros
 from utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
@@ -52,7 +55,7 @@ class StarbotController(BaseController):
 
     def updateKinematics(self):
         # q is continuously updated
-        # to compute in the base frame  you should put neutral base
+        # to compute in the base frame you should put neutral base
         b_X_w = motionVectorTransform(np.zeros(3), self.b_R_w)
         gen_velocities = np.hstack((b_X_w.dot(self.baseTwistW), self.mapToPinocchio(self.qd)))
         neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.mapToPinocchio(self.q)))
@@ -88,7 +91,7 @@ class StarbotController(BaseController):
         #self.estimateContactForces()
 
     def estimateContactForces(self):
-        # estimate ground reaxtion forces from tau
+        # estimate ground reaction forces from tau
         for leg in range(4):
             try:
                 grf = np.linalg.pinv(self.wJ[leg].T).dot(self.getLegJointTorques(leg, self.h_joints - self.mapToPinocchio(self.tau)))
@@ -122,6 +125,18 @@ class StarbotController(BaseController):
         elif isinstance(legid, int):
             return jointState[legid * 3:legid * 3 + 3]
 
+def quinitic_trajectory(q0, qf, tf, time):
+    a0 = q0
+    a1 = 0
+    a2 = 0
+    a3 = (20 * qf - 20 * q0) / (2 * (tf ** 3))
+    a4 = (30 * q0 - 30 * qf) / (2 * (tf ** 4))
+    a5 = (12 * qf - 12 * q0) / (2 * (tf ** 5))
+
+    pos = a0 + a1*time + a2*(time**2) + a3*(time**3) + a4*(time**4) + a5*(time**5)
+    vel = a1 + 2*a2*time + 3*a3*(time**2) + 4*a4*(time**3) + 5*a5*(time**4)
+
+    return pos
 
 def talker(p):
     p.start()
@@ -135,12 +150,40 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
     p.q_des = np.copy(p.q_des_q0)
+    #p.q_des = np.array([ -0.785, 0.785, 0.785, -0.785, -0.785, 0.785, 0.785, -0.785, 0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
     #p.setGravity(0.)
 
+    # simulation parameter
+    start_time_simulation = time.time()
+    start_time_motion=8
+    motion_time=6
+
     while not ros.is_shutdown():
+        act_time = time.time()-start_time_simulation
+
         # update the kinematics
         p.updateKinematics()
         p.tau_ffwd = 1*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
+
+        # if  act_time <= start_time_motion:
+        #     p.q_des = np.copy(p.q_des_q0)
+        # elif start_time_motion <= act_time and act_time <= start_time_motion + motion_time:
+        #     p.q_des = np.array([ 0,0,0,0,
+        #                          quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+        #                          quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+        #                          quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+        #                          quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+        #                          0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
+        # elif start_time_motion + motion_time <= act_time and act_time <= start_time_motion + motion_time*2:
+        #     p.q_des = np.array([ quinitic_trajectory(0, -0.45, motion_time, act_time-start_time_motion-motion_time),
+        #                          quinitic_trajectory(0, 0.45, motion_time, act_time-start_time_motion-motion_time),
+        #                          quinitic_trajectory(0, 0.45, motion_time, act_time-start_time_motion-motion_time),
+        #                          quinitic_trajectory(0, -0.45, motion_time, act_time-start_time_motion-motion_time),
+        #                          -0.785,0.785,0.785,-0.785,
+        #                          0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
+        # else:
+        #     p.q_des=p.q_des
+
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
         # log variables
