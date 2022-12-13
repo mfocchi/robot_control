@@ -154,35 +154,35 @@ def talker(p):
     #p.setGravity(0.)
 
     # simulation parameter
-    start_time_simulation = time.time()
-    start_time_motion=8
-    motion_time=6
+    start_time_simulation = p.time
+    start_time_motion=1
+    motion_time=3
 
     while not ros.is_shutdown():
-        act_time = time.time()-start_time_simulation
+        act_time = p.time-start_time_simulation
 
         # update the kinematics
         p.updateKinematics()
-        p.tau_ffwd = 1*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
+        p.tau_ffwd = 0.*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
 
-        # if  act_time <= start_time_motion:
-        #     p.q_des = np.copy(p.q_des_q0)
-        # elif start_time_motion <= act_time and act_time <= start_time_motion + motion_time:
-        #     p.q_des = np.array([ 0,0,0,0,
-        #                          quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-        #                          quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-        #                          quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-        #                          quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-        #                          0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
-        # elif start_time_motion + motion_time <= act_time and act_time <= start_time_motion + motion_time*2:
-        #     p.q_des = np.array([ quinitic_trajectory(0, -0.45, motion_time, act_time-start_time_motion-motion_time),
-        #                          quinitic_trajectory(0, 0.45, motion_time, act_time-start_time_motion-motion_time),
-        #                          quinitic_trajectory(0, 0.45, motion_time, act_time-start_time_motion-motion_time),
-        #                          quinitic_trajectory(0, -0.45, motion_time, act_time-start_time_motion-motion_time),
-        #                          -0.785,0.785,0.785,-0.785,
-        #                          0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
-        # else:
-        #     p.q_des=p.q_des
+        if  act_time <= start_time_motion:
+            p.q_des = np.copy(p.q_des_q0)
+        elif start_time_motion <= act_time and act_time <= start_time_motion + motion_time:
+            p.q_des = np.array([ 0,0,0,0,
+                                 quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+                                 quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+                                 quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+                                 quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+                                 0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
+        elif start_time_motion + motion_time <= act_time and act_time <= start_time_motion + motion_time*2:
+            p.q_des = np.array([ quinitic_trajectory(0, -0.45, motion_time, act_time-start_time_motion-motion_time),
+                                 quinitic_trajectory(0, 0.45, motion_time, act_time-start_time_motion-motion_time),
+                                 quinitic_trajectory(0, 0.45, motion_time, act_time-start_time_motion-motion_time),
+                                 quinitic_trajectory(0, -0.45, motion_time, act_time-start_time_motion-motion_time),
+                                 -0.785,0.785,0.785,-0.785,
+                                 0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
+        else:
+            p.q_des=p.q_des
 
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
