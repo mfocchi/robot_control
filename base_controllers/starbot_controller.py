@@ -156,7 +156,7 @@ def talker(p):
     # simulation parameter
     start_time_simulation = p.time
     start_time_motion=1
-    motion_time=3
+    motion_time=2
     wheel_pos = 0
     while not ros.is_shutdown():
         act_time = p.time-start_time_simulation
@@ -176,6 +176,9 @@ def talker(p):
                                  0.0, 0.0, 0.0, 0.0,
                                  0.0, 0.0, 0.0, 0.0,
                                  0., 0.0, 0., 0. ])
+            id = p.robot.model.getFrameId('lf_wheel')
+            id = p.robot.model.frames[id].parent
+            print(p.robot.data.oMi[id])
         elif start_time_motion + motion_time <= act_time and act_time <= start_time_motion + motion_time*2:
             p.q_des = np.array([ -0.785, 0.785, 0.785, -0.785,
                                  0.0, 0.0, 0.0, 0.0,
@@ -186,12 +189,12 @@ def talker(p):
                                  quinitic_trajectory(0, -1.57, motion_time, act_time-start_time_motion-motion_time),
                                   0., 0.0, 0., 0.])
         else:
-            wheel_pos += 0.002
+            wheel_pos += 0.01
             p.q_des= np.array([ -0.785, 0.785, 0.785, -0.785,
                                  0.0, 0.0, 0.0, 0.0,
                                  0.0, 0.0, 0.0, 0.0,
                                  1.57, 0., 0.,-1.57,
-                                 -wheel_pos, wheel_pos,wheel_pos, -wheel_pos])
+                                 -wheel_pos, wheel_pos, -wheel_pos, -wheel_pos])
 
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
