@@ -38,9 +38,12 @@ import tf
 from rospy import Time
 import time
 from base_controllers.components.controller_manager import ControllerManager
+from sensor_msgs import point_cloud2
+from sensor_msgs.msg import PointCloud2
+
 
 class Ur5Generic(BaseControllerFixed):
-    
+
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
         self.real_robot = conf.robot_params[self.robot_name]['real_robot']
@@ -134,6 +137,8 @@ class Ur5Generic(BaseControllerFixed):
         self.utils = Utils()
         self.utils.putIntoGlobalParamServer("gripper_sim", self.gripper)
 
+        self.sub_pointcloud = ros.Subscriber("/ur5/zed_node/point_cloud/cloud_registered", PointCloud2,   callback=self.receive_pointcloud, queue_size=1)
+
     def _receive_ftsensor(self, msg):
         contactForceTool0 = np.zeros(3)
         contactMomentTool0 = np.zeros(3)
@@ -168,6 +173,10 @@ class Ur5Generic(BaseControllerFixed):
         # this is expressed in the base frame
         self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
         self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).rotation
+        # camera frame
+        self.x_c= self.robot.framePlacement(self.q, self.robot.model.getFrameId("zed2_left_camera_optical_frame")).translation
+        self.w_R_c = self.robot.framePlacement(self.q, self.robot.model.getFrameId("zed2_left_camera_optical_frame")).rotation
+
         # compute jacobian of the end effector in the base or world frame (they are aligned so in terms of velocity they are the same)
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
@@ -239,6 +248,15 @@ class Ur5Generic(BaseControllerFixed):
                     p.controller_manager.gm.move_gripper(100)
                 break
 
+    def receive_pointcloud(self, msg):
+        #in the zed2_left_camera_optical_frame
+        points_list = []
+        for data in point_cloud2.read_points(msg, field_names=['x','y','z'], skip_nans=False, uvs=[(640, 360)]):
+            points_list.append([data[0], data[1], data[2]])
+        #print("Data Optical frame: ", points_list)
+        pointW = self.w_R_c.dot(points_list[0]) + self.x_c + self.base_offset
+        #print("Data World frame: ", pointW)
+
 def talker(p):
     p.start()
     if p.real_robot:
@@ -268,7 +286,11 @@ def talker(p):
 
     # homing procedure
     if p.homing_flag:
-        p.homing_procedure(conf.robot_params[p.robot_name]['dt'], 0.6, conf.robot_params[p.robot_name]['q_0'], rate)
+        if p.real_robot:
+            v_des = 0.2
+        else:
+            v_des = 0.6
+        p.homing_procedure(conf.robot_params[p.robot_name]['dt'], v_des, conf.robot_params[p.robot_name]['q_0'], rate)
 
     gripper_on = 0
 
