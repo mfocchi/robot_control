@@ -88,16 +88,21 @@ class StarbotController(BaseController):
         self.h_joints = self.h[6:]
 
         # compute contact forces (TODO fix this torques are a bit strange)
-        #self.estimateContactForces()
+        self.estimateContactForces()
 
     def estimateContactForces(self):
         # estimate ground reaction forces from tau
         for leg in range(4):
             try:
+                # print(self.wJ[leg])
+                # print(self.wJ[leg].T)
                 grf = np.linalg.pinv(self.wJ[leg].T).dot(self.getLegJointTorques(leg, self.h_joints - self.mapToPinocchio(self.tau)))
             except np.linalg.linalg.LinAlgError as error:
                 grf = np.zeros(3)
             self.setLegJointState(leg, grf, self.grForcesW)
+
+            # print(grf)
+
             if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
                 self.contact_state[leg] = True
             else:
@@ -138,6 +143,9 @@ def quinitic_trajectory(q0, qf, tf, time):
 
     return pos
 
+def wheel_arc_carState(leg_length):
+    return leg_length - leg_length/(np.sqrt(2))
+
 def talker(p):
     p.start()
     #p.startSimulator(world_name = 'starbot_tunnel.world')
@@ -156,8 +164,10 @@ def talker(p):
     # simulation parameter
     start_time_simulation = p.time
     start_time_motion=1
-    motion_time=2
+    motion_time = wheel_motion_time=2
     wheel_pos = 0
+    state_flag=0
+
     while not ros.is_shutdown():
         act_time = p.time-start_time_simulation
 
@@ -166,19 +176,46 @@ def talker(p):
         p.tau_ffwd = 0.*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
 
         if  act_time <= start_time_motion:
+            if state_flag == 0:
+                id = p.robot.model.getFrameId('lf_wheel')
+                id = p.robot.model.frames[id].parent
+                wheel_arc_distance = wheel_arc_carState(np.array(p.robot.data.oMi[id])[1][3])
+                print(wheel_arc_distance)
+                state_flag = 1
             p.q_des = np.copy(p.q_des_q0)
         elif start_time_motion <= act_time and act_time <= start_time_motion + motion_time:
-            p.q_des = np.array([ quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-                                 quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-                                 quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-                                 quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-                                 0.0, 0.0, 0.0, 0.0,
-                                 0.0, 0.0, 0.0, 0.0,
-                                 0.0, 0.0, 0.0, 0.0,
-                                 0., 0.0, 0., 0. ])
+
+            if (p.contact_state[0] == True):
+                p.q_des = np.array([quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+                                    quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+                                    0.0, 0.0, 0.0, 0.0,
+                                    0.0, 0.0, 0.0, 0.0,
+                                    0.0, 0.0, 0.0, 0.0,
+                                    quinitic_trajectory(0, -wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time),
+                                    quinitic_trajectory(0, wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time),
+                                    quinitic_trajectory(0, wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time),
+                                    quinitic_trajectory(0, -wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time)])
+
+            else:
+                p.q_des = np.array([quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
+                                    quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
+                                    0.0, 0.0, 0.0, 0.0,
+                                    0.0, 0.0, 0.0, 0.0,
+                                    0.0, 0.0, 0.0, 0.0,
+                                    0., 0.0, 0., 0.])
+                wheel_motion_time = motion_time - (act_time - start_time_motion)
             id = p.robot.model.getFrameId('lf_wheel')
             id = p.robot.model.frames[id].parent
+            # leg 0 touch ground
+            if(p.contact_state[0] == True):
+
+                print("check")
             print(p.robot.data.oMi[id])
+            print(np.array(p.robot.data.oMi[id])[1][3])
         elif start_time_motion + motion_time <= act_time and act_time <= start_time_motion + motion_time*2:
             p.q_des = np.array([ -0.785, 0.785, 0.785, -0.785,
                                  0.0, 0.0, 0.0, 0.0,
