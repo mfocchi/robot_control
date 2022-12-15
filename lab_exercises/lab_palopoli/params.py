@@ -23,7 +23,7 @@ robot_params['myrobot'] ={'dt': 0.001,
 robot_params['ur5'] ={'dt': 0.001,
                        'kp': np.array([300, 300, 300,30,30,1]),
                        'kd':  np.array([20,20,20,5, 5,0.5]),
-                       'q_0':  np.array([ -0.32,-0.78, -2.56,-1.63, -1.57, -1.0]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
+                       'q_0':  np.array([ -0.32,-0.78, -2.56,-1.63, -1.57, 3.49]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
                        'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
                        'ee_frame': 'tool0',
                        'control_mode': 'point', # 'trajectory','point'
