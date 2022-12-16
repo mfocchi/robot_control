@@ -48,7 +48,7 @@ class GripperManager():
     def getDesGripperJoints(self):
         return self.SO_filter.filter(self.q_des_gripper, self.gripping_duration)
 
-    def move_gripper(self, diameter):
+    def move_gripper(self, diameter = 30, status = 'close'):
         if not self.real_robot:
             q_finger = self.mapToGripperJoints(diameter)
             self.q_des_gripper = q_finger * np.ones(self.number_of_fingers)
@@ -66,37 +66,51 @@ class GripperManager():
         except:
             raise Exception("Cannot connect to end-effector socket") from None
         sock.settimeout(None)
-        scripts_path = rospkg.RosPack().get_path('ur_description') + '/gripper/scripts'
+        scripts_path = rospkg.RosPack().get_path('ur_description') + '/gripper/scripts/'
 
-        onrobot_script = scripts_path + "/onrobot_superminimal.script"
-        file = open(onrobot_script, "rb")  # Robotiq Gripper
-        lines = file.readlines()
-        file.close()
+        if self.soft_gripper:
+            if diameter > 30.:
+                script = scripts_path + 'soft_open.script'
+            else:
+                script = scripts_path + 'soft_close.script'
 
-        tool_index = 0
-        blocking = True
-        cmd_string = f"tfg_release({diameter},  tool_index={tool_index}, blocking={blocking})"
+            f = open(script, "rb")
+            l = f.read(2024)
+            while (l):
+                sock.send(l)
+                l = f.read(2024)
+            f.close()
+            self.resend_robot_program()
+        else:
+            onrobot_script = scripts_path + "/onrobot_superminimal.script"
+            file = open(onrobot_script, "rb")  # Robotiq Gripper
+            lines = file.readlines()
+            file.close()
 
-        line_number_to_add = 446
+            tool_index = 0
+            blocking = True
+            cmd_string = f"tfg_release({diameter},  tool_index={tool_index}, blocking={blocking})"
 
-        new_lines = lines[0:line_number_to_add]
-        new_lines.insert(line_number_to_add + 1, str.encode(cmd_string))
-        new_lines += lines[line_number_to_add::]
+            line_number_to_add = 446
 
-        offset = 0
-        buffer = 2024
-        file_to_send = b''.join(new_lines)
+            new_lines = lines[0:line_number_to_add]
+            new_lines.insert(line_number_to_add + 1, str.encode(cmd_string))
+            new_lines += lines[line_number_to_add::]
 
-        if len(file_to_send) < buffer:
-            buffer = len(file_to_send)
-        data = file_to_send[0:buffer]
-        while data:
-            sock.send(data)
-            offset += buffer
-            if len(file_to_send) < offset + buffer:
-                buffer = len(file_to_send) - offset
-            data = file_to_send[offset:offset + buffer]
-        sock.close()
+            offset = 0
+            buffer = 2024
+            file_to_send = b''.join(new_lines)
+
+            if len(file_to_send) < buffer:
+                buffer = len(file_to_send)
+            data = file_to_send[0:buffer]
+            while data:
+                sock.send(data)
+                offset += buffer
+                if len(file_to_send) < offset + buffer:
+                    buffer = len(file_to_send) - offset
+                data = file_to_send[offset:offset + buffer]
+            sock.close()
 
         print("Gripper moved, now resend robot program")
         self.resend_robot_program()
