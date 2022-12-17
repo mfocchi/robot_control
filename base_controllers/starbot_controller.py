@@ -17,6 +17,7 @@ from base_controller import BaseController
 from base_controllers.utils.common_functions import plotCoM, plotJoint
 import pinocchio as pin
 import  params as conf
+import numpy as np
 robotName = "starbot"
 
 class StarbotController(BaseController):
@@ -146,6 +147,78 @@ def quinitic_trajectory(q0, qf, tf, time):
 def wheel_arc_carState(leg_length):
     return leg_length - leg_length/(np.sqrt(2))
 
+def generate_q(joints):
+    return np.array([joints["shoulder"][0],
+                     joints["shoulder"][1],
+                     joints["shoulder"][2],
+                     joints["shoulder"][3],
+                     joints["upper_leg"][0],
+                     joints["upper_leg"][1],
+                     joints["upper_leg"][2],
+                     joints["upper_leg"][3],
+                     joints["lower_leg"][0],
+                     joints["lower_leg"][1],
+                     joints["lower_leg"][2],
+                     joints["lower_leg"][3],
+                     joints["pre_wheel"][0],
+                     joints["pre_wheel"][1],
+                     joints["pre_wheel"][2],
+                     joints["pre_wheel"][3],
+                     joints["wheel"][0],
+                     joints["wheel"][1],
+                     joints["wheel"][2],
+                     joints["wheel"][3]])
+
+def initialization_state(p):
+    # TODO add the other 3 legs
+    id = p.robot.model.getFrameId('lf_wheel')
+    id = p.robot.model.frames[id].parent
+    wheel_arc_distance = wheel_arc_carState(np.array(p.robot.data.oMi[id])[1][3])
+    # print(wheel_arc_distance)
+    return np.copy(p.q_des_q0), wheel_arc_distance
+
+def initTocar_state(p, rate, joints, initTocar_motion_time, act_time, shoulder_motion, wheel_arc_distance, wheel_motion):
+    if act_time < initTocar_motion_time/2:
+        joints["shoulder"][0] = quinitic_trajectory(0, -shoulder_motion, initTocar_motion_time / 2, act_time)
+        joints["shoulder"][1] = quinitic_trajectory(0, shoulder_motion, initTocar_motion_time / 2, act_time)
+        joints["shoulder"][2] = quinitic_trajectory(0, shoulder_motion, initTocar_motion_time / 2, act_time)
+        joints["shoulder"][3] = quinitic_trajectory(0, -shoulder_motion, initTocar_motion_time / 2, act_time)
+
+        if p.contact_state[0] == True:
+            step = (wheel_arc_distance-joints["wheel"][1])/(((initTocar_motion_time / 2)-act_time)/float(rate))
+
+            joints["wheel"][0] -= step
+            joints["wheel"][1] += step
+            joints["wheel"][2] += step
+            joints["wheel"][3] -= step
+
+            q_des = generate_q(joints)
+
+        else:
+            q_des = generate_q(joints)
+    else:
+        joints["pre_wheel"][0] = quinitic_trajectory(0, -wheel_motion, initTocar_motion_time / 2, act_time - (initTocar_motion_time / 2))
+        joints["pre_wheel"][1] = quinitic_trajectory(0, 0., initTocar_motion_time / 2, act_time - (initTocar_motion_time / 2))
+        joints["pre_wheel"][2] = quinitic_trajectory(0, 0., initTocar_motion_time / 2, act_time - (initTocar_motion_time / 2))
+        joints["pre_wheel"][3] = quinitic_trajectory(0, -wheel_motion, initTocar_motion_time / 2, act_time - (initTocar_motion_time / 2))
+        q_des = generate_q(joints)
+
+    return joints, q_des
+
+
+def approacing_state(p, joints):
+    joints["wheel"][0] += 0.01
+    joints["wheel"][1] += 0.01
+    joints["wheel"][2] -= 0.01
+    joints["wheel"][3] -= 0.01
+    q_des = generate_q(joints)
+
+    return joints, q_des
+
+#def carTostar_state():
+
+#def climbing_state():
+
 def talker(p):
     p.start()
     #p.startSimulator(world_name = 'starbot_tunnel.world')
@@ -158,15 +231,23 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
     p.q_des = np.copy(p.q_des_q0)
-    #p.q_des = np.array([ -0.785, 0.785, 0.785, -0.785, -0.785, 0.785, 0.785, -0.785, 0.0, 0.0, 0.0, 0.0, 0., 0., 0., 0.0, 0., 0., 0., 0.0 ])
     #p.setGravity(0.)
+
+    # joint values
+    joints = {
+        "shoulder" : np.zeros(4),
+        "upper_leg" : np.zeros(4),
+        "lower_leg" : np.zeros(4),
+        "pre_wheel" : np.zeros(4),
+        "wheel": np.zeros(4)
+    }
 
     # simulation parameter
     start_time_simulation = p.time
     start_time_motion=1
-    motion_time = wheel_motion_time=2
-    wheel_pos = 0
+    initTocar_motion_time = 4
     state_flag=0
+    wheel_arc_distance=0
 
     while not ros.is_shutdown():
         act_time = p.time-start_time_simulation
@@ -175,63 +256,40 @@ def talker(p):
         p.updateKinematics()
         p.tau_ffwd = 0.*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
 
-        if  act_time <= start_time_motion:
-            if state_flag == 0:
-                id = p.robot.model.getFrameId('lf_wheel')
-                id = p.robot.model.frames[id].parent
-                wheel_arc_distance = wheel_arc_carState(np.array(p.robot.data.oMi[id])[1][3])
-                print(wheel_arc_distance)
-                state_flag = 1
-            p.q_des = np.copy(p.q_des_q0)
-        elif start_time_motion <= act_time and act_time <= start_time_motion + motion_time:
-
-            if (p.contact_state[0] == True):
-                p.q_des = np.array([quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-                                    quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-                                    0.0, 0.0, 0.0, 0.0,
-                                    0.0, 0.0, 0.0, 0.0,
-                                    0.0, 0.0, 0.0, 0.0,
-                                    quinitic_trajectory(0, -wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time),
-                                    quinitic_trajectory(0, wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time),
-                                    quinitic_trajectory(0, wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time),
-                                    quinitic_trajectory(0, -wheel_arc_distance, wheel_motion_time, act_time - start_time_motion - wheel_motion_time)])
-
+        # initialization phase
+        if state_flag == 0:
+            if act_time <= start_time_motion:
+                ret = initialization_state(p)
+                p.q_des = ret[0]
+                wheel_arc_distance = ret[1]
             else:
-                p.q_des = np.array([quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-                                    quinitic_trajectory(0, 0.785, motion_time, act_time - start_time_motion),
-                                    quinitic_trajectory(0, -0.785, motion_time, act_time - start_time_motion),
-                                    0.0, 0.0, 0.0, 0.0,
-                                    0.0, 0.0, 0.0, 0.0,
-                                    0.0, 0.0, 0.0, 0.0,
-                                    0., 0.0, 0., 0.])
-                wheel_motion_time = motion_time - (act_time - start_time_motion)
-            id = p.robot.model.getFrameId('lf_wheel')
-            id = p.robot.model.frames[id].parent
-            # leg 0 touch ground
-            if(p.contact_state[0] == True):
+                state_flag = 1
+                start_time_simulation = p.time
 
-                print("check")
-            print(p.robot.data.oMi[id])
-            print(np.array(p.robot.data.oMi[id])[1][3])
-        elif start_time_motion + motion_time <= act_time and act_time <= start_time_motion + motion_time*2:
-            p.q_des = np.array([ -0.785, 0.785, 0.785, -0.785,
-                                 0.0, 0.0, 0.0, 0.0,
-                                 0.0, 0.0, 0.0, 0.0,
-                                 quinitic_trajectory(0, 1.57, motion_time, act_time-start_time_motion-motion_time),
-                                 quinitic_trajectory(0, 0.0, motion_time, act_time-start_time_motion-motion_time),
-                                 quinitic_trajectory(0, 0.0, motion_time, act_time-start_time_motion-motion_time),
-                                 quinitic_trajectory(0, -1.57, motion_time, act_time-start_time_motion-motion_time),
-                                  0., 0.0, 0., 0.])
-        else:
-            wheel_pos += 0.01
-            p.q_des= np.array([ -0.785, 0.785, 0.785, -0.785,
-                                 0.0, 0.0, 0.0, 0.0,
-                                 0.0, 0.0, 0.0, 0.0,
-                                 1.57, 0., 0.,-1.57,
-                                 -wheel_pos, wheel_pos, -wheel_pos, -wheel_pos])
+        # movement from initial position to car state
+        elif state_flag == 1:
+            if act_time <= initTocar_motion_time:
+                ret = initTocar_state(p, conf.robot_params[p.robot_name]['dt'], joints, initTocar_motion_time, act_time, shoulder_motion = 0.785, wheel_arc_distance = wheel_arc_distance, wheel_motion = 1.57)
+                p.q_des = ret[1]
+                joints = ret[0]
+            else:
+                state_flag = 2
+                start_time_simulation = p.time
+
+            # id = p.robot.model.getFrameId('lf_wheel')
+            # id = p.robot.model.frames[id].parent
+            # # leg 0 touch ground
+            # if(p.contact_state[0] == True):
+            #     print("check")
+            # print(p.robot.data.oMi[id])
+            # print(np.array(p.robot.data.oMi[id])[1][3])
+
+        # tunnel approaching (still lo implement!!!!)
+        elif state_flag == 2:
+            p.q_des = p.q_des
+            ret = approacing_state(p, joints)
+            p.q_des = ret[1]
+            joints = ret[0]
 
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
