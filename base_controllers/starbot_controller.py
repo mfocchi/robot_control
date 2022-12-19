@@ -18,6 +18,7 @@ from base_controllers.utils.common_functions import plotCoM, plotJoint
 import pinocchio as pin
 import  params as conf
 import numpy as np
+from base_controllers.utils.math_tools import cross_mx
 robotName = "starbot"
 
 class StarbotController(BaseController):
@@ -26,6 +27,7 @@ class StarbotController(BaseController):
         super().__init__(robot_name=robot_name)
         self.freezeBaseFlag = False
         print("Initialized starbot controller---------------------------------------------------------------")
+        # this is consistent with Pinocchio
         self.leg_map = {
             "LF": 0,
             "LH": 1,
@@ -36,23 +38,42 @@ class StarbotController(BaseController):
         super().initVars()
         ## add your variables to initialize here
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
+        self.n_feet = len(conf.robot_params[self.robot_name]['ee_frames'])
+        self.NEMatrix = np.zeros([6, 3 * self.n_feet])  # Newton-Euler matrix
+        self.grForcesW_des = np.empty(3 * self.n_feet) * np.nan
+        self.comPoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
                 ## add your logs here
-                pass
+                self.comPoseW_log[:, self.log_counter] = self.comPoseW
             super().logData()
 
-    def mapToPinocchio(self, q):
-        q_pin=np.empty((len(self.joint_names)))*np.nan
+    def mapToPinocchio(self, vec):
+        vec_pin=np.empty((len(self.joint_names)))*np.nan
         joint_idx = 0
+        # order of joints in pinocchio is  lf XX, lh XX., rf XX, rh XX whis is different from our joint names
         for pin_fr in self.robot.model.names:
             for fr in self.joint_names:
                 if pin_fr == fr:
-                    q_pin[joint_idx] = q[self.joint_names.index(fr)]
+                    vec_pin[joint_idx] = vec[self.joint_names.index(fr)]
                     joint_idx+=1
-        return q_pin
+        return vec_pin
 
+    def mapFromPinocchio(self, vec_pin):
+        pin_joint_names = []
+        for f in self.robot.model.names:
+            if not ( f == 'universe') and not ( f == 'floating_base_joint'):
+                pin_joint_names.append(f)
+        vec=np.empty((len(self.joint_names)))*np.nan
+        joint_idx = 0
+        # order of joints in pinocchio is  lf XX, lh XX., rf XX, rh XX whis is different from our joint names
+        for fr in self.joint_names:
+            for pin_fr in pin_joint_names:
+                if fr == pin_fr:
+                    vec[joint_idx] = vec_pin[pin_joint_names.index(pin_fr)]
+                    joint_idx+=1
+        return vec
 
     def updateKinematics(self):
         # q is continuously updated
@@ -76,7 +97,7 @@ class StarbotController(BaseController):
                     self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
 
         for leg in range(4):
-            leg_joints = range(6 + self.u.mapIndexToRos(leg) * 5, 6 + self.u.mapIndexToRos(leg) * 5 + 5)
+            leg_joints = range(6 + leg* 5, 6 + leg * 5 + 5)
             self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate, self.robot.model.getFrameId(ee_frames[leg]),
                                                    pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, leg_joints]
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
@@ -88,6 +109,9 @@ class StarbotController(BaseController):
         self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities)
         self.h_joints = self.h[6:]
 
+        self.comPoseW = np.copy(self.basePoseW)
+        self.comPoseW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.robot.robotComW(configuration)
+
         # compute contact forces (TODO fix this torques are a bit strange)
         self.estimateContactForces()
 
@@ -97,39 +121,85 @@ class StarbotController(BaseController):
             try:
                 # print(self.wJ[leg])
                 # print(self.wJ[leg].T)
-                grf = np.linalg.pinv(self.wJ[leg].T).dot(self.getLegJointTorques(leg, self.h_joints - self.mapToPinocchio(self.tau)))
+                # you need to extract the torque of each leg in the convention of Pinocchio cause the Jacobian assumes that
+                tau_leg_without_wheel = self.getLegJointTorques(leg, self.h_joints - self.mapToPinocchio(self.tau))[:-1]
+                grf = np.linalg.pinv(self.wJ[leg][:,:-1].T).dot(tau_leg_without_wheel)
             except np.linalg.linalg.LinAlgError as error:
                 grf = np.zeros(3)
-            self.setLegJointState(leg, grf, self.grForcesW)
-
-            # print(grf)
-
+            self.setLegContactForce(leg, grf, self.grForcesW)
+            # TODO update this in the tunnel with the wheelTobase vector
             if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
                 self.contact_state[leg] = True
             else:
                 self.contact_state[leg] = False
             if self.use_ground_truth_contacts:
-                grfLocal_gt = self.getLegJointState(leg,  self.grForcesLocal_gt)
+                grfLocal_gt = self.getLegContactForce(leg,  self.grForcesLocal_gt)
+                # rotate the vector because it is in the lowerleg frame
                 grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
-                self.getLegJointState(leg, grf_gt, self.grForcesW_gt)
+                self.setLegContactForce(leg, grf_gt, self.grForcesW_gt)
 
-    def getLegJointTorques(self, legid,  jointState):
+    def setLegJointTorques(self, legid,  input, torques):
         if isinstance(legid, str):
-            return jointState[self.leg_map[legid]*5:self.leg_map[legid]*5+5]
+            torques[self.leg_map[legid] * 5:self.leg_map[legid] * 5 + 5] = input
         elif isinstance(legid, int):
-            return jointState[legid * 5:legid * 5 + 5]
+            torques[legid * 5:legid * 5 + 5] = input
 
-    def setLegJointState(self, legid,  input, jointState):
+    def getLegJointTorques(self, legid,  torques):
         if isinstance(legid, str):
-            jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3] = input
+            return torques[self.leg_map[legid]*5:self.leg_map[legid]*5+5]
         elif isinstance(legid, int):
-            jointState[legid*3:legid*3+3] = input
+            return torques[legid * 5:legid * 5 + 5]
 
-    def getLegJointState(self, legid,  jointState):
+    def setLegContactForce(self, legid,  input, forces):
         if isinstance(legid, str):
-            return jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3]
+            forces[self.leg_map[legid]*3:self.leg_map[legid]*3+3] = input
         elif isinstance(legid, int):
-            return jointState[legid * 3:legid * 3 + 3]
+            forces[legid*3:legid*3+3] = input
+
+    def getLegContactForce(self, legid,  forces):
+        if isinstance(legid, str):
+            return forces[self.leg_map[legid]*3:self.leg_map[legid]*3+3]
+        elif isinstance(legid, int):
+            return forces[legid * 3:legid * 3 + 3]
+
+    # comoute gravity torques assuming gravity is applied to com
+    def computeGravityTorques(self, ee_frames):
+        util = Utils()
+
+        # compute gravity wrench
+        Wg = np.zeros(6)
+        mg = self.robot.robotMass * self.robot.model.gravity.vector[:3]
+        Wg[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = -mg
+
+        # clean the matrix
+        self.NEMatrix[:, :] = 0.
+        # wrench = NEMatrix @ grfs
+        for leg in range(len(ee_frames)):
+            if self.contact_state[leg]:
+                start_col = 3 * leg
+                end_col = 3 * (leg + 1)
+                # ---> linear part
+                # identity matrix (I avoid to rewrite zeros)
+                self.NEMatrix[self.u.sp_crd["LX"], start_col] = 1.
+                self.NEMatrix[self.u.sp_crd["LY"], start_col + 1] = 1.
+                self.NEMatrix[self.u.sp_crd["LZ"], start_col + 2] = 1.
+                # ---> angular part
+                # all in a function
+                self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3, start_col:end_col] = \
+                    pin.skew(self.W_contacts[leg] - self.u.linPart(self.comPoseW))
+
+        # Map the desired wrench to grf (note the vector is 12D and is ee_frames convention)
+        self.grForcesW_des = np.linalg.pinv(self.NEMatrix, 1e-06) @ Wg
+
+        # we want to map grfs into torques only considering the joint before the wheel, so I select the first 4 columns of the Jacobian
+        pin_gravity_torques = np.empty(20)
+        for leg in range(len(ee_frames)):
+            # note tau leg has 5 elements
+            tau_leg = -self.wJ[leg].T @ self.getLegContactForce(leg, self.grForcesW_des)
+            # we remove the torque on the wheel
+            tau_leg [4] = 0.0
+            self.setLegJointTorques(leg, tau_leg, pin_gravity_torques)
+        return self.mapFromPinocchio(pin_gravity_torques)
 
 def quinitic_trajectory(q0, qf, tf, time):
     a0 = q0
@@ -255,6 +325,9 @@ def talker(p):
         # update the kinematics
         p.updateKinematics()
         p.tau_ffwd = 0.*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
+        if p.time >3:
+            p.tau_ffwd = p.computeGravityTorques(conf.robot_params[p.robot_name]['ee_frames'])
+
 
         # initialization phase
         if state_flag == 0:
@@ -298,29 +371,20 @@ def talker(p):
 
         # plot actual (green) and desired (blue) contact forces
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.getLegJointState(leg, p.grForcesW / (6 * p.robot.robot_mass)),
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg] * p.getLegContactForce(leg, p.grForcesW / (6 * p.robot.robot_mass)),
                                 "green")
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg] * p.getLegContactForce(leg, p.grForcesW_des / (6 * p.robot.robot_mass)),
+                                "blue")
+
             p.ros_pub.add_marker(p.W_contacts[leg], radius=0.1)
             if (p.use_ground_truth_contacts):
-                p.ros_pub.add_arrow(p.W_contacts[leg], p.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)),
+                p.ros_pub.add_arrow(p.W_contacts[leg], p.getLegContactForce(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)),
                                     "red")
         p.ros_pub.publishVisual()
 
         # wait for synconization of the control loop
         rate.sleep()
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
-
-        # stops the while loop if  you prematurely hit CTRL+C
-        if ros.is_shutdown():
-            print("Shutting Down")
-            break
-
-            # restore PD when finished
-    p.pid.setPDs(conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.0)
-    ros.sleep(1.0)
-    print("Shutting Down")
-    ros.signal_shutdown("killed")
-    p.deregister_node()
 
 if __name__ == '__main__':
 
@@ -333,5 +397,5 @@ if __name__ == '__main__':
         if conf.plotting:
             plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
                       p.tau_ffwd_log, joint_names=p.joint_names)
-
+            plotCoM('position', 1, p.time_log, basePoseW=p.basePoseW_log, title='base lin/ang position')
 
