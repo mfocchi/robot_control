@@ -391,6 +391,15 @@ class Controller(BaseController):
             self.use_ground_truth_contacts = False
 
         self.start()                               # as a thread
+
+        self.go0_conf = 'home'
+        if additional_args is not None:
+            for arg in additional_args:
+                if 'go0_conf:=' in arg:
+                    self.go0_conf = arg.replace('go0_conf:=', '')
+
+
+
         self.startSimulator(world_name, additional_args)            # run gazebo
         if world_name is None:
             self.world_name_str = ''
@@ -702,21 +711,7 @@ class Controller(BaseController):
 
 
 
-    def startupProcedure(self, check_contacts=True):
-        # self.pid = PidManager(self.joint_names)
-        # if self.real_robot:
-        #     self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
-        #                          conf.robot_params[self.robot_name]['kd_real'],
-        #                          np.zeros(self.robot.na))
-        # else:
-        #     self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
-        #                          conf.robot_params[self.robot_name]['kd'],
-        #                          np.zeros(self.robot.na))
-        # while True:
-        #     self.tau_ffwd[6] = 4.
-        #     self.tau_ffwd[9] = 4.
-        #     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-        #     self.rate.sleep()
+    def startupProcedure(self):
         ros.sleep(.5)
         print(colored("Starting up", "blue"))
         if self.robot_name == 'hyq':
@@ -727,11 +722,11 @@ class Controller(BaseController):
         # if self.real_robot:
         #     if input('press ENTER to continue/any key to STOP') != '':
         #         exit(0)
-        # the robot must start in fold configuration
-        if self.real_robot:
-            self.q_des = self.q.copy()
-        else:
-            self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
+        self.q_des = self.q.copy()
+        # if self.real_robot:
+        #     self.q_des = self.q.copy()
+        # else:
+        #     self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
         self.pid = PidManager(self.joint_names)
         if self.real_robot:
             self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
@@ -747,52 +742,64 @@ class Controller(BaseController):
             ros.sleep(0.01)
 
 
-        # try:
-        #     while not ros.is_shutdown():
-        #         print('q =     ', self.q)
-        #         print('q_des = ', self.q_des)
-        #         self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-        #         self.rate.sleep()
-        # except (ros.ROSInterruptException, ros.service.ServiceException):
-        #     ros.signal_shutdown("killed")
-        #     p.deregister_node()
-        # finally:
-        #     sys.exit(-1)
 
-        # IMU BIAS ESTIMATION
-        if self.real_robot and self.robot_name == 'go1':
-            # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
-            while self.imu_utils.counter < self.imu_utils.timeout:
+        if self.go0_conf == 'standUp':
+            self._startup_from_stand_up()
+        elif self.go0_conf == 'standDown':
+            self._startup_from_stand_down()
+
+
+
+    def _startup_from_stand_up(self):
+        self.q_des = conf.robot_params[self.robot_name]['q_0']
+        alpha = 0.
+        try:
+            print(colored("[startupProcedure] applying gravity compensation", "blue"))
+            GCStartTime = self.time
+            while True:
+                q_norm = np.linalg.norm(self.q - self.q_des)
+                qd_norm = np.linalg.norm(self.qd - self.qd_des)
+                if q_norm < 0.08 and qd_norm < 0.1:
+                    break
                 self.updateKinematics()
-                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
-                self.tau_ffwd[:] = 0.
-                self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+                self.visualizeContacts()
+                GCTime = self.time - GCStartTime
+                if GCTime <= 0.6:
+                    if alpha < 1:
+                        alpha = GCTime / 0.5
 
+                self.send_command(self.q_des, self.qd_des, alpha*self.gravityCompensation())
 
-        if check_contacts:
-            self._startupWithContacts()
-        else:
-            self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_0'])
-            try:
-                while True:
-                    n = np.linalg.norm(self.q - self.q_des)
-                    if n < 0.06:
-                        break
+            # IMU BIAS ESTIMATION
+            if self.real_robot and self.robot_name == 'go1':
+                # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
+                while self.imu_utils.counter < self.imu_utils.timeout:
                     self.updateKinematics()
-                    self.visualizeContacts()
-
-                    self.send_command(self.q_des, self.qd_des, self.self_weightCompensation())
-
-
-            except (ros.ROSInterruptException, ros.service.ServiceException):
-                ros.signal_shutdown("killed")
-                self.deregister_node()
+                    self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+                    self.tau_ffwd[:] = 0.
+                    self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
 
+        except (ros.ROSInterruptException, ros.service.ServiceException):
+            ros.signal_shutdown("killed")
+            self.deregister_node()
 
 
 
-    def _startupWithContacts(self):
+    def _startup_from_stand_down(self):
+        for i in range(12):
+            if (i%3) != 0:
+                self.q_des[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
+        # IMU BIAS ESTIMATION
+        #if self.real_robot and self.robot_name == 'go1':
+            # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
+        while self.imu_utils.counter < self.imu_utils.timeout:
+            self.updateKinematics()
+            self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+            self.tau_ffwd[:] = 0.
+            self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+
+
         # initial feet position
         B_feet_pose = [np.zeros(3)] * 4
         neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))#conf.robot_params[self.robot_name]['q_fold']))
