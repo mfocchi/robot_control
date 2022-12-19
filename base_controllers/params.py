@@ -69,8 +69,8 @@ robot_params['aliengo'] ={'dt': 0.002,
                           'spawn_z': 0.5,
                           'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 robot_params['go1'] ={'dt': 0.002,
-                       'kp': 15.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
-                       'kd': 1.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
+                       'kp': 30.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]), # 15
+                       'kd': 5.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),  # 1
                        'kp_real': 20.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
                        'kd_real': 0.3*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
                        'Kp_lin': np.array([200., 200., 200.]), # x y z
