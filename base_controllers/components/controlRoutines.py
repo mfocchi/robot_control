@@ -120,7 +120,7 @@ def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   param
     # compute virtual impedances                
     Wffwd, Wfbk, Wg = computeVirtualImpedanceWrench(conf, act_state, des_state,  W_contacts,  stance_legs,  params) 
     # Total Wrench
-    TotWrench =    Wfbk+ Wffwd+ Wg   
+    TotWrench =    Wffwd + Wfbk+ + Wg
           
     
     #(Ax-b)T*(Ax-b)

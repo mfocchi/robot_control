@@ -41,10 +41,10 @@ control_params['solo'] = {'Kp_lin_x': 100, 'Kp_lin_y': 100, 'Kp_lin_z': 100,
                        'KpRoll': 100, 'KpPitch': 100, 'KpYaw': 100,
                        'KdRoll': 1, 'KdPitch': 1, 'KdYaw': 1, 'gravity': 9.81}
 
-control_params['go1'] = {'Kp_lin_x': 200, 'Kp_lin_y': 200, 'Kp_lin_z': 200,
-                       'Kd_lin_x': 20, 'Kd_lin_y': 20, 'Kd_lin_z': 20,
-                       'KpRoll': 200, 'KpPitch': 200, 'KpYaw': 200,
-                       'KdRoll': 1, 'KdPitch': 1, 'KdYaw': 1, 'gravity': 9.81}
+control_params['go1'] = {'Kp_lin_x': 300, 'Kp_lin_y': 300, 'Kp_lin_z': 800,
+                       'Kd_lin_x': 50, 'Kd_lin_y': 50, 'Kd_lin_z': 50,
+                       'KpRoll': 50, 'KpPitch': 50, 'KpYaw': 50,
+                       'KdRoll': 3, 'KdPitch': 3, 'KdYaw': 3, 'gravity': 9.81}
 
 
 

@@ -39,10 +39,11 @@ class AdvancedController(BaseController):
     def initVars(self):
         super().initVars()
 
-        self.des_basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
-        self.des_baseTwistW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
-        self.des_baseAccW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.des_PoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
+        self.des_TwistW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.des_AccW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.des_forcesW_log = np.empty((12,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.comPoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.Wffwd_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.Wfbk_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.Wg_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size']))*nan
@@ -51,13 +52,15 @@ class AdvancedController(BaseController):
         self.two_pi_f_amp         = np.multiply(p.two_pi_f, lab_conf.amp) # A * 2 PI * frequency
         self.two_pi_f_squared_amp = np.multiply(p.two_pi_f, p.two_pi_f_amp)  # A * (2 PI * frequency)^2
 
+        self.params = Params()
 
     def logData(self):
         if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
-            self.des_basePoseW_log[:, self.log_counter] = self.des_pose
-            self.des_baseTwistW_log[:, self.log_counter] =  self.des_twist           
-            self.des_baseAccW_log[:, self.log_counter] =  self.des_acc       
-            self.des_forcesW_log[:, self.log_counter] =  self.des_forcesW            
+            self.des_PoseW_log[:, self.log_counter] = self.des_pose
+            self.des_TwistW_log[:, self.log_counter] =  self.des_twist
+            self.des_AccW_log[:, self.log_counter] =  self.des_acc
+            self.comPoseW_log[:, self.log_counter] = self.comPoseW
+            self.des_forcesW_log[:, self.log_counter] =  self.des_forcesW
             self.Wffwd_log[:, self.log_counter] =  self.Wffwd            
             self.Wfbk_log[:, self.log_counter] =  self.Wfbk            
             self.Wg_log[:, self.log_counter] =  self.Wg
@@ -80,7 +83,10 @@ def talker(p):
     p.x0 = copy.deepcopy(p.basePoseW)
     p.des_pose  = p.x0
     p.des_twist = np.zeros(6)
-    p.des_acc = np.zeros(6)       
+    p.des_acc = np.zeros(6)
+
+    # ensure PDs are zero to avoid conflict with constant joint trajectories
+    p.pid.setPDs(0.0, 0.0, 0.0)
 
     # Control loop               
     while  (p.time  < lab_conf.exp_duration) or (lab_conf.CONTINUOUS and not ros.is_shutdown()):
@@ -94,8 +100,8 @@ def talker(p):
         p.des_acc = - p.two_pi_f_squared_amp * np.sin(p.two_pi_f*p.time + lab_conf.phi)
         #use this to compute acceleration for a custom trajectory
         #des_acc = np.subtract(des_twist, p.des_twist_old)/p.Ts
-        #p.des__twist_old = des_base_twist
- 
+        #p.des_twist_old = des_twist
+
         # EXERCISE 6: Check static stability, move CoM out of the polygon   
         #p.des_pose[p.u.sp_crd["LY"]] +=0.0004
     
@@ -111,14 +117,14 @@ def talker(p):
         des_state.twist.set(p.des_twist)
         des_state.accel.set(p.des_acc)         
         act_state.pose.set(p.basePoseW)
-        act_state.twist.set(p.baseTwistW)   
+        act_state.twist.set(p.baseTwistW)
 
         # offset of the com wrt base origin in WF 
-        params = Params()  
-        params.gravityComp = False                                                  
-        params.W_base_to_com = p.u.linPart(p.comPoseW)   -   p.u.linPart(p.basePoseW) 
-        params.robot = p.robot
-        params.robotInertiaB = p.compositeRobotInertiaB
+
+        p.params.gravityComp = False
+        p.params.W_base_to_com = p.u.linPart(p.comPoseW)   -   p.u.linPart(p.basePoseW)
+        p.params.robot = p.robot
+        p.params.robotInertiaB = p.compositeRobotInertiaB
 
         #################################################################
         # compute desired contact forces from the whole-body controller                      
@@ -126,52 +132,53 @@ def talker(p):
           
 
         # EXERCISE 2: Projection-based controller (base frame)
-#        params.isCoMControlled = False 
-#        params.gravityComp = False
-#        params.ffwdOn = False        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.params.isCoMControlled = False
+#        p.params.gravityComp = False
+#        p.params.ffwdOn = False
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 
         # EXERCISE 3: Add Gravity Compensation (base frame)        
-#        params.isCoMControlled = False 
-#        params.gravityComp = True
-#        params.ffwdOn = False                                       
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.params.isCoMControlled = False
+#        p.params.gravityComp = True
+#        p.params.ffwdOn = False
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 #     
         # EXERCISE 4: Add FFwd Term (base frame) 
-#        params.isCoMControlled = False 
-#        params.gravityComp = True
-#        params.ffwdOn = True        
-#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+#        p.params.isCoMControlled = False
+#        p.params.gravityComp = True
+#        p.params.ffwdOn = True
+#        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 #                                
 #        # EXERSISE 5: Projection-based controller (CoM)    
 #        # map from base to com frame (they are aligned)
+        p.params.isCoMControlled = True
+        # overwrite with com data
         act_state.pose.set(p.comPoseW)
         act_state.twist.set(p.comTwistW)
-        params.isCoMControlled = True
-        params.robotInertiaB = p.centroidalInertiaB
-        params.gravityComp = True
-        params.ffwdOn = True
-        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+        p.params.robotInertiaB = p.centroidalInertiaB
+        p.params.gravityComp = True
+        p.params.ffwdOn = True
+        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 
         # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
-        # params.normals = [None]*4
-        # params.normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
-        # params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
-        # params.normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
-        # params.normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])
-        # params.f_min = np.array([0.0,0.0,0.0, 0.0])
-        # params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])
+        # p.params.normals = [None]*4
+        # p.params.normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
+        # p.params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
+        # p.params.normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
+        # p.params.normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])
+        # p.params.f_min = np.array([0.0,0.0,0.0, 0.0])
+        # p.params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])
         #
-        # params.isCoMControlled = False
-        # params.gravityComp = True
-        # params.ffwdOn = True
-        # params.frictionCones = False
+        # p.params.isCoMControlled = False
+        # p.params.gravityComp = True
+        # p.params.ffwdOn = True
+        # p.params.frictionCones = False
         #
-        # p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+        # p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 
         # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
-        #params.frictionCones = True       
-        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, params)
+        #p.params.frictionCones = True
+        #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
                                 
         #################################################################          
         # map desired contact forces into torques (missing gravity compensation)                      
@@ -186,6 +193,7 @@ def talker(p):
     
        # send desired command to the ros controller     
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+
         p.logData()
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),   3)  # to avoid issues of dt 0.0009999
 
@@ -198,17 +206,6 @@ def talker(p):
         #wait for synconization of the control loop
         rate.sleep()       
 
-
-    # restore PD when finished
-    p.pid.setPDs(400.0, 6.0, 0.0)
-    ros.sleep(1.0)
-    print ("Shutting Down")
-    ros.signal_shutdown("killed")
-    p.deregister_node()
-
-    # TODO fix the blocking console
-
-
 if __name__ == '__main__':
     p = AdvancedController(robotName)
     try:
@@ -217,10 +214,19 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
     finally:
+        ros.signal_shutdown("killed")
+        p.deregister_node()
         if conf.plotting:
-            plotCoM('position', 0, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log,
-                    p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log + p.Wfbk_log + p.Wg_log)
-            # plotCoM('wrench', 1, p.time_log, p.des_basePoseW_log, p.basePoseW_log, p.des_baseTwistW_log, p.baseTwistW_log, p.des_baseAccW_log, p.Wffwd_log  + p.Wfbk_log + p.Wg_log             )
+            if not p.params.isCoMControlled:
+                plotCoM('position', 0, p.time_log, p.des_PoseW_log, p.basePoseW_log, title='base lin/ang position')
+            else:
+                plotCoM('position', 0, p.time_log, p.des_PoseW_log, p.comPoseW_log, title='com lin/ang position')
+
+            plotCoM('acceleration', 4, p.time_log, des_baseAccW=p.des_AccW_log, title='des accel')
+            plotCoM('velocity', 5, p.time_log, des_baseTwistW=p.des_TwistW_log, title='des twist')
+            plotCoM('wrench', 2, p.time_log, wrenchW=p.Wffwd_log)
+
+            # plotCoM('wrench', 1, p.time_log, wrenchW = p.Wffwd_log  + p.Wfbk_log + p.Wg_log)
             # plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
             # plotConstraitViolation(3,p.constr_viol_log)
             # plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)
