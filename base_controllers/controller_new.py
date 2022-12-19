@@ -589,6 +589,25 @@ class Controller(BaseController):
         return -com_torques
 
 
+    def support_poly(self, contacts):
+        # Wcontacts: lf, rf, lh, rh
+        sp = {}
+        # CCW order
+        sides_order = {'F': [1, 0], 'L': [0, 2], 'H': [2, 3], 'R': [3, 1]}
+        for side in sides_order: # side is the key of sides_order
+            p0 = contacts[sides_order[side][0]][0:2]
+            p1 = contacts[sides_order[side][1]][0:2]
+            m, q = self.line2points2D(p0, p1)
+            sp['line'+side] = {'m': m, 'q': q, 'p0':p0, 'p1':p1}
+        return sp
+
+    @staticmethod
+    def line2points2D(p0, p1):
+        # line defined as y= mx+q
+        m = (p1[1] - p0[1]) / (p1[0] - p0[0])
+        q = p0[1] - m * p0[0]
+        return m, q
+
     def send_command(self, q_des=None, qd_des=None, tau_ffwd=None):
         # q_des, qd_des, and tau_ffwd have dimension 12
         # and are ordered as on the robot
