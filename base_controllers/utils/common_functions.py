@@ -288,7 +288,7 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
     plt.ylabel("norm of ee force")
     plt.grid()
     
-def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, baseAccW=None, des_baseAccW=None, wrenchW=None):
+def plotCoM(name,  figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, baseAccW=None, des_baseAccW=None,  wrenchW=None, title = None):
     plot_var_des_log = None
     if name == 'position':
         plot_var_log = basePoseW
@@ -303,16 +303,21 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
         if   (des_baseAccW is not None):
             plot_var_des_log  = des_baseAccW    
     elif name == 'wrench':
+        plot_var_log =  None
         plot_var_des_log  = wrenchW                                    
     else:
        print("wrong choice")
 
+    if title is None:
+        title = name
+
     # neet to transpose the matrix other wise it cannot be plot with numpy array
     fig = plt.figure(figure_id)
-    fig.suptitle(name, fontsize=20)
+    fig.suptitle(title, fontsize=20)
     plt.subplot(3, 2, 1)
     plt.ylabel("CoM X")
-    plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
+    if (plot_var_log is not None):
+        plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     if (plot_var_des_log is not None):
         plt.plot(time_log, plot_var_des_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
                  color='red')
@@ -322,7 +327,8 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
 
     plt.subplot(3, 2, 3)
     plt.ylabel("CoM Y")
-    plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    if (plot_var_log is not None):
+        plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[1, :], linestyle='-', lw=lw_des, color='red')
@@ -331,7 +337,8 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
 
     plt.subplot(3, 2, 5)
     plt.ylabel("CoM Z")
-    plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    if (plot_var_log is not None):
+        plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[2, :], linestyle='-', lw=lw_des, color='red')
@@ -339,7 +346,8 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
 
     plt.subplot(3, 2, 2)
     plt.ylabel("Roll")
-    plt.plot(time_log, plot_var_log[3, :].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    if (plot_var_log is not None):
+        plt.plot(time_log, plot_var_log[3, :].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[3, :], linestyle='-', lw=lw_des, color='red')
@@ -347,7 +355,8 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
 
     plt.subplot(3, 2, 4)
     plt.ylabel("Pitch")
-    plt.plot(time_log, plot_var_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    if (plot_var_log is not None):
+        plt.plot(time_log, plot_var_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[4, :], linestyle='-', lw=lw_des, color='red')
@@ -355,8 +364,9 @@ def plotCoM(name, figure_id, time_log, des_basePoseW=None, basePoseW=None, des_b
 
     plt.subplot(3, 2, 6)
     plt.ylabel("Yaw")
-    plt.plot(time_log, plot_var_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
-            color='blue')
+    if (plot_var_log is not None):
+        plt.plot(time_log, plot_var_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+                color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[5, :], linestyle='-', lw=lw_des, color='red')
     plt.grid()
