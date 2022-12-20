@@ -191,7 +191,7 @@ class StarbotController(BaseController):
         # Map the desired wrench to grf (note the vector is 12D and is ee_frames convention)
         self.grForcesW_des = np.linalg.pinv(self.NEMatrix, 1e-06) @ Wg
 
-        # we want to map grfs into torques only considering the joint before the wheel, so I select the first 4 columns of the Jacobian
+        # we want to map grfs into torques only considering the joint before the wheel, so I select the first 4 columns of the Jacobian!
         pin_gravity_torques = np.empty(20)
         for leg in range(len(ee_frames)):
             # note tau leg has 5 elements
