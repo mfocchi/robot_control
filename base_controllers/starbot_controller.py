@@ -240,11 +240,21 @@ def generate_q(joints):
                      joints["wheel"][3]])
 
 def initialization_state(p):
-    # TODO add the other 3 legs
+    ee_frames = conf.robot_params[p.robot_name]['ee_frames']
+    leg_length = np.zeros(4)
+    for leg in range(4):
+    	 id = p.robot.model.getFrameId(ee_frames[leg])
+    	 id = p.robot.model.frames[id].parent
+    	 if (ee_frames[leg] == 'rf_wheel' or ee_frames[leg] == 'lh_wheel' ):
+    	   leg_length[leg] = np.array(p.robot.data.oMi[id])[0][3]  
+    	 else:
+    	   leg_length[leg] = np.array(p.robot.data.oMi[id])[1][3]
+    	 leg_length[leg] = abs(leg_length[leg])
+    print("CHECK ",leg_length)
+    
     id = p.robot.model.getFrameId('lf_wheel')
     id = p.robot.model.frames[id].parent
     wheel_arc_distance = wheel_arc_carState(np.array(p.robot.data.oMi[id])[1][3])
-    # print(wheel_arc_distance)
     return np.copy(p.q_des_q0), wheel_arc_distance
 
 def initTocar_state(p, rate, joints, initTocar_motion_time, act_time, shoulder_motion, wheel_arc_distance, wheel_motion):
