@@ -70,7 +70,7 @@ class AdvancedController(BaseController):
 
 def talker(p):
     p.start()
-    p.startSimulator()
+    p.startSimulator(world_name='slow.world', additional_args=['gui:=false'])
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()
@@ -80,10 +80,7 @@ def talker(p):
     
                                 
     # Reset reference to actual value  
-    p.x0 = copy.deepcopy(p.basePoseW)
-    p.des_pose  = p.x0
-    p.des_twist = np.zeros(6)
-    p.des_acc = np.zeros(6)
+    p.x0 = np.copy(p.basePoseW)
 
     # ensure PDs are zero to avoid conflict with constant joint trajectories
     p.pid.setPDs(0.0, 0.0, 0.0)

@@ -257,6 +257,32 @@ class Ur5Generic(BaseControllerFixed):
         pointW = self.w_R_c.dot(points_list[0]) + self.x_c + self.base_offset
         #print("Data World frame: ", pointW)
 
+    def computeIK(self, q0, x_d, phi_d, Kp, Kphi, dt):
+        frame_id = self.robot.model.getFrameId(conf.robot_params[self.robot_name]['ee_frame'])
+        eps = 1e-4
+        err = np.inf
+        qk = q0
+        iter = 0
+        number_of_max_iterations = 2000
+        self.math_utils.Tomega()
+        while np.linalg.norm(err)>eps  :
+            x_e = self.robot.framePlacement(qk, frame_id, True).translation
+            w_R_e = self.robot.framePlacement(qk, frame_id, True).rotation
+            eul_rpy = self.math_utils.rot2eul(w_R_e)
+            J = self.robot.frameJacobian(qk, frame_id, True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
+            Ta = np.array([[np.eye(3), np.zeros(3,3)],[np.zeros(3,3), self.math_utils.Tomega(eul_rpy)]])
+
+            # compute the analytic jacobian
+            Ja = np.linalg.inv(Ta).dot(J)
+            dotqk = np.linalg.inv(Ja + np.eye(6) * 1e-06) * np.hstack(( (Kp * (x_d - x_e)), (Kphi * (phi_d - eul_rpy)) ))
+            qk1 = qk + dotqk*dt
+            qk = qk1
+            iter += 1
+            if iter>number_of_max_iterations:
+                print("IK: max number of iteratin reached, did not converge")
+                break
+        return qk
+
 def talker(p):
     p.start()
     if p.real_robot:

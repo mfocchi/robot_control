@@ -140,10 +140,25 @@ class Math:
         
 
         R =  Rz.dot(Ry.dot(Rx));
-        return R          
-                
-     # used to compute 
-    # omega_dot = J_omega * euler_rates_dot + J_omega_dot*euler_rates   expressed in ZYX convention          
+        return R
+
+    """
+        Computes the mapping between euler rates  and angular acceleration vector (expressed in the world frame), of the rotating frame
+        w_omega_dot = T_omega(rpy) * euler_rates_dot + T_omega_dot(rpy, rpyd)*euler_rates  
+        
+        Parameters
+        ----------
+        rpy vector of Euler Angles that describes the orientation of the rotating frame (we assume the ZYX convention). 
+        Note,  the coordinates of the input vector are expressed as XYZ (roll, pitch, yaw)!
+        
+        rpyd vector of Euler Angles rates. Note, we assume the ZYX convention but the coordinates of the input vector are expressed as XYZ (roll, pitch, yaw)!
+        
+        Returns
+        ----------
+        3x3 matrix T_omega_dot
+    """
+
+
     def Tomega_dot(self, rpy, rpyd):
     
         roll = rpy[0]
@@ -159,8 +174,20 @@ class Math:
      
     
         return Tomega_dot
-    
-    # returns w_omega = Jomega * euler_rates expressed in ZYX convention
+
+    """
+        Computes the mapping matrix between euler rates and angular velocity vector (expressed in the world frame), of the rotating frame
+        w_omega= T_omega(rpy) * euler_rates
+        
+        Parameters
+        ----------
+        rpy vector of Euler Angles that describes the orientation of the rotating frame (we assume the ZYX convention). 
+        Note,  the coordinates of the input vector are expressed as XYZ (roll, pitch, yaw)!
+        
+        Returns
+        ----------
+        3x3 matrix T_omega
+    """
     def Tomega(self, rpy):
     
         #convention yaw pitch roll
