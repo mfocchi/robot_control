@@ -1,21 +1,54 @@
+\documentclass[11pt]{article}
 
-\documentclass{report}   
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
 
-\usepackage{graphicx}
-\usepackage[labelformat=empty]{caption}
+\usepackage{mathtools}
+
+\usepackage{setspace}
+\onehalfspacing
 \usepackage{subcaption}
 
-\usepackage{multirow}
-\usepackage{graphics,graphicx} % for pdf, bitmapped graphics files
-\usepackage{epsfig} % for postscript graphics files
-%\usepackage{mathptmx} % assume new font selection scheme installed
-\usepackage{times} % assumes new font selection scheme installed
-%\usepackage{amssymb}  % assumes amsmath package installed
-
-\usepackage{amsmath} % assumes amsmath package installed
 \usepackage{amsfonts}
-%\usepackage{amssymb}  % assumes amsmath package installed
-\usepackage{url}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{indentfirst}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{example}{Example}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+\newtheorem{corollary}{Corollary}
+
+\newtheorem*{theorem*}{Theorem}
+\newtheorem*{lemma*}{Lemma}
+\newtheorem*{example*}{Example}
+\newtheorem*{definition*}{Definition}
+\newtheorem*{remark*}{Remark}
+\newtheorem*{corollary*}{Corollary}
+
+%\usepackage{booktabs, caption, graphicx, float}
+%\usepackage{subcaption}
+%\captionsetup{tableposition=top,figureposition=bottom,font=small}
+
+\usepackage{comment}
+\usepackage{multirow}
+\usepackage{array}
+
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+
+\usepackage[hidelinks]{hyperref}
+
+\usepackage{geometry}
+\geometry{a4paper, top=3cm,bottom=3cm,left=3cm,right=3cm,%
+	heightrounded}
+\usepackage{upgreek}
+\usepackage{xparse}
+\usepackage{listings}
+\NewDocumentCommand{\codeword}{v}{%
+	\texttt{\textcolor{black}{#1}}%
+}
 
 \newcommand{\Rnum}{\mathbb{R}} % Symbol fo the real numbers set
 \newcommand{\mat}[1]{\ensuremath{\begin{bmatrix}#1\end{bmatrix}}}	% matrix
@@ -23,21 +56,88 @@
 \DeclareMathOperator*{\argmin}{\arg\!\min}				% argmin
 
 
+
+\newcommand{\prepos}[3]{${}_{\mathbf{#2}}{\mathbf{#1}}_{#3}$}
+\newcommand{\preposm}[3]{{}_{\mathbf{#2}}{\mathbf{#1}}_{#3}}
+
+
+
+
+%Dummy text
+\usepackage{lipsum}
+
+%Changing headers and footers
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\textit{\thepage}}
+\lhead{\textit{Kinematics and Dynamics Lab}}
+
+%For inserting the code
+\usepackage{fancyvrb}
+
+%For bold math symbols
+\usepackage{bm}
+
+%For multicolumns
+\usepackage{multicol}
+
+% Norm and abs delimiter
+\usepackage{mathtools}
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+\DeclarePairedDelimiterX{\norm}[1]{\lVert}{\rVert}{#1}
+
+\setcounter{section}{-1}
+
+
+
+% Enumerate
+\usepackage{enumitem}
+
+% Code
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{etoolbox}
+
+% Longtable
+\usepackage{longtable}
+\usepackage{fancyvrb}
+% SI units
+\usepackage{siunitx}
+\sisetup{output-exponent-marker=\ensuremath{\mathrm{e}}}
+
+% Colours in equations
+\usepackage{xcolor}
+
+
 \begin{document}
 
 
-\section*{LAB 5: Floating base robot: quasi-static control of locomotion stability}
+\section*{LAB 6: Floating base robot: quasi-static control of locomotion stability}
 
-Notes:
+\noindent  Notes:
 \begin{itemize}
-	\item You can check the frequency at which the controller is publishing by inspecting the topic \textbf{/hyq/command} with \textbf{rostopic hz /hyq/command}.
-	\item It is possible to set the verbosity level of the output, by setting the parameter  \textit{verbose} in  ex\_5\_conf.py.
-	\item To have the experiment not ending after 5 $s$ set the parameter \textit{CONTINUOUS}=True in  ex\_5\_conf.py (can stop by hitting CTRL+C).
+	\item You can check the frequency at which the controller is publishing by inspecting the topic \textbf{/command} with \textbf{rostopic hz /command}.
+	\item It is possible to set the verbosity level of the output, by setting the parameter  \textit{verbose} in  \codeword{L6\_conf.py}.
+	\item To have the experiment not ending after 5 $s$ set the parameter \textit{CONTINUOUS}=True in  \codeword{L6\_conf.py} (can stop by hitting CTRL+C).
 \end{itemize}
 
+\noindent  \textbf{Important Note!} if the frequency at which \textbf{/command} is not the right one (e.g. check the dt variable in the \codeword{base_controllers/params.py} for the robot that you selected) then it means your computer is not fast enough to run the controller, this can cause degraded performance with tracking errors that are not due to the implemented control strategy but to the delays! To mitigate these issues you can deactivate some parts that are superfluous and are demanding in terms of computational time:
+
+\begin{itemize}
+	\item The most easy and effective option is to slow down the simulation calling the \codeword{p.startSimulator()} function \\
+	with \codeword{world_name='slow.world'} argument, this slows down  simulation frequency to 1/5th of the frequency (i.e. 200Hz). Note that the whole ROS environment will be slowed down with respect to the real world time, so also the controller, so with this trick it should be able to meet the required publishing frequency. 
+	\item Be sure you do not have any other program active (e.g. Zoom, Chrome)
+	\item Comment the subscriber to the bumper plugins that computes the contact forces. \\ Be sure the flag  \codeword{p.use_ground_truth_contacts = False}
+	\item do not publish any visual element (e.g. arrows) commenting the lines related to \codeword{p.ros_pub.add_arrow()} and \codeword{p.ros_pub.publishVisual()}
+
+\end{itemize}
+
+
+\noindent Exercises:\\
 1) \textit{Generate a Sinusoidal Reference for the Robot Trunk:} 
 Generate a sinusoidal reference for $Z$ direction ($f_z$ = 0.5 $Hz$, $A_z$ = 0.03 $rad$ )
-together with another for the pitch direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}$ = 0.1 $rad$ )
+together with another for the pitch direction ($f_{\theta}$ = 1 $Hz$, $A_{\theta}$ = 0.1 $rad$ ). Note that you will have to generate references also for velocity and acceleration. If you select a sin() you would have a non zero velocity at the beginning because the cos() that is its first derivative is non zero at t = 0. This could create tracking errors. Therefore is better to select a cos() for the position and shift it with an offset of -1 to make it pass for 0 at t = 0). 
 
 \quad
  

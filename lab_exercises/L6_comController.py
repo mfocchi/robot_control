@@ -8,6 +8,8 @@ Created on Fri Nov  2 16:52:08 2018
 #!/usr/bin/env python
 
 #inherit from base controller
+import time
+
 from base_controllers.base_controller import BaseController
 import rospy as ros 
 import numpy as np
@@ -70,31 +72,40 @@ class AdvancedController(BaseController):
 
 def talker(p):
     p.start()
-    p.startSimulator(world_name='slow.world', additional_args=['gui:=false'])
+    p.startSimulator(additional_args=['gui:=false'])
+    #p.startSimulator(world_name='slow.world', additional_args=['gui:=false'])
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()
     p.startupProcedure()
+    p.updateKinematics()
 
     rate = ros.Rate(1/lab_conf.dt) # 10hz
-    
-                                
-    # Reset reference to actual value  
-    p.x0 = np.copy(p.basePoseW)
+
+    p.params.isCoMControlled = False
+    #EXERSISE 5:
+    #p.params.isCoMControlled = True
+
+    # Reset reference to actual value
+    if p.params.isCoMControlled:
+        p.x0 = np.copy(p.comPoseW)
+    else:
+        p.x0 = np.copy(p.basePoseW)
 
     # ensure PDs are zero to avoid conflict with constant joint trajectories
     p.pid.setPDs(0.0, 0.0, 0.0)
 
     # Control loop               
     while  (p.time  < lab_conf.exp_duration) or (lab_conf.CONTINUOUS and not ros.is_shutdown()):
+        start = time.time()
         #update the kinematics
         p.updateKinematics()
-                                
+
         # EXERCISE 1: Sinusoidal Reference Generation
         # Reference Generation
-        p.des_pose  = p.x0 +  lab_conf.amp*np.sin(p.two_pi_f*p.time + lab_conf.phi)
-        p.des_twist  = p.two_pi_f_amp * np.cos(p.two_pi_f*p.time + lab_conf.phi)
-        p.des_acc = - p.two_pi_f_squared_amp * np.sin(p.two_pi_f*p.time + lab_conf.phi)
+        p.des_pose  = p.x0 +  lab_conf.amp*(np.cos(p.two_pi_f*p.time + lab_conf.phi) -1)
+        p.des_twist  = -p.two_pi_f_amp * np.sin(p.two_pi_f*p.time + lab_conf.phi)
+        p.des_acc = -p.two_pi_f_squared_amp * np.cos(p.two_pi_f*p.time + lab_conf.phi)
         #use this to compute acceleration for a custom trajectory
         #des_acc = np.subtract(des_twist, p.des_twist_old)/p.Ts
         #p.des_twist_old = des_twist
@@ -109,19 +120,24 @@ def talker(p):
 #        if p.time > 2.0:                            
 #            p.stance_legs[p.u.leg_map["RH"]] = False       
    
-
+        #time1 = time.time()-startTime #3 ms
         des_state.pose.set(p.des_pose)
         des_state.twist.set(p.des_twist)
-        des_state.accel.set(p.des_acc)         
-        act_state.pose.set(p.basePoseW)
-        act_state.twist.set(p.baseTwistW)
+        des_state.accel.set(p.des_acc)
 
-        # offset of the com wrt base origin in WF 
-
-        p.params.gravityComp = False
-        p.params.W_base_to_com = p.u.linPart(p.comPoseW)   -   p.u.linPart(p.basePoseW)
+        # offset of the com wrt base origin in WF
+        p.params.W_base_to_com = p.u.linPart(p.comPoseW) - p.u.linPart(p.basePoseW)
         p.params.robot = p.robot
-        p.params.robotInertiaB = p.compositeRobotInertiaB
+
+        if not p.params.isCoMControlled:
+            act_state.pose.set(p.basePoseW)
+            act_state.twist.set(p.baseTwistW)
+            p.params.robotInertiaB = p.centroidalInertiaB
+        else:
+            act_state.pose.set(p.comPoseW)
+            act_state.twist.set(p.comTwistW)
+            p.params.robotInertiaB = p.compositeRobotInertiaB
+
 
         #################################################################
         # compute desired contact forces from the whole-body controller                      
@@ -129,33 +145,25 @@ def talker(p):
           
 
         # EXERCISE 2: Projection-based controller (base frame)
-#        p.params.isCoMControlled = False
 #        p.params.gravityComp = False
 #        p.params.ffwdOn = False
 #        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 
         # EXERCISE 3: Add Gravity Compensation (base frame)        
-#        p.params.isCoMControlled = False
 #        p.params.gravityComp = True
 #        p.params.ffwdOn = False
 #        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 #     
         # EXERCISE 4: Add FFwd Term (base frame) 
-#        p.params.isCoMControlled = False
 #        p.params.gravityComp = True
 #        p.params.ffwdOn = True
 #        p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
 #                                
 #        # EXERSISE 5: Projection-based controller (CoM)    
-#        # map from base to com frame (they are aligned)
-        p.params.isCoMControlled = True
-        # overwrite with com data
-        act_state.pose.set(p.comPoseW)
-        act_state.twist.set(p.comTwistW)
-        p.params.robotInertiaB = p.centroidalInertiaB
         p.params.gravityComp = True
         p.params.ffwdOn = True
         p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg = projectionBasedController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
+
 
         # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
         # p.params.normals = [None]*4
@@ -166,7 +174,6 @@ def talker(p):
         # p.params.f_min = np.array([0.0,0.0,0.0, 0.0])
         # p.params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])
         #
-        # p.params.isCoMControlled = False
         # p.params.gravityComp = True
         # p.params.ffwdOn = True
         # p.params.frictionCones = False
@@ -176,8 +183,10 @@ def talker(p):
         # EXERCISE 9: quasi-static QP controller (base frame) - friction cone constraints                                    
         #p.params.frictionCones = True
         #p.des_forcesW, p.Wffwd, p.Wfbk, p.Wg, p.constr_viol =  QPController(lab_conf.control_params[p.robot_name], act_state, des_state, p.W_contacts, p.stance_legs, p.params)
-                                
-        #################################################################          
+
+        # time2 = time.time()-startTime #4 ms
+
+        #################################################################
         # map desired contact forces into torques (missing gravity compensation)                      
         #################################################################                                       
         p.jacsT = block_diag(np.transpose(p.wJ[p.u.leg_map["LF"]]), 
@@ -187,7 +196,7 @@ def talker(p):
         p.tau_ffwd =   p.u.mapFromRos(p.h_joints) - p.jacsT.dot(p.des_forcesW)         
  
     
-    
+        #time3 = time.time()-startTime #0.3 ms
        # send desired command to the ros controller     
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
@@ -198,10 +207,11 @@ def talker(p):
         for leg in range(4):
             p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW/(5*p.robot.robotMass)),"green")
             p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.des_forcesW/(5*p.robot.robotMass)),"blue")
-        p.ros_pub.publishVisual()                        
-                                
+        p.ros_pub.publishVisual()
+
+        #time4 = time.time() - startTime # 3ms
         #wait for synconization of the control loop
-        rate.sleep()       
+        rate.sleep()
 
 if __name__ == '__main__':
     p = AdvancedController(robotName)
