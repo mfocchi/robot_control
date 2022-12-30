@@ -258,6 +258,30 @@ def metersToradians(dist):
     # with 0.07 radius of the wheels
     return dist/(0.07*2*np.pi)*360*np.pi/180
 
+
+def distance_contact_force(leg):
+    wheel_force = p.getLegContactForce(leg, p.grForcesW / (6 * p.robot.robot_mass))
+    # torque of primsatic joint
+    tau_leg = p.getLegJointTorques(leg, p.h_joints - p.mapToPinocchio(p.tau))[2]
+
+    # define which leg to consider
+    ee_frames = conf.robot_params[p.robot_name]['ee_frames']
+    id = p.robot.model.getFrameId(ee_frames[leg])
+    id = p.robot.model.frames[id].parent
+
+    if (id == "lf_wheel" or id == "rh_wheel"):
+        # asse y
+        tot_force = wheel_force[0] + wheel_force[2]
+    else:
+        # asse x
+        tot_force = wheel_force[1] + wheel_force[2]
+
+    print("CONTROLLO", tau_leg / tot_force)
+
+    distance = (tau_leg / tot_force) - 0.2
+
+    return distance
+
 def initialization_state(p):
     ee_frames = conf.robot_params[p.robot_name]['ee_frames']
     shoulder_frames = ["lf_bs_joint","lh_bs_joint","rf_bs_joint","rh_bs_joint"]
@@ -391,18 +415,18 @@ def carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, whee
         joints["shoulder"][2] = prev_state["shoulder"][2] - quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
         joints["shoulder"][3] = prev_state["shoulder"][3] + quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
 
-        joints["lower_leg"][0] = prev_state["lower_leg"][0] + quinitic_trajectory(0, 0.05, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
-        joints["lower_leg"][1] = prev_state["lower_leg"][1] + quinitic_trajectory(0, 0.05, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
-        joints["lower_leg"][2] = prev_state["lower_leg"][2] + quinitic_trajectory(0, 0.05, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
-        joints["lower_leg"][3] = prev_state["lower_leg"][3] + quinitic_trajectory(0, 0.05, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+        joints["lower_leg"][0] = prev_state["lower_leg"][0] + quinitic_trajectory(0, distance_contact_force(0), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+        joints["lower_leg"][1] = prev_state["lower_leg"][1] + quinitic_trajectory(0, distance_contact_force(1), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+        joints["lower_leg"][2] = prev_state["lower_leg"][2] + quinitic_trajectory(0, distance_contact_force(2), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+        joints["lower_leg"][3] = prev_state["lower_leg"][3] + quinitic_trajectory(0, distance_contact_force(3), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
 
-        joints["wheel"][0] = prev_state["wheel"][0] + quinitic_trajectory(0, metersToradians(get_external_perimeter(p) * 3 / 360),
+        joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45 / 360),
                                                                           carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["wheel"][1] = prev_state["wheel"][1] - quinitic_trajectory(0, metersToradians(get_external_perimeter(p)*3/360),
+        joints["wheel"][1] = prev_state["wheel"][1] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
                                                                           carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["wheel"][2] = prev_state["wheel"][2] + quinitic_trajectory(0, metersToradians(get_external_perimeter(p)*3/360),
+        joints["wheel"][2] = prev_state["wheel"][2] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
                                                                           carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["wheel"][3] = prev_state["wheel"][3] - quinitic_trajectory(0, metersToradians(get_external_perimeter(p)*3/360),
+        joints["wheel"][3] = prev_state["wheel"][3] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
                                                                           carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
         q_des = generate_q(joints)
 
