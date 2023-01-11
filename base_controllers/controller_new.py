@@ -432,10 +432,7 @@ class Controller(BaseController):
         print(colored("Started controller", "blue"))
 
 
-    def log_policy(self, var):
-        tmp = np.empty((var.shape[0], var.shape[1] + conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        tmp[:var.shape[0], :var.shape[1]] = var
-        return tmp
+
 
     # feedforward controllers
 
