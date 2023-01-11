@@ -746,14 +746,17 @@ class Controller(BaseController):
                                        "green", scale=0.0001)
                 #self.ros_pub.add_marker(self.W_contacts[leg], radius=0.001)
 
-            if (self.use_ground_truth_contacts):
-                self.ros_pub.add_arrow(self.W_contacts[leg],
-                                       self.u.getLegJointState(leg, self.grForcesW_gt / (6 * self.robot.robot_mass)),
-                                       "red")
-            else:
-                self.ros_pub.add_arrow(self.W_contacts[leg],
-                                       self.u.getLegJointState(leg,self.grForcesW_des / (6 * self.robot.robot_mass)),
-                                       "red")
+            # if (self.use_ground_truth_contacts):
+            #     self.ros_pub.add_arrow(self.W_contacts[leg],
+            #                            self.u.getLegJointState(leg, self.grForcesW_gt / (6 * self.robot.robot_mass)),
+            #                            "red")
+            # else:
+            #     self.ros_pub.add_arrow(self.W_contacts[leg],
+            #                            self.u.getLegJointState(leg,self.grForcesW_des / (6 * self.robot.robot_mass)),
+            #                            "red")
+            self.ros_pub.add_arrow(self.W_contacts[leg],
+                                   self.u.getLegJointState(leg, self.grForcesW_des / (6 * self.robot.robot_mass)),
+                                   "blue")
 
         # self.ros_pub.add_polygon([self.B_contacts[0],
         #                           self.B_contacts[1],
