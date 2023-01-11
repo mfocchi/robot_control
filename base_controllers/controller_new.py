@@ -200,6 +200,11 @@ class Controller(BaseController):
         self.wrench_gW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
         self.wrench_desW = np.zeros(6)
 
+        self.wrench_fbW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
+        self.wrench_ffW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
+        self.wrench_gW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
+        self.wrench_desW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
+
         self.NEMatrix = np.zeros([6, 3*self.robot.nee]) # Newton-Euler matrix
 
         try:
@@ -379,6 +384,11 @@ class Controller(BaseController):
         self.W_lin_vel_log[:, self.log_counter] = self.imu_utils.W_lin_vel
         self.zmp_log[:, self.log_counter] = self.zmp
 
+        self.wrench_fbW_log[:, self.log_counter] = self.wrench_fbW
+        self.wrench_ffW_log[:, self.log_counter] = self.wrench_ffW
+        self.wrench_gW_log[:, self.log_counter] = self.wrench_gW
+        self.wrench_desW_log[:, self.log_counter] = self.wrench_desW
+
 
         self.time_log[:, self.log_counter] = self.time
 
@@ -432,8 +442,8 @@ class Controller(BaseController):
     def self_weightCompensation(self):
         # it seems that self weight compensation degrates the control performances: do not use it!
         # require the call to updateKinematics
-        # gravity_torques = self.u.mapFromRos(self.h_joints)
-        gravity_torques = np.zeros(12)
+        gravity_torques = self.u.mapFromRos(self.g_joints)
+        # gravity_torques = np.zeros(12)
         return gravity_torques
 
     def gravityCompensation(self):
@@ -542,19 +552,17 @@ class Controller(BaseController):
         # else the angular wrench is zero
 
 
-    # Whole body controller that includes ffd wrench + fb Wrench (Virtual PD) + gravity compensation
+    # Whole body controller that includes ffwd wrench + fb wrench (Virtual PD) + gravity compensation
     # all vector is in the wf
     def projectionWBC(self, des_pose, des_twist, des_acc = None, comControlled = True):
         self.virtualImpedanceWrench(des_pose, des_twist, des_acc, comControlled)
         self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
 
-        # clean the matrix
-        self.NEMatrix[:,:] = 0.
         # wrench = NEMatrix @ grfs
         for leg in range(self.robot.nee):
+            start_col = 3 * leg
+            end_col = 3 * (leg + 1)
             if self.contact_state[leg]:
-                start_col = 3 * leg
-                end_col = 3 * (leg+1)
                 # ---> linear part
                 # identity matrix (I avoid to rewrite zeros)
                 self.NEMatrix[self.u.sp_crd["LX"], start_col] = 1.
@@ -564,12 +572,16 @@ class Controller(BaseController):
                 # all in a function
                 self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1, start_col:end_col] = \
                     pin.skew(self.W_contacts[leg] - self.u.linPart(self.comPoseW))
+            else:
+                # clean the matrix
+                self.NEMatrix[:, start_col:end_col] = 0.
 
         # Map the desired wrench to grf
-        self.grForcesW_des = np.linalg.pinv(self.NEMatrix, 1e-06) @ self.wrench_desW
+        self.grForcesW_des = np.linalg.pinv(self.NEMatrix, 1e-6) @ self.wrench_desW
         WBC_torques = np.empty(12)
+        h_jointFromRos = self.u.mapFromRos(self.h_joints)
         for leg in range(4):
-            tau_leg  = self.u.getLegJointState(leg, self.h_joints) - \
+            tau_leg  = self.u.getLegJointState(leg, h_jointFromRos) - \
                        self.wJ[leg].T  @ self.u.getLegJointState(leg, self.grForcesW_des)
             self.u.setLegJointState(leg, tau_leg, WBC_torques)
         return WBC_torques
