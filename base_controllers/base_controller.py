@@ -392,8 +392,10 @@ class BaseController(threading.Thread):
         gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.u.mapToRos(self.qd)))
         configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
         self.M = self.robot.mass(configuration)
-        self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities) 
-        self.h_joints = self.h[6:]  
+        self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities)
+        self.h_joints = self.h[6:]
+        self.g = self.robot.gravity(configuration)
+        self.g_joints = self.g[6:]
         
         #compute contact forces
         self.estimateContactForces()
