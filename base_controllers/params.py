@@ -69,8 +69,8 @@ robot_params['aliengo'] ={'dt': 0.002,
                           'spawn_z': 0.5,
                           'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 robot_params['go1'] ={'dt': 0.002,
-                       'kp': 30.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]), # 15
-                       'kd': 5.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),  # 1
+                       'kp': np.array([30., 30., 30.]*4), # 15
+                       'kd': np.array([3.,3.,3.]*4),  # 1
                        'kp_real': 20.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
                        'kd_real': 0.3*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
                        'Kp_lin': np.array([300., 300., 300.]), # x y z
@@ -88,7 +88,7 @@ robot_params['go1'] ={'dt': 0.002,
                         'force_th': 7.,
                         'spawn_x': 0.0,#0.3,
                         'spawn_y': 0.0,
-                        'spawn_z': .08,
+                        'spawn_z': .3,
                         'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 
 robot_params['ur5'] ={'dt': 0.001, 
@@ -161,7 +161,7 @@ robot_params['starbot'] ={'dt': 0.001,
                        'spawn_z' : 1.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
-verbose = False
+verbose = True
 plotting = True
 
 
