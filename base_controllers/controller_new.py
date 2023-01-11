@@ -814,6 +814,10 @@ class Controller(BaseController):
         elif self.go0_conf == 'standDown':
             self._startup_from_stand_down()
 
+        # reset time to zero (I don't want to log startup)
+        self.time = np.zeros(1)
+        self.log_counter = 0
+
 
 
     def _startup_from_stand_up(self):
@@ -825,7 +829,7 @@ class Controller(BaseController):
             while True:
                 q_norm = np.linalg.norm(self.q - self.q_des)
                 qd_norm = np.linalg.norm(self.qd - self.qd_des)
-                if q_norm < 0.08 and qd_norm < 0.1:
+                if q_norm < 0.1 and qd_norm < 0.1 or self.time > 5:
                     break
                 self.updateKinematics()
                 self.visualizeContacts()
@@ -837,6 +841,7 @@ class Controller(BaseController):
                 self.send_command(self.q_des, self.qd_des, alpha*self.gravityCompensation())
 
             # IMU BIAS ESTIMATION
+            print(colored("[startupProcedure]Imu ", "blue"))
             if self.real_robot and self.robot_name == 'go1':
                 # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
                 while self.imu_utils.counter < self.imu_utils.timeout:
@@ -854,6 +859,7 @@ class Controller(BaseController):
 
     def _startup_from_stand_down(self):
         for i in range(12):
+            # modify HAAs
             if (i%3) != 0:
                 self.q_des[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
         # IMU BIAS ESTIMATION
