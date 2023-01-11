@@ -536,7 +536,7 @@ class BaseController(threading.Thread):
         self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.constr_viol_log = np.empty((4,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         
-        self.time = 0.0
+        self.time = np.zeros(1)
         self.loop_time = conf.robot_params[self.robot_name]['dt']
         self.log_counter = 0
 
