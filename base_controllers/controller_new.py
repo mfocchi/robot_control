@@ -10,9 +10,11 @@ import threading
 import numpy as np
 import pinocchio as pin
 # utility functions
+from  scipy.linalg import block_diag
 from base_controllers.utils.pidManager import PidManager
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.math_tools import *
+from base_controllers.utils.optimTools import quadprog_solve_qp
 
 from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics
 from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
@@ -457,7 +459,7 @@ class Controller(BaseController):
         #     tau_leg  = -self.J[leg].T  @ self.u.getLegJointState(leg, self.grForcesW_des)
         #     self.u.setLegJointState(leg, tau_leg, contact_torques)
         # return contact_torques
-        return self.projectionWBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True)
+        return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
     # TODO: To be tested
     # def gravityCompensation(self, legsInContact):
@@ -549,9 +551,11 @@ class Controller(BaseController):
         # else the angular wrench is zero
 
 
+
     # Whole body controller that includes ffwd wrench + fb wrench (Virtual PD) + gravity compensation
     # all vector is in the wf
-    def projectionWBC(self, des_pose, des_twist, des_acc = None, comControlled = True):
+    def WBC(self, des_pose, des_twist, des_acc = None, comControlled = True, type = 'projection'):
+        # self.pr.enable()
         self.virtualImpedanceWrench(des_pose, des_twist, des_acc, comControlled)
         self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
 
@@ -567,23 +571,54 @@ class Controller(BaseController):
                 self.NEMatrix[self.u.sp_crd["LZ"], start_col + 2] = 1.
                 # ---> angular part
                 # all in a function
-                self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1, start_col:end_col] = \
+                self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1, start_col:end_col] = \
                     pin.skew(self.W_contacts[leg] - self.u.linPart(self.comPoseW))
             else:
                 # clean the matrix
                 self.NEMatrix[:, start_col:end_col] = 0.
 
         # Map the desired wrench to grf
-        self.grForcesW_des = np.linalg.pinv(self.NEMatrix, 1e-6) @ self.wrench_desW
+        if type == 'projection':
+            self.grForcesW_des = self.projectionWBC()
+        elif type == 'qp':
+            self.grForcesW_des = self.qpWBC()
+
         WBC_torques = np.empty(12)
         h_jointFromRos = self.u.mapFromRos(self.h_joints)
         for leg in range(4):
-            tau_leg  = self.u.getLegJointState(leg, h_jointFromRos) - \
-                       self.wJ[leg].T  @ self.u.getLegJointState(leg, self.grForcesW_des)
+            tau_leg = self.u.getLegJointState(leg, h_jointFromRos) - \
+                      self.wJ[leg].T @ self.u.getLegJointState(leg, self.grForcesW_des)
             self.u.setLegJointState(leg, tau_leg, WBC_torques)
         return WBC_torques
 
 
+    def projectionWBC(self, tol=1e-6):
+        return np.linalg.pinv(self.NEMatrix, tol) @ self.wrench_desW
+
+    def setWBCConstraints(self, normals = [np.array([0, 0, 1])*4], friction_coeffs= [0.8]*4):
+        # this must be called at least once
+        C_leg = [None] * 4
+
+        for leg in range(4):
+            ty = np.cross(normals[leg], np.array([1, 0, 0]))
+            tx = np.cross(ty, normals[leg])
+            coeff_per_normal = friction_coeffs[leg] * normals[leg]
+            C_leg[leg] = np.array([
+                tx - coeff_per_normal,
+                -tx - coeff_per_normal,
+                ty - coeff_per_normal,
+                -ty - coeff_per_normal])
+
+        self.C_qp = block_diag(block_diag(C_leg[0], C_leg[1], C_leg[2], C_leg[3]))
+        self.d_qp = np.zeros(self.C_qp.shape[0])
+
+
+    def qpWBC(self):
+        G = self.NEMatrix.T @ self.NEMatrix + np.eye(12) * 1e-4  # regularize and make it definite positive
+        g = -self.NEMatrix.T @ self.wrench_desW
+
+        w_des_grf = quadprog_solve_qp(G, g, self.C_qp, self.d_qp, None , None)
+        return w_des_grf
 
     def comFeedforward(self, a_com):
         self.qPin_base_oriented[3:7] = self.quaternion
