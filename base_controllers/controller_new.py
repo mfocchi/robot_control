@@ -505,8 +505,15 @@ class Controller(BaseController):
                 act_twist = self.baseTwistW
             # FEEDBACK WRENCH
             # ---> linear part
-            self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LZ"]+1] = self.Kp_lin @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
+            self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.Kp_lin @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
                                                                        self.Kd_lin @ (self.u.linPart(des_twist) - self.u.linPart(act_twist))
+            # to debug
+            # print("des_pose", self.u.linPart(des_pose))
+            # print("act_pose", self.u.linPart(act_pose))
+            # TODO fix this
+            # print("des_twist", des_twist.T)
+            # print("act_twist", act_twist.T)
+
             # ---> angular part
             # actual orientation: self.b_R_w
             # Desired Orientation
@@ -525,13 +532,13 @@ class Controller(BaseController):
 
             # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an
             # Euclidean space with Jomegaself.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1
-            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1] = self.Kp_ang @ w_err + \
+            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.Kp_ang @ w_err + \
                                                                        self.Kd_ang @ ( Jomega @ (self.u.angPart(des_twist) - self.u.angPart(act_twist)))
 
             # FEED-FORWARD WRENCH
             if not (des_acc is None):
                 # ---> linear part
-                self.wrench_ffW[self.u.sp_crd["LX"]:self.u.sp_crd["LZ"] + 1] = self.robot.robotMass * self.u.linPart(
+                self.wrench_ffW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.robot.robotMass * self.u.linPart(
                     des_acc)
                 # ---> angular part
                 # compute inertia in the world frame:  w_I = R' * B_I * R
@@ -539,7 +546,7 @@ class Controller(BaseController):
                 # compute w_des_omega_dot =  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates (Jomega already computed, see above)
                 Jomega_dot = self.math_utils.Tomega_dot(self.u.angPart(self.comPoseW), self.u.angPart(self.comTwistW))
                 w_des_omega_dot = Jomega @ self.u.angPart(des_acc) + Jomega_dot @ self.u.angPart(des_twist)
-                self.wrench_ffW[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1] = w_I @ w_des_omega_dot
+                self.wrench_ffW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = w_I @ w_des_omega_dot
 
         # GRAVITY WRENCH
         # ---> linear part
@@ -547,7 +554,7 @@ class Controller(BaseController):
         # ---> angular part
         if not comControlled:  # act_state  = base position in this case
             W_base_to_com = self.u.linPart(self.comPoseW) - self.u.linPart(self.basePoseW)
-            self.wrench_gW[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1] = np.cross(W_base_to_com, self.wrench_gW[self.u.sp_crd["LX"]:self.u.sp_crd["LZ"]+1])
+            self.wrench_gW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"]+3] = np.cross(W_base_to_com, self.wrench_gW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"]+3])
         # else the angular wrench is zero
 
 
@@ -563,7 +570,7 @@ class Controller(BaseController):
         for leg in range(self.robot.nee):
             start_col = 3 * leg
             end_col = 3 * (leg + 1)
-            if self.contact_state[leg]:
+            if True:#self.contact_state[leg]:
                 # ---> linear part
                 # identity matrix (I avoid to rewrite zeros)
                 self.NEMatrix[self.u.sp_crd["LX"], start_col] = 1.
