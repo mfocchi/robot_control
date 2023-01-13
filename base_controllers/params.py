@@ -132,6 +132,40 @@ robot_params['climbingrobot'] ={'dt': 0.001,
                        'spawn_z' : 20.0, 
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
+robot_params['climbingrobot_slider'] ={'dt': 0.001,
+                       'kp': np.array([400, 0 ,   0,    400,  100,    50,   50,    50, 30, 30]),
+                       'kd':  np.array([10, 0,    0,    10,   10,     10,   10,     4,   4, 4 ]),
+
+                       'q_0':  np.array([ 0.0, 0, 0, 8.0, 0,0,0, -1.57, 0.0, 0.0 ]),
+                       'joint_names': ['slider', 'mountain_wire_pitch', 'mountain_wire_roll',  'wire_base_prismatic',
+                                       'wire_base_pitch', 'wire_base_roll','wire_base_yaw',
+                                       'hip_pitch', 'hip_roll', 'knee'],
+                       'ee_frame': 'foot',
+                       'spawn_x' : 0.0,
+                       'spawn_y' : 0.0,
+                       'spawn_z' : 20.0,
+                       'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
+
+robot_params['climbingrobot2'] ={'dt': 0.001,
+                       'kp': np.array([0 ,    0,    400,  0,    0,   0, 0 ,    0,    400,  0,    0,   0,    50, 30, 30]),
+                       'kd':  np.array([0,    0,    10,   10,     10,   10,  0,    0,    10,   10,     10,   10,   4,   4, 4  ]),
+
+                       'q_0':  np.array([ 0, 0, 8.0, 0, 0,0, 0, 0, 8.0, 0, 0,0,   -1.57, 0.0, 0.0 ]),
+                       'joint_names': ['mountain_wire_pitch', 'mountain_wire_roll',  'wire_base_prismatic',
+                                       'wire_base_pitch', 'wire_base_roll','wire_base_yaw',
+                                        'mountain_wire_pitch_2', 'mountain_wire_roll_2',  'wire_base_prismatic_2',
+                                       'wire_base_pitch_2', 'wire_base_roll_2','wire_base_yaw_2',
+                                       'hip_pitch', 'hip_roll', 'knee'],
+                       'ee_frame': 'foot',
+                       'spawn_x' : 0.0,
+                       'spawn_y' : 0.0,
+                       'spawn_z' : 20.0,
+                       'spawn_2x': 0.0,
+                       'spawn_2y': 5.0,
+                       'spawn_2z': 20.0,
+                       'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
+
+#
 robot_params['starbot'] ={'dt': 0.001,
                        'kp': 50.*np.array([50. ,   50.,    50.,  50.0 ,
                        			10. ,   10.,    10.,  10. ,
@@ -161,7 +195,7 @@ robot_params['starbot'] ={'dt': 0.001,
                        'spawn_z' : 1.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
-verbose = True
+verbose = False
 plotting = True
 
 

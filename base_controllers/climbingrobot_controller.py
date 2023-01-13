@@ -292,14 +292,11 @@ def talker(p):
 
     p.start()
     if p.robot_name == 'climbingrobot_slider':
-        launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_climbingrobot.launch'
         xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
-        additional_args = 'robot_name:='+p.robot_name
     else:
-        launch_file = None
         xacro_path = None
-        additional_args = None
-    p.startSimulator("slow.world",  additional_args = additional_args, launch_file=launch_file)
+
+    p.startSimulator("slow.world")
     p.loadModelAndPublishers(xacro_path = xacro_path)
 
     p.startupProcedure()
@@ -539,7 +536,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     plt.legend(['sim', 'matlab'])
 
 if __name__ == '__main__':
-    p = ClimbingrobotController(robotName)
+    p = ClimbingrobotController(robot_name=robotName)
 
     try:
         talker(p)
