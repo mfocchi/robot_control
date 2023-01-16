@@ -2,7 +2,7 @@ import numpy as np
 import pinocchio as pin
 
 class IMU_utils:
-    def __init__(self, timeout = 1000, dt = 0.002):
+    def __init__(self, timeout = 250, dt = 0.002):
         self.counter = 0
         self.timeout = timeout
         self.dt = dt
