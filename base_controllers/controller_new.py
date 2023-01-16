@@ -331,7 +331,7 @@ class Controller(BaseController):
             self.world_name_str = world_name
         if 'camera' in self.world_name_str:
             # check if some old jpg are still in /tmp
-            print('#files /tmp/camera_save/default_camera_link_my_camera*: ')
+            print('number of files /tmp/camera_save/default_camera_link_my_camera*: ')
             n_files = os.system('ls /tmp/camera_save/ | grep "default_camera_link_my_camera*" | wc -l')
             if n_files != 0:
                 remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
@@ -900,8 +900,11 @@ class Controller(BaseController):
 
         print('Reference saved in', filename)
 
+    def get_current_frame_file(self):
+        allfiles = [f for f in os.listdir('/tmp/camera_save') if os.path.isfile(os.path.join('/tmp/camera_save', f))]
+        return max(allfiles)
 
-    def save_video(self, path, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=True):
+    def save_video(self, path, start_file=None, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=True):
         # only if camera_xxx.world has been used
         # for details on commands, check https://ffmpeg.org/ffmpeg.html
         if 'camera' not in self.world_name_str:
@@ -910,6 +913,17 @@ class Controller(BaseController):
         #
         # # kill gazebo
         # os.system("killall rosmaster rviz gzserver gzclient")
+
+        if start_file != None:
+            # delete all the files before start_file
+            allfiles = [f for f in os.listdir('/tmp/camera_save') if os.path.isfile(os.path.join('/tmp/camera_save', f))]
+            for f in allfiles:
+                if f < start_file:
+                    #parentheses are not supported by bash
+                    f = f.replace('(', '\(')
+                    f = f.replace(')', '\)')
+                    cmd = 'rm /tmp/camera_save/' + f
+                    os.system(cmd)
 
         if '.' in filename:
             filename=filename[:, filename.find('.')]
