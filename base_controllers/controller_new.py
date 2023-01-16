@@ -348,7 +348,30 @@ class Controller(BaseController):
 
 
 
-    # feedforward controllers
+    def reset(self, basePoseW=None, baseTwistW=None, resetPid=False):
+        if basePoseW is None:
+            basePoseW = np.hstack([self.base_offset, np.zeros(3)])
+        self.freezeBase(flag=True, basePoseW=basePoseW)
+        q_des = conf.robot_params[self.robot_name]['q_0']
+        qd_des = np.zeros(self.robot.na)
+        tau_ffwd = np.zeros(self.robot.na)
+        for k in range(30): # for 30 iteration keep the position, needed for restore joints
+            self.send_command(q_des, qd_des, tau_ffwd)
+        if baseTwistW is None:
+            baseTwistW = np.zeros(6)
+
+        if resetPid:
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
+                                 conf.robot_params[self.robot_name]['kd'],
+                                 np.zeros(self.robot.na))
+        self.freezeBase(flag=True, basePoseW=basePoseW, baseTwistW=baseTwistW)
+
+        self.initVars() # reset logged values
+
+
+        self.imu_utils.W_lin_vel = self.u.linPart(self.baseTwistW)
+
+
 
     def self_weightCompensation(self):
         # it seems that self weight compensation degrates the control performances: do not use it!
