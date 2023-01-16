@@ -727,7 +727,7 @@ class Controller(BaseController):
                 self.send_command(self.q_des, self.qd_des, alpha*self.gravityCompensation())
 
             # IMU BIAS ESTIMATION
-            print(colored("[startupProcedure]Imu ", "blue"))
+            print(colored("[startupProcedure] Imu bias estimation", "blue"))
             if self.real_robot and self.robot_name == 'go1':
                 # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
                 while self.imu_utils.counter < self.imu_utils.timeout:
@@ -749,6 +749,7 @@ class Controller(BaseController):
             if (i%3) != 0:
                 self.q_des[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
         # IMU BIAS ESTIMATION
+        print(colored("[startupProcedure] Imu bias estimation", "blue"))
         #if self.real_robot and self.robot_name == 'go1':
             # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
         while self.imu_utils.counter < self.imu_utils.timeout:
