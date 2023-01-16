@@ -56,28 +56,28 @@ class Controller(BaseController):
         super().initSubscribers()
         if self.real_robot:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
-                                                 callback=self._recieve_imu_acc_real, queue_size=1, tcp_nodelay=True)
+                                                 callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
             self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,
-                                                 callback=self._recieve_euler, queue_size=1, tcp_nodelay=True)
+                                                 callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
         else:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,
-                                                  callback=self._recieve_imu_acc, queue_size=1, tcp_nodelay=True)
+                                                  callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
 
-    def _recieve_imu_acc_real(self, msg):
+    def _receive_imu_acc_real(self, msg):
         self.B_imu_lin_acc[0] = msg.x
         self.B_imu_lin_acc[1] = msg.y
         self.B_imu_lin_acc[2] = msg.z
 
         self.W_base_lin_acc = self.b_R_w.T @ (self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
-    def _recieve_imu_acc(self, msg):
+    def _receive_imu_acc(self, msg):
         self.B_imu_lin_acc[0] = msg.linear_acceleration.x
         self.B_imu_lin_acc[1] = msg.linear_acceleration.y
         self.B_imu_lin_acc[2] = msg.linear_acceleration.z
 
         self.W_base_lin_acc = self.b_R_w.T @ (self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
-    def _recieve_euler(self, msg):
+    def _receive_euler(self, msg):
         self.euler[0] = msg.x
         self.euler[1] = msg.y
         self.euler[2] = msg.z
