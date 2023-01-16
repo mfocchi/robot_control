@@ -421,7 +421,7 @@ class Controller(BaseController):
             Jomega = self.math_utils.Tomega(self.u.angPart(self.comPoseW))
 
             # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an
-            # Euclidean space with Jomegaself.u.sp_crd["AX"]:self.u.sp_crd["AZ"]+1
+            # Euclidean space with Jomega
             self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.Kp_ang @ w_err + \
                                                                        self.Kd_ang @ ( Jomega @ (self.u.angPart(des_twist) - self.u.angPart(act_twist)))
 
