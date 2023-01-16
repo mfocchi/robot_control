@@ -858,7 +858,7 @@ class Controller(BaseController):
                                 q_des_leg = self.IK.ik_leg(self.b_R_w.T@B_foot, foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
 
-                        self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
+                        self.tau_ffwd = self.gravityCompensation()
 
                     else:
                         print(colored("[startupProcedure] desired height reached", "blue"))
@@ -876,7 +876,7 @@ class Controller(BaseController):
                         # if any of the joint position errors is larger than 0.02 or
                         # if any of the joint velocities is larger than 0.02 or
                         # if the watchdog timer is not expired (1 sec)
-                        self.tau_ffwd = self.gravityCompensation() + self.self_weightCompensation()
+                        self.tau_ffwd = self.gravityCompensation()
 
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
