@@ -73,9 +73,9 @@ robot_params['go1'] ={'dt': 0.002,
                        'kd': np.array([3.,3.,3.]*4),  # 1
                        'kp_real': 20.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
                        'kd_real': 0.3*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
-                       'Kp_lin': np.array([500., 500., 800.]), # x y z
-                       'Kd_lin': np.array([200., 100., 100.]),
-                       'Kp_ang': np.array([100., 100., 100.]), # R P Y
+                       'Kp_lin': np.array([800., 500., 800.]), # x y z
+                       'Kd_lin': np.array([100., 100., 100.]),
+                       'Kp_ang': np.array([100., 300., 100.]), # R P Y
                        'Kd_ang': np.array([10., 20., 20.]),
                         'q_0':  np.array([0.2, 0.78, -1.7, -0.20, 0.78, -1.7, 0.20, 0.78, -1.7, -0.20, 0.78, -1.7]),
                         #'q_fold': np.array([0.6, 1.7, -2.77, 0.6, 1.7, -2.77, -0.6, 1.52, -2.77, -0.6, 1.52, -2.77]),
@@ -89,7 +89,7 @@ robot_params['go1'] ={'dt': 0.002,
                         'spawn_x': 0.0,#0.3,
                         'spawn_y': 0.0,
                         'spawn_z': .3,
-                        'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
+                        'buffer_size': 3001} # note the frames are all aligned with base for joints = 0
 
 robot_params['ur5'] ={'dt': 0.001, 
                        'kp': np.array([300, 300, 300,30,30,1]),
