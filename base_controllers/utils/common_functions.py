@@ -153,24 +153,28 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None):
 def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None):
     plot_var_des_log = None
     if name == 'position':
+        unit = '[rad]'
         plot_var_log = q_log
         if   (q_des_log is not None):
             plot_var_des_log = q_des_log
         else:
             plot_var_des_log = None
     elif name == 'velocity':
+        unit = '[rad/s]'
         plot_var_log = qd_log
         if   (qd_des_log is not None):
             plot_var_des_log  = qd_des_log
         else:
             plot_var_des_log = None
     elif name == 'acceleration':
+        unit = '[rad/s^2]'
         plot_var_log = qdd_log
         if   (qdd_des_log is not None):
             plot_var_des_log  = qdd_des_log
         else:
             plot_var_des_log = None
     elif name == 'torque':
+        unit = '[Nm]'
         plot_var_log = tau_log
         if   (tau_des_log is not None):
             plot_var_des_log  = tau_des_log
@@ -211,9 +215,13 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
     for jidx in range(njoints):
         if (njoints % 3 == 0): #divisible by 3
             plt.subplot(int(njoints / 3), 3, jidx + 1)
+            if jidx + 3 >= njoints:
+                plt.xlabel("Time [s]")
         else:  # divisible by 2
             plt.subplot(int(njoints / 2), 2, jidx + 1)
-        plt.ylabel(labels[jidx])
+            if jidx + 2 >= njoints:
+                plt.xlabel("Time [s]")
+        plt.ylabel(labels[jidx] + ' '+ unit)
         if name == 'torque' and tau_ffwd_log is not None:
             plt.plot(time_log, tau_ffwd_log[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
                      color='green')
@@ -223,6 +231,12 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
         if (q_adm is not None):
             plt.plot(time_log, q_adm[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
         plt.grid()
+
+    if njoints == 12:
+        fig.align_ylabels(fig.axes[0:12:3])
+        fig.align_ylabels(fig.axes[1:12:4])
+        fig.align_ylabels(fig.axes[2:12:4])
+
     return fig
                 
     
@@ -291,20 +305,31 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
 def plotCoM(name,  figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, baseAccW=None, des_baseAccW=None,  wrenchW=None, title = None):
     plot_var_des_log = None
     if name == 'position':
+        labels = ["CoM X", "CoM Y", "CoM Z", "Roll", "Pitch", "Yaw"]
+        lin_unit = '[m]'
+        ang_unit = '[rad]'
         plot_var_log = basePoseW
         if   (des_basePoseW is not None):
             plot_var_des_log = des_basePoseW
     elif name == 'velocity':
+        labels = ["CoM X", "CoM Y", "CoM Z", "Roll", "Pitch", "Yaw"]
+        lin_unit = '[m/s]'
+        ang_unit = '[rad/s]'
         plot_var_log = baseTwistW
         if   (des_baseTwistW is not None):
             plot_var_des_log  = des_baseTwistW
     elif name == 'acceleration':
+        labels = ["CoM X", "CoM Y", "CoM Z", "Roll", "Pitch", "Yaw"]
+        lin_unit = '[m/s^2]'
+        ang_unit = '[rad/s^2]'
         plot_var_log = baseAccW
         if   (des_baseAccW is not None):
             plot_var_des_log  = des_baseAccW    
     elif name == 'wrench':
-        plot_var_log =  None
-        plot_var_des_log  = wrenchW                                    
+        labels = ["FX", "FY", "FZ", "MX", "MY", "MX"]
+        lin_unit = '[N]'
+        ang_unit = '[Nm]'
+        plot_var_log  = wrenchW
     else:
        print("wrong choice")
 
@@ -315,61 +340,59 @@ def plotCoM(name,  figure_id, time_log, des_basePoseW=None, basePoseW=None, des_
     fig = plt.figure(figure_id)
     fig.suptitle(title, fontsize=20)
     plt.subplot(3, 2, 1)
-    plt.ylabel("CoM X")
-    if (plot_var_log is not None):
-        plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
+    plt.ylabel(labels[0] + " "+lin_unit)
+    plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     if (plot_var_des_log is not None):
         plt.plot(time_log, plot_var_des_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
                  color='red')
-
     plt.grid()
 
-
     plt.subplot(3, 2, 3)
-    plt.ylabel("CoM Y")
-    if (plot_var_log is not None):
-        plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    plt.ylabel(labels[1] + " "+lin_unit)
+    plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[1, :], linestyle='-', lw=lw_des, color='red')
-    plt.legend(bbox_to_anchor=(-0.01, 1.115, 1.01, 0.115), loc=3, mode="expand")
     plt.grid()
 
     plt.subplot(3, 2, 5)
-    plt.ylabel("CoM Z")
-    if (plot_var_log is not None):
-        plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    plt.ylabel(labels[2] + " "+lin_unit)
+    plt.xlabel("Time [s]")
+    plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[2, :], linestyle='-', lw=lw_des, color='red')
     plt.grid()
 
     plt.subplot(3, 2, 2)
-    plt.ylabel("Roll")
-    if (plot_var_log is not None):
-        plt.plot(time_log, plot_var_log[3, :].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    plt.ylabel(labels[3] + " "+ang_unit)
+    plt.plot(time_log, plot_var_log[3, :].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[3, :], linestyle='-', lw=lw_des, color='red')
     plt.grid()
 
     plt.subplot(3, 2, 4)
-    plt.ylabel("Pitch")
-    if (plot_var_log is not None):
-        plt.plot(time_log, plot_var_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+    plt.ylabel(labels[4] + " "+ang_unit)
+    plt.plot(time_log, plot_var_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[4, :], linestyle='-', lw=lw_des, color='red')
     plt.grid()
 
     plt.subplot(3, 2, 6)
-    plt.ylabel("Yaw")
-    if (plot_var_log is not None):
-        plt.plot(time_log, plot_var_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
-                color='blue')
+    plt.ylabel(labels[5] + " "+ang_unit)
+    plt.xlabel("Time [s]")
+    plt.plot(time_log, plot_var_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+            color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[5, :], linestyle='-', lw=lw_des, color='red')
     plt.grid()
+
+
+    fig.align_ylabels(fig.axes[:3])
+    fig.align_ylabels(fig.axes[3:])
+
     return fig
 
 
@@ -410,21 +433,24 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
     fig = plt.figure(figure_id)
     fig.suptitle("ground reaction forces", fontsize=20)  
     plt.subplot(6,2,1)
-    plt.ylabel("$LF_x$", fontsize=10)
+    plt.ylabel("$LF_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[0,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[0,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((-100,100))
                 
     plt.subplot(6,2,3)
-    plt.ylabel("$LF_y$", fontsize=10)
+    plt.ylabel("$LF_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[1,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[1,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((-100,100))
                 
     plt.subplot(6,2,5)
-    plt.ylabel("$LF_z$", fontsize=10)
+    plt.ylabel("$LF_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[2,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[2,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
@@ -432,21 +458,24 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
 
     #RF
     plt.subplot(6,2,2)
-    plt.ylabel("$RF_x$", fontsize=10)
+    plt.ylabel("$RF_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[3,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[3,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((-100,100))
                 
     plt.subplot(6,2,4)
-    plt.ylabel("$RF_y$", fontsize=10)
+    plt.ylabel("$RF_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[4,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[4,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((-100,100))
                 
     plt.subplot(6,2,6)
-    plt.ylabel("$RF_z$", fontsize=10)
+    plt.ylabel("$RF_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[5,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[5,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
@@ -454,14 +483,16 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
                 
      #LH
     plt.subplot(6,2,7)
-    plt.ylabel("$LH_x$", fontsize=10)
+    plt.ylabel("$LH_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[6,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[6,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((-100,100))
                 
     plt.subplot(6,2,9)
-    plt.ylabel("$LH_y$", fontsize=10)
+    plt.ylabel("$LH_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[7,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[7,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
@@ -469,7 +500,8 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
                 
                 
     plt.subplot(6,2,11)
-    plt.ylabel("$LH_z$", fontsize=10)
+    plt.ylabel("$LH_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[8,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[8,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
@@ -477,25 +509,34 @@ def plotGRFs(figure_id, time_log, des_forces, act_forces):
                 
      #RH
     plt.subplot(6,2,8)
-    plt.ylabel("$RH_x$", fontsize=10)
+    plt.ylabel("$RH_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[9,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[9,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((-100,100))
                 
     plt.subplot(6,2,10)
-    plt.ylabel("$RH_y$", fontsize=10)
+    plt.ylabel("$RH_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[10,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[10,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((-100,100))
                         
     plt.subplot(6,2,12)
-    plt.ylabel("$RH_z$", fontsize=10)
+    plt.ylabel("$RH_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[11,:],linestyle='-',lw=lw_des,color = 'red')
     plt.plot(time_log, act_forces[11,:],linestyle='-',lw=lw_act,color = 'blue')
     plt.grid()
     #plt.ylim((0,450))
+
+
+    fig.align_ylabels(fig.axes[0:12:4])
+    fig.align_ylabels(fig.axes[1:12:4])
+    fig.align_ylabels(fig.axes[2:12:4])
+    fig.align_ylabels(fig.axes[3:12:4])
 
 
 def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
@@ -504,7 +545,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     fig = plt.figure(figure_id)
     fig.suptitle("ground reaction forces", fontsize=20)
     plt.subplot(6, 2, 1)
-    plt.ylabel("$LF_x$", fontsize=10)
+    plt.ylabel("$LF_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[0, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[0, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[0, :], linestyle='-', lw=lw_act, color='green')
@@ -512,7 +554,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 3)
-    plt.ylabel("$LF_y$", fontsize=10)
+    plt.ylabel("$LF_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[1, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[1, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[1, :], linestyle='-', lw=lw_act, color='green')
@@ -520,7 +563,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 5)
-    plt.ylabel("$LF_z$", fontsize=10)
+    plt.ylabel("$LF_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[2, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[2, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[2, :], linestyle='-', lw=lw_act, color='green')
@@ -529,7 +573,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
 
     # RF
     plt.subplot(6, 2, 2)
-    plt.ylabel("$RF_x$", fontsize=10)
+    plt.ylabel("$RF_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[3, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[3, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[3, :], linestyle='-', lw=lw_act, color='green')
@@ -537,7 +582,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 4)
-    plt.ylabel("$RF_y$", fontsize=10)
+    plt.ylabel("$RF_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[4, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[4, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[4, :], linestyle='-', lw=lw_act, color='green')
@@ -545,7 +591,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 6)
-    plt.ylabel("$RF_z$", fontsize=10)
+    plt.ylabel("$RF_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[5, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[5, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[5, :], linestyle='-', lw=lw_act, color='green')
@@ -554,7 +601,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
 
     # LH
     plt.subplot(6, 2, 7)
-    plt.ylabel("$LH_x$", fontsize=10)
+    plt.ylabel("$LH_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[6, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[6, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[6, :], linestyle='-', lw=lw_act, color='green')
@@ -562,7 +610,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 9)
-    plt.ylabel("$LH_y$", fontsize=10)
+    plt.ylabel("$LH_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[7, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[7, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[7, :], linestyle='-', lw=lw_act, color='green')
@@ -570,7 +619,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 11)
-    plt.ylabel("$LH_z$", fontsize=10)
+    plt.ylabel("$LH_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[8, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[8, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[8, :], linestyle='-', lw=lw_act, color='green')
@@ -579,7 +629,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
 
     # RH
     plt.subplot(6, 2, 8)
-    plt.ylabel("$RH_x$", fontsize=10)
+    plt.ylabel("$RH_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[9, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[9, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[9, :], linestyle='-', lw=lw_act, color='green')
@@ -587,7 +638,8 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 10)
-    plt.ylabel("$RH_y$", fontsize=10)
+    plt.ylabel("$RH_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[10, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[10, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[10, :], linestyle='-', lw=lw_act, color='green')
@@ -595,12 +647,18 @@ def plotGRFs_withGT(figure_id, time_log, des_forces, act_forces, gt_forces):
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 12)
-    plt.ylabel("$RH_z$", fontsize=10)
+    plt.ylabel("$RH_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[11, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[11, :], linestyle='-', lw=lw_act, color='blue')
     plt.plot(time_log, gt_forces[11, :], linestyle='-', lw=lw_act, color='green')
     plt.grid()
     # plt.ylim((0,450))
+
+    fig.align_ylabels(fig.axes[:6])
+    fig.align_ylabels(fig.axes[6:])
+    return fig
+
 
 def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_states):
     # %% Input plots
@@ -608,7 +666,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     fig = plt.figure(figure_id)
     fig.suptitle("ground reaction forces", fontsize=20)
     plt.subplot(6, 2, 1)
-    plt.ylabel("$LF_x$", fontsize=10)
+    plt.ylabel("$LF_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[0, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[0, :], linestyle='-', lw=lw_act, color='blue')
     coeff =  max(np.nanmax(des_forces[0, :]), np.nanmax(act_forces[0, :]))
@@ -617,7 +676,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 3)
-    plt.ylabel("$LF_y$", fontsize=10)
+    plt.ylabel("$LF_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[1, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[1, :], linestyle='-', lw=lw_act, color='blue')
     coeff =  max(np.nanmax(des_forces[1, :]), np.nanmax(act_forces[1, :]))
@@ -626,7 +686,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 5)
-    plt.ylabel("$LF_z$", fontsize=10)
+    plt.ylabel("$LF_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[2, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[2, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[2, :]), np.nanmax(act_forces[2, :]))
@@ -636,7 +697,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
 
     # RF
     plt.subplot(6, 2, 2)
-    plt.ylabel("$RF_x$", fontsize=10)
+    plt.ylabel("$RF_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[3, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[3, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[3, :]), np.nanmax(act_forces[3, :]))
@@ -645,7 +707,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 4)
-    plt.ylabel("$RF_y$", fontsize=10)
+    plt.ylabel("$RF_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[4, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[4, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[4, :]), np.nanmax(act_forces[4, :]))
@@ -654,7 +717,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 6)
-    plt.ylabel("$RF_z$", fontsize=10)
+    plt.ylabel("$RF_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[5, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[5, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[5, :]), np.nanmax(act_forces[5, :]))
@@ -664,7 +728,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
 
     # LH
     plt.subplot(6, 2, 7)
-    plt.ylabel("$LH_x$", fontsize=10)
+    plt.ylabel("$LH_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[6, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[6, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[6, :]), np.nanmax(act_forces[6, :]))
@@ -673,7 +738,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 9)
-    plt.ylabel("$LH_y$", fontsize=10)
+    plt.ylabel("$LH_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[7, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[7, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[7, :]), np.nanmax(act_forces[7, :]))
@@ -682,7 +748,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 11)
-    plt.ylabel("$LH_z$", fontsize=10)
+    plt.ylabel("$LH_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[8, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[8, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[8, :]), np.nanmax(act_forces[8, :]))
@@ -692,7 +759,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
 
     # RH
     plt.subplot(6, 2, 8)
-    plt.ylabel("$RH_x$", fontsize=10)
+    plt.ylabel("$RH_x [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[9, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[9, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[9, :]), np.nanmax(act_forces[9, :]))
@@ -701,7 +769,8 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 10)
-    plt.ylabel("$RH_y$", fontsize=10)
+    plt.ylabel("$RH_y [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[10, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[10, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[10, :]), np.nanmax(act_forces[10, :]))
@@ -710,13 +779,18 @@ def plotGRFs_withContacts(figure_id, time_log, des_forces, act_forces, contact_s
     # plt.ylim((-100,100))
 
     plt.subplot(6, 2, 12)
-    plt.ylabel("$RH_z$", fontsize=10)
+    plt.ylabel("$RH_z [N]$", fontsize=10)
+    plt.xlabel("Time [s]")
     plt.plot(time_log, des_forces[11, :], linestyle='-', lw=lw_des, color='red')
     plt.plot(time_log, act_forces[11, :], linestyle='-', lw=lw_act, color='blue')
     coeff = max(np.nanmax(des_forces[11, :]), np.nanmax(act_forces[11, :]))
     plt.plot(time_log, coeff * contact_states[3, :], linestyle='-', lw=lw_act/2, color='black')
     plt.grid()
     # plt.ylim((0,450))
+
+    fig.align_ylabels(fig.axes[:6])
+    fig.align_ylabels(fig.axes[6:])
+    return fig
 
 
 def plotFeet(figure_id, time_log, des_feet=None, act_feet=None, contact_states=None):
@@ -734,7 +808,8 @@ def plotFeet(figure_id, time_log, des_feet=None, act_feet=None, contact_states=N
         for a in range(3):
             i = 3*l+a
             plt.subplot(6, 2, positions[3*l+a])
-            plt.ylabel("$"+legs[l]+"_"+axes[a]+"$", fontsize=10)
+            plt.ylabel("$"+legs[l]+"_"+axes[a]+"\, [m]$", fontsize=10)
+            plt.xlabel("Time [s]")
             if des_feet is not None:
                 plt.plot(time_log, des_feet[i, :], linestyle='-', lw=lw_des, color='red')
             if act_feet is not None:
@@ -744,6 +819,9 @@ def plotFeet(figure_id, time_log, des_feet=None, act_feet=None, contact_states=N
                 plt.plot(time_log, coeff*contact_states[l, :], linestyle='-', lw=lw_act/2, color='black')
             plt.grid()
     # plt.ylim((-100,100))
+
+    fig.align_ylabels(fig.axes[:6])
+    fig.align_ylabels(fig.axes[6:])
     return fig
 
 
