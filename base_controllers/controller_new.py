@@ -153,19 +153,13 @@ class Controller(BaseController):
 
         self.euler = np.zeros(3)
         # some extra variables
-        self.gen_config_neutral = pin.neutral(self.robot.model)
-        self.qPin_base_oriented = pin.neutral(self.robot.model)
-        self.vPin_base_oriented = np.zeros(self.robot.na)
 
-        self.tau_ddp = np.zeros(self.robot.na)
         self.tau_fb = np.zeros(self.robot.na)
         self.tau_des = np.zeros(self.robot.na)
 
         self.basePoseW_des = np.zeros(6) * np.nan
         self.baseTwistW_des = np.zeros(6) * np.nan
 
-        # self.comPoseW = np.zeros(6) * np.nan
-        # self.comTwistW = np.zeros(6) * np.nan
 
         self.comPoseW_des = np.zeros(6) * np.nan
         self.comTwistW_des = np.zeros(6) * np.nan
@@ -178,16 +172,11 @@ class Controller(BaseController):
 
         self.contact_state = np.array([False] * 4)
 
-        self.contact_matrix = np.hstack([np.vstack([np.eye(3), np.zeros((3, 3))])] * self.robot.nee)
-        self.gravityW = -self.robot.robot_mass * self.robot.model.gravity.vector
-        self.gravityB = np.zeros_like(self.gravityW)
-
         self.g_mag = np.linalg.norm(self.robot.model.gravity.vector)
 
         self.grForcesW_des = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesB_ffwd = np.empty(3 * self.robot.nee) * np.nan
-        self.grForcesB_ddp = np.empty(3 * self.robot.nee) * np.nan
 
         # virtual impedance wrench control
         self.Kp_lin = np.diag(conf.robot_params[self.robot_name].get('Kp_lin', np.zeros(3)))
@@ -202,10 +191,10 @@ class Controller(BaseController):
         self.wrench_gW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
         self.wrench_desW = np.zeros(6)
 
-        self.wrench_fbW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
-        self.wrench_ffW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
-        self.wrench_gW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
-        self.wrench_desW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*np.nan
+        self.wrench_fbW_log = np.full( (6, conf.robot_params[self.robot_name]['buffer_size'] ), np.nan)
+        self.wrench_ffW_log = np.full( (6, conf.robot_params[self.robot_name]['buffer_size'] ), np.nan)
+        self.wrench_gW_log = np.full( (6, conf.robot_params[self.robot_name]['buffer_size'] ), np.nan)
+        self.wrench_desW_log = np.full( (6, conf.robot_params[self.robot_name]['buffer_size'] ), np.nan)
 
         self.NEMatrix = np.zeros([6, 3*self.robot.nee]) # Newton-Euler matrix
 
@@ -215,129 +204,58 @@ class Controller(BaseController):
             self.force_th = 0.
 
         # imu
-        self.B_imu_lin_acc = np.empty(3) * np.nan
-        self.W_base_lin_acc = np.empty(3) * np.nan
+        self.B_imu_lin_acc = np.full(3, np.nan)
+        self.W_base_lin_acc = np.full(3, np.nan)
 
 
-        self.comPosB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.comVelB_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.comPosB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.comVelB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
-        self.comPoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.comTwistW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.comPoseW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.comTwistW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.comPoseW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.comTwistW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.comPoseW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.comTwistW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
-        self.comVelW_leg_odom = np.empty((3)) * np.nan
-        self.comVelW_leg_odom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-
-
-        self.basePoseW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.baseTwistW_des_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.w_p_b_legOdom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.w_v_b_legOdom_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-
-        self.tau_fb_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.tau_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.comVelW_leg_odom = np.full((3), np.nan)
+        self.comVelW_leg_odom_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
 
-        self.grForcesB_log = np.empty((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.grForcesW_gt_log = np.empty(
-            (3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.basePoseW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.baseTwistW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.w_p_b_legOdom_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.w_v_b_legOdom_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
-        self.grForcesW_des_log = np.empty(
-            (3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.tau_fb_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.tau_des_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
-        self.W_contacts_log = np.empty((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.W_contacts_des_log = np.empty(
-            (3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
-        self.B_contacts_log = np.empty((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.B_contacts_des_log = np.empty((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.grForcesB_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.grForcesW_gt_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+
+        self.grForcesW_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+
+        self.W_contacts_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.W_contacts_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+
+        self.B_contacts_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.B_contacts_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.contact_state_log = np.empty((self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
-        self.tau_minus_h_log = np.empty((self.robot.nv, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.tau_minus_h = np.zeros(self.robot.nv)
-
-        self.qdd_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.qdd = np.zeros(self.robot.na)
-
-        self.W_base_lin_acc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.W_base_lin_acc_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.W_base_lin_acc = np.zeros(3)
-
-        self.C_qd_log = np.empty((self.robot.nv, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.C_qd = np.zeros(self.robot.nv)
-
-        self.T_p_com_ref_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.T_p_base_leg_odom_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-
-        self.T_p_com_ref_lc = np.zeros(3)
-        self.T_p_base_leg_odom_lc = np.zeros(3)
-
-        self.T_v_com_ref_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-        self.T_v_base_leg_odom_lc_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-
-        self.T_v_com_ref_lc = np.zeros(3)
-        self.T_v_base_leg_odom_lc = np.zeros(3)
-
-        self.W_lin_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        
+        self.W_lin_vel_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.zmp = np.zeros(3)
-        self.zmp_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-
-
-
-
-        self.time_log =  np.empty((1, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
+        self.zmp_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
 
     def logData(self):
         self.log_counter += 1
         self.log_counter %= conf.robot_params[self.robot_name]['buffer_size']
 
-        # if log_counter exceed N*buffer_size, reshape all the log variables
-        # if self.log_counter != 0 and (self.log_counter % conf.robot_params[self.robot_name]['buffer_size']) == 0:
-        #     self.comPosB_log = self.log_policy(self.comPosB_log)
-        #     self.comVelB_log = self.log_policy(self.comVelB_log)
-        #     self.comPosW_log = self.log_policy(self.comPosW_log)
-        #     self.comVelW_log = self.log_policy(self.comVelW_log)
-        #     self.comPosW_des_log = self.log_policy(self.comPosW_des_log)
-        #     self.comVelW_des_log = self.log_policy(self.comVelW_des_log)
-        #     self.basePoseW_log = self.log_policy(self.basePoseW_log)
-        #     self.baseTwistW_log = self.log_policy(self.baseTwistW_log)
-        #     self.basePoseW_des_log = self.log_policy(self.basePoseW_des_log)
-        #     self.baseTwistW_des_log = self.log_policy(self.baseTwistW_des_log)
-        #     self.w_p_b_legOdom_log = self.log_policy(self.w_p_b_legOdom_log)
-        #     self.w_v_b_legOdom_log = self.log_policy(self.w_v_b_legOdom_log)
-        #     self.q_des_log = self.log_policy(self.q_des_log)
-        #     self.q_log = self.log_policy(self.q_log)
-        #     self.qd_des_log = self.log_policy(self.qd_des_log)
-        #     self.qd_log = self.log_policy(self.qd_log)
-        #     self.tau_fb_log = self.log_policy(self.tau_fb_log)
-        #     self.tau_ffwd_log = self.log_policy(self.tau_ffwd_log)
-        #     self.tau_des_log = self.log_policy(self.tau_des_log)
-        #     self.tau_log = self.log_policy(self.tau_log)
-        #     self.time_log = self.log_policy(self.time_log)
-        #     self.constr_viol_log = self.log_policy(self.constr_viol_log)
-        #     self.grForcesW_log = self.log_policy(self.grForcesW_log)
-        #     self.grForcesW_des_log = self.log_policy(self.grForcesW_des_log)
-        #     self.grForcesB_log = self.log_policy(self.grForcesB_log)
-        #     self.grForcesW_gt_log = self.log_policy(self.grForcesW_gt_log)
-        #     self.W_contacts_log = self.log_policy(self.W_contacts_log)
-        #     self.B_contacts_log = self.log_policy(self.B_contacts_log)
-        #     self.B_contacts_des_log = self.log_policy(self.B_contacts_des_log)
-        #     self.contact_state_log = self.log_policy(self.contact_state_log)
-        #     self.tau_minus_h_log = self.log_policy(self.tau_minus_h_log)
-        #     self.qdd_log = self.log_policy(self.qdd_log)
-        #     self.base_acc_W_log = self.log_policy(self.base_acc_W_log)
-        #     self.C_qd_log = self.log_policy(self.C_qd_log)
-        #     self.T_p_com_ref_lc_log = self.log_policy(self.T_p_com_ref_lc_log)
-        #     self.T_p_base_leg_odom_lc_log = self.log_policy(self.T_p_base_leg_odom_lc_log)
-        #     self.T_v_com_ref_lc_log = self.log_policy(self.T_v_com_ref_lc_log)
-        #     self.T_v_base_leg_odom_lc_log = self.log_policy(self.T_v_base_leg_odom_lc_log)
-        #     self.comVelW_leg_odom_log = self.log_policy(self.comVelW_leg_odom_log)
-
-        # Fill with new values
+        # full with new values
         self.comPosB_log[:, self.log_counter] = self.comB
         self.comVelB_log[:, self.log_counter] = self.comVelB
         self.comPoseW_log[:, self.log_counter] = self.comPoseW
@@ -365,15 +283,9 @@ class Controller(BaseController):
         self.grForcesW_gt_log[:, self.log_counter] = self.grForcesW_gt
         self.grForcesB_log[:, self.log_counter] = self.grForcesB
         self.contact_state_log[:, self.log_counter] = self.contact_state
-        self.tau_minus_h_log[:, self.log_counter] = self.tau_minus_h
-        self.qdd_log[:, self.log_counter] = self.qdd
+        
         self.W_base_lin_acc_log[:, self.log_counter] = self.W_base_lin_acc
-        self.C_qd_log[:, self.log_counter] = self.C_qd
-        self.T_p_com_ref_lc_log[:, self.log_counter] = self.T_p_com_ref_lc
-        self.T_p_base_leg_odom_lc_log[:, self.log_counter] = self.T_p_base_leg_odom_lc
-
-        self.T_v_com_ref_lc_log[:, self.log_counter] = self.T_v_com_ref_lc
-        self.T_v_base_leg_odom_lc_log[:, self.log_counter] = self.T_v_base_leg_odom_lc
+        
 
         self.comVelW_leg_odom_log[:, self.log_counter] = self.comVelW_leg_odom
 
@@ -392,7 +304,7 @@ class Controller(BaseController):
         self.wrench_desW_log[:, self.log_counter] = self.wrench_desW
 
 
-        self.time_log[:, self.log_counter] = self.time
+        self.time_log[self.log_counter] = self.time
 
 
     def startController(self, world_name=None, xacro_path=None, use_ground_truth_contacts=True, additional_args=None):
