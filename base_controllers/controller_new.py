@@ -382,52 +382,7 @@ class Controller(BaseController):
 
     def gravityCompensation(self):
         # require the call to updateKinematics
-        # to simplyfy, all the feet are assumed to be in contact
-        # contact_torques = np.zeros(self.robot.na)
-        # for leg in range(4):
-        #     S = pin.skew(self.B_contacts[leg] - self.comB )
-        #     self.contact_matrix[3:, 3 * leg:3 * (leg + 1)] = S
-        # C_pinv = np.linalg.pinv(self.contact_matrix)
-        # self.gravityB[0:3] = self.b_R_w @ self.gravityW[0:3]
-        # self.grForcesW_des = C_pinv @ self.gravityB
-        # for leg in range(4):
-        #     tau_leg  = -self.J[leg].T  @ self.u.getLegJointState(leg, self.grForcesW_des)
-        #     self.u.setLegJointState(leg, tau_leg, contact_torques)
-        # return contact_torques
         return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
-
-    # TODO: To be tested
-    # def gravityCompensation(self, legsInContact):
-    #     legsInContact.sort()
-    #     nc = len(legsInContact)
-    #     fb_config = np.hstack((0.,0.,0.,0., 0., 0., 1., self.u.mapFromRos(self.q)))
-    #
-    #     com_B = self.robot.com(fb_config)
-    #
-    #     self.robot.forwardKinematics(fb_config)
-    #     pin.updateFramePlacements(self.robot.model, self.robot.data)
-    #     contact_matrix = np.zeros([6, nc])
-    #
-    #     for i in range(0, nc):
-    #         index = self.robot.getEndEffectorsFrameId[i]
-    #         foot_pos_B = self.robot.data.oMf[index].translation
-    #         S = pin.skew(foot_pos_B - com_B)
-    #         contact_matrix[:3, 3 * i:3 * (i + 1)] = np.eye(3)
-    #         contact_matrix[3:, 3 * i:3 * (i + 1)] = S
-    #     C_pinv = np.linalg.pinv(contact_matrix)
-    #     self.gravityB[0:3] = pin.Quaternion(self.quaternion).toRotationMatrix().T @ self.gravityW[0:3]
-    #     # these are the forces applied to the feet in contact
-    #     feet_forces_gravity_tmp = C_pinv @ self.gravityB
-    #     # let add zeros for the forces on the feet not in contact
-    #     feet_forces_gravity= np.zeros(3*self.robot.nee)
-    #     for leg in range(0, self.robot.nee):
-    #         if leg in legsInContact:
-    #             f = feet_forces_gravity_tmp[3*legsInContact.index(leg):3*(legsInContact.index(leg)+1)]
-    #             feet_forces_gravity = self.u.getLegJointState(leg, f)
-    #
-    #     J = self.robot.getEEStackJacobians(fb_config, 'linear')[:, 6:]
-    #     contact_torques = -self.u.mapToRos(J.T @ feet_forces_gravity)
-    #     return contact_torques
 
 
     def virtualImpedanceWrench(self, des_pose, des_twist, des_acc = None, comControlled = True):
@@ -562,17 +517,6 @@ class Controller(BaseController):
         w_des_grf = quadprog_solve_qp(G, g, self.C_qp, self.d_qp, None , None)
         return w_des_grf
 
-    def comFeedforward(self, a_com):
-        self.qPin_base_oriented[3:7] = self.quaternion
-        self.qPin_base_oriented[7:] = self.u.mapFromRos(self.q)
-
-        pin.jacobianCenterOfMass(self.robot.model, self.robot.data, self.qPin_base_oriented)
-        J_com = self.robot.data.Jcom
-
-        wrench = self.robot.robot_mass * a_com
-        com_torques = self.u.mapToRos(J_com[:, 6:].T @ wrench)
-
-        return -com_torques
 
 
     def support_poly(self, contacts):
