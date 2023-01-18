@@ -25,7 +25,7 @@ from utils.common_functions import plotJoint, plotCoMLinear
 from numpy import nan
 import matplotlib.pyplot as plt
 
-import rospy
+import rospkg
 import rospy as ros
 from utils.math_tools import *
 import pinocchio as pin
@@ -84,7 +84,7 @@ class JumpLegController(BaseControllerFixed):
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
         self.no_gazebo = False
-        self.use_ground_truth_contacts = True
+        self.use_ground_truth_contacts = False
 
         if self.use_ground_truth_contacts:
             self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
@@ -173,6 +173,7 @@ class JumpLegController(BaseControllerFixed):
         self.cost = Cost()
         # unil friction sing jointrange torques err_vliftoff target
         # self.cost.weights = np.array([1., 0.1, 10., 0.01, 10., 10., 1.])
+        #  unilateral  friction   singularity      joint_range  joint_torques   error_vel_liftoff  target = 0
         self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.]) 
         self.mu = 0.8
 
@@ -597,14 +598,15 @@ def talker(p):
         p.ros_pub = RosPub("jumpleg")
         p.robot = getRobotModel("jumpleg")
     else:
-        p.startSimulator("jump_platform.world")
+        additional_args=['gui:=false']
+        p.startSimulator("jump_platform.world", additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
         p.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
         p.startupProcedure()
 
-    p.loadRLAgent(mode='train', data_path='/home/riccardo/jumpleg_agent', model_name='load', restore_train=False)
+    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='25000', restore_train=False)
 
     p.initVars()
     ros.sleep(1.0)
@@ -658,7 +660,7 @@ def talker(p):
         p.plotTrajectoryBezier(p.T_th)
 
         # Control loop
-        while True:
+        while not ros.is_shutdown():
             # update the kinematics
             p.updateKinematicsDynamics()
             if (p.time > startTrust):
@@ -738,11 +740,16 @@ def talker(p):
             #     p.EXTERNAL_FORCE = False
 
             # plot end-effector and contact force
-            p.ros_pub.add_arrow(
-                p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
+            if not p.use_ground_truth_contacts:
+                p.ros_pub.add_arrow(
+                    p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
+            else:
+                p.ros_pub.add_arrow(
+                    p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "red")
+            #plot end-effector
             p.ros_pub.add_marker(p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
             p.ros_pub.add_cone(
-                p.base_offset + p.q[:3] + p.x_ee, np.array([0, 0, 1.]), p.mu, height=0.01, color="blue")
+                p.base_offset + p.q[:3] + p.x_ee, np.array([0, 0, 1.]), p.mu, height=0.05, color="blue")
             # p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
 
@@ -782,26 +789,24 @@ def talker(p):
         p.cost.reset()
         plt.cla()
 
-    print("Shutting Down")
-    ros.signal_shutdown("killed")
-    p.deregister_node()
-
 
 if __name__ == '__main__':
     p = JumpLegController(robotName)
 
     try:
         talker(p)
-    except ros.ROSInterruptException:
+    except (ros.ROSInterruptException, ros.service.ServiceException):
+        ros.signal_shutdown("killed")
+        p.deregister_node()
         if conf.plotting:
             print("PLOTTING")
-            plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-            plotCoMLinear('contact force', 2, p.time_log,
-                          None, p.contactForceW_log)
-            plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plt.show(block=True)
+            # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
+            # plotCoMLinear('contact force', 2, p.time_log,
+            #               None, p.contactForceW_log)
+            # plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+            #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            # plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+            #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            # plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+            #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+
