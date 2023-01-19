@@ -173,9 +173,16 @@ class Ur5Generic(BaseControllerFixed):
         # this is expressed in the base frame
         self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
         self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).rotation
-        # camera frame
-        self.x_c= self.robot.framePlacement(self.q, self.robot.model.getFrameId("zed2_left_camera_optical_frame")).translation
-        self.w_R_c = self.robot.framePlacement(self.q, self.robot.model.getFrameId("zed2_left_camera_optical_frame")).rotation
+
+        if self.real_robot:
+            # zed2_camera_center is the frame where point cloud is generated in REAL robot
+            pointcloud_frame = "zed2_camera_center"
+        else:
+            # left_camera_optical_frame is the frame where point cloud is generated in SIMULATION
+            pointcloud_frame = "zed2_left_camera_optical_frame"
+        # offset of the camera in the world frame
+        self.x_c= self.robot.framePlacement(self.q, self.robot.model.getFrameId(pointcloud_frame)).translation
+        self.w_R_c = self.robot.framePlacement(self.q, self.robot.model.getFrameId(pointcloud_frame)).rotation
 
         # compute jacobian of the end effector in the base or world frame (they are aligned so in terms of velocity they are the same)
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
@@ -249,9 +256,12 @@ class Ur5Generic(BaseControllerFixed):
                 break
 
     def receive_pointcloud(self, msg):
-        #in the zed2_left_camera_optical_frame
         points_list = []
-        for data in point_cloud2.read_points(msg, field_names=['x','y','z'], skip_nans=False, uvs=[(640, 360)]):
+        #this is the center of the image plane
+        center_x = int(msg.width / 2)
+        center_y = int(msg.height / 2)
+
+        for data in point_cloud2.read_points(msg, field_names=['x','y','z'], skip_nans=False, uvs=[(center_x, center_y)]):
             points_list.append([data[0], data[1], data[2]])
         #print("Data Optical frame: ", points_list)
         pointW = self.w_R_c.dot(points_list[0]) + self.x_c + self.base_offset
