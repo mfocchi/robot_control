@@ -101,6 +101,8 @@ class RosPub():
 
         if len(self.markerArrayFixed.markers) > 0:
             self.marker_fixed_pub.publish(self.markerArrayFixed)
+            self.markerArrayFixed.markers.clear()
+            self.id_fixed = 0
 
 
 
