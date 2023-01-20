@@ -524,17 +524,17 @@ class BaseController(threading.Thread):
         self.w_R_lowerleg =  [np.eye(3)] * 4
 
         #log vars
-        self.basePoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
-        self.baseTwistW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
-        self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
-        self.q_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan   
-        self.qd_des_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
-        self.qd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] )) *nan                                  
-        self.tau_ffwd_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan    
-        self.tau_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))*nan                                  
-        self.grForcesW_log = np.empty((self.robot.na,conf.robot_params[self.robot_name]['buffer_size'] ))  *nan 
-        self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
-        self.constr_viol_log = np.empty((4,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.basePoseW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.baseTwistW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.q_des_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)    
+        self.q_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)   
+        self.qd_des_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)    
+        self.qd_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)                                  
+        self.tau_ffwd_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)    
+        self.tau_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)                                  
+        self.grForcesW_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan) 
+        self.time_log = np.full((conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.constr_viol_log = np.full((4, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         
         self.time = np.zeros(1)
         self.loop_time = conf.robot_params[self.robot_name]['dt']
