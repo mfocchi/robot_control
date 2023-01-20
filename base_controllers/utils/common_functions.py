@@ -10,6 +10,9 @@ import psutil
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
+
 import sys
 from termcolor import colored
 import rospkg
@@ -929,4 +932,71 @@ def plotJointImpedance(name, q_log, q_des_log, tau_log):
         plt.ylabel(labels[jidx])    
         plt.plot(q_log[jidx,:].T-q_des_log[jidx,:].T, tau_log[jidx,:].T, linestyle='-', lw=lw_des,color = 'blue')
         plt.grid()
-        
+
+
+def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
+    import matplotlib as mpl
+    size_font = 24
+    mpl.rcdefaults()
+    mpl.rcParams['lines.linewidth'] = 10
+    mpl.rcParams['lines.markersize'] = 6
+    mpl.rcParams['patch.linewidth'] = 2
+    mpl.rcParams['axes.grid'] = True
+    mpl.rcParams['axes.labelsize'] = size_font
+    mpl.rcParams['font.family'] = 'sans-serif'
+    mpl.rcParams['font.size'] = size_font
+    mpl.rcParams['font.serif'] = ['Times New Roman', 'Times', 'Bitstream Vera Serif', 'DejaVu Serif',
+                                  'New Century Schoolbook',
+                                  'Century Schoolbook L', 'Utopia', 'ITC Bookman', 'Bookman', 'Nimbus Roman No9 L',
+                                  'Palatino',
+                                  'Charter', 'serif']
+    mpl.rcParams['text.usetex'] = True
+    mpl.rcParams['legend.fontsize'] = size_font
+    mpl.rcParams['legend.loc'] = 'best'
+    mpl.rcParams['figure.facecolor'] = 'white'
+    mpl.rcParams['figure.figsize'] = 14, 14
+    mpl.rcParams['savefig.format'] = 'pdf'
+
+
+
+
+
+    phase_rad = []
+    for deg in phase_deg:
+        rad = deg * np.pi/180
+        phase_rad.append(rad)
+
+    patches = []
+    for mag in [mag0, mag1, mag2]:
+        if mag is not None:
+            poly = np.zeros((len(phase_rad), 2))
+            for i in range(len(phase_rad)):
+                poly[i, :] = np.array([phase_rad[i], mag[i]])
+            patches.append(Polygon(poly))
+
+    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+    # plt.subplots_adjust(left=0.04, bottom=0.04, top=0.96, right=0.96)
+
+    p = PatchCollection(patches, alpha=0.7)
+    fcolors = ['g', 'dodgerblue', 'coral']
+    ecolors = ['darkgreen', 'b', 'r']
+    p.set_edgecolor(ecolors)
+    p.set_facecolor(fcolors)
+
+
+    ax.set_rmax(3)
+    step = np.abs(phase_deg[0]-phase_deg[1])
+    phase_rad =np.arange(0,360, step)*np.pi/180
+    ax.set_xticks(phase_rad)
+
+    rticks = np.arange(0,4,0.5)
+    ax.set_rticks(rticks)
+    #rticks_show = np.arange(0, 4, 1)
+    ax.set_yticklabels(rticks)
+    ax.add_collection(p)
+
+    plt.show()
+    return fig, ax
+
+    
+
