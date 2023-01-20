@@ -101,7 +101,7 @@ class InverseKinematics:
         self.KneeInward = KNEE_INWARD
         self.KneeOutward = KNEE_OUTWARD
 
-    def ik_leg(self, foot_pos, foot_idx, hip=HIP_DOWN, knee=KNEE_INWARD):
+    def ik_leg(self, foot_pos, foot_idx, hip=HIP_DOWN, knee=KNEE_INWARD, verbose = False):
         # import warnings
         # warnings.filterwarnings("error")
         q = np.zeros(3)
@@ -121,7 +121,8 @@ class InverseKinematics:
         #     print('sq', sq)
 
         if sq < 0:
-            print('foot is higher that hip!')
+            if verbose:
+                print('foot is higher that hip!')
             return q, isFeasible
         HAA_foot_z = np.sqrt(sq)
 
@@ -131,7 +132,8 @@ class InverseKinematics:
         # Verify if the foot is inside the work space of the leg (WS1)
         if (HAA_foot_x ** 2 + HAA_foot_z ** 2) > (
                 self.measures[leg]['HFE_2_KFE_z'] + self.measures[leg]['KFE_2_FOOT_z']) ** 2:
-            print('Foot position is out of the workspace')
+            if verbose:
+                print('Foot position is out of the workspace')
             return q, isFeasible
 
         #################
@@ -201,7 +203,8 @@ class InverseKinematics:
             isFeasible = True
         else:
             outROMidx = np.hstack([np.where(cond_upper == False)[0],np.where(cond_lower == False)[0]])
-            print('IK produced a solution for leg '+ leg+ ' out of ROM for joint(s) '+str(outROMidx))
+            if verbose:
+                print('IK produced a solution for leg '+ leg+ ' out of ROM for joint(s) '+str(outROMidx))
 
         return q, isFeasible
 
