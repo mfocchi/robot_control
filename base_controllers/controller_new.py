@@ -25,8 +25,7 @@ import base_controllers.params as conf
 from scipy.io import savemat
 
 #gazebo messages
-from gazebo_msgs.srv import SetModelStateRequest
-from gazebo_msgs.msg import ModelState
+from gazebo_ros import gazebo_interface
 
 from geometry_msgs.msg import Vector3
 from sensor_msgs.msg import Imu
@@ -355,15 +354,16 @@ class Controller(BaseController):
         q_des = conf.robot_params[self.robot_name]['q_0']
         qd_des = np.zeros(self.robot.na)
         tau_ffwd = np.zeros(self.robot.na)
-        for k in range(30): # for 30 iteration keep the position, needed for restore joints
-            self.send_command(q_des, qd_des, tau_ffwd)
-        if baseTwistW is None:
-            baseTwistW = np.zeros(6)
-
         if resetPid:
             self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
                                  conf.robot_params[self.robot_name]['kd'],
                                  np.zeros(self.robot.na))
+        gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
+        for k in range(100): # for 30 iteration keep the position, needed for restore joints
+            self.send_command(q_des, qd_des, tau_ffwd)
+        if baseTwistW is None:
+            baseTwistW = np.zeros(6)
+
         self.freezeBase(flag=True, basePoseW=basePoseW, baseTwistW=baseTwistW)
 
         self.initVars() # reset logged values
