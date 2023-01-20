@@ -397,12 +397,6 @@ class Controller(BaseController):
             # ---> linear part
             self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.Kp_lin @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
                                                                        self.Kd_lin @ (self.u.linPart(des_twist) - self.u.linPart(act_twist))
-            # to debug
-            # print("des_pose", self.u.linPart(des_pose))
-            # print("act_pose", self.u.linPart(act_pose))
-            # TODO fix this
-            # print("des_twist", des_twist.T)
-            # print("act_twist", act_twist.T)
 
             # ---> angular part
             # actual orientation: self.b_R_w
@@ -572,47 +566,6 @@ class Controller(BaseController):
         self.logData()
         self.sync_check()
         self.time = np.round(self.time + np.array([self.loop_time]), 3)
-
-
-
-        # def estimateContacts_KKT(self): # TODO
-    #     q_ros = self.u.mapToRos(self.q)
-    #     v_ros = self.u.mapToRos(self.qd)
-    #     tau_ros = self.u.mapToRos(self.tau)
-    #
-    #     B_R_W = pin.Quaternion(self.quaternion).toRotationMatrix().T
-    #
-    #     full_conf = np.hstack((self.basePoseW[0:3], self.quaternion, q_ros))
-    #     full_vel  = np.hstack((self.baseTwistW[0:6], v_ros))
-    #
-    #     full_tau = np.hstack(([0.]*6, tau_ros))
-    #     full_h = self.robot.nle(full_conf, full_vel)
-    #
-    #     C_qd = full_h - self.robot.gravity(full_conf)
-    #
-    #     self.tau_minus_h = full_tau - full_h
-    #     self.C_qd = C_qd
-    #     bias = np.hstack((self.tau_minus_h, [0., 0., 0.] * 4))
-    #
-    #     dJdq = np.zeros(12)
-    #     for leg in range(0, 4):
-    #         dJdq[3*leg:3*(leg+1)] = self.robot.dJdq(full_conf, full_vel, self.robot.model.getFrameId(self.ee_frame_names[leg]), 'linear')
-    #     bias[self.robot.nv:] = self.u.mapToRos(dJdq)
-    #
-    #     KKT_inv = self.robot.KKTMatrixAtEndEffectorsInv(full_conf, 'linear')
-    #     tmp = KKT_inv @ bias
-    #     full_a = tmp[0:self.robot.nv]
-    #     full_grfW = -tmp[self.robot.nv:]
-    #
-    #     self.grForcesW = self.u.mapToRos(full_grfW)
-    #     self.base_acc_W = full_a[:6]
-    #     self.qdd = self.u.mapToRos(full_a[6:])
-    #
-    #     for leg in range(4):
-    #
-    #         self.grForcesB[3*leg:3*(leg+1)] = B_R_W @ self.grForcesW[3*leg:3*(leg+1)]
-    #
-    #         self.contact_state[leg] = self.grForcesW[3*(leg+1)-1] > self.force_th
 
 
 
