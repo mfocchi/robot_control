@@ -923,10 +923,13 @@ if __name__ == '__main__':
     p = Controller('go1')
     try:
         #p.startController(world_name='slow.world')
-        p.startController(additional_args=['gui:=False', 'go0conf:=standDown'])
+        p.startController(additional_args=['gui:=False', 'go0_conf:=standDown'])
+        p.startupProcedure()
 
         while not ros.is_shutdown():
-            p.tau_ffwd = p.gravityCompensation() + p.self_weightCompensation()
+            p.updateKinematics()
+            p.visualizeContacts()
+            p.tau_ffwd = p.gravityCompensation()
             p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
 
 
@@ -941,5 +944,4 @@ if __name__ == '__main__':
     from base_controllers.utils.common_functions import plotJoint, plotCoM, plotGRFs
 
     plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,)
-    plotJoint('torque', 1, p.time_log.flatten(), p.tau_log, p.tau_ffwd_log)
- 
+    plotJoint('torque', 1, p.time_log.flatten(), tau_log=p.tau_log, tau_des_log=p.tau_ffwd_log)
