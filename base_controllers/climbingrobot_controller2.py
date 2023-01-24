@@ -76,13 +76,24 @@ class ClimbingrobotController(BaseControllerFixed):
         print("URDF generated")
         self.robot  = RobotWrapper.BuildFromURDF(urdf_location)
 
-        self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
-        self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
-        self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.broadcaster = tf.TransformBroadcaster()
         self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
                                              callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
                                              tcp_nodelay=True)
+
+        # xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
+        # additional_urdf_args = ' anchorX:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
+        # additional_urdf_args += ' anchorY:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
+        # additional_urdf_args += ' anchorZ:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
+        # additional_urdf_args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
+        # additional_urdf_args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
+        # additional_urdf_args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
+        # super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args)
+        # # additional stuff
+        # self.broadcaster = tf.TransformBroadcaster()
+        # self.sub_contact = ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
+        #                                   callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
+        #                                   tcp_nodelay=True)
 
     def computeRopeAngle(self, anchor, point):
         rope_direction = ( anchor - point) / np.linalg.norm(anchor  - point)
@@ -168,8 +179,8 @@ class ClimbingrobotController(BaseControllerFixed):
         # the mountain is always wrt to world
         mountain_pos = np.array([- self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
-        self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
-        self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar2', '/world')
+        # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
+        # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar2', '/world')
 
     def _receive_contact(self, msg):
         grf = np.zeros(3)
@@ -301,11 +312,14 @@ def talker(p):
 
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
+
+        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),   3)  # to avoid issues of dt 0.0009999
+        p.logData()
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale = 3.)# arope, already in gazebo
         p.ros_pub.add_arrow(p.anchor_pos2, (p.base_pos - p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+        p.ros_pub.add_marker(p.base_pos, radius=1.0)
         p.ros_pub.publishVisual()
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        p.logData()
         rate.sleep()
     #p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -526,10 +540,12 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        plotJoint('position', 0, p.time, p.q_log, p.q_des_log,
+        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,
                   joint_names=conf.robot_params[p.robot_name]['joint_names'])
     finally:
-        p.plotStuff()
+        pass
+        # if conf.plotting:
+        #     p.plotStuff()
 
 
         
