@@ -298,7 +298,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
 def talker(p):
     p.start()
-    p.startSimulator("slow.world", additional_args= ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
+    p.startSimulator(world_name="accurate.world", additional_args= ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
                                                      'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
                                                      'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z'])])
     p.loadModelAndPublishers()
