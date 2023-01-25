@@ -252,8 +252,10 @@ class ClimbingrobotController(BaseControllerFixed):
 
     # compute the passive and rope joints reference from the matlab position referred to a world frame located in between anchor
     def computeJointVariables(self, p):
-        mountain_wire_pitch_l = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_x'], -p[2])
-        mountain_wire_pitch_r = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_2x'], -p[2])
+        # mountain_wire_pitch_l = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_x'], -p[2])
+        # mountain_wire_pitch_r = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_2x'], -p[2])
+        mountain_wire_pitch_l = math.atan2(p[0] , -p[2])
+        mountain_wire_pitch_r = math.atan2(p[0] , -p[2])
 
         anchor_distance_y = (self.anchor_pos2 - self.anchor_pos)[1]
         mountain_wire_roll_l = -math.atan2(-p[2], p[1])
@@ -280,23 +282,72 @@ def talker(p):
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
+    p.updateKinematicsDynamics()
 
-    p0 = np.array([0.3, 2.5, -6])
-    # debug
+    # debug p0 is defined wrt anchor1 pos
+    p0 = np.array([0.0, 2.5, -6])
+    p.q_des[:12] = p.computeJointVariables(p0)
+    jumpN = 0
+    # while not ros.is_shutdown():
+    #     p.updateKinematicsDynamics()
+    #     #multiple jump test
+    #     if (jumpN == 0) and (p.time >3.): #change target
+    #         p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
+    #         p0 = np.array([0.0, 3, -8])
+    #         print(colored(f"Jumpping to {p0}", "red"))
+    #         p.applyForce(100, 0, 0., 0.02)
+    #         p.q_des[:12] = p.computeJointVariables(p0)
+    #         print(p.q_des[:12])
+    #         jumpN += 1
+    #     if (jumpN == 1) and (p.time > 5.5):  # change target
+    #         p0 = np.array([0.0, 4.5, -8])
+    #         print(colored(f"Jumpping to {p0}", "red"))
+    #         p.applyForce(100, 0, 0., 0.02)
+    #         p.q_des[:12] = p.computeJointVariables(p0)
+    #         print(p.q_des[:12])
+    #         jumpN += 1
+    #     if (jumpN == 2) and (p.time > 10):  # change target
+    #         p0 = np.array([0.0, 2, -6])
+    #         print(colored(f"Jumpping to {p0}", "red"))
+    #         p.applyForce(100, 0, 0., 0.02)
+    #         p.q_des[:12] = p.computeJointVariables(p0)
+    #         print(p.q_des[:12])
+    #         jumpN += 1
+    #     # compensate gravity only for robpe joint
+    #     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]
+    #     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+    #     p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)  # to avoid issues of dt 0.0009999
+    #     p.logData()
+    #     p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
+    #     p.ros_pub.add_arrow(p.anchor_pos2, (p.base_pos - p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+    #     p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 5., "blue", scale=4.5)
+    #     p.ros_pub.add_marker(p.mat2Gazebo + p0, color="red", radius=0.2)
+    #     p.ros_pub.publishVisual()
+    #     rate.sleep()
+
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
-        p.q_des[:12] = p.computeJointVariables(p0)
-        if (p.time >2.): #change target
-            p0 = np.array([0.3, 2.5, -6]) +np.array([0., 0.5, -2])
+        # validation test matlab
+        if (jumpN == 0) and (p.time >3.): #change target
+            p.applyForce(200, 0, 0., 0.05)
+            p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
+            p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+            p.tau_ffwd[p.rope_index[0]] = -30
+            p.tau_ffwd[p.rope_index[1]] = -40
+            jumpN+=1
+        if (jumpN ==1) and (p.base_pos[0]< conf.robot_params[p.robot_name]['spawn_x']):
+            print("target in matlab is: ",p.base_pos-p.anchor_pos)
+            break
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),   3)  # to avoid issues of dt 0.0009999
+        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)  # to avoid issues of dt 0.0009999
         p.logData()
-        p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale = 3.)# arope, already in gazebo
+        p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
         p.ros_pub.add_arrow(p.anchor_pos2, (p.base_pos - p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
-        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 5., "blue", scale = 4.5)
+        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 5., "blue", scale=4.5)
         p.ros_pub.add_marker(p.mat2Gazebo + p0, color="red", radius=0.2)
         p.ros_pub.publishVisual()
         rate.sleep()
+
 
 
     #p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
@@ -519,6 +570,8 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
         plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,
+                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plotJoint('torque', 1, p.time_log, tau_log=p.tau_log, tau_ffwd_log = p.tau_ffwd_log,
                   joint_names=conf.robot_params[p.robot_name]['joint_names'])
     finally:
         pass
