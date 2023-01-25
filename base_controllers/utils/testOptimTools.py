@@ -35,7 +35,7 @@ d = np.array([3., 2., -2.]).reshape((3,))
 
 result = quadprog_solve_qp(G, g, C, d)
 
-print result 
+print (result)
 
 #do the same with matrix array
 M = np.matrix([[1., 2., 0.], [-8., 3., 2.], [0., 1., 1.]])
@@ -46,7 +46,7 @@ C = np.matrix([[1., 2., 1.], [2., 0., 1.], [-1., 2., -1.]])
 d = np.matrix([3., 2., -2.]).reshape((3,))
 result = quadprog_solve_qp(G, g, C, d)
 
-print result
+print (result)
 
 #with equalituies and inequalities 
 M = np.matrix([[1., 2., 0.], [-8., 3., 2.], [0., 1., 1.]])
@@ -64,7 +64,7 @@ b = np.matrix([3. ]).reshape((1,))
 
 result = quadprog_solve_qp(G, g, C, d,A , b)
 
-print result
+print (result)
 
 from scipy.linalg import block_diag
 M = np.array([[ 1.    , 0.    , 0.    , 1.    , 0.    , 0.    , 1.    , 0.   ,  0.     ,1.   ,  0.    , 0.   ],
@@ -82,4 +82,4 @@ C =  - block_diag( np.array([0. ,0. ,1.]),  np.array([0. ,0. ,1.]), np.array([0.
 d = -np.array([230., 10. ,10. ,10.]).reshape((4,))	
 
 result = quadprog_solve_qp(G, g, C, d,None , None)
-print result
+print (result)

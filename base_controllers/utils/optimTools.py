@@ -22,8 +22,8 @@ def quadprog_solve_qp(G, g, C=None, d=None, A=None, b=None):
     
     qp_G = .5 * (G + G.T)   # make sure P is symmetric
     qp_a = -g.T
-    if A is not None and C is not None:
-        qp_C = -np.vstack([A, C]).T
+    if A is not None and C is not None: # case with both inequalities and equalities
+        qp_C = -np.vstack([A, C]).T # the first meq ones are the equalities
         qp_b = -np.hstack([b, d])
         meq = A.shape[0]
     elif C is not None and A is None:  # only inequality constraints
@@ -36,9 +36,12 @@ def quadprog_solve_qp(G, g, C=None, d=None, A=None, b=None):
         qp_b = -b
         meq = A.shape[0]
     else:
-       print("quadprog_solve_qp error: you need to set at least one inequality or equality constraint")
-       return 0                     
-                                    
+        print("quadprog_solve_qp: no inequality or equality constraint set the problem is unconstrained")
+        if isinstance(qp_a, np.matrix):
+            return solve_qp(qp_G, qp_a.A1)[0]
+        else:
+            return solve_qp(qp_G, qp_a)[0]
+
     if isinstance(qp_a, np.matrix) or isinstance(qp_b, np.matrix):                                
         return solve_qp(qp_G, qp_a.A1, qp_C, qp_b.A1, meq)[0]     
     else:
