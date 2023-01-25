@@ -62,38 +62,36 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def loadModelAndPublishers(self, xacro_path=None):
         xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
-        super().loadModelAndPublishers(xacro_path)
-        # Fetch model from parameter server
-        urdf_location = os.environ['LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/' + self.robot_name + '.urdf'
-        args = xacro_path + ' --inorder -o ' + urdf_location
-        args += ' anchorX:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
-        args += ' anchorY:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
-        args += ' anchorZ:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
-        args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
-        args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
-        args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
-        os.system("rosrun xacro xacro " + args)
-        print("URDF generated")
-        self.robot  = RobotWrapper.BuildFromURDF(urdf_location)
+        additional_urdf_args = ' anchorX:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
+        additional_urdf_args += ' anchorY:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
+        additional_urdf_args += ' anchorZ:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
+        additional_urdf_args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
+        additional_urdf_args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
+        additional_urdf_args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
+        super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args)
+
+        # OLD
+        # super().loadModelAndPublishers(xacro_path)
+        # # Fetch model from parameter server
+        # urdf_location = os.environ['LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/' + self.robot_name + '.urdf'
+        # #generate urdf in urdf_location
+        # args = xacro_path + ' --inorder -o ' + urdf_location
+        # args += ' anchorX:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
+        # args += ' anchorY:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
+        # args += ' anchorZ:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
+        # args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
+        # args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
+        # args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
+        # os.system("rosrun xacro xacro " + args)
+        # print("URDF generated_mine")
+        # # load urdf
+        # print(urdf_location)
+        # self.robot  = RobotWrapper.BuildFromURDF(urdf_location)
 
         self.broadcaster = tf.TransformBroadcaster()
         self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
                                              callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
                                              tcp_nodelay=True)
-
-        # xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
-        # additional_urdf_args = ' anchorX:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
-        # additional_urdf_args += ' anchorY:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
-        # additional_urdf_args += ' anchorZ:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
-        # additional_urdf_args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
-        # additional_urdf_args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
-        # additional_urdf_args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
-        # super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args)
-        # # additional stuff
-        # self.broadcaster = tf.TransformBroadcaster()
-        # self.sub_contact = ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
-        #                                   callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
-        #                                   tcp_nodelay=True)
 
     def computeRopeAngle(self, anchor, point):
         rope_direction = ( anchor - point) / np.linalg.norm(anchor  - point)
@@ -318,7 +316,6 @@ def talker(p):
         p.logData()
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale = 3.)# arope, already in gazebo
         p.ros_pub.add_arrow(p.anchor_pos2, (p.base_pos - p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
-        p.ros_pub.add_marker(p.base_pos, radius=1.0)
         p.ros_pub.publishVisual()
         rate.sleep()
     #p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there

@@ -148,19 +148,10 @@ class BaseControllerFixed(threading.Thread):
         ros.sleep(1.0)
         print(colored('SIMULATION Started', 'blue'))
 
-    def loadModelAndPublishers(self,  xacro_path = None):
+    def loadModelAndPublishers(self,  xacro_path = None, additional_urdf_args = None):
 
-        # Loading a robot model of robot (Pinocchio)
-        if xacro_path is None:
-            xacro_path = rospkg.RosPack().get_path(self.robot_name+'_description') + '/urdf/'+self.robot_name+'.xacro'
-        else:
-            print("loading custom xacro path: ", xacro_path)
-        self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path)
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
-
-
-
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
         # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -171,15 +162,24 @@ class BaseControllerFixed(threading.Thread):
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
 
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
-
+        # subscribers
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
                                          callback=self._receive_jstate, queue_size=1,buff_size = 2 ** 24, tcp_nodelay=True)
-
 
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
         if (self.use_torque_control):
             self.pid = PidManager(self.joint_names)
+
+        # Loading a robot model of robot (Pinocchio)
+        if xacro_path is None:
+            print(colored(f"setting default xacro path", "blue"))
+            xacro_path = rospkg.RosPack().get_path(
+                self.robot_name + '_description') + '/urdf/' + self.robot_name + '.xacro'
+        else:
+            print(colored(f"loading custom xacro path:  : {xacro_path}", "blue"))
+        self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path,
+                                   additional_urdf_args=additional_urdf_args)
 
     def _receive_jstate(self, msg):
          for msg_idx in range(len(msg.name)):          
