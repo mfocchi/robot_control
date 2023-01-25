@@ -93,48 +93,7 @@ class ClimbingrobotController(BaseControllerFixed):
                                              callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
                                              tcp_nodelay=True)
 
-    def computeRopeAngle(self, anchor, point):
-        rope_direction = ( anchor - point) / np.linalg.norm(anchor  - point)
-        print(rope_direction)
-        #angle of the point wrt the vertical line passing throught the anchor
-        alpha_anchor1 = math.acos(rope_direction[2])
-        beta = math.atan2(point[0] + 0.0001, point[1]) #added small amount to have normal1 perpendicular to wall  when 0, 0
-        normal1 = np.array([math.sin(beta), math.cos(beta), math.sin(alpha_anchor1)])
-        #now I need to further rotate  of alpha_anchor2 about an -Y (or -alpha_anchor2 about Y) axis perpendicular to normal1 (we neglect this effect)
-        #alpha_anchor2 = atan2(r_leg, norm(anchor - point));
-        # Ry= np.array([[cos(-alpha_anchor2),  0,      sin(-alpha_anchor2)],
-        #               [0,                   1,                          0],
-        #               [-sin(-alpha_anchor2), 0,  cos(-alpha_anchor2)]]
-        # normal2 = Ry.dot(normal1)
-        return beta, normal1
 
-    def rot2phi_theta(self, R):
-        # this rotation is obtrained rotating phi about Z and theta about -Y axis as in Luigis convention
-        #
-        # syms psi theta phi
-        # Rsym_x = [	1   ,    0     	  ,  	  0,
-        #                 0   ,    cos(psi) ,  -sin(psi),
-        #                 0   ,    sin(psi) ,  cos(psi)];
-        # Rsym_y =[cos(theta) ,	 0  ,   sin(theta),
-        #           0       ,    1  ,   0,
-        #           -sin(theta) 	,	 0  ,  cos(theta)];
-        #
-        # Rsym_z =[cos(phi), -sin(phi), 0,
-        #           sin(phi), cos(phi), 0,
-        #           0, 0, 1];
-        # the transpose is equal to rotate of -theta about Y  which is the same as rotating theta about -Y
-        #R = simplify(Rsym_z * Rsym_y')
-
-        #[cos(phi) * cos(theta), -sin(phi), -cos(phi) * sin(theta)]
-        #[cos(theta) * sin(phi), cos(phi), -sin(phi) * sin(theta)]
-        #[sin(theta), 0, cos(theta)]
-        # note, with the urdf we have R = Rsym_y'*Rsym_x which has R(1,0) null
-
-        theta = math.atan2(R[2, 0],R[2,2])
-        phi = math.atan2(-R[1, 2], -R[0, 2]) #-cos(phi) * sin(theta) , -sin(phi) * sin(theta)
-
-        # returns  pitch = theta,  yaw = phi
-        return theta, phi
 
     def updateKinematicsDynamics(self):
         # q is continuously updated
@@ -161,13 +120,15 @@ class ClimbingrobotController(BaseControllerFixed):
 
         w_R_wire = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire')).rotation
         w_R_wire2 = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire_2')).rotation
-        self.theta, self.phi =  self.rot2phi_theta(w_R_wire)
+
 
         self.l = self.q[p.rope_index[0]]
         self.ldot = self.qd[p.rope_index[0]]
-        self.theta_2, self.phi_2 = self.rot2phi_theta(w_R_wire2)
         self.l_2 = self.q[p.rope_index[1]]
         self.ldot_2 = self.qd[p.rope_index[1]]
+
+        # WF matlab to WF Gazebo offset
+        self.mat2Gazebo = self.anchor_pos
 
         # compute com variables accordint to a frame located at the foot
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
@@ -288,11 +249,23 @@ class ClimbingrobotController(BaseControllerFixed):
 
         return angle, max_Fut, max_Fun
 
+
+    # compute the passive and rope joints reference from the matlab position referred to a world frame located in between anchor
     def computeJointVariables(self, p):
-        wire_base_prismatic = math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2] * p[2])
-        mountain_wire_pitch = math.atan2(p[0], -p[2])
-        mountain_wire_roll = math.asin(p[1]/wire_base_prismatic)
-        return [mountain_wire_pitch, mountain_wire_roll,  wire_base_prismatic]
+        mountain_wire_pitch_l = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_x'], -p[2])
+        mountain_wire_pitch_r = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_2x'], -p[2])
+
+        anchor_distance_y = (self.anchor_pos2 - self.anchor_pos)[1]
+        mountain_wire_roll_l = -math.atan2(-p[2], p[1])
+        mountain_wire_roll_r = math.atan2(-p[2], anchor_distance_y-p[1])
+
+        wire_base_prismatic_l = np.linalg.norm(p) -anchor_distance_y*0.5
+        wire_base_prismatic_r = math.sqrt(p[0]*p[0] +(anchor_distance_y - p[1])*(anchor_distance_y - p[1]) + p[2] * p[2])-anchor_distance_y*0.5
+
+        wire_base_roll_l = -mountain_wire_roll_l
+        wire_base_roll_r = -mountain_wire_roll_r
+        return [mountain_wire_pitch_r, mountain_wire_roll_r,  wire_base_prismatic_r, 0., wire_base_roll_r, 0.,
+                mountain_wire_pitch_l, mountain_wire_roll_l,  wire_base_prismatic_l, 0., wire_base_roll_l, 0.]
 
 def talker(p):
     p.start()
@@ -308,16 +281,24 @@ def talker(p):
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
+    p0 = np.array([0.3, 2.5, -6])
+    # debug
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
-
+        p.q_des[:12] = p.computeJointVariables(p0)
+        if (p.time >2.): #change target
+            p0 = np.array([0.3, 2.5, -6]) +np.array([0., 0.5, -2])
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),   3)  # to avoid issues of dt 0.0009999
         p.logData()
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale = 3.)# arope, already in gazebo
         p.ros_pub.add_arrow(p.anchor_pos2, (p.base_pos - p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 5., "blue", scale = 4.5)
+        p.ros_pub.add_marker(p.mat2Gazebo + p0, color="red", radius=0.2)
         p.ros_pub.publishVisual()
         rate.sleep()
+
+
     #p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
     # jump parameters
