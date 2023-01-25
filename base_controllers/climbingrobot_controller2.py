@@ -284,7 +284,10 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     p.updateKinematicsDynamics()
 
-    # debug p0 is defined wrt anchor1 pos
+    # jump parameters
+    p.startJump = 2.5
+    p.orientTime = 0.5
+    # p0 is defined wrt anchor1 pos
     p0 = np.array([0.0, 2.5, -6])
     p.q_des[:12] = p.computeJointVariables(p0)
     jumpN = 0
@@ -325,25 +328,35 @@ def talker(p):
     #     p.ros_pub.publishVisual()
     #     rate.sleep()
 
+    # validation test matlab
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
-        # validation test matlab
-        if (jumpN == 0) and (p.time >3.): #change target
-            p.applyForce(200, 0, 0., 0.05)
+        if (jumpN == 0) and (p.time >p.startJump): #change target
+            print(colored(f"Start Matlab Validation Test", "red"))
             p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
             p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
             p.tau_ffwd[p.rope_index[0]] = -30
             p.tau_ffwd[p.rope_index[1]] = -40
+            p.w_Fleg = np.array([200., 0., 0.])
+            if p.EXTERNAL_FORCE:
+                p.applyForce(200, 0, 0., 0.05)
             jumpN+=1
-        if (jumpN ==1) and (p.base_pos[0]< conf.robot_params[p.robot_name]['spawn_x']):
-            print("target in matlab is: ",p.base_pos-p.anchor_pos)
-            break
+        if (jumpN ==1):
+            if not p.EXTERNAL_FORCE and p.time<(p.startJump + 0.05):
+                p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
+                p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / 20., "red", scale=4.5)
+            else:
+                p.tau_ffwd[p.leg_index] = np.zeros(3)
+            if (p.base_pos[0] < conf.robot_params[p.robot_name]['spawn_x']):
+                print("target in matlab is: ",p.base_pos-p.anchor_pos)
+                break
+
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)  # to avoid issues of dt 0.0009999
         p.logData()
         p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
         p.ros_pub.add_arrow(p.anchor_pos2, (p.base_pos - p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
-        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 5., "blue", scale=4.5)
+        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 20., "blue", scale=4.5)
         p.ros_pub.add_marker(p.mat2Gazebo + p0, color="red", radius=0.2)
         p.ros_pub.publishVisual()
         rate.sleep()
@@ -352,9 +365,7 @@ def talker(p):
 
     #p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-    # jump parameters
-    p.startJump = 0.5
-    p.orientTime = 0.5
+
 
     #override with matlab stuff
     if p.LOAD_MATLAB_TRAJ:
