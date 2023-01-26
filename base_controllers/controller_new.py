@@ -166,6 +166,7 @@ class Controller(BaseController):
             self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.W_lin_vel[0]
             self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.W_lin_vel[1]
             self.baseTwistW[self.u.sp_crd["LZ"]] = self.imu_utils.W_lin_vel[2]
+
         self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
         self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
         self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
@@ -175,7 +176,6 @@ class Controller(BaseController):
         self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
-
 
 
     def initVars(self):
