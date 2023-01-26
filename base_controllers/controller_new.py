@@ -36,8 +36,6 @@ from ros_impedance_controller.msg import EffortPid
 
 from base_controllers.components.imu_utils import IMU_utils
 
-
-
 import datetime
 
 class Controller(BaseController):

@@ -27,10 +27,14 @@ from scipy.io import savemat
 #gazebo messages
 from gazebo_ros import gazebo_interface
 
+from gazebo_msgs.msg import ContactsState
+from sensor_msgs.msg import JointState
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Vector3
 from sensor_msgs.msg import Imu
-from base_controllers.components.imu_utils import IMU_utils
+from ros_impedance_controller.msg import EffortPid
 
+from base_controllers.components.imu_utils import IMU_utils
 
 import datetime
 
@@ -52,36 +56,59 @@ class Controller(BaseController):
     # startupProcedure
 
     def initSubscribers(self):
-        super().initSubscribers()
+        self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
+                                         callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid,
+                                             callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
+
         if self.real_robot:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
-                                                 callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
+                                                  callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
             self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,
-                                                 callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
+                                                callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
+            self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
+                                           callback=self._receive_pose_real,
+                                           queue_size=1, tcp_nodelay=True)
         else:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,
                                                   callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
+            self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
+                                           callback=self._receive_pose,
+                                           queue_size=1, tcp_nodelay=True)
+            if self.use_ground_truth_contacts:
+                self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
+                self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
+                self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
+                self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
 
     def _receive_imu_acc_real(self, msg):
         self.B_imu_lin_acc[0] = msg.x
         self.B_imu_lin_acc[1] = msg.y
         self.B_imu_lin_acc[2] = msg.z
 
-        self.W_base_lin_acc = self.b_R_w.T @ (self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
+        self.W_base_lin_acc = self.b_R_w.T @ (
+                    self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
     def _receive_imu_acc(self, msg):
         self.B_imu_lin_acc[0] = msg.linear_acceleration.x
         self.B_imu_lin_acc[1] = msg.linear_acceleration.y
         self.B_imu_lin_acc[2] = msg.linear_acceleration.z
 
-        self.W_base_lin_acc = self.b_R_w.T @ (self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
+        self.W_base_lin_acc = self.b_R_w.T @ (
+                    self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
     def _receive_euler(self, msg):
         self.euler[0] = msg.x
         self.euler[1] = msg.y
         self.euler[2] = msg.z
-
-
 
     def _receive_pose(self, msg):
         self.quaternion[0] = msg.pose.pose.orientation.x
@@ -89,34 +116,19 @@ class Controller(BaseController):
         self.quaternion[2] = msg.pose.pose.orientation.z
         self.quaternion[3] = msg.pose.pose.orientation.w
 
-        if self.real_robot:
-            self.basePoseW[self.u.sp_crd["LX"]] = self.w_p_b_legOdom[0]
-            self.basePoseW[self.u.sp_crd["LY"]] = self.w_p_b_legOdom[1]
-            self.basePoseW[self.u.sp_crd["LZ"]] = self.w_p_b_legOdom[2]
-        else:
-            self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
-            self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
-            self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
+        self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
+        self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
+        self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
 
-            self.euler = np.array(euler_from_quaternion(self.quaternion))
+        self.euler = np.array(euler_from_quaternion(self.quaternion))
 
         self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
 
-        if self.real_robot:
-            if all(self.contact_state) == True:
-                self.baseTwistW[self.u.sp_crd["LX"]] = self.w_v_b_legOdom[0]
-                self.baseTwistW[self.u.sp_crd["LY"]] = self.w_v_b_legOdom[1]
-                self.baseTwistW[self.u.sp_crd["LZ"]] = self.w_v_b_legOdom[2]
-            else:
-                self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.W_lin_vel[0]
-                self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.W_lin_vel[1]
-                self.baseTwistW[self.u.sp_crd["LZ"]] = self.imu_utils.W_lin_vel[2]
-        else:
-            self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
-            self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
-            self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.twist.linear.z
+        self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
+        self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
+        self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.twist.linear.z
         self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
         self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
         self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
@@ -127,8 +139,40 @@ class Controller(BaseController):
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
 
+    def _receive_pose_real(self, msg):
+        self.quaternion[0] = msg.pose.pose.orientation.x
+        self.quaternion[1] = msg.pose.pose.orientation.y
+        self.quaternion[2] = msg.pose.pose.orientation.z
+        self.quaternion[3] = msg.pose.pose.orientation.w
 
+        if all(self.contact_state) == True:
+            self.basePoseW[self.u.sp_crd["LX"]] = self.w_p_b_legOdom[0]
+            self.basePoseW[self.u.sp_crd["LY"]] = self.w_p_b_legOdom[1]
+            self.basePoseW[self.u.sp_crd["LZ"]] = self.w_p_b_legOdom[2]
 
+        self.euler = np.array(euler_from_quaternion(self.quaternion))
+        self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
+        self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
+        self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
+
+        if all(self.contact_state):
+            self.baseTwistW[self.u.sp_crd["LX"]] = self.w_v_b_legOdom[0]
+            self.baseTwistW[self.u.sp_crd["LY"]] = self.w_v_b_legOdom[1]
+            self.baseTwistW[self.u.sp_crd["LZ"]] = self.w_v_b_legOdom[2]
+        else:
+            self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.W_lin_vel[0]
+            self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.W_lin_vel[1]
+            self.baseTwistW[self.u.sp_crd["LZ"]] = self.imu_utils.W_lin_vel[2]
+
+        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
+        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
+        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
+
+        # compute orientation matrix
+        self.b_R_w = self.math_utils.rpyToRot(self.euler)
+        self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                       self.quaternion,
+                                       ros.Time.now(), '/base_link', '/world')
     def initVars(self):
         super().initVars()
         self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
@@ -243,7 +287,7 @@ class Controller(BaseController):
 
         self.W_base_lin_acc_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.W_base_lin_acc = np.zeros(3)
-        
+
         self.W_lin_vel_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.zmp = np.zeros(3)
@@ -282,9 +326,9 @@ class Controller(BaseController):
         self.grForcesW_gt_log[:, self.log_counter] = self.grForcesW_gt
         self.grForcesB_log[:, self.log_counter] = self.grForcesB
         self.contact_state_log[:, self.log_counter] = self.contact_state
-        
+
         self.W_base_lin_acc_log[:, self.log_counter] = self.W_base_lin_acc
-        
+
 
         self.comVelW_leg_odom_log[:, self.log_counter] = self.comVelW_leg_odom
 
@@ -359,7 +403,7 @@ class Controller(BaseController):
                                  conf.robot_params[self.robot_name]['kd'],
                                  np.zeros(self.robot.na))
         gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
-        for k in range(100): # for 30 iteration keep the position, needed for restore joints
+        for k in range(100): # for 100 iteration keep the position, needed for restore joints
             self.send_command(q_des, qd_des, tau_ffwd)
         if baseTwistW is None:
             baseTwistW = np.zeros(6)
@@ -855,7 +899,10 @@ class Controller(BaseController):
 
     def get_current_frame_file(self):
         allfiles = [f for f in os.listdir('/tmp/camera_save') if os.path.isfile(os.path.join('/tmp/camera_save', f))]
-        return max(allfiles)
+        if len(allfiles) != 0:
+            return max(allfiles)
+        else:
+            None
 
     def save_video(self, path, start_file=None, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=True):
         # only if camera_xxx.world has been used
