@@ -904,7 +904,10 @@ class Controller(BaseController):
 
     def get_current_frame_file(self):
         allfiles = [f for f in os.listdir('/tmp/camera_save') if os.path.isfile(os.path.join('/tmp/camera_save', f))]
-        return max(allfiles)
+        if len(allfiles) != 0:
+            return max(allfiles)
+        else:
+            None
 
     def save_video(self, path, start_file=None, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=True):
         # only if camera_xxx.world has been used
