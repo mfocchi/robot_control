@@ -293,6 +293,17 @@ class Controller(BaseController):
         self.zmp = np.zeros(3)
         self.zmp_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
+        # robot height is the height of the robot base frame in home configuration
+        self.robot_height = 0.
+
+        neutral_fb_jointstate = np.hstack([pin.neutral(self.robot.model)[0:7], self.u.mapToRos(conf.robot_params[self.robot_name]['q_0']) ])
+
+        self.robot.forwardKinematics(neutral_fb_jointstate)
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
+        for id in self.robot.getEndEffectorsFrameId:
+            self.robot_height += self.robot.data.oMf[id].translation[2]
+        self.robot_height /= -4.
+
 
     def logData(self):
         self.log_counter += 1
@@ -769,13 +780,6 @@ class Controller(BaseController):
         # desired final height
         neutral_fb_jointstate[7:] = self.u.mapToRos(conf.robot_params[self.robot_name]['q_0'])
 
-        self.robot.forwardKinematics(neutral_fb_jointstate)
-        pin.updateFramePlacements(self.robot.model, self.robot.data)
-        robot_height = 0.
-        for id in self.robot.getEndEffectorsFrameId:
-            robot_height += self.robot.data.oMf[id].translation[2]
-        robot_height /= -4.
-
         # increase of the motion
         delta_z = 0.0005
         ########################
@@ -831,7 +835,7 @@ class Controller(BaseController):
                             alpha = GCTime / 0.5
                         self.tau_ffwd = alpha * (self.gravityCompensation() + self.self_weightCompensation())
                     else:
-                        print(colored("[startupProcedure] moving to desired height (" + str(np.around(robot_height, 3)) +" m)", "blue"))
+                        print(colored("[startupProcedure] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
                         state = 2
 
                 if state == 2:
@@ -843,14 +847,14 @@ class Controller(BaseController):
                         current_robot_height += self.robot.data.oMf[id].translation[2]
                     current_robot_height /= -4.
 
-                    if np.abs(current_robot_height - robot_height) > 0.005:
+                    if np.abs(current_robot_height - self.robot_height) > 0.005:
                         # set reference
                         for leg in range(4):
                             foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
                             foot_id = self.robot.model.getFrameId(foot)
                             leg_name = foot[:2]
                             B_feet_pose[leg][2] -= delta_z
-                            if current_robot_height <= robot_height:
+                            if current_robot_height <= self.robot_height:
                                 B_foot = B_feet_pose[leg] # self.b_R_w.T @ b_R_w_init @ B_feet_pose[leg]
                                 q_des_leg = self.IK.ik_leg(self.b_R_w.T@B_foot, foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
