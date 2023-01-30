@@ -735,7 +735,7 @@ class Controller(BaseController):
                 if q_norm < 0.1 and qd_norm < 0.1 or self.time > 5:
                     break
                 self.updateKinematics()
-                self.visualizeContacts()
+                # self.visualizeContacts()
                 GCTime = self.time - GCStartTime
                 if GCTime <= 0.6:
                     if alpha < 1:
@@ -810,7 +810,7 @@ class Controller(BaseController):
         try:
             while not ros.is_shutdown() and state != 4:
                 self.updateKinematics()
-                self.visualizeContacts()
+                # self.visualizeContacts()
                 # if state == -1:
                 #     print(self.q-self.q_des)
                 #     if np.linalg.norm(self.q-self.q_des) > 0.05:
