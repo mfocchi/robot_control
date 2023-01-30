@@ -84,12 +84,12 @@ robot_params['go1'] ={'dt': 0.002,
                                           'rf_kfe_joint', 'lh_haa_joint', 'lh_hfe_joint', 'lh_kfe_joint',  'rh_haa_joint',
                                           'rh_hfe_joint', 'rh_kfe_joint'],
                         'ee_frames': ['lf_foot', 'rf_foot', 'lh_foot','rh_foot'],
-                        'real_robot': False,
-                        'force_th': 7.,
+                        'real_robot': True,
+                        'force_th': 10.,
                         'spawn_x': 0.0,#0.3,
                         'spawn_y': 0.0,
                         'spawn_z': .3,
-                        'buffer_size': 3001} # note the frames are all aligned with base for joints = 0
+                        'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 
 robot_params['ur5'] ={'dt': 0.001, 
                        'kp': np.array([300, 300, 300,30,30,1]),
