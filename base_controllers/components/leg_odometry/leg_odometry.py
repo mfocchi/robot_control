@@ -70,12 +70,12 @@ class LegOdometry:
                 b_v_f = b_Jl_f @ self._b_vel_neutral
                 w_v_b = -pin.skew(w_omega_b) @ w_R_b @ b_p_f - w_R_b @ b_v_f
 
-                self.w_p_b_update += w_p_b
-                self.w_v_b_update += w_v_b
+                self.w_p_b_update = (k * self.w_p_b_update + w_p_b)/(k+1)
+                self.w_v_b_update = (k * self.w_v_b_update + w_v_b)/(k+1)
 
-        if nc != 0:
-            self.w_p_b_update/=nc
-            self.w_v_b_update/=nc
+        # if nc != 0:
+        #     self.w_p_b_update/=nc
+        #     self.w_v_b_update/=nc
 
         return self.w_p_b_update, self.w_v_b_update
 
