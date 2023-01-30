@@ -692,10 +692,6 @@ class Controller(BaseController):
         #     if input('press ENTER to continue/any key to STOP') != '':
         #         exit(0)
         self.q_des = self.q.copy()
-        # if self.real_robot:
-        #     self.q_des = self.q.copy()
-        # else:
-        #     self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
         self.pid = PidManager(self.joint_names)
         if self.real_robot:
             self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
