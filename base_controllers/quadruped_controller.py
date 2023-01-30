@@ -761,18 +761,24 @@ class Controller(BaseController):
 
 
     def _startup_from_stand_down(self):
+        q_init = self.q.copy()
+        q_ref = self.q.copy()
         for i in range(12):
-            # modify HAAs
+            # modify HFEs & KFEs
             if (i%3) != 0:
-                self.q_des[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
+                q_ref[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
         # IMU BIAS ESTIMATION
         print(colored("[startupProcedure] Imu bias estimation", "blue"))
         #if self.real_robot and self.robot_name == 'go1':
             # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
+
+        ref_time_out = int(self.imu_utils.timeout/2)
         while self.imu_utils.counter < self.imu_utils.timeout:
             self.updateKinematics()
             self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
             self.tau_ffwd[:] = 0.
+            sigma = min(self.imu_utils.counter/ref_time_out, 1)
+            self.q_des = (1-sigma) * q_init + sigma * q_ref
             self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
 
