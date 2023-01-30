@@ -959,10 +959,6 @@ def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
     mpl.rcParams['figure.figsize'] = 14, 14
     mpl.rcParams['savefig.format'] = 'pdf'
 
-
-
-
-
     phase_rad = []
     for deg in phase_deg:
         rad = deg * np.pi/180
@@ -990,12 +986,16 @@ def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
     step = np.abs(phase_deg[0]-phase_deg[1])
     phase_rad =np.arange(0,360, step)*np.pi/180
     ax.set_xticks(phase_rad)
+    ax.tick_params(axis='x', which='major', pad=15)
 
     rticks = np.arange(0,4,0.5)
     ax.set_rticks(rticks)
+
     #rticks_show = np.arange(0, 4, 1)
-    ax.set_yticklabels(rticks)
+    ax.set_yticklabels(['0', '', '1', '', '2', '', '3'])
     ax.add_collection(p)
+
+    fig.suptitle(name)
 
     plt.show()
     return fig, ax
