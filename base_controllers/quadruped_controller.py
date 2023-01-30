@@ -714,8 +714,8 @@ class Controller(BaseController):
             self._startup_from_stand_down()
 
         # reset time to zero (I don't want to log startup)
-        self.time = np.zeros(1)
-        self.log_counter = 0
+        # self.time = np.zeros(1)
+        # self.log_counter = 0
 
 
 
