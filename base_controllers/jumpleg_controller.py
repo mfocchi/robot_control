@@ -80,6 +80,7 @@ class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
+        self.ACTION_TORQUES = False
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
@@ -644,10 +645,24 @@ def talker(p):
         state = np.concatenate((com_0, p.target_CoM))
         action = p.action_service(state).action
         #print("Action from agent:", action)
-
-        p.T_th = action[0]
-        com_f = np.array(action[1:4])
-        comd_f = np.array(action[4:])
+        if p.ACTION_TORQUES:
+            p.T_th = action[0]
+            p.a = np.empty((3, 6))*0.0
+            haa_idx = 1
+            hfe_idx = haa_idx + 6
+            kfe_idx = hfe_idx + 6
+            # TODO
+            # p.a[0, :] = np.array(action[haa_idx:haa_idx+6])
+            # p.a[1, :] = np.array(action[hfe_idx:hfe_idx + 6])
+            # p.a[2, :] = np.array(action[kfe_idx:kfe_idx + 6])
+            com_f = np.zeros(3)
+            comd_f = np.zeros(3)
+        else:
+            p.T_th = action[0]
+            com_f = np.array(action[1:4])
+            comd_f = np.array(action[4:])
+            p.computeHeuristicSolutionBezier(com_0, com_f, comd_f)
+            p.plotTrajectoryBezier(p.T_th)
         # OLD way
         # p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
         # print(f"Actor action:\n"
@@ -655,9 +670,6 @@ def talker(p):
         #       f"haa: {p.a[0, :]}\n"
         #       f"hfe: {p.a[1, :]}\n"
         #       f"kfe: {p.a[2, :]}\n")
-
-        p.computeHeuristicSolutionBezier(com_0, com_f, comd_f)
-        p.plotTrajectoryBezier(p.T_th)
 
         # Control loop
         while not ros.is_shutdown():
@@ -678,10 +690,17 @@ def talker(p):
                     print(colored(
                         "STARTING A NEW EPISODE---------------------------------------------------------",   "red"))
                     print("Target position from agent:", p.target_CoM)
-                    print(f"Actor action:\n"
-                          f"T_th: {p.T_th}\n"
-                          f"com_f: {com_f}\n"
-                          f"comd_f: {comd_f}")
+                    if not p.ACTION_TORQUES:
+                        print(f"Actor action:\n"
+                              f"T_th: {p.T_th}\n"
+                              f"com_f: {com_f}\n"
+                              f"comd_f: {comd_f}")
+                    else:
+                        print(f"Actor action with torques:\n")
+                        # setting leg pd = 0
+                        p.pid.setPDjoint(3, 0., 0., 0.)
+                        p.pid.setPDjoint(4, 0., 0., 0.)
+                        p.pid.setPDjoint(5, 0., 0., 0.)
                     p.trustPhaseFlag = True
 
                 # compute joint reference
@@ -695,8 +714,12 @@ def talker(p):
                     #     p.q_des[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) +  p.a[i,4] *pow(t, 4) + p.a[i,5] *pow(t, 5)
                     #     p.qd_des[3 + i] = p.a[i, 1] + 2 * p.a[i, 2] * t + 3 * p.a[i, 3] * pow(t, 2) + 4 * p.a[i,4] * pow(t, 3) + 5 * p.a[i,5] * pow(t, 4)
                     #     p.qdd_des[3 + i] = 2 * p.a[i,2] + 6 * p.a[i,3] * t + 12 * p.a[i,4] * pow(t, 2) + 20 * p.a[i,5] * pow(t, 3)
-                    p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] = p.evalBezier(
-                        t, p.T_th)
+
+                    if p.ACTION_TORQUES:
+                        for i in range(3):
+                            p.tau_ffwd[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) + p.a[i, 4] * pow(t, 4) + p.a[i, 5] * pow(t, 5)
+                    else:
+                        p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] = p.evalBezier(t, p.T_th)
 
                     if p.evaluateRunningCosts():
                         break
@@ -718,9 +741,13 @@ def talker(p):
                     p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
                 else:
                     if (p.time < startTrust + p.T_th):
-                        # add gravity compensation
-                        p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3])
+                        if not p.ACTION_TORQUES:
+                            # add gravity compensation
+                            p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3])
                     else:
+                        if p.ACTION_TORQUES:
+                            # restore PD during flyght
+                            p.pid.setPDjoint(np.array([3,4,5]), conf.robot_params[p.robot_name]['kp'],conf.robot_params[p.robot_name]['kd'], np.zeros((6)))
                         p.tau_ffwd[3:] = np.zeros(3)
 
                 # send commands to gazebo
@@ -756,19 +783,21 @@ def talker(p):
             p.ros_pub.add_marker(com_f, color="red", radius=0.1)
             # reachabe space
             p.ros_pub.add_marker([0, 0, 0], color="green", radius=0.64)
-            p.ros_pub.add_arrow(com_f, comd_f, "red")
-            # plot com intermediate positions
-            for blob in range(len(p.intermediate_com_position)):
-                p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[
-                                     blob*1./p.number_of_blobs, blob*1./p.number_of_blobs, blob*1./p.number_of_blobs], radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 0], color=[
-                                 0., 1., 0.],  radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 1], color=[
-                                 0., 1., 0.], radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 2], color=[
-                                 0., 1., 0.], radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[
-                                 0., 1., 0.], radius=0.02)
+
+            if not p.ACTION_TORQUES:
+                p.ros_pub.add_arrow(com_f, comd_f, "red")
+                # plot com intermediate positions
+                for blob in range(len(p.intermediate_com_position)):
+                    p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[
+                                         blob*1./p.number_of_blobs, blob*1./p.number_of_blobs, blob*1./p.number_of_blobs], radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 0], color=[
+                                     0., 1., 0.],  radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 1], color=[
+                                     0., 1., 0.], radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 2], color=[
+                                     0., 1., 0.], radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[
+                                     0., 1., 0.], radius=0.02)
 
             if (not p.trustPhaseFlag):
                 p.ros_pub.add_arrow(com_f, p.comd_lo, "green")

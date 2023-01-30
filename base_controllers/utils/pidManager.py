@@ -128,10 +128,12 @@ class PidManager:
                     self.joint_pid.p_value = kp
                 else:
                     self.joint_pid.p_value = kp[joint]
+
                 if not isinstance(kd, np.ndarray):
                     self.joint_pid.d_value = kd
                 else:
                     self.joint_pid.d_value = kd[joint]
+
                 if not isinstance(ki, np.ndarray):
                     self.joint_pid.i_value = ki
                 else:
@@ -147,7 +149,6 @@ class PidManager:
     def setPDjoints(self, kp, kd, ki):
         """
         Set array of values of PID for all joints
-        @joint_idx: (int) index of the joint /(array) of indices of the set of joints
         @kp: proportional gain (array)
         @kd: derivative gain (array)
         @kp: integral gain (array)
