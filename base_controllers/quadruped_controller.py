@@ -48,6 +48,8 @@ class Controller(BaseController):
 
         self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
 
+        self.use_ground_truth_pose = True
+
     #####################
     # OVERRIDEN METHODS #
     #####################
@@ -72,9 +74,14 @@ class Controller(BaseController):
         else:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,
                                                   callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
-            self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
-                                           callback=self._receive_pose,
-                                           queue_size=1, tcp_nodelay=True)
+            if self.use_ground_truth_pose:
+                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
+                                               callback=self._receive_pose,
+                                               queue_size=1, tcp_nodelay=True)
+            else:
+                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
+                                               callback=self._receive_pose_real,
+                                               queue_size=1, tcp_nodelay=True)
             if self.use_ground_truth_contacts:
                 self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
                                                      callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
@@ -361,11 +368,13 @@ class Controller(BaseController):
         self.time_log[self.log_counter] = self.time
 
 
-    def startController(self, world_name=None, xacro_path=None, use_ground_truth_contacts=True, additional_args=None):
+    def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=None):
 
         if self.real_robot == False:
+            self.use_ground_truth_pose = use_ground_truth_pose
             self.use_ground_truth_contacts = use_ground_truth_contacts
         else:
+            self.use_ground_truth_pose = False
             self.use_ground_truth_contacts = False
 
         self.start()                               # as a thread
