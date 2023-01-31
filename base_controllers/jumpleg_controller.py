@@ -85,7 +85,7 @@ class JumpLegController(BaseControllerFixed):
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
         self.no_gazebo = False
-        self.use_ground_truth_contacts = False
+        self.use_ground_truth_contacts = True
 
         if self.use_ground_truth_contacts:
             self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
@@ -172,10 +172,13 @@ class JumpLegController(BaseControllerFixed):
         super().initVars()
         self.a = np.empty((3, 6))
         self.cost = Cost()
-        # unil friction sing jointrange torques err_vliftoff target
-        # self.cost.weights = np.array([1., 0.1, 10., 0.01, 10., 10., 1.])
-        #  unilateral  friction   singularity      joint_range  joint_torques   error_vel_liftoff  target = 0
-        self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.]) 
+
+        if self.ACTION_TORQUES:
+            self.cost.weights = np.array([10., 10., 10., 10., 10., 0., 1.])
+        else:
+            #  unilateral  friction   singularity      joint_range  joint_torques   error_vel_liftoff  target = 0
+            self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.])
+
         self.mu = 0.8
 
         self.qdd_des = np.zeros(self.robot.na)
@@ -330,7 +333,6 @@ class JumpLegController(BaseControllerFixed):
                 self.q_des[3:] = self.q_des_q0[3:]
 
     def computeHeuristicSolution(self, com_0, com_f, comd_f, T_th):
-        # TODO write a generic inverse kinematic function to map com into joints
         # boundary conditions
         # position
         q_0_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(-com_0,
@@ -552,8 +554,9 @@ class JumpLegController(BaseControllerFixed):
                                                        self.cost.weights[4] * self.cost.joint_torques +
                                                        self.cost.weights[5] * self.cost.error_vel_liftoff)
 
-        if (reward < 0):
-            reward = 0
+        if not self.ACTION_TORQUES:
+            if (reward < 0):
+                reward = 0
 
         # unil  friction sing jointrange torques target
         msg.next_state = np.concatenate((self.com, self.target_CoM))
@@ -620,8 +623,9 @@ def talker(p):
     # from base_controllers.utils.custom_robot_wrapper import RobotWrapper
     # p.robotPinocchio = RobotWrapper.BuildFromURDF(urdf_location)
 
+    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/final_runs", model_name='latest', restore_train=False)
 
-    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='25000', restore_train=False)
+    #p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
 
     p.initVars()
     ros.sleep(1.0)
@@ -638,20 +642,20 @@ def talker(p):
 
     plt.ion()
     figure = plt.figure(figsize=(15, 10))
+    p.number_of_episode = 0
 
     # here the RL loop...
     while True:
         p.time = 0.
         startTrust = 0.2
         max_episode_time = 2
+        p.number_of_episode += 1
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
         p.trustPhaseFlag = False
         p.intermediate_com_position = []
         p.comd_lo = np.zeros(3)
-
-        # TODO: extend the target on Z
         p.target_CoM = (p.target_service()).target_CoM
         for i in range(10):
             p.setJumpPlatformPosition(p.target_CoM)
@@ -661,14 +665,15 @@ def talker(p):
         #print("Action from agent:", action)
         if p.ACTION_TORQUES:
             p.T_th = action[0]
-            p.a = np.empty((3, 6))*0.0
+            p.a = np.zeros((3, 6))
             haa_idx = 1
             hfe_idx = haa_idx + 6
             kfe_idx = hfe_idx + 6
-            # TODO
-            # p.a[0, :] = np.array(action[haa_idx:haa_idx+6])
-            # p.a[1, :] = np.array(action[hfe_idx:hfe_idx + 6])
-            # p.a[2, :] = np.array(action[kfe_idx:kfe_idx + 6])
+
+            p.a[0, :] = np.array(action[haa_idx:haa_idx+6])
+            p.a[1, :] = np.array(action[hfe_idx:hfe_idx + 6])
+            p.a[2, :] = np.array(action[kfe_idx:kfe_idx + 6])
+            print(p.a)
             com_f = np.zeros(3)
             comd_f = np.zeros(3)
         else:
@@ -701,8 +706,7 @@ def talker(p):
                     p.freezeBase(False)
 
                     print("\n\n")
-                    print(colored(
-                        "STARTING A NEW EPISODE---------------------------------------------------------",   "red"))
+                    print(colored(f"STARTING A NEW EPISODE--------------------------------------------# :{p.number_of_episode}", "red"))
                     print("Target position from agent:", p.target_CoM)
                     if not p.ACTION_TORQUES:
                         print(f"Actor action:\n"
@@ -710,7 +714,7 @@ def talker(p):
                               f"com_f: {com_f}\n"
                               f"comd_f: {comd_f}")
                     else:
-                        print(f"Actor action with torques:\n")
+                        print(f"Actor action with torques:\n {p.a}\n")
                         # setting leg pd = 0
                         p.pid.setPDjoint(3, 0., 0., 0.)
                         p.pid.setPDjoint(4, 0., 0., 0.)
@@ -812,9 +816,8 @@ def talker(p):
                                      0., 1., 0.], radius=0.02)
                 p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[
                                      0., 1., 0.], radius=0.02)
-
-            if (not p.trustPhaseFlag):
-                p.ros_pub.add_arrow(com_f, p.comd_lo, "green")
+                if (not p.trustPhaseFlag):
+                    p.ros_pub.add_arrow(com_f, p.comd_lo, "green")
 
             p.ros_pub.publishVisual()
 
