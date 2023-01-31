@@ -484,12 +484,18 @@ class BaseController(threading.Thread):
                 self.pid.setPDs(0.0, 0.0, 0.0)
                 self.use_torque_control = True
             
-            if (self.robot_name == 'solo' or self.robot_name == 'aliengo' or self.robot_name=='go1'):
+            if (self.robot_name == 'aliengo' or self.robot_name=='go1'):
                 start_t = ros.get_time()
                 while ros.get_time() - start_t < 0.5:
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                     ros.sleep(0.01)
                 self.pid.setPDs(0.0, 0.0, 0.0)
+
+            if (self.robot_name == 'solo'):
+                start_t = ros.get_time()
+                while ros.get_time() - start_t < 0.5:
+                    self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                    ros.sleep(0.01)
             print(colored("finished startup -- starting controller", "red"))
 
     def initVars(self):
