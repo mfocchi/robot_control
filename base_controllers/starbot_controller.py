@@ -201,6 +201,7 @@ class StarbotController(BaseController):
             self.setLegJointTorques(leg, tau_leg, pin_gravity_torques)
         return self.mapFromPinocchio(pin_gravity_torques)
 
+# function to generate trajectories given start position, final position, motion time and actual time
 def quinitic_trajectory(q0, qf, tf, time):
     a0 = q0
     a1 = 0
@@ -210,13 +211,15 @@ def quinitic_trajectory(q0, qf, tf, time):
     a5 = (12 * qf - 12 * q0) / (2 * (tf ** 5))
 
     pos = a0 + a1*time + a2*(time**2) + a3*(time**3) + a4*(time**4) + a5*(time**5)
-    vel = a1 + 2*a2*time + 3*a3*(time**2) + 4*a4*(time**3) + 5*a5*(time**4)
+    #vel = a1 + 2*a2*time + 3*a3*(time**2) + 4*a4*(time**3) + 5*a5*(time**4)
 
     return pos
 
+# compute distance wheels has to travel from init state to car state
 def wheel_arc_carState(leg_length):
     return leg_length - leg_length/(np.sqrt(2))
 
+# generate new q desired
 def generate_q(joints):
     return np.array([joints["shoulder"][0],
                      joints["shoulder"][1],
@@ -239,6 +242,7 @@ def generate_q(joints):
                      joints["wheel"][2],
                      joints["wheel"][3]])
 
+# compute the perimeter of the circle in which the wheels are placed
 def get_external_perimeter(p):
     ee_frames = conf.robot_params[p.robot_name]['ee_frames']
     radius = np.zeros(4)
@@ -254,6 +258,7 @@ def get_external_perimeter(p):
     radius = np.mean(radius)
     return radius*2*np.pi
 
+# convert distance expressed in meters into radians for the wheels
 def metersToradians(dist):
     # with 0.07 radius of the wheels
     return dist/(0.07*2*np.pi)*360*np.pi/180
@@ -282,6 +287,7 @@ def distance_contact_force(leg):
 
     return distance
 
+# finds useful data of the robot in init position
 def initialization_state(p):
     ee_frames = conf.robot_params[p.robot_name]['ee_frames']
     shoulder_frames = ["lf_bs_joint","lh_bs_joint","rf_bs_joint","rh_bs_joint"]
@@ -302,18 +308,20 @@ def initialization_state(p):
 
     leg_length = np.mean(leg_length)
     shoulder_pos = np.mean(shoulder_pos)
-    print(leg_length)
+    #print(leg_length)
 
     return np.copy(p.q_des_q0), leg_length, shoulder_pos
 
-
+# state change, from init configuration to car one
 def initTocar_state(p, joints, prev_state, initTocar_motion_time, act_time, shoulder_motion, wheel_arc_dist, wheel_motion, contact_time):
+    # move shoulder to lower the 4 legs and lift the central body
     if act_time < initTocar_motion_time/2:
         joints["shoulder"][0] = quinitic_trajectory(0, -shoulder_motion, initTocar_motion_time / 2, act_time)
         joints["shoulder"][1] = quinitic_trajectory(0, shoulder_motion, initTocar_motion_time / 2, act_time)
         joints["shoulder"][2] = quinitic_trajectory(0, shoulder_motion, initTocar_motion_time / 2, act_time)
         joints["shoulder"][3] = quinitic_trajectory(0, -shoulder_motion, initTocar_motion_time / 2, act_time)
 
+        # rotate wheels to finish lifting motion
         if p.contact_state[0] == True:
             if contact_time == 0:
                 contact_time = act_time
@@ -324,6 +332,8 @@ def initTocar_state(p, joints, prev_state, initTocar_motion_time, act_time, shou
             joints["wheel"][3] = prev_state["wheel"][3] + quinitic_trajectory(0, wheel_arc_dist, initTocar_motion_time / 2, act_time)
 
         q_des = generate_q(joints)
+
+    # change wheels orientation to enable car configuration movement
     else:
         joints["pre_wheel"][0] = quinitic_trajectory(0, 0., initTocar_motion_time / 2, act_time - (initTocar_motion_time / 2))
         joints["pre_wheel"][1] = quinitic_trajectory(0, -wheel_motion, initTocar_motion_time / 2, act_time - (initTocar_motion_time / 2))
@@ -333,7 +343,7 @@ def initTocar_state(p, joints, prev_state, initTocar_motion_time, act_time, shou
 
     return joints, q_des, contact_time
 
-
+# approaching tunnel state
 def approacing_state(p, joints, prev_state, dist_from_tunnel, approaching_tunnel_time, act_time):
     joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, dist_from_tunnel, approaching_tunnel_time, act_time)
     joints["wheel"][1] = prev_state["wheel"][1] + quinitic_trajectory(0, dist_from_tunnel, approaching_tunnel_time, act_time)
@@ -343,99 +353,145 @@ def approacing_state(p, joints, prev_state, dist_from_tunnel, approaching_tunnel
 
     return joints, q_des
 
-def carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, wheel_motion, robot_rotation, straight_leg_angle):
-    if act_time <= carTostar_motion_time/6:
-        joints["pre_wheel"][0] = quinitic_trajectory(0, -wheel_motion, carTostar_motion_time / 6, act_time)
+# state change, from car configuration to star one (inside tunnel)
+def carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, wheel_motion, robot_rotation, straight_leg_angle, wheel_arc_dist):
+    # change wheels orientation to enable the robot to rotate its body on his Z axis
+    if act_time <= carTostar_motion_time/8:
+        joints["pre_wheel"][0] = quinitic_trajectory(0, -wheel_motion, carTostar_motion_time / 8, act_time)
         joints["pre_wheel"][1] = joints["pre_wheel"][1]
         joints["pre_wheel"][2] = joints["pre_wheel"][2]
-        joints["pre_wheel"][3] = quinitic_trajectory(0, +wheel_motion, carTostar_motion_time / 6, act_time)
+        joints["pre_wheel"][3] = quinitic_trajectory(0, +wheel_motion, carTostar_motion_time / 8, act_time)
         q_des = generate_q(joints)
 
-        if act_time == carTostar_motion_time/6:
+        if act_time == carTostar_motion_time/8:
             prev_state["shoulder"] = np.copy(joints["shoulder"])
             prev_state["upper_leg"] = np.copy(joints["upper_leg"])
             prev_state["lower_leg"] = np.copy(joints["lower_leg"])
             prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
             prev_state["wheel"] = np.copy(joints["wheel"])
 
-    elif act_time > carTostar_motion_time/6 and act_time <= (carTostar_motion_time/6)*2:
-        joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6))
-        joints["wheel"][1] = prev_state["wheel"][1] + quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6))
-        joints["wheel"][2] = prev_state["wheel"][2] - quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6))
-        joints["wheel"][3] = prev_state["wheel"][3] + quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6))
+    # rotate wheels to change robot orientation
+    elif act_time > carTostar_motion_time/8 and act_time <= (carTostar_motion_time/8)*2:
+        joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8))
+        joints["wheel"][1] = prev_state["wheel"][1] + quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8))
+        joints["wheel"][2] = prev_state["wheel"][2] - quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8))
+        joints["wheel"][3] = prev_state["wheel"][3] + quinitic_trajectory(0, robot_rotation, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8))
         q_des = generate_q(joints)
 
-        if act_time == carTostar_motion_time/6*2:
+        if act_time == carTostar_motion_time/8*2:
             prev_state["shoulder"] = np.copy(joints["shoulder"])
             prev_state["upper_leg"] = np.copy(joints["upper_leg"])
             prev_state["lower_leg"] = np.copy(joints["lower_leg"])
             prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
             prev_state["wheel"] = np.copy(joints["wheel"])
 
-    elif act_time > (carTostar_motion_time/6)*2 and act_time <= (carTostar_motion_time/6)*3:
-        joints["upper_leg"][0] = prev_state["upper_leg"][0] + quinitic_trajectory(0, straight_leg_angle, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
-        joints["upper_leg"][1] = prev_state["upper_leg"][1] - quinitic_trajectory(0, straight_leg_angle, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
-        joints["upper_leg"][2] = prev_state["upper_leg"][2] - quinitic_trajectory(0, straight_leg_angle, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
-        joints["upper_leg"][3] = prev_state["upper_leg"][3] + quinitic_trajectory(0, straight_leg_angle, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
-
-        joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, metersToradians(get_external_perimeter(p)*straight_leg_angle/360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
-        joints["wheel"][1] = prev_state["wheel"][1] - quinitic_trajectory(0, metersToradians(get_external_perimeter(p)*straight_leg_angle/360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
-        joints["wheel"][2] = prev_state["wheel"][2] + quinitic_trajectory(0, metersToradians(get_external_perimeter(p)*straight_leg_angle/360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
-        joints["wheel"][3] = prev_state["wheel"][3] + quinitic_trajectory(0, metersToradians(get_external_perimeter(p)*straight_leg_angle/360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*2))
+    # close legs to enable robot raise inside the tunnel
+    elif act_time > (carTostar_motion_time/8)*2 and act_time <= (carTostar_motion_time/8)*3:
+        joints["upper_leg"][0] = quinitic_trajectory(0, 0.6, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 2))
+        joints["upper_leg"][1] = quinitic_trajectory(0, -0.6, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 2))
+        joints["upper_leg"][2] = quinitic_trajectory(0, -0.6, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 2))
+        joints["upper_leg"][3] = quinitic_trajectory(0, 0.6, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 2))
         q_des = generate_q(joints)
 
-        if act_time == carTostar_motion_time/6*3:
+        if act_time == carTostar_motion_time / 8*3:
             prev_state["shoulder"] = np.copy(joints["shoulder"])
             prev_state["upper_leg"] = np.copy(joints["upper_leg"])
             prev_state["lower_leg"] = np.copy(joints["lower_leg"])
             prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
             prev_state["wheel"] = np.copy(joints["wheel"])
 
-    elif act_time > (carTostar_motion_time/6)*3 and act_time <= (carTostar_motion_time/6)*4:
-        joints["pre_wheel"][0] = prev_state["pre_wheel"][0] + quinitic_trajectory(0, wheel_motion, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*3))
-        joints["pre_wheel"][1] = prev_state["pre_wheel"][1] + quinitic_trajectory(0, wheel_motion, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*3))
-        joints["pre_wheel"][2] = prev_state["pre_wheel"][2] - quinitic_trajectory(0, wheel_motion, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*3))
-        joints["pre_wheel"][3] = prev_state["pre_wheel"][3] - quinitic_trajectory(0, wheel_motion, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*3))
+    # change wheels orientation to robot raise inside the tunnel
+    elif act_time > (carTostar_motion_time / 8) * 3 and act_time <= (carTostar_motion_time / 8) * 4:
+        joints["pre_wheel"][0] = quinitic_trajectory(prev_state["pre_wheel"][0], 0, carTostar_motion_time / 8,
+                                                     act_time - (carTostar_motion_time / 8 * 3))
+        joints["pre_wheel"][1] = quinitic_trajectory(prev_state["pre_wheel"][1], 0, carTostar_motion_time / 8,
+                                                     act_time - (carTostar_motion_time / 8 * 3))
+        joints["pre_wheel"][2] = quinitic_trajectory(prev_state["pre_wheel"][2], 0, carTostar_motion_time / 8,
+                                                     act_time - (carTostar_motion_time / 8 * 3))
+        joints["pre_wheel"][3] = quinitic_trajectory(prev_state["pre_wheel"][3], 0, carTostar_motion_time / 8,
+                                                     act_time - (carTostar_motion_time / 8 * 3))
         q_des = generate_q(joints)
 
-        if act_time == carTostar_motion_time / 6*4:
+        if act_time == carTostar_motion_time / 8 * 4:
             prev_state["shoulder"] = np.copy(joints["shoulder"])
             prev_state["upper_leg"] = np.copy(joints["upper_leg"])
             prev_state["lower_leg"] = np.copy(joints["lower_leg"])
             prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
             prev_state["wheel"] = np.copy(joints["wheel"])
 
-    elif act_time > (carTostar_motion_time / 6) * 4 and act_time <= (carTostar_motion_time / 6) * 5:
-        joints["shoulder"][0] = prev_state["shoulder"][0] + quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["shoulder"][1] = prev_state["shoulder"][1] - quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["shoulder"][2] = prev_state["shoulder"][2] - quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["shoulder"][3] = prev_state["shoulder"][3] + quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    # robot raise inside tunnel, wheels rotation, shoulder joint straightening and leg extension
+    elif act_time > (carTostar_motion_time / 8) * 4 and act_time <= (carTostar_motion_time / 8) * 5:
+        joints["shoulder"][0] = prev_state["shoulder"][0] + quinitic_trajectory(0, 0.785, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
+        joints["shoulder"][1] = prev_state["shoulder"][1] - quinitic_trajectory(0, 0.785, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
+        joints["shoulder"][2] = prev_state["shoulder"][2] - quinitic_trajectory(0, 0.785, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
+        joints["shoulder"][3] = prev_state["shoulder"][3] + quinitic_trajectory(0, 0.785, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
 
-        joints["lower_leg"][0] = prev_state["lower_leg"][0] + quinitic_trajectory(0, distance_contact_force(0), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
-        joints["lower_leg"][1] = prev_state["lower_leg"][1] + quinitic_trajectory(0, distance_contact_force(1), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
-        joints["lower_leg"][2] = prev_state["lower_leg"][2] + quinitic_trajectory(0, distance_contact_force(2), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
-        joints["lower_leg"][3] = prev_state["lower_leg"][3] + quinitic_trajectory(0, distance_contact_force(3), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+        joints["lower_leg"][0] = prev_state["lower_leg"][0] + quinitic_trajectory(0, 0.07, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 4))
+        joints["lower_leg"][1] = prev_state["lower_leg"][1] + quinitic_trajectory(0, 0.07, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 4))
+        joints["lower_leg"][2] = prev_state["lower_leg"][2] + quinitic_trajectory(0, 0.07, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 4))
+        joints["lower_leg"][3] = prev_state["lower_leg"][3] + quinitic_trajectory(0, 0.07, carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8 * 4))
 
-        joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45 / 360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["wheel"][1] = prev_state["wheel"][1] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["wheel"][2] = prev_state["wheel"][2] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
-        joints["wheel"][3] = prev_state["wheel"][3] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
-                                                                          carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+        joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 116 / 360),
+                                                                          carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
+        joints["wheel"][1] = prev_state["wheel"][1] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 36/360),
+                                                                          carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
+        joints["wheel"][2] = prev_state["wheel"][2] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 116/360),
+                                                                          carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
+        joints["wheel"][3] = prev_state["wheel"][3] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 36/360),
+                                                                          carTostar_motion_time / 8, act_time - (carTostar_motion_time / 8*4))
         q_des = generate_q(joints)
 
-        if act_time == carTostar_motion_time / 6*5:
+        if act_time == carTostar_motion_time / 8*5:
             prev_state["shoulder"] = np.copy(joints["shoulder"])
             prev_state["upper_leg"] = np.copy(joints["upper_leg"])
             prev_state["lower_leg"] = np.copy(joints["lower_leg"])
             prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
             prev_state["wheel"] = np.copy(joints["wheel"])
+
+    # elif act_time > (carTostar_motion_time / 6) * 4 and act_time <= (carTostar_motion_time / 6) * 5:
+    #     joints["pre_wheel"][0] = quinitic_trajectory(0, -0.9, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #     joints["pre_wheel"][1] = quinitic_trajectory(0, +0.9, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #     joints["pre_wheel"][2] = quinitic_trajectory(0, +0.9, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #     joints["pre_wheel"][3] = quinitic_trajectory(0, -0.9, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #     q_des = generate_q(joints)
+    #
+    #     if act_time == carTostar_motion_time / 6 * 5:
+    #         prev_state["shoulder"] = np.copy(joints["shoulder"])
+    #         prev_state["upper_leg"] = np.copy(joints["upper_leg"])
+    #         prev_state["lower_leg"] = np.copy(joints["lower_leg"])
+    #         prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
+    #         prev_state["wheel"] = np.copy(joints["wheel"])
+
+
+
+
+    # elif act_time > (carTostar_motion_time / 6) * 4 and act_time <= (carTostar_motion_time / 6) * 5:
+    #     joints["shoulder"][0] = prev_state["shoulder"][0] + quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #     joints["shoulder"][1] = prev_state["shoulder"][1] - quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #     joints["shoulder"][2] = prev_state["shoulder"][2] - quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #     joints["shoulder"][3] = prev_state["shoulder"][3] + quinitic_trajectory(0, 0.785, carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #
+    #     joints["lower_leg"][0] = prev_state["lower_leg"][0] + quinitic_trajectory(0, distance_contact_force(0), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #     joints["lower_leg"][1] = prev_state["lower_leg"][1] + quinitic_trajectory(0, distance_contact_force(1), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #     joints["lower_leg"][2] = prev_state["lower_leg"][2] + quinitic_trajectory(0, distance_contact_force(2), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #     joints["lower_leg"][3] = prev_state["lower_leg"][3] + quinitic_trajectory(0, distance_contact_force(3), carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6 * 4))
+    #
+    #     joints["wheel"][0] = prev_state["wheel"][0] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45 / 360),
+    #                                                                       carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #     joints["wheel"][1] = prev_state["wheel"][1] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
+    #                                                                       carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #     joints["wheel"][2] = prev_state["wheel"][2] + quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
+    #                                                                       carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #     joints["wheel"][3] = prev_state["wheel"][3] - quinitic_trajectory(0, metersToradians((1.236*2*np.pi) * 45/360),
+    #                                                                       carTostar_motion_time / 6, act_time - (carTostar_motion_time / 6*4))
+    #     q_des = generate_q(joints)
+    #
+    #     if act_time == carTostar_motion_time / 6*5:
+    #         prev_state["shoulder"] = np.copy(joints["shoulder"])
+    #         prev_state["upper_leg"] = np.copy(joints["upper_leg"])
+    #         prev_state["lower_leg"] = np.copy(joints["lower_leg"])
+    #         prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
+    #         prev_state["wheel"] = np.copy(joints["wheel"])
 
     else:
         q_des = p.q_des
@@ -485,13 +541,15 @@ def talker(p):
     leg_length=0
     dist_from_tunnel = 60
 
+    print("State 0: init configuration")
+
     while not ros.is_shutdown():
         act_time = p.time-start_time_simulation
 
         # update the kinematics
         p.updateKinematics()
         p.tau_ffwd = 0.*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
-        if p.time >3:
+        if p.time >3 and state_flag < 3:
             p.tau_ffwd = p.computeGravityTorques(conf.robot_params[p.robot_name]['ee_frames'])
 
         # initialization phase
@@ -502,6 +560,7 @@ def talker(p):
                 leg_length = ret[1]
                 shoulder_pos = ret[2]
             else:
+                print("Start robot lifting, from init configuration to car one")
                 state_flag = 1
                 start_time_simulation = p.time
                 contact_time = 0
@@ -512,7 +571,7 @@ def talker(p):
                 prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
                 prev_state["wheel"] = np.copy(joints["wheel"])
 
-        # movement from initial position to car state
+        # movement from init configuration to car one
         elif state_flag == 1:
             if act_time <= initTocar_motion_time:
                 ret = initTocar_state(p, joints, prev_state, initTocar_motion_time, act_time, 0.785, metersToradians(wheel_arc_carState(leg_length)),
@@ -521,6 +580,8 @@ def talker(p):
                 joints = ret[0]
                 contact_time = ret[2]
             else:
+                print("State 1: car configuration")
+                print("Start tunnel approaching")
                 state_flag = 2
                 start_time_simulation = p.time
                 prev_state["shoulder"] = np.copy(joints["shoulder"])
@@ -537,12 +598,15 @@ def talker(p):
             # print(p.robot.data.oMi[id])
             # print(np.array(p.robot.data.oMi[id])[1][3])
 
+        # tunnel approaching
         elif state_flag == 2:
             if act_time <= approaching_tunnel_time:
                 ret = approacing_state(p, joints, prev_state, dist_from_tunnel, approaching_tunnel_time, act_time)
                 p.q_des = ret[1]
                 joints = ret[0]
             else:
+                print("State 2: car configuration inside tunnel")
+                print("Start configuration change from car to star")
                 state_flag = 3
                 start_time_simulation = p.time
                 robot_rotation = metersToradians(get_external_perimeter(p)/8)
@@ -553,12 +617,16 @@ def talker(p):
                 prev_state["wheel"] = np.copy(joints["wheel"])
                 print(robot_rotation)
 
+        # configuration change from car to star
         elif state_flag == 3:
             if act_time <= carTostar_motion_time:
-                ret = carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, wheel_motion=1.57, robot_rotation = robot_rotation, straight_leg_angle = 0.5236)
+                ret = carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, wheel_motion=1.57, robot_rotation = robot_rotation,
+                                      straight_leg_angle = 0.5236, wheel_arc_dist=metersToradians(wheel_arc_carState(leg_length)))
                 p.q_des = ret[1]
                 joints = ret[0]
             else:
+                print("State 3: star configuration")
+                print("Start tunnel climbing")
                 state_flag = 4
                 start_time_simulation = p.time
                 prev_state["shoulder"] = np.copy(joints["shoulder"])
