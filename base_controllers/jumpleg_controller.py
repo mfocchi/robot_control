@@ -174,10 +174,12 @@ class JumpLegController(BaseControllerFixed):
         self.cost = Cost()
 
         if self.ACTION_TORQUES:
-            self.cost.weights = np.array([10., 10., 10., 10., 10., 0., 1.])
+            # self.cost.weights = np.array([10., 10., 10., 10., 10., 0., 1.])
+            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 10., 1.])
         else:
             #  unilateral  friction   singularity      joint_range  joint_torques   error_vel_liftoff  target = 0
-            self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.])
+            # self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.])
+            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 10., 1.])
 
         self.mu = 0.8
 
