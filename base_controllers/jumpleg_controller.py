@@ -6,13 +6,13 @@ Created on Fri Nov  2 16:52:08 2018
 """
 
 from __future__ import print_function
-import params as conf
+import base_controllers.params as conf
 from jumpleg_rl.srv import *
 from gazebo_msgs.srv import SetModelStateRequest
-from utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
+from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory
 from base_controllers.utils.common_functions import getRobotModel
 from base_controllers.utils.ros_publish import RosPub
-from base_controller_fixed import BaseControllerFixed
+from base_controllers.base_controller_fixed import BaseControllerFixed
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelConfigurationRequest
@@ -21,13 +21,13 @@ from gazebo_msgs.msg import ContactsState
 import roslaunch
 import os
 from termcolor import colored
-from utils.common_functions import plotJoint, plotCoMLinear
+from base_controllers.utils.common_functions import plotJoint, plotCoMLinear
 from numpy import nan
 import matplotlib.pyplot as plt
 
 import rospkg
 import rospy as ros
-from utils.math_tools import *
+from base_controllers.utils.math_tools import *
 import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision=5,
                     linewidth=1000, suppress=True)
@@ -220,12 +220,13 @@ class JumpLegController(BaseControllerFixed):
         req_reset_joints.model_name = self.robot_name
         req_reset_joints.urdf_param_name = 'robot_description'
         req_reset_joints.joint_names = self.joint_names
-
         req_reset_joints.joint_positions = self.q_des_q0
         # send request and get response (in this case none)
-        for i in range(10):
-            self.reset_joints(req_reset_joints)
-        return True
+        # for i in range(10):
+        #     self.reset_joints(req_reset_joints)
+        # return True
+
+        self.reset_joints(req_reset_joints)
 
     def freezeBase(self, flag):
         if not self.no_gazebo:
@@ -248,7 +249,7 @@ class JumpLegController(BaseControllerFixed):
             if (not self.freezeBaseFlag) and (flag):
                 #print(colored("freezing base", "red"))
                 #print(colored(f"resetting base: {p.resetBase()}", "magenta"))
-                p.resetBase()
+
                 self.freezeBaseFlag = flag
                 self.q_des = self.q_des_q0.copy()
                 self.qd_des = np.zeros(self.robot.na).copy()
@@ -257,6 +258,7 @@ class JumpLegController(BaseControllerFixed):
                 self.tau_ffwd[2] = self.g[2]
                 self.pid.setPDjoints(
                     conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],  np.zeros(self.robot.na))
+                self.resetBase()
 
     def thirdOrderPolynomialTrajectory(self, tf, q0, qf):
         # Matrix used to solve the linear system of equations for the polynomial trajectory
@@ -590,6 +592,10 @@ class JumpLegController(BaseControllerFixed):
         # send request and get response (in this case none)
         self.set_state(set_platform_position)
 
+    def loadModelAndPublishers(self,  xacro_path = None, additional_urdf_args = None):
+        super().loadModelAndPublishers()
+        self.reset_joints = ros.ServiceProxy(
+            '/gazebo/set_model_configuration', SetModelConfiguration)
 
 def talker(p):
 
@@ -603,9 +609,17 @@ def talker(p):
         p.startSimulator("jump_platform.world", additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
-        p.reset_joints = ros.ServiceProxy(
-            '/gazebo/set_model_configuration', SetModelConfiguration)
         p.startupProcedure()
+
+    #
+    # xacro_path = rospkg.RosPack().get_path('jumpleg_description') + '/robots/jumpleg_pinocchio.urdf.xacro'
+    # args = xacro_path + ' --inorder -o ' + os.environ['LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/jumpleg_pinocchio.urdf'
+    # os.system("rosrun xacro xacro " + args)
+    # urdf_location = os.environ['LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/jumpleg_pinocchio.urdf'
+    # print(urdf_location)
+    # from base_controllers.utils.custom_robot_wrapper import RobotWrapper
+    # p.robotPinocchio = RobotWrapper.BuildFromURDF(urdf_location)
+
 
     p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='25000', restore_train=False)
 
@@ -808,10 +822,7 @@ def talker(p):
             rate.sleep()
 
             p.time = p.time + conf.robot_params[p.robot_name]['dt']
-           # stops the while loop if  you prematurely hit CTRL+C
-            if ros.is_shutdown():
-                print("Shutting Down")
-                break
+
 
         # eval rewards
         p.evalTotalReward(comd_f)
