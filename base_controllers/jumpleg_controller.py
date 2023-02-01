@@ -625,9 +625,9 @@ def talker(p):
     # from base_controllers.utils.custom_robot_wrapper import RobotWrapper
     # p.robotPinocchio = RobotWrapper.BuildFromURDF(urdf_location)
 
-    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/final_runs", model_name='latest', restore_train=False)
-
-    #p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    # p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    # p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
 
     p.initVars()
     ros.sleep(1.0)
@@ -659,8 +659,11 @@ def talker(p):
         p.intermediate_com_position = []
         p.comd_lo = np.zeros(3)
         p.target_CoM = (p.target_service()).target_CoM
-        for i in range(10):
-            p.setJumpPlatformPosition(p.target_CoM)
+        print(p.target_CoM)
+
+        if p.target_CoM[2] == -1:
+            print(colored("# RECIVED STOP TARGET_COM SIGNAL #", "red"))
+            break
 
         state = np.concatenate((com_0, p.target_CoM))
         action = p.action_service(state).action
@@ -753,6 +756,11 @@ def talker(p):
                     # apex detection
                     p.detectApex()
                     if (p.detectedApexFlag):
+                        
+                        # set jump position (avoid collision in jumping)
+                        for i in range(10):
+                            p.setJumpPlatformPosition(p.target_CoM)
+
                         if p.detectTouchDown():
                             break
 
