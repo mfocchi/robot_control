@@ -92,13 +92,15 @@ def projectionBasedController(conf, act_state, des_state, W_contacts, stance_leg
                 
     # EXERCISE 2.2: Compute mapping to grfs
     # Stance matrix
-    S_mat = np.diag(np.hstack([stance_legs[util.leg_map["LF"]] * np.ones(3), stance_legs[util.leg_map["RF"]] * np.ones(3),
-                              stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
+    S_mat = np.diag(np.hstack([stance_legs[util.leg_map["LF"]] * np.ones(3),
+                               stance_legs[util.leg_map["LH"]] * np.ones(3),
+                               stance_legs[util.leg_map["RF"]] * np.ones(3),
+                               stance_legs[util.leg_map["RH"]] * np.ones(3)]))
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
     # and COM trajectories)
     d1 = cross_mx(W_contacts[util.leg_map["LF"]] - act_state.pose.position)
-    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - act_state.pose.position)
-    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - act_state.pose.position)
+    d2 = cross_mx(W_contacts[util.leg_map["LH"]] - act_state.pose.position)
+    d3 = cross_mx(W_contacts[util.leg_map["RH"]] - act_state.pose.position)
     d4 = cross_mx(W_contacts[util.leg_map["RH"]] - act_state.pose.position)
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
@@ -120,7 +122,7 @@ def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   param
     # compute virtual impedances                
     Wffwd, Wfbk, Wg = computeVirtualImpedanceWrench(conf, act_state, des_state,  W_contacts,  stance_legs,  params) 
     # Total Wrench
-    TotWrench =    Wffwd + Wfbk+ + Wg
+    TotWrench =    Wffwd + Wfbk+  Wg
           
     
     #(Ax-b)T*(Ax-b)
@@ -131,14 +133,16 @@ def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   param
         
     # compute cost function
     # Stance matrix
-    S_mat = np.diag(np.hstack([stance_legs[util.leg_map["LF"]] * np.ones(3), stance_legs[util.leg_map["RF"]] * np.ones(3),
-                              stance_legs[util.leg_map["LH"]] * np.ones(3), stance_legs[util.leg_map["RH"]] * np.ones(3)]))
+    S_mat = np.diag(np.hstack([stance_legs[util.leg_map["LF"]] * np.ones(3),
+                               stance_legs[util.leg_map["LH"]] * np.ones(3),
+                               stance_legs[util.leg_map["RF"]] * np.ones(3),
+                               stance_legs[util.leg_map["RH"]] * np.ones(3)]))
     # This is a skew symmetric matrix for (xfi-xc)  corressponding  toe difference between the foothold locations
     # and COM/BASE trajectories, this will depend on what what put in act_state)
                          
     d1 = cross_mx(W_contacts[util.leg_map["LF"]] - act_state.pose.position)
-    d2 = cross_mx(W_contacts[util.leg_map["RF"]] - act_state.pose.position)
-    d3 = cross_mx(W_contacts[util.leg_map["LH"]] - act_state.pose.position)
+    d2 = cross_mx(W_contacts[util.leg_map["LH"]] - act_state.pose.position)
+    d3 = cross_mx(W_contacts[util.leg_map["RF"]] - act_state.pose.position)
     d4 = cross_mx(W_contacts[util.leg_map["RH"]] - act_state.pose.position)
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
@@ -152,8 +156,8 @@ def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   param
     
     # compute unilateral constraints Cx >= params.f_min => -Cx <= -params.f_min
     C =  - block_diag( params.normals[util.leg_map["LF"]] , 
-                       params.normals[util.leg_map["RF"]], 
-                       params.normals[util.leg_map["LH"]], 
+                       params.normals[util.leg_map["LH"]],
+                       params.normals[util.leg_map["RF"]],
                        params.normals[util.leg_map["RH"]]    )                                                 
     #not need to nullify columns relative to legs that are not in contact because the QP solver removes 0 = 0 constraints                                                                                           #
     d = -params.f_min.reshape((4,))
@@ -174,8 +178,8 @@ def QPController(conf, act_state,  des_state, W_contacts,   stance_legs,   param
             
                        
         C =   block_diag( C_leg[util.leg_map["LF"]] , 
-                       C_leg[util.leg_map["RF"]], 
-                           C_leg[util.leg_map["LH"]], 
+                       C_leg[util.leg_map["LH"]],
+                           C_leg[util.leg_map["RF"]],
                            C_leg[util.leg_map["RH"]]    )   
         d = np.zeros(C.shape[0]) 
          

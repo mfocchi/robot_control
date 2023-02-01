@@ -18,8 +18,8 @@ class Utils:
         
         self.leg_map = {
             "LF": 0,
-            "RF": 1,
-            "LH": 2,
+            "LH": 1,
+            "RF": 2,
             "RH": 3
         }
         self.crd = {
@@ -146,40 +146,40 @@ class Utils:
             return False
 
     def mapFromRos(self, ros_in):
-        ros_out = np.zeros_like(ros_in)
-        ros_out[0:3] = ros_in[0:3] 
-        ros_out[3:6] = ros_in[6:9] 
-        ros_out[6:9] = ros_in[3:6] 
-        ros_out[9:12] = ros_in[9:12]
-        if (len(ros_in)>12):
-            ros_out[12:] = ros_in[12:] #copy last joints if any
-        return ros_out
+        # ros_out = np.zeros_like(ros_in)
+        # ros_out[0:3] = ros_in[0:3]
+        # ros_out[3:6] = ros_in[6:9]
+        # ros_out[6:9] = ros_in[3:6]
+        # ros_out[9:12] = ros_in[9:12]
+        # if (len(ros_in)>12):
+        #     ros_out[12:] = ros_in[12:] #copy last joints if any
+        return ros_in
         
     
     def mapToRos(self, ros_in):
-        ros_out = np.zeros_like(ros_in)
-        ros_out[0:3] = ros_in[0:3] 
-        ros_out[3:6] = ros_in[6:9] 
-        ros_out[6:9] = ros_in[3:6] 
-        ros_out[9:12] = ros_in[9:12]
-        if (len(ros_in)>12):
-            ros_out[12:] = ros_in[12:] #copy last joints if any
-        return ros_out
+        # ros_out = np.zeros_like(ros_in)
+        # ros_out[0:3] = ros_in[0:3]
+        # ros_out[3:6] = ros_in[6:9]
+        # ros_out[6:9] = ros_in[3:6]
+        # ros_out[9:12] = ros_in[9:12]
+        # if (len(ros_in)>12):
+        #     ros_out[12:] = ros_in[12:] #copy last joints if any
+        return ros_in
         
-    def mapIndexToRos(self, index_in):
-        index_out =  index_in
-        if index_in == 1:
-            index_out = 2            
-        if index_in == 2:
-            index_out = 1            
-        return index_out
+    def mapIndexToRos(self, index_in: object) -> object:
+        # index_out =  index_in
+        # if index_in == 1:
+        #     index_out = 2
+        # if index_in == 2:
+        #     index_out = 1
+        return index_in
 
-    def mapLegListToRos(self, list):
-        tmp1 = list[1]
-        tmp2 = list[2]
-
-        list[1] = tmp2
-        list[2] = tmp1
+    def mapLegListToRos(self, list: object) -> object:
+        # tmp1 = list[1]
+        # tmp2 = list[2]
+        #
+        # list[1] = tmp2
+        # list[2] = tmp1
 
         return list
 

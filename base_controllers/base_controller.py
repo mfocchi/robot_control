@@ -210,28 +210,28 @@ class BaseController(threading.Thread):
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] =  msg.states[0].wrenches[0].force.y
         grf[2] =  msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(0, grf, self.grForcesLocal_gt)
+        self.u.setLegJointState(self.u.leg_map["LF"], grf, self.grForcesLocal_gt)
 
     def _receive_contact_rf(self, msg):
         grf = np.zeros(3)
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] =  msg.states[0].wrenches[0].force.y
         grf[2] =  msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(1, grf, self.grForcesLocal_gt)
+        self.u.setLegJointState(self.u.leg_map["RF"], grf, self.grForcesLocal_gt)
 
     def _receive_contact_lh(self, msg):
         grf = np.zeros(3)
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] =  msg.states[0].wrenches[0].force.y
         grf[2] =  msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(2, grf, self.grForcesLocal_gt)
+        self.u.setLegJointState(self.u.leg_map["LH"], grf, self.grForcesLocal_gt)
 
     def _receive_contact_rh(self, msg):
         grf = np.zeros(3)
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] =  msg.states[0].wrenches[0].force.y
         grf[2] =  msg.states[0].wrenches[0].force.z
-        self.u.setLegJointState(3, grf, self.grForcesLocal_gt)
+        self.u.setLegJointState(self.u.leg_map["RH"], grf, self.grForcesLocal_gt)
 
     def _receive_pose(self, msg):
         
@@ -369,8 +369,8 @@ class BaseController(threading.Thread):
         # q is continuously updated
         # to compute in the base frame  you should put neutral base
         b_X_w = motionVectorTransform(np.zeros(3), self.b_R_w)
-        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.u.mapToRos(self.qd)))
-        neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))
+        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW), self.qd))
+        neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.q))
         pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate, gen_velocities)
         pin.computeJointJacobians(self.robot.model, self.robot.data)  
         pin.updateFramePlacements(self.robot.model, self.robot.data)
@@ -383,14 +383,14 @@ class BaseController(threading.Thread):
 
         for leg in range(4):
             # TODO fix for different number of joint per leg
-            leg_joints =  range(6+self.u.mapIndexToRos(leg)*3, 6+self.u.mapIndexToRos(leg)*3+3) 
+            leg_joints =  range(6+leg*3, 6+leg*3+3)
             self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
 
 
         # Pinocchio Update the joint and frame placements
-        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW),self.u.mapToRos(self.qd)))
-        configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.u.mapToRos(self.q)))
+        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW), self.qd))
+        configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.q))
         self.M = self.robot.mass(configuration)
         self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities)
         self.h_joints = self.h[6:]
@@ -401,7 +401,7 @@ class BaseController(threading.Thread):
         self.estimateContactForces()
         
         # compute com / robot inertias
-        self.comB = self.robot.robotComB(self.u.mapToRos(self.q))
+        self.comB = self.robot.robotComB(self.q)
         self.comPoseW = copy.deepcopy(self.basePoseW)
         self.comPoseW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"]+3] = self.robot.robotComW(configuration) # + np.array([0.05, 0.0,0.0])
         W_base_to_com = self.u.linPart(self.comPoseW)  - self.u.linPart(self.basePoseW) 
@@ -415,7 +415,7 @@ class BaseController(threading.Thread):
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
             try:
-                grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.u.mapFromRos(self.h_joints)-self.tau ))
+                grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.h_joints-self.tau ))
             except np.linalg.linalg.LinAlgError as error:
                 grf = np.zeros(3)
             self.u.setLegJointState(leg, grf, self.grForcesW)
@@ -455,7 +455,7 @@ class BaseController(threading.Thread):
             if (self.robot_name == 'hyq'):                        
                 # these torques are to compensate the leg gravity
                 self.gravity_comp = np.array(
-                    [24.2571, 1.92, 50.5, 24.2, 1.92, 50.5739, 21.3801, -2.08377, -44.9598, 21.3858, -2.08365, -44.9615])
+                    [24.2571, 1.92, 50.5,  21.3801, -2.08377, -44.9598, 24.2, 1.92, 50.5739, 21.3858, -2.08365, -44.9615])
                                                         
                 print("reset posture...")
                 self.freezeBase(1, basePoseW=np.hstack( (self.base_offset, np.array([0.,0.,0.]))) )

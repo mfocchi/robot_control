@@ -131,13 +131,7 @@ class Utils:
         else:
             return False
 
-    def mapFromRos(self, ros_in):
-        ros_out = np.zeros_like(ros_in)
-        ros_out[0:3] = ros_in[0:3] 
-        ros_out[3:6] = ros_in[6:9] 
-        ros_out[6:9] = ros_in[3:6] 
-        ros_out[9:12] = ros_in[9:12] 
-        return ros_out
+
 ###################################################################### Put in class geometry to be shared with ABDO TODO
 
     class LineCoeff2d:

@@ -72,8 +72,8 @@ class AdvancedController(BaseController):
 
 def talker(p):
     p.start()
-    p.startSimulator(additional_args=['gui:=false'])
-    #p.startSimulator(world_name='slow.world', additional_args=['gui:=false'])
+    #p.startSimulator(additional_args=['gui:=false'])
+    p.startSimulator(world_name='slow.world', additional_args=['gui:=false'])
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()
@@ -168,8 +168,8 @@ def talker(p):
         # EXERCISE 7: quasi-static QP controller (base frame) - unilateral constraints                
         # p.params.normals = [None]*4
         # p.params.normals[p.u.leg_map["LF"]] = np.array([0.0,0.0,1.0])
-        # p.params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
         # p.params.normals[p.u.leg_map["LH"]] = np.array([0.0,0.0,1.0])
+        # p.params.normals[p.u.leg_map["RF"]] = np.array([0.0,0.0,1.0])
         # p.params.normals[p.u.leg_map["RH"]] = np.array([0.0,0.0,1.0])
         # p.params.f_min = np.array([0.0,0.0,0.0, 0.0])
         # p.params.friction_coeff = np.array([0.6,0.6,0.6, 0.6])
@@ -190,10 +190,10 @@ def talker(p):
         # map desired contact forces into torques (missing gravity compensation)                      
         #################################################################                                       
         p.jacsT = block_diag(np.transpose(p.wJ[p.u.leg_map["LF"]]), 
-                        np.transpose(p.wJ[p.u.leg_map["RF"]] ), 
-                        np.transpose(p.wJ[p.u.leg_map["LH"]] ), 
+                        np.transpose(p.wJ[p.u.leg_map["LH"]] ),
+                        np.transpose(p.wJ[p.u.leg_map["RF"]] ),
                         np.transpose(p.wJ[p.u.leg_map["RH"]]  ))
-        p.tau_ffwd =   p.u.mapFromRos(p.h_joints) - p.jacsT.dot(p.des_forcesW)         
+        p.tau_ffwd =    p.h_joints - p.jacsT.dot(p.des_forcesW)
  
     
         #time3 = time.time()-startTime #0.3 ms
@@ -229,8 +229,8 @@ if __name__ == '__main__':
             else:
                 plotCoM('position', 0, p.time_log, p.des_PoseW_log, p.comPoseW_log, title='com lin/ang position')
 
-            plotCoM('acceleration', 4, p.time_log, des_baseAccW=p.des_AccW_log, title='des accel')
-            plotCoM('velocity', 5, p.time_log, des_baseTwistW=p.des_TwistW_log, title='des twist')
+            plotCoM('acceleration', 4, p.time_log, baseAccW=p.des_AccW_log, title='des accel')
+            plotCoM('velocity', 5, p.time_log, baseTwistW=p.des_TwistW_log, title='des twist')
             plotCoM('wrench', 2, p.time_log, wrenchW=p.Wffwd_log)
 
             # plotCoM('wrench', 1, p.time_log, wrenchW = p.Wffwd_log  + p.Wfbk_log + p.Wg_log)
