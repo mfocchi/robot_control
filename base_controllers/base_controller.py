@@ -384,7 +384,8 @@ class BaseController(threading.Thread):
                                                              self.robot.model.getFrameId(ee_frames[leg]),
                                                              update_kinematics=False ).translation
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
-            if self.use_ground_truth_contacts:
+        if self.use_ground_truth_contacts:
+            for leg in range(4):
                 self.w_R_lowerleg[leg] = self.b_R_w.transpose().dot(self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
 
         for leg in range(4):
@@ -433,7 +434,8 @@ class BaseController(threading.Thread):
             else:
                 self.contact_state[leg] = False
 
-            if self.use_ground_truth_contacts:
+        if self.use_ground_truth_contacts:
+            for leg in range(4):
                 grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
                 grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
                 self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
