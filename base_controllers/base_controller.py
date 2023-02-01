@@ -368,10 +368,9 @@ class BaseController(threading.Thread):
     def updateKinematics(self):
         # q is continuously updated
         # to compute in the base frame  you should put neutral base
-        b_X_w = motionVectorTransform(np.zeros(3), self.b_R_w)
-        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW), self.qd))
-        neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.q))
-        pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate, gen_velocities)
+        # b_X_w = motionVectorTransform(np.zeros(3), self.b_R_w)
+        # b_X_w = pin.SE3(self.b_R_w, np.zeros(3)).action
+        # self.gen_velocities[:6] = b_X_w.dot(self.baseTwistW)
         self.gen_velocities[:3] = self.b_R_w.dot(self.u.linPart(self.baseTwistW))
         self.gen_velocities[3:6] = self.b_R_w.dot(self.u.angPart(self.baseTwistW))
         self.gen_velocities[6:] = self.qd
