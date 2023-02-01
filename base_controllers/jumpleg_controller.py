@@ -175,7 +175,7 @@ class JumpLegController(BaseControllerFixed):
 
         if self.ACTION_TORQUES:
             # self.cost.weights = np.array([10., 10., 10., 10., 10., 0., 1.])
-            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 10., 1.])
+            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 0., 1.])
         else:
             #  unilateral  friction   singularity      joint_range  joint_torques   error_vel_liftoff  target = 0
             # self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.])
@@ -330,6 +330,8 @@ class JumpLegController(BaseControllerFixed):
         if not self.detectedApexFlag and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
+                for i in range(10):
+                    p.setJumpPlatformPosition(p.target_CoM)
                 p.contactForceW = np.zeros(3)
                 print(colored("APEX detected", "red"))
                 self.q_des[3:] = self.q_des_q0[3:]
@@ -625,8 +627,8 @@ def talker(p):
     # from base_controllers.utils.custom_robot_wrapper import RobotWrapper
     # p.robotPinocchio = RobotWrapper.BuildFromURDF(urdf_location)
 
-    # p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
-    p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    # p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
     # p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
 
     p.initVars()
@@ -660,6 +662,8 @@ def talker(p):
         p.comd_lo = np.zeros(3)
         p.target_CoM = (p.target_service()).target_CoM
         print(p.target_CoM)
+        for i in range(10):
+            p.setJumpPlatformPosition(com_0-[0,0,0.2])
 
         if p.target_CoM[2] == -1:
             print(colored("# RECIVED STOP TARGET_COM SIGNAL #", "red"))
@@ -758,9 +762,6 @@ def talker(p):
                     if (p.detectedApexFlag):
                         
                         # set jump position (avoid collision in jumping)
-                        for i in range(10):
-                            p.setJumpPlatformPosition(p.target_CoM)
-
                         if p.detectTouchDown():
                             break
 
