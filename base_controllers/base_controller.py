@@ -372,29 +372,39 @@ class BaseController(threading.Thread):
         gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW), self.qd))
         neutral_fb_jointstate = np.hstack(( pin.neutral(self.robot.model)[0:7], self.q))
         pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate, gen_velocities)
+        self.gen_velocities[:3] = self.b_R_w.dot(self.u.linPart(self.baseTwistW))
+        self.gen_velocities[3:6] = self.b_R_w.dot(self.u.angPart(self.baseTwistW))
+        self.gen_velocities[6:] = self.qd
+        self.neutral_fb_jointstate[7:] = self.q
+        pin.forwardKinematics(self.robot.model, self.robot.data, self.neutral_fb_jointstate, self.gen_velocities)
         pin.computeJointJacobians(self.robot.model, self.robot.data)  
         pin.updateFramePlacements(self.robot.model, self.robot.data)
         ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         for leg in range(4):
-            self.B_contacts[leg] = self.robot.framePlacement(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), update_kinematics=True ).translation
+            self.B_contacts[leg] = self.robot.framePlacement(self.neutral_fb_jointstate,
+                                                             self.robot.model.getFrameId(ee_frames[leg]),
+                                                             update_kinematics=False ).translation
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
             if self.use_ground_truth_contacts:
                 self.w_R_lowerleg[leg] = self.b_R_w.transpose().dot(self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
 
         for leg in range(4):
             # TODO fix for different number of joint per leg
-            leg_joints =  range(6+leg*3, 6+leg*3+3)
-            self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate,  self.robot.model.getFrameId(ee_frames[leg]), pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,leg_joints]  
+            self.J[leg] = self.robot.frameJacobian(self.neutral_fb_jointstate,
+                                                   self.robot.model.getFrameId(ee_frames[leg]),
+                                                   update=False,
+                                                   ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,6+leg*3:6+leg*3+3]
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
 
-
         # Pinocchio Update the joint and frame placements
-        gen_velocities  = np.hstack((b_X_w.dot(self.baseTwistW), self.qd))
-        configuration = np.hstack(( self.u.linPart(self.basePoseW), self.quaternion, self.q))
-        self.M = self.robot.mass(configuration)
-        self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, configuration, gen_velocities)
+        self.configuration[:3] = self.u.linPart(self.basePoseW)
+        self.configuration[3:7] = self.quaternion
+        self.configuration[7:] = self.q
+
+        self.M = self.robot.mass(self.configuration)
+        self.h = pin.nonLinearEffects(self.robot.model, self.robot.data, self.configuration, self.gen_velocities)
         self.h_joints = self.h[6:]
-        self.g = self.robot.gravity(configuration)
+        self.g = self.robot.gravity(self.configuration)
         self.g_joints = self.g[6:]
         
         #compute contact forces
@@ -407,9 +417,9 @@ class BaseController(threading.Thread):
         W_base_to_com = self.u.linPart(self.comPoseW)  - self.u.linPart(self.basePoseW) 
         self.comTwistW = np.dot( motionVectorTransform( W_base_to_com, np.eye(3)),self.baseTwistW)
         # inertia w.r.t the com
-        self.centroidalInertiaB = self.robot.centroidalInertiaB(configuration, gen_velocities)
+        self.centroidalInertiaB = self.robot.centroidalInertiaB(self.configuration, self.gen_velocities)
         # inertia w.r.t the base frame origin
-        self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(configuration)
+        self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(self.configuration)
 
     def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
@@ -504,6 +514,9 @@ class BaseController(threading.Thread):
         self.stance_legs = np.array([True, True, True, True])
         self.centroidalInertiaB = np.identity(3)
         self.compositeRobotInertiaB = np.identity(3)
+        self.gen_velocities = np.zeros(self.robot.nv)
+        self.neutral_fb_jointstate = pin.neutral(self.robot.model)
+        self.configuration = pin.neutral(self.robot.model)
         self.q = np.zeros(self.robot.na)
         self.qd = np.zeros(self.robot.na)
         self.tau = np.zeros(self.robot.na)
