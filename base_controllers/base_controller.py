@@ -395,6 +395,12 @@ class BaseController(threading.Thread):
                                                    update=False,
                                                    ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,6+leg*3:6+leg*3+3]
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
+            try:
+                self.J_inv[leg] = np.linalg.inv(self.J[leg])
+                self.wJ_inv[leg] = self.J_inv[leg].dot(self.b_R_w)
+            except np.linalg.linalg.LinAlgError as error:
+                self.J_inv[leg][:,:] = 0.
+                self.wJ_inv[leg][:,:] = 0.
 
         # Pinocchio Update the joint and frame placements
         self.configuration[:3] = self.u.linPart(self.basePoseW)
@@ -413,9 +419,11 @@ class BaseController(threading.Thread):
         # compute com / robot inertias
         self.comB = self.robot.robotComB(self.q)
         self.comPoseW = copy.deepcopy(self.basePoseW)
-        self.comPoseW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"]+3] = self.robot.robotComW(configuration) # + np.array([0.05, 0.0,0.0])
-        W_base_to_com = self.u.linPart(self.comPoseW)  - self.u.linPart(self.basePoseW) 
-        self.comTwistW = np.dot( motionVectorTransform( W_base_to_com, np.eye(3)),self.baseTwistW)
+        self.comPoseW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"]+3] = self.robot.robotComW(self.configuration) # + np.array([0.05, 0.0,0.0])
+        W_base_to_com = self.u.linPart(self.comPoseW)  - self.u.linPart(self.basePoseW)
+        # self.comTwistW = np.dot( motionVectorTransform( W_base_to_com, np.eye(3)),self.baseTwistW)
+        self.comTwistW = pin.SE3(np.eye(3), W_base_to_com).action.dot(self.baseTwistW)
+
         # inertia w.r.t the com
         self.centroidalInertiaB = self.robot.centroidalInertiaB(self.configuration, self.gen_velocities)
         # inertia w.r.t the base frame origin
@@ -424,11 +432,9 @@ class BaseController(threading.Thread):
     def estimateContactForces(self):           
         # estimate ground reaxtion forces from tau 
         for leg in range(4):
-            try:
-                grf = np.linalg.inv(self.wJ[leg].T).dot(self.u.getLegJointState(leg,  self.h_joints-self.tau ))
-            except np.linalg.linalg.LinAlgError as error:
-                grf = np.zeros(3)
+            grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  self.h_joints-self.tau ))
             self.u.setLegJointState(leg, grf, self.grForcesW)
+
             if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
                 self.contact_state[leg] = True
             else:
@@ -533,8 +539,10 @@ class BaseController(threading.Thread):
         self.grForcesLocal_gt = np.zeros(self.robot.na)
         self.grForcesW_gt = np.zeros(self.robot.na)
         self.basePoseW = np.zeros(6)
-        self.J = [np.zeros((6, self.robot.nv))] * 4
+        self.J = [np.zeros((3,3))] * 4
         self.wJ = [np.eye(3)] * 4
+        self.J_inv = [np.zeros((3, 3))] * 4
+        self.wJ_inv = [np.eye(3)] * 4
         self.W_contacts = [np.zeros((3))] * 4
         self.W_contacts_des = [np.zeros((3))] * 4
         self.B_contacts = [np.zeros((3))] * 4
