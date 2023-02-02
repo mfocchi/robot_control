@@ -189,10 +189,10 @@ def talker(p):
         #################################################################
         # map desired contact forces into torques (missing gravity compensation)                      
         #################################################################                                       
-        p.jacsT = block_diag(np.transpose(p.wJ[p.u.leg_map["LF"]]), 
-                        np.transpose(p.wJ[p.u.leg_map["LH"]] ),
-                        np.transpose(p.wJ[p.u.leg_map["RF"]] ),
-                        np.transpose(p.wJ[p.u.leg_map["RH"]]  ))
+        p.jacsT = block_diag(np.transpose(p.wJ[p.u.leg_map["LF"]]),
+                             np.transpose(p.wJ[p.u.leg_map["LH"]] ),
+                             np.transpose(p.wJ[p.u.leg_map["RF"]] ),
+                             np.transpose(p.wJ[p.u.leg_map["RH"]]  ))
         p.tau_ffwd =    p.h_joints - p.jacsT.dot(p.des_forcesW)
  
     

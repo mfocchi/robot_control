@@ -100,7 +100,7 @@ def projectionBasedController(conf, act_state, des_state, W_contacts, stance_leg
     # and COM trajectories)
     d1 = cross_mx(W_contacts[util.leg_map["LF"]] - act_state.pose.position)
     d2 = cross_mx(W_contacts[util.leg_map["LH"]] - act_state.pose.position)
-    d3 = cross_mx(W_contacts[util.leg_map["RH"]] - act_state.pose.position)
+    d3 = cross_mx(W_contacts[util.leg_map["RF"]] - act_state.pose.position)
     d4 = cross_mx(W_contacts[util.leg_map["RH"]] - act_state.pose.position)
     # Compute Jb^T
     JbT = np.vstack([np.hstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3)]),
