@@ -46,8 +46,6 @@ class Controller(BaseController):
 
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
 
-        self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
-
         self.use_ground_truth_pose = True
 
     #####################
@@ -183,6 +181,8 @@ class Controller(BaseController):
     def initVars(self):
         super().initVars()
         self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
+
+        self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
         self.IK = InverseKinematics(self.robot)
         self.leg_odom = LegOdometry(self.robot)
         self.legConfig = {}
@@ -199,7 +199,7 @@ class Controller(BaseController):
             self.legConfig['rh'] = ['HipDown', 'KneeOutward']
 
         else:
-            assert False, 'Robot name is not valid'
+            assert False, 'leg configuration is not defined for ' + self.robot_name
 
         self.euler = np.zeros(3)
         # some extra variables
