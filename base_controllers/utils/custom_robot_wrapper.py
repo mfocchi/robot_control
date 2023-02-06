@@ -20,13 +20,29 @@ class RobotWrapper(PinocchioRobotWrapper):
         # robot mass
         pin.crba(robot.model, robot.data, pin.neutral(robot.model))
         robot.robotMass = robot.data.M[0, 0]
+        # TODO: fix in all files (robotMass is prefered)
+        robot.robot_mass = robot.robotMass
+        #number of attive joints
+        if (robot.model.joints[1].nq == 7):
+            robot.na = robot.model.nv - 6
+        else:
+            robot.na = robot.model.nv
+        # ee frames, ndeces and names
+        robot.getEndEffectorsFrames = []
+        robot.getEndEffectorsFrameId = []
+        robot.getEndEffectorsFrameNames = []
+        for f in robot.model.frames:
+            if 'foot' in f.name and 'joint' not in f.name and 'fixed' not in f.name:
+                robot.getEndEffectorsFrames.append(f)
+                robot.getEndEffectorsFrameId.append(robot.model.getFrameId(f.name))
+                robot.getEndEffectorsFrameNames.append(f.name)
+        # number of ee
+        robot.nee = len(robot.getEndEffectorsFrameId)
+        # is floating base
+        list_of_joint_types = [i.shortname() for i in robot.model.joints]
+        robot.isFloatingBase = pin.JointModelFreeFlyer().shortname() in list_of_joint_types
+
         return robot
-    
-    @property
-    def na(self):
-        if(self.model.joints[1].nq==7):
-            return self.model.nv-6
-        return self.model.nv
                              
         
     def mass(self, q, update=True):
@@ -214,43 +230,6 @@ class RobotWrapper(PinocchioRobotWrapper):
             if(not consider_only_active_collision_pairs or self.collision_data.activeCollisionPairs[i]):
                 if(pin.computeCollision(self.collision_model, self.collision_data, i)):
                     res += [(i, self.collision_model.collisionPairs[i])];
-        return res;
-
-    @property
-    def getEndEffectorsFrameId(self):
-        ee_frames = self.getEndEffectorsFrames
-        idx = []
-        for f in ee_frames:
-            idx.append(self.model.getFrameId(f.name))
-        return idx
-
-    @property
-    def getEndEffectorsFrameNames(self):
-        ee_frames = self.getEndEffectorsFrames
-        names = []
-        for f in ee_frames:
-            names.append(f.name)
-        return names
-
-    @property
-    def getEndEffectorsFrames(self):
-        frames = []
-        for f in self.model.frames:
-            if 'foot' in f.name and 'joint' not in f.name and 'fixed' not in f.name:
-                frames.append(f)
-        return frames
-
-    @property
-    def nee(self):
-        return len(self.getEndEffectorsFrameId)
-
-    @property
-    def isFloatingBase(self):
-        list_of_joint_types = [i.shortname() for i in self.model.joints]
-        if pin.JointModelFreeFlyer().shortname() in list_of_joint_types:
-            return True
-        else:
-            return False
 
     def getEEStackJacobians(self, q, component='full', ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
         ee_idxs = self.getEndEffectorsFrameId
