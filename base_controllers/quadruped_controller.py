@@ -468,12 +468,18 @@ class Controller(BaseController):
             # ---> angular part
             # actual orientation: self.b_R_w
             # Desired Orientation
-            b_Rdes_w = self.math_utils.rpyToRot(self.u.angPart(des_pose))
+            # the following are equivalent but the second is faster
+            #b_Rdes_w = self.math_utils.rpyToRot(self.u.angPart(des_pose))
+            b_Rdes_w = pin.rpy.rpyToMatrix(self.u.angPart(des_pose)).T
 
             # compute orientation error
             b_Re_w = b_Rdes_w @ self.b_R_w.T
             # express orientation error in angle-axis form
-            b_err = rotMatToRotVec(b_Re_w)
+            # the followings are equivalent but the second is faster
+            #b_err = rotMatToRotVec(b_Re_w)
+
+            aa_err = pin.AngleAxis(b_Re_w.T)
+            b_err = aa_err.axis * aa_err.angle
 
             # the orientation error is expressed in the base_frame so it should be rotated to have the wrench in the
             # world frame
