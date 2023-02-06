@@ -18,6 +18,10 @@ class LineCoeff2d:
         self.r = 0.0
 
 class Math:
+    def __init__(self):
+        self._Tomega_mat = np.diag([0.,0.,1.])
+        self._Tomega_dot_mat = np.zeros([3,3])
+
     def normalize(self, n):
         norm1 = np.linalg.norm(n)
         n = np.true_divide(n, norm1)
@@ -137,7 +141,7 @@ class Math:
                       [  s_yaw ,  c_yaw ,          0],
                       [0      ,     0     ,       1]]);
         
-        
+
 
         R =  Rz.dot(Ry.dot(Rx));
         return R
@@ -168,12 +172,26 @@ class Math:
         pitchd = rpyd[1]
         yawd = rpyd[2]
     
-        Tomega_dot = np.array([[ -np.cos(yaw)*np.sin(pitch)*pitchd - np.cos(pitch)*np.sin(yaw)*yawd,  -np.cos(yaw)*yawd, 0],
-                              [ np.cos(yaw)*np.cos(pitch)*yawd - np.sin(yaw)*np.sin(pitch)*pitchd,    -np.sin(yaw)*yawd, 0  ],
-                              [ -np.cos(pitch)*pitchd,  0, 0 ]])
-     
-    
-        return Tomega_dot
+        # Tomega_dot = np.array([[ -np.cos(yaw)*np.sin(pitch)*pitchd - np.cos(pitch)*np.sin(yaw)*yawd,  -np.cos(yaw)*yawd, 0],
+        #                       [ np.cos(yaw)*np.cos(pitch)*yawd - np.sin(yaw)*np.sin(pitch)*pitchd,    -np.sin(yaw)*yawd, 0  ],
+        #                       [ -np.cos(pitch)*pitchd,  0, 0 ]])
+        #
+        #
+        # return Tomega_dot
+
+        # faster way
+        cp = np.cos(pitch)
+        sp = np.sin(pitch)
+        cy = np.cos(yaw)
+        sy = np.sin(yaw)
+        self._Tomega_dot_mat[0, 0] = -sp * cy * pitchd - cp * sy * yawd
+        self._Tomega_dot_mat[1, 0] = -sp * sy * pitchd + cp * cy * yawd
+        self._Tomega_dot_mat[2, 0] = -cp*pitchd
+
+        self._Tomega_dot_mat[0, 1] = -cy * yawd
+        self._Tomega_dot_mat[1, 1] = -sy * yawd
+        
+        return self._Tomega_dot_mat
 
     """
         Computes the mapping matrix between euler rates and angular velocity vector (expressed in the world frame), of the rotating frame
@@ -197,10 +215,24 @@ class Math:
         yaw = rpy[2]
         
 
-        Tomega = np.array([[np.cos(pitch)*np.cos(yaw),       -np.sin(yaw),                    0],
-                           [ np.cos(pitch)*np.sin(yaw),       np.cos(yaw),                    0],
-                           [ -np.sin(pitch),      0 ,                                         1]])
-        return Tomega
+        # Tomega = np.array([[np.cos(pitch)*np.cos(yaw),       -np.sin(yaw),                    0],
+        #                    [ np.cos(pitch)*np.sin(yaw),       np.cos(yaw),                    0],
+        #                    [ -np.sin(pitch),      0 ,                                         1]])
+        # return Tomega
+
+        # faster way
+
+        cp = np.cos(pitch)
+        sp = np.sin(pitch)
+        cy = np.cos(yaw)
+        sy = np.sin(yaw)
+        self._Tomega_mat[0, 0] = cp * cy
+        self._Tomega_mat[1, 0] = cp * sy
+        self._Tomega_mat[2, 0] = -sp
+        self._Tomega_mat[0, 1] = -sy
+        self._Tomega_mat[1, 1] = cy
+
+        return self._Tomega_mat
 
     ##################
     # Geometry Utils
