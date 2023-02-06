@@ -230,6 +230,7 @@ class RobotWrapper(PinocchioRobotWrapper):
             if(not consider_only_active_collision_pairs or self.collision_data.activeCollisionPairs[i]):
                 if(pin.computeCollision(self.collision_model, self.collision_data, i)):
                     res += [(i, self.collision_model.collisionPairs[i])];
+        return res
 
     def getEEStackJacobians(self, q, component='full', ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED):
         ee_idxs = self.getEndEffectorsFrameId
