@@ -15,10 +15,11 @@ class RobotWrapper(PinocchioRobotWrapper):
     def BuildFromURDF(filename, package_dirs=None, root_joint=None, verbose=False, meshLoader=None):
         robot = RobotWrapper()
         robot.initFromURDF(filename, package_dirs, root_joint, verbose, meshLoader)
-        #additional var        
-        pin.crba(robot.model, robot.data, np.zeros(robot.model.nq))
-        robot.robot_mass = robot.data.M[0,0] 
-        
+        #additional var
+
+        # robot mass
+        pin.crba(robot.model, robot.data, pin.neutral(robot.model))
+        robot.robotMass = robot.data.M[0, 0]
         return robot
     
     @property
@@ -87,10 +88,7 @@ class RobotWrapper(PinocchioRobotWrapper):
             pin.crba(self.model, self.data, q)
         return self.data.M[3:3+3,3:3+3];
 
-    @property
-    def robotMass(self):
-        pin.crba(self.model, self.data, pin.neutral(self.model))
-        return self.data.M[0,0]
+
         
     def computeAllTerms(self, q, v):
         ''' pin.computeAllTerms is equivalent to calling:
