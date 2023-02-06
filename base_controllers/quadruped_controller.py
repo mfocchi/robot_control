@@ -432,7 +432,6 @@ class Controller(BaseController):
             baseTwistW = np.zeros(6)
 
         self.freezeBase(flag=True, basePoseW=basePoseW, baseTwistW=baseTwistW)
-
         self.initVars() # reset logged values
 
 
@@ -486,6 +485,7 @@ class Controller(BaseController):
             w_err = self.b_R_w.T @ b_err
             # map des euler rates into des omega
             Jomega = self.math_utils.Tomega(self.u.angPart(self.comPoseW))
+
 
             # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an
             # Euclidean space with Jomega
