@@ -652,9 +652,9 @@ def talker(p):
         
         # plot actual (green) and desired (blue) contact forces 
         for leg in range(4):
-            p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg]*p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robot_mass)),"green")
+            p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg]*p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robotMass)),"green")
             if (p.use_ground_truth_contacts):
-                p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)), "red")
+                p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robotMass)), "red")
         p.ros_pub.publishVisual()      				
   
 #        if (p.time>0.5): 
