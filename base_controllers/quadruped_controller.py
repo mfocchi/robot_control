@@ -350,11 +350,14 @@ class Controller(BaseController):
 
         self.comVelW_leg_odom_log[:, self.log_counter] = self.comVelW_leg_odom
 
-        self.B_contacts_log[:, self.log_counter] = np.array(self.B_contacts).flatten()
-        self.B_contacts_des_log[:, self.log_counter] = np.array(self.B_contacts_des).flatten()
+        for leg in range(4):
+            start = 3 * leg
+            end = 3 * (leg+1)
+            self.B_contacts_log[start:end, self.log_counter] = self.B_contacts[leg]
+            self.B_contacts_des_log[start:end, self.log_counter] = self.B_contacts_des[leg]
 
-        self.W_contacts_log[:, self.log_counter] = np.array(self.W_contacts).flatten()
-        self.W_contacts_des_log[:, self.log_counter] = np.array(self.W_contacts_des).flatten()
+            self.W_contacts_log[start:end, self.log_counter] = self.W_contacts[leg]
+            self.W_contacts_des_log[start:end, self.log_counter] = self.W_contacts_des[leg]
 
         self.W_lin_vel_log[:, self.log_counter] = self.imu_utils.W_lin_vel
         self.zmp_log[:, self.log_counter] = self.zmp
