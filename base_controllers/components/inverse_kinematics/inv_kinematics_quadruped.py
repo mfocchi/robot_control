@@ -51,7 +51,7 @@ class InverseKinematics:
         self._lowerleg_id_dict = {}
         self._foot_id_dict = {}
 
-        legs = ['lf', 'rf', 'lh', 'rh']
+        legs = ['lf', 'lh', 'rf', 'rh']
 
         for leg in legs:
             self._hip_id_dict[leg] = self.robot.model.getFrameId(leg + '_hip')
@@ -296,10 +296,10 @@ if __name__ == '__main__':
     # knee = [KNEE_INWARD] * 4
 
     robot_name = 'go1'
-    qj = np.array([ 0.2, 0.7, -1.4,   # lf
-                   0.2, 0.7, -1.4,    # lh
-                   -0.2, 0.7, -1.4,   # rf
-                   -0.2, 0.7, -1.4])  # rh
+    qj = np.array([0.2, 0.78, -1.7,
+                   0.2, 0.78, -1.7,
+                   -0.2, 0.78, -1.7,
+                   -0.2, 0.78, -1.7])
     hip = [HIP_DOWN] * 4
     knee = [KNEE_INWARD] * 2 + [KNEE_OUTWARD] * 2
 
