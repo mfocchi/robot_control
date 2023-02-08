@@ -222,10 +222,13 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
             plt.subplot(int(njoints / 3), 3, jidx + 1)
             if jidx + 3 >= njoints:
                 plt.xlabel("Time [s]")
-        else:  # divisible by 2
+        elif (njoints % 2 == 0):  # divisible by 2
             plt.subplot(int(njoints / 2), 2, jidx + 1)
             if jidx + 2 >= njoints:
                 plt.xlabel("Time [s]")
+        else: # put in a single columnn
+            plt.subplot(njoints, 1, jidx + 1)
+
         plt.ylabel(labels[jidx] + ' '+ unit)
         if name == 'torque' and tau_ffwd_log is not None:
             plt.plot(time_log, tau_ffwd_log[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
