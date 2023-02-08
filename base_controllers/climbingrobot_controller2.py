@@ -30,6 +30,7 @@ import rospkg
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 
 import  params as conf
+#robotName = "climbingrobot2landing"
 robotName = "climbingrobot2"
 
 class ClimbingrobotController(BaseControllerFixed):
@@ -44,6 +45,11 @@ class ClimbingrobotController(BaseControllerFixed):
         self.leg_index = np.array([12, 13, 14])
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
         self.anchor_passive_joints = np.array([0,1, 6,7])
+        if robot_name == 'climbingrobot2landing':
+            self.landing = True
+        else:
+            self.landing = False
+        self.landing_joints = np.array([15, 16])
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
         self.r_leg = 0.3
         print("Initialized climbingrobot controller---------------------------------------------------------------")
@@ -70,29 +76,17 @@ class ClimbingrobotController(BaseControllerFixed):
         additional_urdf_args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
         super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args)
 
-        # OLD
-        # super().loadModelAndPublishers(xacro_path)
-        # # Fetch model from parameter server
-        # urdf_location = os.environ['LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/' + self.robot_name + '.urdf'
-        # #generate urdf in urdf_location
-        # args = xacro_path + ' --inorder -o ' + urdf_location
-        # args += ' anchorX:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
-        # args += ' anchorY:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
-        # args += ' anchorZ:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
-        # args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
-        # args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
-        # args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
-        # os.system("rosrun xacro xacro " + args)
-        # print("URDF generated_mine")
-        # # load urdf
-        # print(urdf_location)
-        # self.robot  = RobotWrapper.BuildFromURDF(urdf_location)
-
         self.broadcaster = tf.TransformBroadcaster()
         self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
                                              callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
                                              tcp_nodelay=True)
-
+        if p.landing:
+            self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_landing_l_bumper", ContactsState,
+                                                 callback=self._receive_contact_landing_l, queue_size=1, buff_size=2 ** 24,
+                                                 tcp_nodelay=True)
+            self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_landing_r_bumper", ContactsState,
+                                                 callback=self._receive_contact_landing_r, queue_size=1, buff_size=2 ** 24,
+                                                 tcp_nodelay=True)
 
 
     def updateKinematicsDynamics(self):
@@ -110,8 +104,12 @@ class ClimbingrobotController(BaseControllerFixed):
         self.anchor_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor')).translation
         self.anchor_pos2 = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor_2')).translation
         self.base_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).translation
+
         self.w_R_b = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).rotation
         self.x_ee =  self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
+
+        self.hoist_l_pos = self.base_pos +  self.w_R_b.dot(np.array([0.0, -0.05, 0.05]))
+        self.hoist_r_pos = self.base_pos + self.w_R_b.dot(np.array([0.0, 0.05, 0.05]))
 
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
         self.J = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
@@ -140,6 +138,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
         # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
         # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar2', '/world')
+        if p.landing:
+            self.x_landing_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId('foot_landing_l')).translation
+            self.x_landing_r = self.robot.framePlacement(self.q, self.robot.model.getFrameId('foot_landing_r')).translation
 
     def _receive_contact(self, msg):
         grf = np.zeros(3)
@@ -148,8 +149,25 @@ class ClimbingrobotController(BaseControllerFixed):
         grf[2] = msg.states[0].wrenches[0].force.z
         self.contactForceW = self.robot.framePlacement(self.q,  self.robot.model.getFrameId("lower_link")).rotation.dot(grf)
 
+    def _receive_contact_landing_l(self, msg):
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] = msg.states[0].wrenches[0].force.y
+        grf[2] = msg.states[0].wrenches[0].force.z
+        self.contactForceW_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId("lowerleg_landing_l")).rotation.dot(grf)
+
+    def _receive_contact_landing_r(self, msg):
+        grf = np.zeros(3)
+        grf[0] = msg.states[0].wrenches[0].force.x
+        grf[1] = msg.states[0].wrenches[0].force.y
+        grf[2] = msg.states[0].wrenches[0].force.z
+        self.contactForceW_r = self.robot.framePlacement(self.q, self.robot.model.getFrameId("lowerleg_landing_r")).rotation.dot(grf)
+
+
     def initVars(self):
         super().initVars()
+        self.contactForceW_l = np.zeros(3)
+        self.contactForceW_r = np.zeros(3)
         self.qdd_des =  np.zeros(self.robot.na)
         self.base_accel = np.zeros(3)
         # init new logged vars here
@@ -329,17 +347,27 @@ def talker(p):
     #     rate.sleep()
 
     # validation test matlab
+    Fr_l = 0
+    Fr_r = 0
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
         if (jumpN == 0) and (p.time >p.startJump): #change target
             print(colored(f"Start Matlab Validation Test", "red"))
             p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
             p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
-            p.tau_ffwd[p.rope_index[0]] = -30
-            p.tau_ffwd[p.rope_index[1]] = -40
-            p.w_Fleg = np.array([200., 0., 0.])
+            if p.landing:
+                Fr_l = -90
+                Fr_r = -120
+                Fleg = 1000
+            else:
+                Fr_l = -30
+                Fr_r = -40
+                Fleg = 200
+            p.tau_ffwd[p.rope_index[0]] = Fr_l
+            p.tau_ffwd[p.rope_index[1]] = Fr_r
+            p.w_Fleg = np.array([Fleg, 0., 0.])
             if p.EXTERNAL_FORCE:
-                p.applyForce(200, 0, 0., 0.05)
+                p.applyForce(Fleg, 0, 0., 0.05)
             jumpN+=1
         if (jumpN ==1):
             if not p.EXTERNAL_FORCE and p.time<(p.startJump + 0.05):
@@ -347,22 +375,39 @@ def talker(p):
                 p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / 20., "red", scale=4.5)
             else:
                 p.tau_ffwd[p.leg_index] = np.zeros(3)
+
+                if  p.landing:
+                    # retract knee joint and extend landing joints
+                    p.tau_ffwd[p.landing_joints] = np.zeros(2)
+                    p.q_des[p.leg_index[2]] = 0.3
+                    p.q_des[p.landing_joints] = np.array([-0.8, 0.8])
             if (p.base_pos[0] < conf.robot_params[p.robot_name]['spawn_x']):
-                print("target in matlab is: ",p.base_pos-p.anchor_pos)
+                print(colored(f"target in matlab is: {p.base_pos-p.mat2Gazebo}"))
                 break
 
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)  # to avoid issues of dt 0.0009999
-        p.logData()
-        p.ros_pub.add_arrow(p.anchor_pos, (p.base_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
-        p.ros_pub.add_arrow(p.anchor_pos2, (p.base_pos - p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+        rope_direction = (p.hoist_l_pos - p.anchor_pos) / np.linalg.norm(p.hoist_l_pos  - p.anchor_pos)
+        p.ros_pub.add_arrow(p.hoist_l_pos, rope_direction * Fr_l / 50., "red", scale=4.5)
+        rope_direction2 = (p.hoist_r_pos - p.anchor_pos2) / np.linalg.norm(p.hoist_r_pos  - p.anchor_pos2)
+        p.ros_pub.add_arrow(p.hoist_r_pos, rope_direction2 * Fr_r / 50., "red", scale=4.5)
+
+
+        p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
+        p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+        if p.landing:
+            p.ros_pub.add_arrow(p.x_landing_l, p.contactForceW_l / 20., "blue", scale=4.5)
+            p.ros_pub.add_arrow(p.x_landing_r, p.contactForceW_r / 20., "blue", scale=4.5)
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / 20., "blue", scale=4.5)
         p.ros_pub.add_marker(p.mat2Gazebo + p0, color="red", radius=0.2)
+
         p.ros_pub.publishVisual()
+        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),
+                          3)  # to avoid issues of dt 0.0009999
+        p.logData()
         rate.sleep()
 
-
-
+    import sys
+    sys.exit()
     #p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
@@ -450,13 +495,15 @@ def talker(p):
                     p.b_Fu_xy = np.hstack((Fu_norm ,0.))
 
                     # start already to use the rope
-                    Fr = p.jumps[p.jumpNumber]["Fr"][p.getIndex(p.time - p.end_orienting)]
-                    p.tau_ffwd[p.rope_index[0]] = Fr
-                    p.tau_ffwd[p.rope_index[1]] = Fr
-                    rope_direction = (p.base_pos - p.anchor_pos) / np.linalg.norm(p.base_pos - p.anchor_pos)
-                    p.ros_pub.add_arrow(p.base_pos, rope_direction * Fr / 50., "red", scale=4.5)
-                    rope_direction2 = (p.base_pos - p.anchor_pos2) / np.linalg.norm(p.base_pos - p.anchor_pos2)
-                    p.ros_pub.add_arrow(p.base_pos, rope_direction2 * Fr / 50., "red", scale=4.5)
+                    Fr_l = p.jumps[p.jumpNumber]["Fr"][p.getIndex(p.time - p.end_orienting)]
+                    Fr_r = p.jumps[p.jumpNumber]["Fr"][p.getIndex(p.time - p.end_orienting)]
+
+                    p.tau_ffwd[p.rope_index[0]] = Fr_l
+                    p.tau_ffwd[p.rope_index[1]] = Fr_r
+                    rope_direction = (p.hoist_l_pos - p.anchor_pos) / np.linalg.norm(p.hoist_l_pos- p.anchor_pos)
+                    p.ros_pub.add_arrow(p.hoist_l_pos, rope_direction * Fr_l / 50., "red", scale=4.5)
+                    rope_direction2 = (p.hoist_r_pos - p.anchor_pos2) / np.linalg.norm(p.hoist_r_pos - p.anchor_pos2)
+                    p.ros_pub.add_arrow(p.hoist_r_pos, rope_direction2 * Fr_r / 50., "red", scale=4.5)
                 #using all 3 leg joints to generate impulse
                 p.w_Fu = p.w_R_b.dot(np.hstack((p.b_Fu_xy, 0)))
                 p.tau_ffwd[p.leg_index] = - p.Jleg.T.dot(p.w_Fu)

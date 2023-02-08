@@ -181,6 +181,39 @@ robot_params['climbingrobot2'] ={'dt': 0.001,
                        'spawn_2z': 20.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
+robot_params['climbingrobot2landing'] ={'dt': 0.001,
+                       'kp': np.array([0 ,    0,    400,  40,    40,   40,
+                                       0 ,    0,    400,  40,    40,   40,
+                                       50, 30, 30,
+                                       0.5, 0.5
+                                       ]),
+                       'kd':  np.array([20,    20,    100,   20,     20,   20,
+                                        20,    20,    100,   20,     20,   20,
+                                        10,   10, 10,
+                                        0.1, 0.1
+                                        ]),
+                       # this corresposnds to p = [0.03, 2.5, -6] from matlab WF  which is located in anchor_pos1
+                       'q_0':  np.array([ 0.0,    1.17  ,  4.0000   ,      0. ,   -1.17 ,        0.,
+                                          0.0,  -1.17,    4.0000  ,       0. ,  1.17,           0.,
+                                          -1.57, 0.0, 0.0,
+                                          0., -0
+                                          ]),
+
+                       'joint_names': ['mountain_wire_pitch_r', 'mountain_wire_roll_r',  'wire_base_prismatic_r',
+                                       'wire_base_pitch_r', 'wire_base_roll_r','wire_base_yaw_r',
+                                        'mountain_wire_pitch_l', 'mountain_wire_roll_l',  'wire_base_prismatic_l',
+                                       'wire_base_pitch_l', 'wire_base_roll_l','wire_base_yaw_l',
+                                       'hip_pitch', 'hip_roll', 'knee',
+                                       'hip_yaw_landing_l', 'hip_yaw_landing_r'],
+                       'ee_frame': 'foot',
+                       'spawn_x' : 0.2,
+                       'spawn_y' : 0.0,
+                       'spawn_z' : 20.0,
+                       'spawn_2x': 0.2,
+                       'spawn_2y': 5.0,
+                       'spawn_2z': 20.0,
+                       'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
+
 #
 robot_params['starbot'] ={'dt': 0.001,
                        'kp': 50.*np.array([50. ,   50.,    50.,  50.0 ,
