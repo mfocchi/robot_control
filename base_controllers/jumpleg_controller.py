@@ -128,6 +128,8 @@ class JumpLegController(BaseControllerFixed):
         # this is expressed in a workdframe with the origin attached to the base frame origin
         self.x_ee = self.robot.framePlacement(
             self.q_fixed, self.robot.model.getFrameId(frame_name)).translation
+        self.w_x_ee = self.robot.framePlacement(
+            self.q, self.robot.model.getFrameId(frame_name)).translation
 
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(
@@ -618,14 +620,7 @@ def talker(p):
         p.loadModelAndPublishers()
         p.startupProcedure()
 
-    #
-    # xacro_path = rospkg.RosPack().get_path('jumpleg_description') + '/robots/jumpleg_pinocchio.urdf.xacro'
-    # args = xacro_path + ' --inorder -o ' + os.environ['LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/jumpleg_pinocchio.urdf'
-    # os.system("rosrun xacro xacro " + args)
-    # urdf_location = os.environ['LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/jumpleg_pinocchio.urdf'
-    # print(urdf_location)
-    # from base_controllers.utils.custom_robot_wrapper import RobotWrapper
-    # p.robotPinocchio = RobotWrapper.BuildFromURDF(urdf_location)
+
 
     p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
     # p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
