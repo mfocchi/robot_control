@@ -11,6 +11,7 @@ from base_controllers.components.filter import SecondOrderFilter
 import rospy as ros
 from std_srvs.srv import Trigger, TriggerRequest
 from  termcolor import  colored
+from ros_impedance_controller.srv import generic_float
 
 class GripperManager():
     def __init__(self, real_robot_flag = False, dt = 0.001, gripping_duration = 5.):
@@ -26,6 +27,12 @@ class GripperManager():
             self.number_of_fingers = 3
         self.SO_filter = SecondOrderFilter(self.number_of_fingers)
         self.SO_filter.initFilter(self.q_des_gripper,dt)
+        ros.Service('move_gripper', generic_float, self.move_gripper_callback)
+
+    def move_gripper_callback(self, req):
+        diameter = req.data
+        self.move_gripper(diameter)
+        return True
 
     def resend_robot_program(self):
         ros.sleep(1.5)
