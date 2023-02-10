@@ -349,52 +349,52 @@ def plotCoM(name,  figure_id, time_log, des_basePoseW=None, basePoseW=None, des_
     fig.suptitle(title, fontsize=20)
     plt.subplot(3, 2, 1)
     plt.ylabel(labels[0] + " "+lin_unit)
-    plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     if (plot_var_des_log is not None):
         plt.plot(time_log, plot_var_des_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
                  color='red')
+    plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     plt.grid()
 
     plt.subplot(3, 2, 3)
     plt.ylabel(labels[1] + " "+lin_unit)
-    plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
-            color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[1, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+            color='blue')
     plt.grid()
 
     plt.subplot(3, 2, 5)
     plt.ylabel(labels[2] + " "+lin_unit)
     plt.xlabel("Time [s]")
-    plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
-            color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[2, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+            color='blue')
     plt.grid()
 
     plt.subplot(3, 2, 2)
     plt.ylabel(labels[3] + " "+ang_unit)
-    plt.plot(time_log, plot_var_log[3, :].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
-            color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[3, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, plot_var_log[3, :].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+            color='blue')
     plt.grid()
 
     plt.subplot(3, 2, 4)
     plt.ylabel(labels[4] + " "+ang_unit)
-    plt.plot(time_log, plot_var_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
-            color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[4, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, plot_var_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+            color='blue')
     plt.grid()
 
     plt.subplot(3, 2, 6)
     plt.ylabel(labels[5] + " "+ang_unit)
     plt.xlabel("Time [s]")
-    plt.plot(time_log, plot_var_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
-            color='blue')
     if (plot_var_des_log is not None):
        plt.plot(time_log, plot_var_des_log[5, :], linestyle='-', lw=lw_des, color='red')
+    plt.plot(time_log, plot_var_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+            color='blue')
     plt.grid()
 
 
