@@ -371,7 +371,7 @@ class Controller(BaseController):
         self.time_log[self.log_counter] = self.time
 
 
-    def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=None):
+    def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=[]):
 
         if self.real_robot == False:
             self.use_ground_truth_pose = use_ground_truth_pose
@@ -389,6 +389,11 @@ class Controller(BaseController):
                     self.go0_conf = arg.replace('go0_conf:=', '')
 
 
+        additional_args.append("load_force_sensors:="+str(not self.use_ground_truth_contacts).lower())
+        if self.use_ground_truth_contacts and (world_name is None or not 'slow' in world_name):
+            print('Cannot use ground truth contact with not slow world file')
+            print('Set world file to slow.world')
+            world_name = 'slow.world'
 
         self.startSimulator(world_name, additional_args)            # run gazebo
         if world_name is None:
