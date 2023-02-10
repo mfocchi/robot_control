@@ -19,8 +19,8 @@ class IMU_utils:
     def IMU_bias_estimation(self, b_R_w, IMU_accelerometer):
             self.IMU_accelerometer_bias = self.alpha_accelerometer * self.IMU_accelerometer_bias + \
                     (1 - self.alpha_accelerometer) * (IMU_accelerometer - b_R_w @ self.g0)
-            self.counter += 1
         self.IMU_accelerometer_bias_log[:, self.counter] = self.IMU_accelerometer_bias
+        self.counter += 1
 
 
     def compute_lin_vel(self, W_lin_acc, loop_dt):
