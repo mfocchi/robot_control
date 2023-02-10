@@ -818,7 +818,7 @@ class Controller(BaseController):
 
 
         # initial feet position
-        B_feet_vel = self.u.full_listOfArrays(4, 3, 3, 0.)
+        B_feet_vel = self.u.full_listOfArrays(4, 3, 0, 0.)
         neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.q))
         pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate)
         pin.updateFramePlacements(self.robot.model, self.robot.data)
