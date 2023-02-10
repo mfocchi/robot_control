@@ -11,7 +11,7 @@ class IMU_utils:
         self.g0 = np.array([0., 0., 9.81])
 
         # filters data
-        self.alpha_accelerometer = 0.95
+        self.alpha_accelerometer = 0.99
         self.alpha_velocity = np.array([0.21, 0.21, 0.21]) # X Y should be equal
         self.W_lin_vel = np.zeros(3)
 
