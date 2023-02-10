@@ -221,8 +221,6 @@ class Controller(BaseController):
         self.w_p_b_legOdom = np.zeros(3) #* np.nan
         self.w_v_b_legOdom = np.zeros(3) #* np.nan
 
-        self.contact_state = np.array([False] * 4)
-
         self.g_mag = np.linalg.norm(self.robot.model.gravity.vector)
 
         self.grForcesW_des = np.empty(3 * self.robot.nee) * np.nan
