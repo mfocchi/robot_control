@@ -1012,7 +1012,8 @@ if __name__ == '__main__':
     import matplotlib
 
     matplotlib.use('TkAgg')
-    from base_controllers.utils.common_functions import plotJoint, plotCoM, plotGRFs
+    from base_controllers.utils.common_functions import *
 
     plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,)
     plotJoint('torque', 1, p.time_log.flatten(), tau_log=p.tau_log, tau_des_log=p.tau_ffwd_log)
+    plotFeet(2, p.time_log, act_feet=p.W_contacts_log)
