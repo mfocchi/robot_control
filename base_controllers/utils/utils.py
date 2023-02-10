@@ -9,6 +9,7 @@ import os
 import numpy as np
 import rospy as ros
 from rospy.exceptions import ROSException
+import copy
 
 
 class Utils:
@@ -218,7 +219,7 @@ class Utils:
         # create a list of length independent np.ndarrays
         L = []
         for i in range(length):
-            L.append(array.copy())
+            L.append(copy.deepcopy(array))
         return L
 
             
