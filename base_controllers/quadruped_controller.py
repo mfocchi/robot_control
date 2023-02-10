@@ -258,6 +258,9 @@ class Controller(BaseController):
         self.B_imu_lin_acc = np.full(3, np.nan)
         self.W_base_lin_acc = np.full(3, np.nan)
 
+        self.B_imu_lin_acc = np.full(3, np.nan)
+        self.W_base_lin_acc = np.full(3, np.nan)
+
 
         self.comPosB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.comVelB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
