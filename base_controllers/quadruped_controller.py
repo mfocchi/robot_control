@@ -817,15 +817,15 @@ class Controller(BaseController):
 
 
         # initial feet position
-        B_feet_pose = [np.zeros(3)] * 4
-        neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.u.mapToRos(self.q)))#conf.robot_params[self.robot_name]['q_fold']))
+        B_feet_vel = self.u.full_listOfArrays(4, 3, 3, 0.)
+        neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.q))
         pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate)
         pin.updateFramePlacements(self.robot.model, self.robot.data)
 
         for leg in range(4):
             foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
             foot_id = self.robot.model.getFrameId(foot)
-            B_feet_pose[leg] = self.robot.data.oMf[foot_id].translation.copy()
+            self.B_contacts_des[leg] = self.robot.data.oMf[foot_id].translation.copy()
         # desired final height
         neutral_fb_jointstate[7:] = self.u.mapToRos(conf.robot_params[self.robot_name]['q_0'])
 
@@ -863,9 +863,21 @@ class Controller(BaseController):
                                 foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
                                 foot_id = self.robot.model.getFrameId(foot)
                                 leg_name = foot[:2]
-                                B_feet_pose[leg][2] -= delta_z
-                                q_des_leg = self.IK.ik_leg(self.b_R_w.T@B_feet_pose[leg], foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
+                                self.B_contacts_des[leg][2] -= delta_z
+                                q_des_leg = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
+                                                           foot_id,self.
+                                                           legConfig[leg_name][0],
+                                                           self.legConfig[leg_name][1])[0]
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
+                        for leg in range(4):
+                            B_feet_vel[leg][2] = -delta_z
+                            foot_name = conf.robot_params[self.robot_name]['ee_frames'][leg]
+                            qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
+                                                               B_v_foot=B_feet_vel[leg],
+                                                               foot_idx=self.robot.model.getFrameId(foot_name),
+                                                               damp=1e-6,
+                                                               update=leg == 0)
+                            self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
                         # if self.log_counter != 0:
                         #     self.qd_des = (self.q_des - self.q_des_log[:, self.log_counter]) / self.dt
                         self.tau_ffwd[:] = 0.
@@ -881,32 +893,54 @@ class Controller(BaseController):
                     self.qd_des[:] = 0
                     if GCTime <= 0.6:
                         if alpha < 1:
-                            alpha = GCTime / 0.5
-                        self.tau_ffwd = alpha * (self.gravityCompensation() + self.self_weightCompensation())
+                            alpha = GCTime / 0.2
+                        self.tau_ffwd = alpha* self.gravityCompensation() #+ self.self_weightCompensation())
                     else:
                         print(colored("[startupProcedure] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
+                        HStarttime = self.time
+                        # 5-th order polynomial
+                        HPeriod = 5.0
+                        B_feet_pose_init = copy.deepcopy( self.B_contacts_des)
+                        B_feet_pose_fin = copy.deepcopy( self.B_contacts_des)
+                        pos = [np.polynomial.Polynomial([0]*5)]*4
+                        vel = [np.polynomial.Polynomial([0]*4)]*4
+                        for leg in range(4):
+                            B_feet_pose_fin[leg][2]=-self.robot_height
+                            a = B_feet_pose_init[leg][2]
+                            b = 0
+                            c = 0
+                            d =  10 * (B_feet_pose_fin[leg][2] - B_feet_pose_init[leg][2]) / HPeriod ** 3
+                            e = -15 * (B_feet_pose_fin[leg][2] - B_feet_pose_init[leg][2]) / HPeriod ** 4
+                            f =   6 * (B_feet_pose_fin[leg][2] - B_feet_pose_init[leg][2]) / HPeriod ** 5
+                            pos[leg].coef = np.array([a, b, c, d, e, f])
+                            vel[leg].coef = np.array([b, 2*c, 3*d, 4*e, 5*f])
+
                         state = 2
 
                 if state == 2:
-                    neutral_fb_jointstate[7:] = self.u.mapToRos(self.q)
-                    self.robot.forwardKinematics(neutral_fb_jointstate)
-                    pin.updateFramePlacements(self.robot.model, self.robot.data)
-                    current_robot_height = 0.
-                    for id in self.robot.getEndEffectorsFrameId:
-                        current_robot_height += self.robot.data.oMf[id].translation[2]
-                    current_robot_height /= -4.
-
-                    if np.abs(current_robot_height - self.robot_height) > 0.005:
-                        # set reference
+                    Htime = self.time-HStarttime
+                    if Htime < HPeriod:
                         for leg in range(4):
                             foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
                             foot_id = self.robot.model.getFrameId(foot)
-                            leg_name = foot[:2]
-                            B_feet_pose[leg][2] -= delta_z
-                            if current_robot_height <= self.robot_height:
-                                B_foot = B_feet_pose[leg] # self.b_R_w.T @ b_R_w_init @ B_feet_pose[leg]
-                                q_des_leg = self.IK.ik_leg(self.b_R_w.T@B_foot, foot_id,self. legConfig[leg_name][0],self. legConfig[leg_name][1])[0].flatten()
-                                self.u.setLegJointState(leg, q_des_leg, self.q_des)
+                            # 5-th order polynomial
+                            self.B_contacts_des[leg][2] = pos[leg](Htime)
+                            q_des_leg, isFeasible = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
+                                                                   foot_id,
+                                                                   self.legConfig[foot[:2]][0],
+                                                                   self.legConfig[foot[:2]][1])
+                            self.u.setLegJointState(leg, q_des_leg, self.q_des)
+
+
+                        for leg in range(4):
+                            B_feet_vel[leg][2] = vel[leg](Htime)
+                            foot_name = conf.robot_params[self.robot_name]['ee_frames'][leg]
+                            qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
+                                                               B_v_foot=B_feet_vel[leg],
+                                                               foot_idx=self.robot.model.getFrameId(foot_name),
+                                                               damp=1e-6,
+                                                               update=leg == 0)
+                            self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
 
                         self.tau_ffwd = self.gravityCompensation()
 
@@ -916,14 +950,12 @@ class Controller(BaseController):
                         WTime = self.time
 
                 if state == 3:
-                    #if (self.time - WTime) <= 0.5:
-
+                    self.qd_des[:] = 0.
                     if all(np.abs(self.qd) < 0.025) and (self.time - WTime) >0.5:
                         print(colored("[startupProcedure] completed", "green"))
                         state = 4
                     else:
                         # enter
-                        # if any of the joint position errors is larger than 0.02 or
                         # if any of the joint velocities is larger than 0.02 or
                         # if the watchdog timer is not expired (1 sec)
                         self.tau_ffwd = self.gravityCompensation()
