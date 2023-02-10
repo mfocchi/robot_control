@@ -202,4 +202,24 @@ class Utils:
             print("Elapsed time is " + str(time.time() - startTime_for_tictoc) + " seconds.")
         else:
             print("Toc: start time not set")
+
+    def full_listOfArrays(self, length, rows, cols=0, value=np.nan):
+        # create a list of length independent np.ndarrays of shape (rows, cols) with all the entries set to value
+        # e.g. full_array_list(2, 1, 2, 5) returns
+        # [ array([[5], [5]]), array([[5], [5]])]
+        L = []
+        if cols == 0:
+            a = np.full(rows, value)
+        else:
+            a = np.full((rows, cols), value)
+        self.listOfArrays(length, a)
+        return L
+
+    def listOfArrays(self, length, array):
+        # create a list of length independent np.ndarrays
+        L = []
+        for i in range(length):
+            L.append(array.copy())
+        return L
+
             

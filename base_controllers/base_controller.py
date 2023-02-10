@@ -539,17 +539,17 @@ class BaseController(threading.Thread):
         self.grForcesLocal_gt = np.zeros(self.robot.na)
         self.grForcesW_gt = np.zeros(self.robot.na)
         self.basePoseW = np.zeros(6)
-        self.J = [np.zeros((3,3))] * 4
-        self.wJ = [np.eye(3)] * 4
-        self.J_inv = [np.zeros((3, 3))] * 4
-        self.wJ_inv = [np.eye(3)] * 4
-        self.W_contacts = [np.zeros((3))] * 4
-        self.W_contacts_des = [np.zeros((3))] * 4
-        self.B_contacts = [np.zeros((3))] * 4
-        self.B_contacts_des = [np.zeros((3))] * 4
-        self.contact_state = np.array([False, False, False, False])
-        self.contact_normal = [np.array([0., 0., 1.])]*4
-        self.w_R_lowerleg =  [np.eye(3)] * 4
+        self.J = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.wJ = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.J_inv = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.wJ_inv = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.W_contacts = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.W_contacts_des = self.u.full_listOfArrays(4, 3)
+        self.B_contacts = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.B_contacts_des = self.u.full_listOfArrays(4, 3)
+        self.contact_state = self.u.full_listOfArrays(4, 3, 0, False)
+        self.contact_normal = self.u.listOfArrays(4, np.array([0., 0., 1]))
+        self.w_R_lowerleg =  self.u.listOfArrays(4, np.eye(3))
 
         #log vars
         self.basePoseW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
