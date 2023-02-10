@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import copy
 import os
 
 import rospy as ros
@@ -701,24 +702,6 @@ class Controller(BaseController):
             super(Controller, self).startupProcedure()
             return
 
-        # wait for user confirmation to start
-        # if self.real_robot:
-        #     if input('press ENTER to continue/any key to STOP') != '':
-        #         exit(0)
-        self.q_des = self.q.copy()
-        self.pid = PidManager(self.joint_names)
-        if self.real_robot:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
-                                 conf.robot_params[self.robot_name]['kd_real'],
-                                 np.zeros(self.robot.na))
-        else:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
-                                 conf.robot_params[self.robot_name]['kd'],
-                                 np.zeros(self.robot.na))
-
-        for i in range(10):
-            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-            ros.sleep(0.01)
 
 
 
@@ -734,6 +717,21 @@ class Controller(BaseController):
 
 
     def _startup_from_stand_up(self):
+        self.q_des = self.q.copy()
+        self.pid = PidManager(self.joint_names)
+        if self.real_robot:
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
+                                 conf.robot_params[self.robot_name]['kd_real'],
+                                 np.zeros(self.robot.na))
+        else:
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
+                                 conf.robot_params[self.robot_name]['kd'],
+                                 np.zeros(self.robot.na))
+
+        for i in range(10):
+            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+            ros.sleep(0.01)
+
         self.q_des = conf.robot_params[self.robot_name]['q_0']
         alpha = 0.
         try:
@@ -771,6 +769,14 @@ class Controller(BaseController):
 
 
     def _startup_from_stand_down(self):
+        self.q_des = self.q.copy()
+        self.pid = PidManager(self.joint_names)
+
+        for i in range(10):
+            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+            ros.sleep(0.01)
+
+
         q_init = self.q.copy()
         q_ref = self.q.copy()
         for i in range(12):
@@ -782,14 +788,32 @@ class Controller(BaseController):
         #if self.real_robot and self.robot_name == 'go1':
             # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
 
-        ref_time_out = int(self.imu_utils.timeout/2)
         while self.imu_utils.counter < self.imu_utils.timeout:
             self.updateKinematics()
             self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
             self.tau_ffwd[:] = 0.
-            sigma = min(self.imu_utils.counter/ref_time_out, 1)
-            self.q_des = (1-sigma) * q_init + sigma * q_ref
+
             self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+
+
+        if self.real_robot:
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
+                                 conf.robot_params[self.robot_name]['kd_real'],
+                                 np.zeros(self.robot.na))
+        else:
+            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
+                                 conf.robot_params[self.robot_name]['kd'],
+                                 np.zeros(self.robot.na))
+
+        ref_timeout = int(self.imu_utils.timeout / 2)
+        ref_counter = 0
+        while ref_counter < ref_timeout:
+            self.updateKinematics()
+            self.tau_ffwd[:] = 0.
+            sigma = ref_counter / ref_timeout
+            self.q_des = (1 - sigma) * q_init + sigma * q_ref
+            self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+            ref_counter += 1
 
 
         # initial feet position
