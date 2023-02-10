@@ -547,7 +547,7 @@ class BaseController(threading.Thread):
         self.W_contacts_des = self.u.full_listOfArrays(4, 3)
         self.B_contacts = self.u.listOfArrays(4, np.zeros((3,3)))
         self.B_contacts_des = self.u.full_listOfArrays(4, 3)
-        self.contact_state = self.u.full_listOfArrays(4, 3, 0, False)
+        self.contact_state = self.u.full_listOfArrays(4, 1, 0, False)
         self.contact_normal = self.u.listOfArrays(4, np.array([0., 0., 1]))
         self.w_R_lowerleg =  self.u.listOfArrays(4, np.eye(3))
 
