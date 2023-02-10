@@ -7,6 +7,7 @@ class IMU_utils:
         self.timeout = timeout
         self.dt = dt
         self.IMU_accelerometer_bias = np.zeros(3)
+        self.IMU_accelerometer_bias_log = np.full((3, timeout), np.nan)
         self.g0 = np.array([0., 0., 9.81])
 
         # filters data
@@ -19,6 +20,7 @@ class IMU_utils:
             self.IMU_accelerometer_bias = self.alpha_accelerometer * self.IMU_accelerometer_bias + \
                     (1 - self.alpha_accelerometer) * (IMU_accelerometer - b_R_w @ self.g0)
             self.counter += 1
+        self.IMU_accelerometer_bias_log[:, self.counter] = self.IMU_accelerometer_bias
 
 
     def compute_lin_vel(self, W_lin_acc, loop_dt):
