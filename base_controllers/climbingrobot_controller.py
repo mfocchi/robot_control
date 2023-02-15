@@ -282,10 +282,15 @@ class ClimbingrobotController(BaseControllerFixed):
 
         return angle, max_Fut, max_Fun
 
-    def computeJointVariables(self, p):
-        wire_base_prismatic = math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2] * p[2])
-        mountain_wire_pitch = math.atan2(p[0], -p[2])
-        mountain_wire_roll = math.asin(p[1]/wire_base_prismatic)
+    def computeJointVariables(self, p, slider = None):
+        if p.robot_name == 'climbingrobot_slider':
+            wire_base_prismatic = math.sqrt(p[0]*p[0] + (p[1] - slider)*(p[1] - slider) + p[2] * p[2])
+            mountain_wire_pitch = math.atan2(p[0], -p[2])
+            mountain_wire_roll = math.asin((p[1]- slider)/wire_base_prismatic)
+        else:
+            wire_base_prismatic = math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2] * p[2])
+            mountain_wire_pitch = math.atan2(p[0], -p[2])
+            mountain_wire_roll = math.asin(p[1]/wire_base_prismatic)
         return [mountain_wire_pitch, mountain_wire_roll,  wire_base_prismatic]
 
 def talker(p):
