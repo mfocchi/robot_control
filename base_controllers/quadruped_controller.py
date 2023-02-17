@@ -152,20 +152,19 @@ class Controller(BaseController):
         self.quaternion[2] = msg.pose.pose.orientation.z
         self.quaternion[3] = msg.pose.pose.orientation.w
 
-        if all(self.contact_state) == True:
-            self.basePoseW[self.u.sp_crd["LX"]] = self.w_p_b_legOdom[0]
-            self.basePoseW[self.u.sp_crd["LY"]] = self.w_p_b_legOdom[1]
-            self.basePoseW[self.u.sp_crd["LZ"]] = self.w_p_b_legOdom[2]
 
-        self.euler = np.array(euler_from_quaternion(self.quaternion))
+        self.basePoseW[self.u.sp_crd["LX"]] = self.basePoseW_legOdom[0]
+        self.basePoseW[self.u.sp_crd["LY"]] = self.basePoseW_legOdom[1]
+        self.basePoseW[self.u.sp_crd["LZ"]] = self.basePoseW_legOdom[2]
+
         self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
 
-        if all(self.contact_state):
-            self.baseTwistW[self.u.sp_crd["LX"]] = self.w_v_b_legOdom[0]
-            self.baseTwistW[self.u.sp_crd["LY"]] = self.w_v_b_legOdom[1]
-            self.baseTwistW[self.u.sp_crd["LZ"]] = self.w_v_b_legOdom[2]
+        if any(self.contact_state):
+            self.baseTwistW[self.u.sp_crd["LX"]] = self.baseTwistW_legOdom[0]
+            self.baseTwistW[self.u.sp_crd["LY"]] = self.baseTwistW_legOdom[1]
+            self.baseTwistW[self.u.sp_crd["LZ"]] = self.baseTwistW_legOdom[2]
         else:
             self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.W_lin_vel[0]
             self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.W_lin_vel[1]
@@ -219,8 +218,8 @@ class Controller(BaseController):
         self.comPosB = np.zeros(3) * np.nan
         self.comVelB = np.zeros(3) * np.nan
 
-        self.w_p_b_legOdom = np.zeros(3) #* np.nan
-        self.w_v_b_legOdom = np.zeros(3) #* np.nan
+        self.basePoseW_legOdom = np.zeros(3) #* np.nan
+        self.baseTwistW_legOdom = np.zeros(3) #* np.nan
 
         self.g_mag = np.linalg.norm(self.robot.model.gravity.vector)
 
