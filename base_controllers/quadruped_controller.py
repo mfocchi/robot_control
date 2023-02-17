@@ -810,7 +810,7 @@ class Controller(BaseController):
         self.q_des = conf.robot_params[self.robot_name]['q_0']
         alpha = 0.
         try:
-            print(colored("[startupProcedure] applying gravity compensation", "blue"))
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] applying gravity compensation", "blue"))
             GCStartTime = self.time
             while True:
                 q_norm = np.linalg.norm(self.q - self.q_des)
@@ -827,7 +827,7 @@ class Controller(BaseController):
                 self.send_command(self.q_des, self.qd_des, alpha*self.gravityCompensation())
 
             # IMU BIAS ESTIMATION
-            print(colored("[startupProcedure] Imu bias estimation", "blue"))
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
             if self.real_robot and self.robot_name == 'go1':
                 # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
                 while self.imu_utils.counter < self.imu_utils.timeout:
@@ -859,7 +859,7 @@ class Controller(BaseController):
             if (i%3) != 0:
                 q_ref[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
         # IMU BIAS ESTIMATION
-        print(colored("[startupProcedure] Imu bias estimation", "blue"))
+        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
         #if self.real_robot and self.robot_name == 'go1':
             # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
 
