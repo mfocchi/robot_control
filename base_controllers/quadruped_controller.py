@@ -326,7 +326,7 @@ class Controller(BaseController):
         self.log_counter %= conf.robot_params[self.robot_name]['buffer_size']
 
         # full with new values
-        self.comPosB_log[:, self.log_counter] = self.comB
+        self.comPosB_log[:, self.log_counter] = self.comPosB
         self.comVelB_log[:, self.log_counter] = self.comVelB
         self.comPoseW_log[:, self.log_counter] = self.comPoseW
         self.comTwistW_log[:, self.log_counter] = self.comTwistW
