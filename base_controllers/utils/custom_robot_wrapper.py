@@ -71,7 +71,7 @@ class RobotWrapper(PinocchioRobotWrapper):
             return PinocchioRobotWrapper.com(self, floating_base_q);
          else:
             floating_base_qd = np.zeros(self.nv)
-            floating_base_qd[6:] = self.qd
+            floating_base_qd[6:] = qd_j
             return PinocchioRobotWrapper.com(self, floating_base_q, floating_base_qd)
        
     def Jcom(self, q, update=True):
