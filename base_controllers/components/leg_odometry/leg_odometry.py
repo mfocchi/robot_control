@@ -10,8 +10,8 @@ class LegOdometry:
 
         self.w_feet_pos_init = np.empty([3, len(self.robot.getEndEffectorsFrameId)]) * np.nan
 
-        self.w_p_b_update = np.empty(3) * np.nan
-        self.w_v_b_update = np.empty(3) * np.nan
+        self.w_p_b_update = np.zeros(3)
+        self.w_v_b_update = np.zeros(3)
 
         self._b_conf_neutral = pin.neutral(self.robot.model)
         self._b_vel_neutral  = np.zeros(self.robot.model.nv)
