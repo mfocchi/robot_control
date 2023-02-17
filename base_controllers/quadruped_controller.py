@@ -377,7 +377,7 @@ class Controller(BaseController):
         self.wrench_desW_log[:, self.log_counter] = self.wrench_desW
 
 
-        self.time_log[self.log_counter] = self.time
+        self.time_log[self.log_counter] = np.round(self.time + self.dt, 3)
 
 
     def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=[]):
