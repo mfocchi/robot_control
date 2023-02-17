@@ -46,6 +46,7 @@ class Controller(BaseController):
         self.dt = conf.robot_params[self.robot_name]['dt']
 
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
+        self.leg_names = [foot[:2] for foot in self.ee_frames]
 
         self.use_ground_truth_pose = True
 
