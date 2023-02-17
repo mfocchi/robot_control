@@ -45,15 +45,17 @@ class InverseKinematics:
         pin.forwardKinematics(self.robot.model, self.robot.data, pin.neutral(self.robot.model))
         pin.updateFramePlacements(self.robot.model, self.robot.data)
 
+        self.q = np.empty(3) * np.nan
+
         # indeces
         self._hip_id_dict = {}
         self._upperleg_id_dict = {}
         self._lowerleg_id_dict = {}
         self._foot_id_dict = {}
 
-        legs = ['lf', 'lh', 'rf', 'rh']
+        self.legs = ['lf', 'lh', 'rf', 'rh']
 
-        for leg in legs:
+        for leg in self.legs:
             self._hip_id_dict[leg] = self.robot.model.getFrameId(leg + '_hip')
             self._upperleg_id_dict[leg] = self.robot.model.getFrameId(leg + '_upperleg')
             self._lowerleg_id_dict[leg] = self.robot.model.getFrameId(leg + '_lowerleg')
@@ -64,7 +66,7 @@ class InverseKinematics:
         self.upper_limits = {}
         self.lower_limits = {}
 
-        for leg in legs:
+        for leg in self.legs:
             self.measures[leg] = {}
 
             self.measures[leg]['base_2_HAA_x'] = self.robot.data.oMf[self._hip_id_dict[leg]].translation[0]
