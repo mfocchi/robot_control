@@ -336,8 +336,8 @@ class Controller(BaseController):
         self.baseTwistW_log[:, self.log_counter] = self.baseTwistW
         self.basePoseW_des_log[:, self.log_counter] = self.basePoseW_des
         self.baseTwistW_des_log[:, self.log_counter] = self.baseTwistW_des
-        self.w_p_b_legOdom_log[:, self.log_counter] = self.w_p_b_legOdom
-        self.w_v_b_legOdom_log[:, self.log_counter] = self.w_v_b_legOdom
+        self.basePoseW_legOdom_log[:, self.log_counter] = self.basePoseW_legOdom
+        self.baseTwistW_legOdom_log[:, self.log_counter] = self.baseTwistW_legOdom
         self.q_des_log[:, self.log_counter] = self.q_des
         self.q_log[:, self.log_counter] = self.q
         self.qd_des_log[:, self.log_counter] = self.qd_des
