@@ -721,8 +721,6 @@ class Controller(BaseController):
         self.time = np.round(self.time + np.array([self.loop_time]), 3)
 
 
-
-
     def visualizeContacts(self):
         for legid in self.u.leg_map.keys():
 
@@ -902,7 +900,7 @@ class Controller(BaseController):
             foot_id = self.robot.model.getFrameId(foot)
             self.B_contacts_des[leg] = self.robot.data.oMf[foot_id].translation.copy()
         # desired final height
-        neutral_fb_jointstate[7:] = self.u.mapToRos(conf.robot_params[self.robot_name]['q_0'])
+        neutral_fb_jointstate[7:] = self.q.copy()#conf.robot_params[self.robot_name]['q_0']
 
         # increase of the motion
         delta_z = 0.0005
@@ -915,42 +913,31 @@ class Controller(BaseController):
         # state = 2: apply PD + gravity compensation
         # state = 3: exit
         state = 0
-        print(colored("[startupProcedure] searching contacts", "blue"))
+        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] searching contacts", "blue"))
         try:
             while not ros.is_shutdown() and state != 4:
                 self.updateKinematics()
                 # self.visualizeContacts()
-                # if state == -1:
-                #     print(self.q-self.q_des)
-                #     if np.linalg.norm(self.q-self.q_des) > 0.05:
-                #         self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
-                #         self.qd_des[:] = 0.
-                #         self.tau_ffwd[:] = 0.
-                #     else:
-                #         state = 0
 
                 if state == 0:
-                    if not self.contact_state.all(): # if at least one is not in contact
+                    if not all(self.contact_state): # if at least one is not in contact
                         for leg in range(4):
                             if not self.contact_state[leg]:
                                 # update feet task
                                 # if a leg is in contact, it must keep the same reference (waiting for the others)
-                                foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
-                                foot_id = self.robot.model.getFrameId(foot)
-                                leg_name = foot[:2]
                                 self.B_contacts_des[leg][2] -= delta_z
-                                q_des_leg = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
-                                                           foot_id,self.
-                                                           legConfig[leg_name][0],
-                                                           self.legConfig[leg_name][1])[0]
+
+                                q_des_leg, isFeasible = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
+                                                                       self.leg_names[leg],
+                                                                       self.legConfig[self.leg_names[leg]][0],
+                                                                       self.legConfig[self.leg_names[leg]][1])
+
                                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
                         for leg in range(4):
                             B_feet_vel[leg][2] = -delta_z
-                            foot_name = conf.robot_params[self.robot_name]['ee_frames'][leg]
                             qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
                                                                B_v_foot=B_feet_vel[leg],
-                                                               foot_idx=self.robot.model.getFrameId(foot_name),
-                                                               damp=1e-6,
+                                                               leg=self.leg_names[leg],
                                                                update=leg == 0)
                             self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
                         # if self.log_counter != 0:
@@ -958,7 +945,13 @@ class Controller(BaseController):
                         self.tau_ffwd[:] = 0.
 
                     else:
-                        print(colored("[startupProcedure] appling gravity compensation", "blue"))
+                        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] appling gravity compensation", "blue"))
+                        # base height
+                        base_height = 0.
+                        for leg in range(4):
+                            base_height -= self.B_contacts[leg][2]
+                        self.leg_odom.reset(np.hstack([0., 0., base_height/4, self.quaternion, self.q]))
+
                         state = 1
                         GCStartTime = self.time
                         alpha = 0.
@@ -969,27 +962,22 @@ class Controller(BaseController):
                     if GCTime <= 0.6:
                         if alpha < 1:
                             alpha = GCTime / 0.2
-                        self.tau_ffwd = alpha* self.gravityCompensation() #+ self.self_weightCompensation())
+                        self.tau_ffwd = alpha* self.self_weightCompensation()
                     else:
-                        print(colored("[startupProcedure] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
+                        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
                         HStarttime = self.time
                         # 5-th order polynomial
                         HPeriod = 5.0
                         B_feet_pose_init = copy.deepcopy( self.B_contacts_des)
                         B_feet_pose_fin = copy.deepcopy( self.B_contacts_des)
-                        pos = [np.polynomial.Polynomial([0]*5)]*4
-                        vel = [np.polynomial.Polynomial([0]*4)]*4
+                        pos = [None, None, None, None]
+                        vel = [None, None, None, None]
                         for leg in range(4):
                             B_feet_pose_fin[leg][2]=-self.robot_height
-                            a = B_feet_pose_init[leg][2]
-                            b = 0
-                            c = 0
-                            d =  10 * (B_feet_pose_fin[leg][2] - B_feet_pose_init[leg][2]) / HPeriod ** 3
-                            e = -15 * (B_feet_pose_fin[leg][2] - B_feet_pose_init[leg][2]) / HPeriod ** 4
-                            f =   6 * (B_feet_pose_fin[leg][2] - B_feet_pose_init[leg][2]) / HPeriod ** 5
-                            pos[leg].coef = np.array([a, b, c, d, e, f])
-                            vel[leg].coef = np.array([b, 2*c, 3*d, 4*e, 5*f])
-
+                            pos[leg], vel[leg], acc = polynomialRef(B_feet_pose_init[leg][2], B_feet_pose_fin[leg][2],
+                                                                    0., 0.,
+                                                                    0., 0.,
+                                                                    HPeriod)
                         state = 2
 
                 if state == 2:
@@ -997,53 +985,47 @@ class Controller(BaseController):
                     if Htime < HPeriod:
                         for leg in range(4):
                             foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
-                            foot_id = self.robot.model.getFrameId(foot)
                             # 5-th order polynomial
                             self.B_contacts_des[leg][2] = pos[leg](Htime)
-                            q_des_leg, isFeasible = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
-                                                                   foot_id,
-                                                                   self.legConfig[foot[:2]][0],
-                                                                   self.legConfig[foot[:2]][1])
+                            q_des_leg, isFeasible = self.IK.ik_leg(self.B_contacts_des[leg],
+                                                                   self.leg_names[leg],
+                                                                   self.legConfig[self.leg_names[leg]][0],
+                                                                   self.legConfig[self.leg_names[leg]][1])
                             self.u.setLegJointState(leg, q_des_leg, self.q_des)
 
 
                         for leg in range(4):
                             B_feet_vel[leg][2] = vel[leg](Htime)
                             foot_name = conf.robot_params[self.robot_name]['ee_frames'][leg]
-                            qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
+                            qd_leg_des = qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
                                                                B_v_foot=B_feet_vel[leg],
-                                                               foot_idx=self.robot.model.getFrameId(foot_name),
-                                                               damp=1e-6,
+                                                               leg=self.leg_names[leg],
                                                                update=leg == 0)
                             self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
 
-                        self.tau_ffwd = self.gravityCompensation()
+                        self.gravityCompensation()
 
                     else:
-                        print(colored("[startupProcedure] desired height reached", "blue"))
+                        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] desired height reached", "blue"))
                         state = 3
                         WTime = self.time
 
                 if state == 3:
                     self.qd_des[:] = 0.
                     if all(np.abs(self.qd) < 0.025) and (self.time - WTime) >0.5:
-                        print(colored("[startupProcedure] completed", "green"))
+                        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] completed", "green"))
                         state = 4
                     else:
                         # enter
                         # if any of the joint velocities is larger than 0.02 or
                         # if the watchdog timer is not expired (1 sec)
-                        self.tau_ffwd = self.gravityCompensation()
-
+                        self.gravityCompensation()
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
         except (ros.ROSInterruptException, ros.service.ServiceException):
             ros.signal_shutdown("killed")
             self.deregister_node()
-
-        #self.time = 0.
-
 
 
     def save_reference(self, filename):
