@@ -89,6 +89,13 @@ class InverseKinematics:
 
             self.measures[leg]['HAA_2_FOOT_y'] = self.robot.data.oMf[self._foot_id_dict[leg]].translation[1] - \
                                                  self.robot.data.oMf[self._hip_id_dict[leg]].translation[1]
+            # avoid recomputation of known measures
+            self.measures[leg]['HFE_2_KFE_z**2'] = self.measures[leg]['HFE_2_KFE_z'] ** 2
+            self.measures[leg]['KFE_2_FOOT_z**2'] = self.measures[leg]['KFE_2_FOOT_z'] ** 2
+            self.measures[leg]['HFE_2_KFE_z*KFE_2_FOOT_z']=self.measures[leg]['HFE_2_KFE_z'] * self.measures[leg]['KFE_2_FOOT_z']
+            self.measures[leg]['HAA_2_FOOT_y**2'] = self.measures[leg]['HAA_2_FOOT_y'] ** 2
+            self.measures[leg]['(HFE_2_KFE_z+KFE_2_FOOT_z)**2'] = (self.measures[leg]['HFE_2_KFE_z'] + self.measures[leg]['KFE_2_FOOT_z']) ** 2
+
 
             self.upper_limits[leg] = self.u.getLegJointState(leg.upper(), self.robot.model.upperPositionLimit[7:])
             self.lower_limits[leg] = self.u.getLegJointState(leg.upper(), self.robot.model.lowerPositionLimit[7:])
