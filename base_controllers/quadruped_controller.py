@@ -454,15 +454,13 @@ class Controller(BaseController):
 
 
     def self_weightCompensation(self):
-        # it seems that self weight compensation degrates the control performances: do not use it!
         # require the call to updateKinematics
-        gravity_torques = self.u.mapFromRos(self.g_joints)
-        # gravity_torques = np.zeros(12)
+        gravity_torques = self.g_joints
         return gravity_torques
 
     def gravityCompensation(self):
         # require the call to updateKinematics
-        return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
+        self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
 
     def virtualImpedanceWrench(self, des_pose, des_twist, des_acc = None, comControlled = True):
@@ -475,24 +473,28 @@ class Controller(BaseController):
                 act_twist = self.baseTwistW
             # FEEDBACK WRENCH
             # ---> linear part
-            self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.Kp_lin @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
-                                                                       self.Kd_lin @ (self.u.linPart(des_twist) - self.u.linPart(act_twist))
+            self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.kp_lin @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
+                                                                       self.kd_lin @ (self.u.linPart(des_twist) - self.u.linPart(act_twist))
 
             # ---> angular part
             # actual orientation: self.b_R_w
             # Desired Orientation
-            # the following are equivalent but the second is faster
-            #b_Rdes_w = self.math_utils.rpyToRot(self.u.angPart(des_pose))
-            b_Rdes_w = pin.rpy.rpyToMatrix(self.u.angPart(des_pose)).T
 
+            # the following are equivalent but the second is faster
+
+            # b_Rdes_w = self.math_utils.rpyToRot(self.u.angPart(des_pose))
+            # # compute orientation error
+            # b_Re_w = b_Rdes_w @ self.b_R_w.T
+            # # express orientation error in angle-axis form
+            # b_err = rotMatToRotVec(b_Re_w)
+
+            b_Rdes_w = pin.rpy.rpyToMatrix(self.u.angPart(des_pose)).T
             # compute orientation error
             b_Re_w = b_Rdes_w @ self.b_R_w.T
             # express orientation error in angle-axis form
-            # the followings are equivalent but the second is faster
-            #b_err = rotMatToRotVec(b_Re_w)
-
             aa_err = pin.AngleAxis(b_Re_w.T)
             b_err = aa_err.axis * aa_err.angle
+
 
             # the orientation error is expressed in the base_frame so it should be rotated to have the wrench in the
             # world frame
@@ -503,8 +505,8 @@ class Controller(BaseController):
 
             # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an
             # Euclidean space with Jomega
-            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.Kp_ang @ w_err + \
-                                                                       self.Kd_ang @ ( Jomega @ (self.u.angPart(des_twist) - self.u.angPart(act_twist)))
+            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.kp_ang @ w_err + \
+                                                                       self.kd_ang @ ( Jomega @ (self.u.angPart(des_twist) - self.u.angPart(act_twist)))
 
             # FEED-FORWARD WRENCH
             if not (des_acc is None):
@@ -533,7 +535,7 @@ class Controller(BaseController):
     # Whole body controller that includes ffwd wrench + fb wrench (Virtual PD) + gravity compensation
     # all vector is in the wf
     def WBC(self, des_pose, des_twist, des_acc = None, comControlled = True, type = 'projection'):
-        # self.pr.enable()
+        # does side effect on tau_ffwd
         self.virtualImpedanceWrench(des_pose, des_twist, des_acc, comControlled)
         self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
 
@@ -561,19 +563,18 @@ class Controller(BaseController):
         elif type == 'qp':
             self.grForcesW_des = self.qpWBC()
 
-        WBC_torques = np.empty(12)
         h_jointFromRos = self.u.mapFromRos(self.h_joints)
         for leg in range(4):
             tau_leg = self.u.getLegJointState(leg, h_jointFromRos) - \
                       self.wJ[leg].T @ self.u.getLegJointState(leg, self.grForcesW_des)
-            self.u.setLegJointState(leg, tau_leg, WBC_torques)
-        return WBC_torques
-
+            self.u.setLegJointState(leg, tau_leg, self.tau_ffwd)
 
     def projectionWBC(self, tol=1e-6):
-        return np.linalg.pinv(self.NEMatrix, tol) @ self.wrench_desW
+        # NEMatrix is 6 x 12
+        Npinv = np.linalg.pinv(self.NEMatrix.T, tol).T# self.NEMatrix.T @ np.linalg.inv(self.NEMatrix @ self.NEMatrix.T)
+        return Npinv  @ self.wrench_desW
 
-    def setWBCConstraints(self, normals = [np.array([0, 0, 1])*4], friction_coeffs= [0.8]*4):
+    def setWBCConstraints(self, normals = [np.array([0, 0, 1])*4], friction_coeffs= [0.8]*4, reg = 1e-4):
         # this must be called at least once
         C_leg = [None] * 4
 
@@ -589,10 +590,12 @@ class Controller(BaseController):
 
         self.C_qp = block_diag(block_diag(C_leg[0], C_leg[1], C_leg[2], C_leg[3]))
         self.d_qp = np.zeros(self.C_qp.shape[0])
+        self.reg_mat = np.eye(12) * 1e-4
 
 
     def qpWBC(self):
-        G = self.NEMatrix.T @ self.NEMatrix + np.eye(12) * 1e-4  # regularize and make it definite positive
+        #never profiled
+        G = self.NEMatrix.T @ self.NEMatrix + self.reg_mat  # regularize and make it definite positive
         g = -self.NEMatrix.T @ self.wrench_desW
 
         w_des_grf = quadprog_solve_qp(G, g, self.C_qp, self.d_qp, None , None)
