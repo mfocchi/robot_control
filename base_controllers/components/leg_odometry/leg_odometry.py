@@ -21,9 +21,7 @@ class LegOdometry:
 
 
     def compute_feet_position(self, q):
-        q_tmp = q.copy()
-        q_tmp[7:] = self.u.mapFromRos(q_tmp[7:])
-        pin.forwardKinematics(self.robot.model, self.robot.data, q_tmp)
+        pin.forwardKinematics(self.robot.model, self.robot.data, q)
         pin.updateFramePlacements(self.robot.model, self.robot.data)
         for i, index in enumerate(self.robot.getEndEffectorsFrameId):
             self.w_feet_pos_init[:, i] = self.robot.data.oMf[index].translation.copy()
