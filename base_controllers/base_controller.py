@@ -417,7 +417,7 @@ class BaseController(threading.Thread):
         self.estimateContactForces()
         
         # compute com / robot inertias
-        self.comB = self.robot.robotComB(self.q)
+        self.comPosB, self.comVelB = copy.deepcopy(self.robot.robotComB(self.q, self.qd))
         self.comPoseW = copy.deepcopy(self.basePoseW)
         self.comPoseW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"]+3] = self.robot.robotComW(self.configuration) # + np.array([0.05, 0.0,0.0])
         W_base_to_com = self.u.linPart(self.comPoseW)  - self.u.linPart(self.basePoseW)
