@@ -765,9 +765,15 @@ class Controller(BaseController):
         # self.ros_pub.add_marker_fixed(self.zmp)
         self.ros_pub.publishVisual()
 
-
-
-
+    def updateKinematics(self):
+        self.basePoseW_legOdom, self.baseTwistW_legOdom = self.leg_odom.base_in_world(self.contact_state,
+                                                                             self.B_contacts,
+                                                                             self.b_R_w,
+                                                                             self.wJ,
+                                                                             self.u.angPart(self.baseTwistW),
+                                                                             self.qd)
+        self.imu_utils.compute_lin_vel(self.W_base_lin_acc, self.loop_time)
+        super(Controller, self).updateKinematics()
 
     def startupProcedure(self):
         ros.sleep(.5)
