@@ -698,23 +698,14 @@ class Controller(BaseController):
         # q_des, qd_des, and tau_ffwd have dimension 12
         # and are ordered as on the robot
 
-        if (q_des is None) and (qd_des is None) and (tau_ffwd is None):
-            raise RuntimeError('Cannot have both states (q_des and qd_des) and controls (tau_ffwd) as None')
-
         if q_des is not None:
             self.q_des = q_des
-        else:
-            self.q_des = np.zeros(self.robot.na)
 
         if qd_des is not None:
             self.qd_des = qd_des
-        else:
-            self.qd_des = np.zeros(self.robot.na)
 
         if tau_ffwd is not None:
             self.tau_ffwd = tau_ffwd
-        else:
-            self.tau_ffwd = np.zeros(self.robot.na)
 
         self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
 
