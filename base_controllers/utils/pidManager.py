@@ -151,10 +151,10 @@ class PidManager:
         Set array of values of PID for all joints
         @kp: proportional gain (array)
         @kd: derivative gain (array)
-        @kp: integral gain (array)
+        @ki: integral gain (array)
         """
         # create the message
-        self.req_msg.data = []
+        #self.req_msg.data = []
         
         for joint_idx in range(len(self.joint_names)):
             # fill in the message with des values for kp kd
