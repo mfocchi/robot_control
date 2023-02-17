@@ -705,6 +705,53 @@ def forceVectorTransform(position, rotationMx):
     return b_X_a
 
 
+def polynomialRef(x0, xf, v0, vf, a0, af, T):
+    # 7-th order polynomial (impose zero jerk at boundary)
+
+    M = np.array([[1, 0,      0,        0,           0,           0,            0,            0],
+                  [1, T, T ** 2,   T ** 3,      T ** 4,      T ** 5,       T ** 6,       T ** 7],
+                  [0, 1,      0,        0,           0,           0,            0,            0],
+                  [0, 1,  2 * T, 3*T ** 2,    4*T ** 3,    5*T ** 4,     6*T ** 5,     7*T ** 6],
+                  [0, 0,      2,        0,           0,           0,            0,            0],
+                  [0, 0,      2,    6 * T, 12 * T ** 2, 20 * T ** 3,    30*T ** 4,    42*T ** 5],
+                  [0, 0,      0,        6,           0,           0,            0,            0],
+                  [0, 0,      0,        6,      24 * T, 60 * T ** 2, 120 * T ** 3, 210 * T ** 4],
+                  ])
+
+    j0 = np.zeros_like(x0)
+    jf = np.zeros_like(xf)
+    init_conds = np.vstack([x0, xf, v0, vf, a0, af, j0, jf])
+
+    p_coeffs = np.linalg.inv(M) @ init_conds
+    v_coeffs = np.array([p_coeffs[1], 2 * p_coeffs[2],3 * p_coeffs[3], 4 * p_coeffs[4], 5 * p_coeffs[5], 6 * p_coeffs[6], 7 * p_coeffs[7]])
+    a_coeffs = np.array([v_coeffs[1], 2 * v_coeffs[2],3 * v_coeffs[3], 4 * v_coeffs[4], 5 * v_coeffs[5], 6 * v_coeffs[6]])
+
+    pos = lambda t: (p_coeffs[0] +
+                     p_coeffs[1] * t +
+                     p_coeffs[2] * t ** 2 +
+                     p_coeffs[3] * t ** 3 +
+                     p_coeffs[4] * t ** 4 +
+                     p_coeffs[5] * t ** 5 +
+                     p_coeffs[6] * t ** 6 +
+                     p_coeffs[7] * t ** 7) if 0 <= t <= T else x0 if t <0 else xf
+
+    vel = lambda t: (v_coeffs[0] +
+                     v_coeffs[1] * t +
+                     v_coeffs[2] * t ** 2 +
+                     v_coeffs[3] * t ** 3 +
+                     v_coeffs[4] * t ** 4 +
+                     v_coeffs[5] * t ** 5 +
+                     v_coeffs[6] * t ** 6) if 0 <= t <= T else v0 if t <0 else vf
+
+    acc = lambda t: (a_coeffs[0] +
+                     a_coeffs[1] * t +
+                     a_coeffs[2] * t ** 2 +
+                     a_coeffs[3] * t ** 3 +
+                     a_coeffs[4] * t ** 4 +
+                     a_coeffs[5] * t ** 5) if 0 <= t <= T else a0 if t <0 else af
+
+    return pos, vel, acc
+
 
 
 
