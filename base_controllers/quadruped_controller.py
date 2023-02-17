@@ -228,11 +228,18 @@ class Controller(BaseController):
         self.grForcesB_ffwd = np.empty(3 * self.robot.nee) * np.nan
 
         # virtual impedance wrench control
-        self.Kp_lin = np.diag(conf.robot_params[self.robot_name].get('Kp_lin', np.zeros(3)))
-        self.Kd_lin = np.diag(conf.robot_params[self.robot_name].get('Kd_lin', np.zeros(3)))
+        if self.real_robot:
+            self.kp_lin = np.diag(conf.robot_params[self.robot_name].get('kp_lin_real', np.zeros(3)))
+            self.kd_lin = np.diag(conf.robot_params[self.robot_name].get('kd_lin_real', np.zeros(3)))
 
-        self.Kp_ang = np.diag(conf.robot_params[self.robot_name].get('Kp_ang', np.zeros(3)))
-        self.Kd_ang = np.diag(conf.robot_params[self.robot_name].get('Kd_ang', np.zeros(3)))
+            self.kp_ang = np.diag(conf.robot_params[self.robot_name].get('kp_ang_real', np.zeros(3)))
+            self.kd_ang = np.diag(conf.robot_params[self.robot_name].get('kd_ang_real', np.zeros(3)))
+        else:
+            self.kp_lin = np.diag(conf.robot_params[self.robot_name].get('kp_lin', np.zeros(3)))
+            self.kd_lin = np.diag(conf.robot_params[self.robot_name].get('kd_lin', np.zeros(3)))
+
+            self.kp_ang = np.diag(conf.robot_params[self.robot_name].get('kp_ang', np.zeros(3)))
+            self.kd_ang = np.diag(conf.robot_params[self.robot_name].get('kd_ang', np.zeros(3)))
 
         self.wrench_fbW  = np.zeros(6)
         self.wrench_ffW  = np.zeros(6)

@@ -80,10 +80,16 @@ robot_params['go1'] ={'dt': 0.002,
                        'kd': np.array([1.,1.,1.]*4),  # 1
                        'kp_real': 20.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
                        'kd_real': 0.3*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
-                       'Kp_lin': np.array([800., 500., 800.]), # x y z
-                       'Kd_lin': np.array([100., 100., 100.]),
-                       'Kp_ang': np.array([100., 300., 100.]), # R P Y
-                       'Kd_ang': np.array([10., 20., 20.]),
+                       'kp_real_wbc': 10.*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
+                       'kd_real_wbc': 0.1*np.array([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1]),
+                       'kp_lin': np.array([800., 500., 900.]), # x y z
+                       'kd_lin': np.array([100., 100., 100.]),
+                       'kp_ang': np.array([100., 300., 100.]), # R P Y
+                       'kd_ang': np.array([10., 20., 20.]),
+                       'kp_lin_real': np.array([1000., 300., 1600.]), # x y z
+                       'kd_lin_real': np.array([40., 20., 100.]),
+                       'kp_ang_real': np.array([50., 50., 50.]), # R P Y
+                       'kd_ang_real': np.array([2., 2., 2.]),
                         'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
                         'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
                         'joint_names': ['lf_haa_joint',  'lf_hfe_joint', 'lf_kfe_joint',
