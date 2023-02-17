@@ -78,24 +78,25 @@ class LegOdometry:
         return self.w_p_b_update, self.w_v_b_update
 
 
-    def base_in_world(self, contact_state, W_contacts, wJ, ang_vel, qd):
+    def base_in_world(self, contact_state,  B_contacts, b_R_w, wJ, ang_vel, qd):
         '''
         same idea of the above, but faster
         '''
-        assert self._reset_has_been_called_once, "Please call reset funcion after initializing LegOdometry"
 
-        self.w_p_b_update[:] = 0.
-        self.w_v_b_update[:] = 0.
 
-        nc = 0
-        for k, value in enumerate(contact_state):
-            if value:
-                nc+=1
-                w_p_b = self.w_feet_pos_init[:, k] - W_contacts[k]
-                w_v_b = -pin.skew(ang_vel) @ W_contacts[k] - wJ[k] @ self.u.getLegJointState(k, qd)
+        if  self._reset_has_been_called_once:
+            nc = 0
+            if any(contact_state):
+                self.w_p_b_update[:] = 0.
+                self.w_v_b_update[:] = 0.
+            for k, value in enumerate(contact_state):
+                if value:
+                    nc+=1
+                    w_p_b = self.w_feet_pos_init[:, k] - b_R_w@ B_contacts[k]
+                    w_v_b = -pin.skew(ang_vel) @  b_R_w @ B_contacts[k] - wJ[k] @ self.u.getLegJointState(k, qd)
 
-                self.w_p_b_update = (k * self.w_p_b_update + w_p_b)/(k+1)
-                self.w_v_b_update = (k * self.w_v_b_update + w_v_b)/(k+1)
+                    self.w_p_b_update = (k * self.w_p_b_update + w_p_b)/(k+1)
+                    self.w_v_b_update = (k * self.w_v_b_update + w_v_b)/(k+1)
 
         return self.w_p_b_update, self.w_v_b_update
 
