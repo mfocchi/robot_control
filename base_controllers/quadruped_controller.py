@@ -602,6 +602,78 @@ class Controller(BaseController):
         return w_des_grf
 
 
+    def Wcom2Wbase_des(self):
+        # suppose comPose/Twist des and W_contacts_des are set
+        # base ref in W
+        b_R_w_des = pin.rpy.rpyToMatrix(self.u.angPart(self.comPoseW_des)).T
+        omega_skew = pin.skew(self.u.angPart(self.comTwistW_des))
+
+        self.basePoseW_des = self.comPoseW_des.copy()
+        self.basePoseW_des[:3] -= b_R_w_des.T @ self.comPosB
+
+        self.baseTwistW_des = self.comTwistW_des.copy()
+        self.baseTwistW_des[:3] -= b_R_w_des.T @ (omega_skew @ self.comPosB + self.comVelB)
+
+    def Wbase2Bcontact_des(self):
+        b_R_w_des = pin.rpy.rpyToMatrix(self.u.angPart(self.basePoseW_des)).T
+        omega_skew = pin.skew(self.u.angPart(self.baseTwistW_des))
+        # feet ref in B
+        for leg in range(4):
+            self.B_contacts_des[leg] = b_R_w_des @ (self.W_contacts_des[leg] - self.u.linPart(self.basePoseW_des))
+            self.B_vel_contact_des[leg] = b_R_w_des @ (
+                    omega_skew.T @ (self.W_contacts_des[leg] - self.u.linPart(self.basePoseW_des))
+                    - self.u.linPart(self.baseTwistW_des))
+            # self.B_vel_contact_des[leg] = 5 * (self.B_contacts_des[leg]-self.B_contacts[leg])
+
+    def Wbase2Joints_des(self):
+        # before the first call, please set
+        # q_des = q.copy()
+        # qd_des[:] = 0.
+        # suppose WbasePose/Twist des and W_contacts_des are set
+        self.Wbase2Bcontact_des()
+
+        # time = 0, 1, 2, 3, ...
+        # time = 0 -> q_des = ik(),         qd_des = const.
+        # time = 1 -> q_des += qd_des * dt, qd_des = const.
+        # time = 2 -> q_des = const,        qd_des = diff_ik()
+        # time = 3 -> q_des += qd_des * dt, qd_des = const.
+        # ...
+
+        if self.log_counter % 4 == 0:
+            for leg in range(4):
+                q_des_leg, isFeasible = self.IK.ik_leg(self.B_contacts_des[leg],
+                                                       self.leg_names[leg],
+                                                       self.legConfig[self.leg_names[leg]][0],
+                                                       self.legConfig[self.leg_names[leg]][1])
+                if isFeasible:
+                    self.u.setLegJointState(leg, q_des_leg, self.q_des)
+
+        elif self.log_counter % 4 == 2:
+            for leg in range(4):
+                qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
+                                                 B_v_foot=self.B_vel_contact_des[leg],
+                                                 leg=self.leg_names[leg],
+                                                 update=leg == 0)  # update Jacobians only with the first leg
+
+                # qd_leg_des = self.J_inv[leg] @ self.B_vel_contact_des[leg]
+
+                self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
+        else:
+            self.q_des += self.qd_des * self.dt
+
+    def Wcom2Joints_des(self):
+        # before the first call, please set
+        # q_des = q.copy()
+        # qd_des[:] = 0.
+        # suppose WcomPose/Twist des and W_contacts_des are set
+        # base ref in W
+        self.Wcom2Wbase_des()
+        self.Wbase2Joints_des()
+
+
+        
+        
+        
 
     def support_poly(self, contacts):
         # Wcontacts: lf, rf, lh, rh
