@@ -281,8 +281,8 @@ class Controller(BaseController):
 
         self.basePoseW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.baseTwistW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
-        self.w_p_b_legOdom_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
-        self.w_v_b_legOdom_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.basePoseW_legOdom_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.baseTwistW_legOdom_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.tau_fb_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.tau_des_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
