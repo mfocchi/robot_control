@@ -34,6 +34,10 @@ class StarbotController(BaseController):
             "RF": 2,
             "RH": 3
         }
+        self.prewheel_joints = np.array([12,13,14,15])
+        self.prismatic_joints = np.array([8, 9, 10,11])
+        self.wheel_joints = np.array([16, 17, 18, 19])
+
     def initVars(self):
         super().initVars()
         ## add your variables to initialize here
@@ -42,7 +46,7 @@ class StarbotController(BaseController):
         self.NEMatrix = np.zeros([6, 3 * self.n_feet])  # Newton-Euler matrix
         self.grForcesW_des = np.empty(3 * self.n_feet) * np.nan
         self.comPoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
-
+        self.pipeContact = [False] * 4
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
                 ## add your logs here
@@ -498,6 +502,28 @@ def carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, whee
 
     return joints, q_des
 
+    # find euler angles to align to pipe according to ros convention correspondent to perform a rotation about X followed by a one about Z
+def alignToPipe(roll, yaw):
+    c_roll = np.cos(roll)
+    s_roll = np.sin(roll)
+
+    c_yaw = np.cos(yaw)
+    s_yaw = np.sin(yaw)
+
+    Rx = np.array([[1, 0, 0],
+                   [0, c_roll, -s_roll],
+                   [0, s_roll, c_roll]]);
+
+
+
+    Rz = np.array([[c_yaw, -s_yaw, 0],
+                   [s_yaw, c_yaw, 0],
+                   [0, 0, 1]]);
+
+    R = Rx.dot(Rz)
+    math_utils = Math()
+    return math_utils.rot2eul(R)
+
 #def climbing_state():
 
 def talker(p):
@@ -541,102 +567,138 @@ def talker(p):
     leg_length=0
     dist_from_tunnel = 60
 
+    ros.sleep(2.)
     print("State 0: init configuration")
+    p.freezeBase(True, basePoseW=np.hstack(( np.array([0, 4., 0.7]), alignToPipe(1.9 ,0.707) )))
+    w_R_d = p.math_utils.eul2Rot(0.33, 0., 0.)
 
     while not ros.is_shutdown():
         act_time = p.time-start_time_simulation
 
         # update the kinematics
         p.updateKinematics()
-        p.tau_ffwd = 0.*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
-        if p.time >3 and state_flag < 3:
-            p.tau_ffwd = p.computeGravityTorques(conf.robot_params[p.robot_name]['ee_frames'])
+        #p.tau_ffwd = 0.*np.array([0,0,0,0,   0,0,0,0 , 0 , 0, 0,0  ,0,0,0,0, 1.,1.,1.,1.])#(p.robot.na)
+        # if p.time >3 and state_flag < 3:
+        #     p.tau_ffwd = p.computeGravityTorques(conf.robot_params[p.robot_name]['ee_frames'])
+
+
+        # approach
+        if (state_flag == 0) and p.time > 1.:
+            state_flag = 1
+
+
+            for leg in range(4):
+                p.contact_normal[leg] = (p.u.linPart(p.basePoseW) - p.W_contacts[leg])/np.linalg.norm(p.u.linPart(p.basePoseW) - p.W_contacts[leg])
+        if (state_flag == 1):
+            #approach kinematically
+            p.q_des[p.prismatic_joints] += 0.0001
+            # check contacts
+            for leg in range(4):
+               if p.contact_normal[leg].dot(p.getLegContactForce(leg, p.grForcesW)) >= conf.robot_params[p.robot_name]['force_th']:
+                   p.pipeContact[leg] = True
+               else:
+                   p.pipeContact[leg] = False
+            if all(p.pipeContact):
+                state_flag = 2
+                print("starting")
+                # approach with force (controller)
+                #TODO activate prismatic
+                #p.tau_ffwd[p.prismatic_joints] = 200
+                #p.pid.setPDjoint(p.prismatic_joints, 0, 0, 0)
+
+                # this restores gravity (only when everyting works)
+                #p.freezeBase(False)
+        if (state_flag == 2):
+            # go forward + orientation control + prewheel controller
+            p.q_des[p.wheel_joints]+=np.array([0.01,-0.01,-0.01,0.01 ])
+            # base orientation
+            w_R_a = p.math_utils.eul2Rot(p.euler)
 
         # initialization phase
-        if state_flag == 0:
-            if act_time <= start_time_motion:
-                ret = initialization_state(p)
-                p.q_des = ret[0]
-                leg_length = ret[1]
-                shoulder_pos = ret[2]
-            else:
-                print("Start robot lifting, from init configuration to car one")
-                state_flag = 1
-                start_time_simulation = p.time
-                contact_time = 0
-
-                prev_state["shoulder"] = np.copy(joints["shoulder"])
-                prev_state["upper_leg"] = np.copy(joints["upper_leg"])
-                prev_state["lower_leg"] = np.copy(joints["lower_leg"])
-                prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
-                prev_state["wheel"] = np.copy(joints["wheel"])
-
-        # movement from init configuration to car one
-        elif state_flag == 1:
-            if act_time <= initTocar_motion_time:
-                ret = initTocar_state(p, joints, prev_state, initTocar_motion_time, act_time, 0.785, metersToradians(wheel_arc_carState(leg_length)),
-                                      1.57, contact_time)
-                p.q_des = ret[1]
-                joints = ret[0]
-                contact_time = ret[2]
-            else:
-                print("State 1: car configuration")
-                print("Start tunnel approaching")
-                state_flag = 2
-                start_time_simulation = p.time
-                prev_state["shoulder"] = np.copy(joints["shoulder"])
-                prev_state["upper_leg"] = np.copy(joints["upper_leg"])
-                prev_state["lower_leg"] = np.copy(joints["lower_leg"])
-                prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
-                prev_state["wheel"] = np.copy(joints["wheel"])
-
-            # id = p.robot.model.getFrameId('lf_wheel')
-            # id = p.robot.model.frames[id].parent
-            # # leg 0 touch ground
-            # if(p.contact_state[0] == True):
-            #     print("check")
-            # print(p.robot.data.oMi[id])
-            # print(np.array(p.robot.data.oMi[id])[1][3])
-
-        # tunnel approaching
-        elif state_flag == 2:
-            if act_time <= approaching_tunnel_time:
-                ret = approacing_state(p, joints, prev_state, dist_from_tunnel, approaching_tunnel_time, act_time)
-                p.q_des = ret[1]
-                joints = ret[0]
-            else:
-                print("State 2: car configuration inside tunnel")
-                print("Start configuration change from car to star")
-                state_flag = 3
-                start_time_simulation = p.time
-                robot_rotation = metersToradians(get_external_perimeter(p)/8)
-                prev_state["shoulder"] = np.copy(joints["shoulder"])
-                prev_state["upper_leg"] = np.copy(joints["upper_leg"])
-                prev_state["lower_leg"] = np.copy(joints["lower_leg"])
-                prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
-                prev_state["wheel"] = np.copy(joints["wheel"])
-                print(robot_rotation)
-
-        # configuration change from car to star
-        elif state_flag == 3:
-            if act_time <= carTostar_motion_time:
-                ret = carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, wheel_motion=1.57, robot_rotation = robot_rotation,
-                                      straight_leg_angle = 0.5236, wheel_arc_dist=metersToradians(wheel_arc_carState(leg_length)))
-                p.q_des = ret[1]
-                joints = ret[0]
-            else:
-                print("State 3: star configuration")
-                print("Start tunnel climbing")
-                state_flag = 4
-                start_time_simulation = p.time
-                prev_state["shoulder"] = np.copy(joints["shoulder"])
-                prev_state["upper_leg"] = np.copy(joints["upper_leg"])
-                prev_state["lower_leg"] = np.copy(joints["lower_leg"])
-                prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
-                prev_state["wheel"] = np.copy(joints["wheel"])
-
-        elif state_flag == 4:
-            p.q_des = p.q_des
+        # if state_flag == 0:
+        #     if act_time <= start_time_motion:
+        #         ret = initialization_state(p)
+        #         p.q_des = ret[0]
+        #         leg_length = ret[1]
+        #         shoulder_pos = ret[2]
+        #     else:
+        #         print("Start robot lifting, from init configuration to car one")
+        #         state_flag = 1
+        #         start_time_simulation = p.time
+        #         contact_time = 0
+        #
+        #         prev_state["shoulder"] = np.copy(joints["shoulder"])
+        #         prev_state["upper_leg"] = np.copy(joints["upper_leg"])
+        #         prev_state["lower_leg"] = np.copy(joints["lower_leg"])
+        #         prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
+        #         prev_state["wheel"] = np.copy(joints["wheel"])
+        #
+        # # movement from init configuration to car one
+        # elif state_flag == 1:
+        #     if act_time <= initTocar_motion_time:
+        #         ret = initTocar_state(p, joints, prev_state, initTocar_motion_time, act_time, 0.785, metersToradians(wheel_arc_carState(leg_length)),
+        #                               1.57, contact_time)
+        #         p.q_des = ret[1]
+        #         joints = ret[0]
+        #         contact_time = ret[2]
+        #     else:
+        #         print("State 1: car configuration")
+        #         print("Start tunnel approaching")
+        #         state_flag = 2
+        #         start_time_simulation = p.time
+        #         prev_state["shoulder"] = np.copy(joints["shoulder"])
+        #         prev_state["upper_leg"] = np.copy(joints["upper_leg"])
+        #         prev_state["lower_leg"] = np.copy(joints["lower_leg"])
+        #         prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
+        #         prev_state["wheel"] = np.copy(joints["wheel"])
+        #
+        #     # id = p.robot.model.getFrameId('lf_wheel')
+        #     # id = p.robot.model.frames[id].parent
+        #     # # leg 0 touch ground
+        #     # if(p.contact_state[0] == True):
+        #     #     print("check")
+        #     # print(p.robot.data.oMi[id])
+        #     # print(np.array(p.robot.data.oMi[id])[1][3])
+        #
+        # # tunnel approaching
+        # elif state_flag == 2:
+        #     if act_time <= approaching_tunnel_time:
+        #         ret = approacing_state(p, joints, prev_state, dist_from_tunnel, approaching_tunnel_time, act_time)
+        #         p.q_des = ret[1]
+        #         joints = ret[0]
+        #     else:
+        #         print("State 2: car configuration inside tunnel")
+        #         print("Start configuration change from car to star")
+        #         state_flag = 3
+        #         start_time_simulation = p.time
+        #         robot_rotation = metersToradians(get_external_perimeter(p)/8)
+        #         prev_state["shoulder"] = np.copy(joints["shoulder"])
+        #         prev_state["upper_leg"] = np.copy(joints["upper_leg"])
+        #         prev_state["lower_leg"] = np.copy(joints["lower_leg"])
+        #         prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
+        #         prev_state["wheel"] = np.copy(joints["wheel"])
+        #         print(robot_rotation)
+        #
+        # # configuration change from car to star
+        # elif state_flag == 3:
+        #     if act_time <= carTostar_motion_time:
+        #         ret = carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, wheel_motion=1.57, robot_rotation = robot_rotation,
+        #                               straight_leg_angle = 0.5236, wheel_arc_dist=metersToradians(wheel_arc_carState(leg_length)))
+        #         p.q_des = ret[1]
+        #         joints = ret[0]
+        #     else:
+        #         print("State 3: star configuration")
+        #         print("Start tunnel climbing")
+        #         state_flag = 4
+        #         start_time_simulation = p.time
+        #         prev_state["shoulder"] = np.copy(joints["shoulder"])
+        #         prev_state["upper_leg"] = np.copy(joints["upper_leg"])
+        #         prev_state["lower_leg"] = np.copy(joints["lower_leg"])
+        #         prev_state["pre_wheel"] = np.copy(joints["pre_wheel"])
+        #         prev_state["wheel"] = np.copy(joints["wheel"])
+        #
+        # elif state_flag == 4:
+        #     p.q_des = p.q_des
 
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
@@ -651,6 +713,7 @@ def talker(p):
                                 "blue")
 
             p.ros_pub.add_marker(p.W_contacts[leg], radius=0.1)
+            p.ros_pub.add_marker(p.pipeContact[leg]*p.W_contacts[leg], color="green", radius=0.1)
             if (p.use_ground_truth_contacts):
                 p.ros_pub.add_arrow(p.W_contacts[leg], p.getLegContactForce(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)),
                                     "red")
