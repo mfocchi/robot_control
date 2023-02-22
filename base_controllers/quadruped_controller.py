@@ -269,6 +269,9 @@ class Controller(BaseController):
         except KeyError:
             self.force_th = 0.
 
+        self.W_vel_contact_des = self.u.full_listOfArrays(4, 3)
+        self.B_vel_contact_des = self.u.full_listOfArrays(4, 3)
+
         # imu
         self.B_imu_lin_acc = np.full(3, np.nan)
         self.W_base_lin_acc = np.full(3, np.nan)
@@ -378,6 +381,8 @@ class Controller(BaseController):
             self.W_contacts_log[start:end, self.log_counter] = self.W_contacts[leg]
             self.W_contacts_des_log[start:end, self.log_counter] = self.W_contacts_des[leg]
 
+            self.B_vel_contact_des_log[start:end, self.log_counter] = self.B_vel_contact_des[leg]
+            self.W_vel_contact_des_log[start:end, self.log_counter] = self.W_vel_contact_des[leg]
         self.W_lin_vel_log[:, self.log_counter] = self.imu_utils.W_lin_vel
         self.zmp_log[:, self.log_counter] = self.zmp
 
