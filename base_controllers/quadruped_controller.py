@@ -900,8 +900,9 @@ class Controller(BaseController):
         # desired final height
         neutral_fb_jointstate[7:] = self.q.copy()#conf.robot_params[self.robot_name]['q_0']
 
-        # increase of the motion
-        delta_z = 0.0005
+        # increase of the motion (m/s)
+        delta_z = 0.1
+        update = [True, True, True, True]
         ########################
         # FINITE STATE MACHINE #
         ########################
