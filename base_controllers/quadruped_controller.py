@@ -392,8 +392,7 @@ class Controller(BaseController):
         self.wrench_desW_log[:, self.log_counter] = self.wrench_desW
 
 
-        self.time_log[self.log_counter] = np.round(self.time + self.dt, 3)
-
+        self.time_log[self.log_counter] = self.time
 
     def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=[]):
 
@@ -731,7 +730,7 @@ class Controller(BaseController):
         self.rate.sleep()
         self.logData()
         self.sync_check()
-        self.time = np.round(self.time + np.array([self.loop_time]), 3)
+        self.time = np.round(self.time + self.dt, 3)#np.array([self.loop_time]), 3)
 
 
     def visualizeContacts(self):
