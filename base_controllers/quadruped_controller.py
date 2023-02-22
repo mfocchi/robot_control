@@ -227,19 +227,29 @@ class Controller(BaseController):
         self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesB_ffwd = np.empty(3 * self.robot.nee) * np.nan
 
-        # virtual impedance wrench control
+        # load gains
         if self.real_robot:
-            self.kp_lin = np.diag(conf.robot_params[self.robot_name].get('kp_lin_real', np.zeros(3)))
-            self.kd_lin = np.diag(conf.robot_params[self.robot_name].get('kd_lin_real', np.zeros(3)))
-
-            self.kp_ang = np.diag(conf.robot_params[self.robot_name].get('kp_ang_real', np.zeros(3)))
-            self.kd_ang = np.diag(conf.robot_params[self.robot_name].get('kd_ang_real', np.zeros(3)))
+            real_str = '_real'
         else:
-            self.kp_lin = np.diag(conf.robot_params[self.robot_name].get('kp_lin', np.zeros(3)))
-            self.kd_lin = np.diag(conf.robot_params[self.robot_name].get('kd_lin', np.zeros(3)))
+            real_str = ''
 
-            self.kp_ang = np.diag(conf.robot_params[self.robot_name].get('kp_ang', np.zeros(3)))
-            self.kd_ang = np.diag(conf.robot_params[self.robot_name].get('kd_ang', np.zeros(3)))
+        # stand alone joint pid
+        self.kp_j = conf.robot_params[self.robot_name].get('kp'+real_str, np.zeros(self.robot.na))
+        self.kd_j = conf.robot_params[self.robot_name].get('kd'+real_str, np.zeros(self.robot.na))
+        self.ki_j = conf.robot_params[self.robot_name].get('ki'+real_str, np.zeros(self.robot.na))
+
+        # virtual impedance wrench control
+        self.kp_lin = np.diag(conf.robot_params[self.robot_name].get('kp_lin'+real_str, np.zeros(3)))
+        self.kd_lin = np.diag(conf.robot_params[self.robot_name].get('kd_lin'+real_str, np.zeros(3)))
+
+        self.kp_ang = np.diag(conf.robot_params[self.robot_name].get('kp_ang'+real_str, np.zeros(3)))
+        self.kd_ang = np.diag(conf.robot_params[self.robot_name].get('kd_ang'+real_str, np.zeros(3)))
+
+        # joint pid with wbc
+        self.kp_wbc_j = conf.robot_params[self.robot_name].get('kp_wbc'+real_str, np.zeros(self.robot.na))
+        self.kd_wbc_j = conf.robot_params[self.robot_name].get('kd_wbc'+real_str, np.zeros(self.robot.na))
+        self.ki_wbc_j = conf.robot_params[self.robot_name].get('ki_wbc'+real_str, np.zeros(self.robot.na))
+
 
         self.wrench_fbW  = np.zeros(6)
         self.wrench_ffW  = np.zeros(6)
@@ -436,9 +446,7 @@ class Controller(BaseController):
         qd_des = np.zeros(self.robot.na)
         tau_ffwd = np.zeros(self.robot.na)
         if resetPid:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
-                                 conf.robot_params[self.robot_name]['kd'],
-                                 np.zeros(self.robot.na))
+            self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
         gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
         for k in range(100): # for 100 iteration keep the position, needed for restore joints
             self.send_command(q_des, qd_des, tau_ffwd)
@@ -792,14 +800,7 @@ class Controller(BaseController):
     def _startup_from_stand_up(self):
         self.q_des = self.q.copy()
         self.pid = PidManager(self.joint_names)
-        if self.real_robot:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
-                                 conf.robot_params[self.robot_name]['kd_real'],
-                                 np.zeros(self.robot.na))
-        else:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
-                                 conf.robot_params[self.robot_name]['kd'],
-                                 np.zeros(self.robot.na))
+        self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
 
         for i in range(10):
             self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
@@ -818,9 +819,9 @@ class Controller(BaseController):
                 self.updateKinematics()
                 # self.visualizeContacts()
                 GCTime = self.time - GCStartTime
-                if GCTime <= 0.6:
+                if GCTime <= 1.5:
                     if alpha < 1:
-                        alpha = GCTime / 0.5
+                        alpha = GCTime/1.5
 
                 self.send_command(self.q_des, self.qd_des, alpha*self.gravityCompensation())
 
@@ -868,15 +869,7 @@ class Controller(BaseController):
 
             self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
-
-        if self.real_robot:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp_real'],
-                                 conf.robot_params[self.robot_name]['kd_real'],
-                                 np.zeros(self.robot.na))
-        else:
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
-                                 conf.robot_params[self.robot_name]['kd'],
-                                 np.zeros(self.robot.na))
+        self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
 
         ref_timeout = int(self.imu_utils.timeout / 2)
         ref_counter = 0
