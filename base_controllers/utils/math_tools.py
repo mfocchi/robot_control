@@ -720,9 +720,9 @@ def polynomialRef(x0, xf, v0, vf, a0, af, T):
 
     j0 = np.zeros_like(x0)
     jf = np.zeros_like(xf)
-    init_conds = np.vstack([x0, xf, v0, vf, a0, af, j0, jf])
+    boundary_conds = np.vstack([x0, xf, v0, vf, a0, af, j0, jf])
 
-    p_coeffs = np.linalg.inv(M) @ init_conds
+    p_coeffs = np.linalg.inv(M) @ boundary_conds
     v_coeffs = np.array([p_coeffs[1], 2 * p_coeffs[2],3 * p_coeffs[3], 4 * p_coeffs[4], 5 * p_coeffs[5], 6 * p_coeffs[6], 7 * p_coeffs[7]])
     a_coeffs = np.array([v_coeffs[1], 2 * v_coeffs[2],3 * v_coeffs[3], 4 * v_coeffs[4], 5 * v_coeffs[5], 6 * v_coeffs[6]])
 
