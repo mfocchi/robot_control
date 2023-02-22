@@ -920,26 +920,35 @@ class Controller(BaseController):
                 # self.visualizeContacts()
 
                 if state == 0:
-                    if not all(self.contact_state): # if at least one is not in contact
-                        for leg in range(4):
-                            if not self.contact_state[leg]:
-                                # update feet task
-                                # if a leg is in contact, it must keep the same reference (waiting for the others)
-                                self.B_contacts_des[leg][2] -= delta_z
+                    switch_cond = True
+                    for leg in range(4):
+                        if self.B_contacts[leg][2] > -0.04:
+                            switch_cond = False
+                        elif not self.contact_state[leg]:
+                            switch_cond = False
+                        if switch_cond == False:
+                            break
 
-                                q_des_leg, isFeasible = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
-                                                                       self.leg_names[leg],
-                                                                       self.legConfig[self.leg_names[leg]][0],
-                                                                       self.legConfig[self.leg_names[leg]][1])
-
-                                self.u.setLegJointState(leg, q_des_leg, self.q_des)
+                    if not switch_cond:
                         for leg in range(4):
-                            B_feet_vel[leg][2] = -delta_z
-                            qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
-                                                               B_v_foot=B_feet_vel[leg],
-                                                               leg=self.leg_names[leg],
-                                                               update=leg == 0)
-                            self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
+                            # update feet task
+                            self.B_contacts_des[leg][2] -= delta_z * self.dt
+
+                            q_des_leg, isFeasible = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
+                                                                   self.leg_names[leg],
+                                                                   self.legConfig[self.leg_names[leg]][0],
+                                                                   self.legConfig[self.leg_names[leg]][1])
+
+                            self.u.setLegJointState(leg, q_des_leg, self.q_des)
+
+
+                        for leg in range(4):
+                                B_feet_vel[leg][2] = -delta_z
+                                qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
+                                                                   B_v_foot=B_feet_vel[leg],
+                                                                   leg=self.leg_names[leg],
+                                                                   update=leg == 0)
+                                self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
                         # if self.log_counter != 0:
                         #     self.qd_des = (self.q_des - self.q_des_log[:, self.log_counter]) / self.dt
                         self.tau_ffwd[:] = 0.
@@ -959,9 +968,9 @@ class Controller(BaseController):
                 if state == 1:
                     GCTime = self.time-GCStartTime
                     self.qd_des[:] = 0
-                    if GCTime <= 0.6:
+                    if GCTime <= 1.5:
                         if alpha < 1:
-                            alpha = GCTime / 0.2
+                            alpha = GCTime
                         self.tau_ffwd = alpha* self.self_weightCompensation()
                     else:
                         print(colored("[startupProcedure t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
