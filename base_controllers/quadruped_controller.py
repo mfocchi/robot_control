@@ -146,6 +146,7 @@ class Controller(BaseController):
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
 
+
     def _receive_pose_real(self, msg):
         self.quaternion[0] = msg.pose.pose.orientation.x
         self.quaternion[1] = msg.pose.pose.orientation.y
@@ -224,6 +225,7 @@ class Controller(BaseController):
         self.g_mag = np.linalg.norm(self.robot.model.gravity.vector)
 
         self.grForcesW_des = np.empty(3 * self.robot.nee) * np.nan
+        self.grForcesW_wbc = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesB_ffwd = np.empty(3 * self.robot.nee) * np.nan
 
@@ -305,12 +307,16 @@ class Controller(BaseController):
         self.grForcesW_gt_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.grForcesW_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.grForcesW_wbc_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.W_contacts_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.W_contacts_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.B_contacts_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.B_contacts_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+
+        self.B_vel_contact_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.W_vel_contact_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.contact_state_log = np.empty((self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
@@ -363,6 +369,7 @@ class Controller(BaseController):
         self.tau_log[:, self.log_counter] = self.tau
         self.grForcesW_log[:, self.log_counter] = self.grForcesW
         self.grForcesW_des_log[:, self.log_counter] = self.grForcesW_des
+        self.grForcesW_wbc_log[:, self.log_counter] = self.grForcesW_wbc
         self.grForcesW_gt_log[:, self.log_counter] = self.grForcesW_gt
         self.grForcesB_log[:, self.log_counter] = self.grForcesB
         self.contact_state_log[:, self.log_counter] = self.contact_state
@@ -383,6 +390,7 @@ class Controller(BaseController):
 
             self.B_vel_contact_des_log[start:end, self.log_counter] = self.B_vel_contact_des[leg]
             self.W_vel_contact_des_log[start:end, self.log_counter] = self.W_vel_contact_des[leg]
+
         self.W_lin_vel_log[:, self.log_counter] = self.imu_utils.W_lin_vel
         self.zmp_log[:, self.log_counter] = self.zmp
 
@@ -571,15 +579,20 @@ class Controller(BaseController):
 
         # Map the desired wrench to grf
         if type == 'projection':
-            self.grForcesW_des = self.projectionWBC()
+            self.grForcesW_wbc = self.projectionWBC()
         elif type == 'qp':
-            self.grForcesW_des = self.qpWBC()
+            self.grForcesW_wbc = self.qpWBC()
 
         h_jointFromRos = self.u.mapFromRos(self.h_joints)
         for leg in range(4):
             tau_leg = self.u.getLegJointState(leg, h_jointFromRos) - \
-                      self.wJ[leg].T @ self.u.getLegJointState(leg, self.grForcesW_des)
+                      self.wJ[leg].T @ self.u.getLegJointState(leg, self.grForcesW_wbc)
             self.u.setLegJointState(leg, tau_leg, self.tau_ffwd)
+
+        # wbc + joint pid
+        for leg in range(4):
+            grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  self.h_joints-self.tau_des ))
+            self.u.setLegJointState(leg, grf, self.grForcesW_des)
 
     def projectionWBC(self, tol=1e-6):
         # NEMatrix is 6 x 12
