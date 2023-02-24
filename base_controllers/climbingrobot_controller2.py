@@ -31,7 +31,7 @@ from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 
 import  params as conf
 #robotName = "climbingrobot2landing"
-robotName = "climbingrobot2"
+robotName = "climbingrobot2landing"
 
 class ClimbingrobotController(BaseControllerFixed):
     
@@ -49,7 +49,7 @@ class ClimbingrobotController(BaseControllerFixed):
             self.landing = True
         else:
             self.landing = False
-        self.landing_joints = np.array([15, 16])
+        self.landing_joints = np.array([15, 17])
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
         self.r_leg = 0.3
         print("Initialized climbingrobot controller---------------------------------------------------------------")
@@ -139,8 +139,8 @@ class ClimbingrobotController(BaseControllerFixed):
         # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
         # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar2', '/world')
         if p.landing:
-            self.x_landing_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId('foot_landing_l')).translation
-            self.x_landing_r = self.robot.framePlacement(self.q, self.robot.model.getFrameId('foot_landing_r')).translation
+            self.x_landing_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wheel_l')).translation
+            self.x_landing_r = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wheel_r')).translation
 
     def _receive_contact(self, msg):
         grf = np.zeros(3)
@@ -154,14 +154,14 @@ class ClimbingrobotController(BaseControllerFixed):
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] = msg.states[0].wrenches[0].force.y
         grf[2] = msg.states[0].wrenches[0].force.z
-        self.contactForceW_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId("lowerleg_landing_l")).rotation.dot(grf)
+        self.contactForceW_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId("wheel_l")).rotation.dot(grf)
 
     def _receive_contact_landing_r(self, msg):
         grf = np.zeros(3)
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] = msg.states[0].wrenches[0].force.y
         grf[2] = msg.states[0].wrenches[0].force.z
-        self.contactForceW_r = self.robot.framePlacement(self.q, self.robot.model.getFrameId("lowerleg_landing_r")).rotation.dot(grf)
+        self.contactForceW_r = self.robot.framePlacement(self.q, self.robot.model.getFrameId("wheel_r")).rotation.dot(grf)
 
 
     def initVars(self):

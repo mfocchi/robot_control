@@ -213,18 +213,18 @@ robot_params['climbingrobot2landing'] ={'dt': 0.001,
                        'kp': np.array([0 ,    0,    400,  40,    40,   40,
                                        0 ,    0,    400,  40,    40,   40,
                                        50, 30, 30,
-                                       0.5, 0.5
+                                       30, 30., 30,30.
                                        ]),
                        'kd':  np.array([20,    20,    100,   20,     20,   20,
                                         20,    20,    100,   20,     20,   20,
                                         10,   10, 10,
-                                        0.1, 0.1
+                                        10, 3, 10 ,3
                                         ]),
                        # this corresposnds to p = [0.03, 2.5, -6] from matlab WF  which is located in anchor_pos1
                        'q_0':  np.array([ 0.0,    1.17  ,  4.0000   ,      0. ,   -1.17 ,        0.,
                                           0.0,  -1.17,    4.0000  ,       0. ,  1.17,           0.,
                                           -1.57, 0.0, 0.0,
-                                          0., -0
+                                          0., -0, 0.,0.
                                           ]),
 
                        'joint_names': ['mountain_wire_pitch_r', 'mountain_wire_roll_r',  'wire_base_prismatic_r',
@@ -232,7 +232,7 @@ robot_params['climbingrobot2landing'] ={'dt': 0.001,
                                         'mountain_wire_pitch_l', 'mountain_wire_roll_l',  'wire_base_prismatic_l',
                                        'wire_base_pitch_l', 'wire_base_roll_l','wire_base_yaw_l',
                                        'hip_pitch', 'hip_roll', 'knee',
-                                       'hip_yaw_landing_l', 'hip_yaw_landing_r'],
+                                       'hip_yaw_landing_l', 'wheel_joint_l', 'hip_yaw_landing_r', 'wheel_joint_r'],
                        'ee_frame': 'foot',
                        'spawn_x' : 0.2,
                        'spawn_y' : 0.0,
