@@ -174,10 +174,13 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_accel = np.zeros(3)
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
-
-        self.simp_model_state_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        if self.robot_name == 'climbingrobot_slider':
+            self.simp_model_state_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        else:
+            self.simp_model_state_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.ldot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
 
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
         self.time_jump_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
@@ -187,7 +190,10 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
-                self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
+                if self.robot_name == 'climbingrobot_slider':
+                    self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l,self.q[self.slider_index]])
+                else:
+                    self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
                 self.ldot_log[self.log_counter] = self.ldot
                 self.base_pos_log[:, self.log_counter] = self.base_pos
                 self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
@@ -212,8 +218,11 @@ class ClimbingrobotController(BaseControllerFixed):
         if p0 is None:
             # recompute the theta angle to have the anchor attached to the wall
             req_reset_joints.joint_positions[self.anchor_passive_joints[0]] = math.atan2(self.r_leg, conf.robot_params[self.robot_name]['q_0'][p.rope_index])
-        else: # do IK on p0
-            req_reset_joints.joint_positions[self.anchor_passive_joints[0]], req_reset_joints.joint_positions[self.anchor_passive_joints[1]], req_reset_joints.joint_positions[self.rope_index] = self.computeJointVariables(p0)
+        else: # do IK on p0 overwrite the first anchor joints and the rope joint
+            if self.robot_name == 'climbingrobot_slider':
+                req_reset_joints.joint_positions[self.anchor_passive_joints[0]], req_reset_joints.joint_positions[self.anchor_passive_joints[1]], req_reset_joints.joint_positions[self.rope_index] = self.computeJointVariables(p0, conf.robot_params[self.robot_name]['q_0'][self.slider_index])
+            else:
+                req_reset_joints.joint_positions[self.anchor_passive_joints[0]], req_reset_joints.joint_positions[self.anchor_passive_joints[1]], req_reset_joints.joint_positions[self.rope_index] = self.computeJointVariables(p0)
             beta1, self.rope_normal = self.computeRopeAngle(p0)
             beta2, max_Fut, max_Fun = self.getImpulseAngle()
             print("\033[34m" + "impulses are: Fun : ", max_Fun, " and  Fut : ", max_Fut)
@@ -253,10 +262,18 @@ class ClimbingrobotController(BaseControllerFixed):
             plotJoint('position', 0, time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             #plotJoint('torque', 1, time_gazebo, None, None, None, None, None,None, p.tau_ffwd_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
-            plot3D('states', 3, ['theta', 'phi', 'l'], time_gazebo, p.simp_model_state_log)
-            mio.savemat('test_gazebo.mat', {'solution': p.matvars['solution'], 'T_th': p.matvars['T_th'], 'mu': p.matvars['mu'],
+            plot3D('states', 3, ['theta', 'phi', 'l'], time_gazebo, p.simp_model_state_log[:3,:])
+            vars = {'solution': p.matvars['solution'], 'T_th': p.matvars['T_th'], 'mu': p.matvars['mu'],
                                             'Fun_max':p.matvars['Fun_max'], 'Fr_max':p.matvars['Fr_max'], 'p0':p.matvars['p0'],'pf': p.matvars['pf'],
-                                            'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
+                                            'time_gazebo': time_gazebo,
+                                            'traj_gazebo': traj_gazebo,
+                                            'theta_gazebo': p.simp_model_state_log[0,:],
+                                            'phi_gazebo': p.simp_model_state_log[1,:],
+                                            'l_gazebo': p.simp_model_state_log[2,:]}
+
+            if p.robot_name == 'climbingrobot_slider':
+                vars['sy_gazebo'] = p.simp_model_state_log[3, :]
+            mio.savemat('test_gazebo.mat', vars)
 
 
     def getIndex(self,t):
@@ -283,7 +300,7 @@ class ClimbingrobotController(BaseControllerFixed):
         return angle, max_Fut, max_Fun
 
     def computeJointVariables(self, p, slider = None):
-        if p.robot_name == 'climbingrobot_slider':
+        if self.robot_name == 'climbingrobot_slider':
             wire_base_prismatic = math.sqrt(p[0]*p[0] + (p[1] - slider)*(p[1] - slider) + p[2] * p[2])
             mountain_wire_pitch = math.atan2(p[0], -p[2])
             mountain_wire_roll = math.asin((p[1]- slider)/wire_base_prismatic)
