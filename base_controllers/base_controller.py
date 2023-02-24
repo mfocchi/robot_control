@@ -439,6 +439,8 @@ class BaseController(threading.Thread):
                 self.contact_state[leg] = True
             else:
                 self.contact_state[leg] = False
+                # if self.time % 100:
+                #     print('contact lost on leg: ' + conf.robot_params[self.robot_name]['ee_frames'][leg])
 
         if self.use_ground_truth_contacts:
             for leg in range(4):
