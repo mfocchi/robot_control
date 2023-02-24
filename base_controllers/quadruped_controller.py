@@ -97,20 +97,18 @@ class Controller(BaseController):
                                                      tcp_nodelay=True)
 
     def _receive_imu_acc_real(self, msg):
-        self.B_imu_lin_acc[0] = msg.x
-        self.B_imu_lin_acc[1] = msg.y
-        self.B_imu_lin_acc[2] = msg.z
+        self.baseLinAccB[0] = msg.x
+        self.baseLinAccB[1] = msg.y
+        self.baseLinAccB[2] = msg.z
 
-        self.W_base_lin_acc = self.b_R_w.T @ (
-                    self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
+        self.baseLinAccW = self.b_R_w.T @ (self.baseLinAccB - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
     def _receive_imu_acc(self, msg):
-        self.B_imu_lin_acc[0] = msg.linear_acceleration.x
-        self.B_imu_lin_acc[1] = msg.linear_acceleration.y
-        self.B_imu_lin_acc[2] = msg.linear_acceleration.z
+        self.baseLinAccB[0] = msg.linear_acceleration.x
+        self.baseLinAccB[1] = msg.linear_acceleration.y
+        self.baseLinAccB[2] = msg.linear_acceleration.z
 
-        self.W_base_lin_acc = self.b_R_w.T @ (
-                    self.B_imu_lin_acc - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
+        self.baseLinAccW = self.b_R_w.T @ (self.baseLinAccB - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
     def _receive_euler(self, msg):
         self.euler[0] = msg.x
@@ -167,9 +165,9 @@ class Controller(BaseController):
             self.baseTwistW[self.u.sp_crd["LY"]] = self.baseTwistW_legOdom[1]
             self.baseTwistW[self.u.sp_crd["LZ"]] = self.baseTwistW_legOdom[2]
         else:
-            self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.W_lin_vel[0]
-            self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.W_lin_vel[1]
-            self.baseTwistW[self.u.sp_crd["LZ"]] = self.imu_utils.W_lin_vel[2]
+            self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.baseLinTwistImuW[0]
+            self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.baseLinTwistImuW[1]
+            self.baseTwistW[self.u.sp_crd["LZ"]] = self.imu_utils.baseLinTwistImuW[2]
 
         self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
         self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
@@ -276,11 +274,11 @@ class Controller(BaseController):
         self.B_vel_contact_des = self.u.full_listOfArrays(4, 3)
 
         # imu
-        self.B_imu_lin_acc = np.full(3, np.nan)
-        self.W_base_lin_acc = np.full(3, np.nan)
+        self.baseLinAccB = np.full(3, np.nan)
+        self.baseLinAccW = np.full(3, np.nan)
 
-        self.B_imu_lin_acc = np.full(3, np.nan)
-        self.W_base_lin_acc = np.full(3, np.nan)
+        self.baseLinAccB = np.full(3, np.nan)
+        self.baseLinAccW = np.full(3, np.nan)
 
 
         self.comPosB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
@@ -321,10 +319,11 @@ class Controller(BaseController):
 
         self.contact_state_log = np.empty((self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
-        self.W_base_lin_acc_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
-        self.W_base_lin_acc = np.zeros(3)
+        self.baseLinAccW_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.baseLinAccW = np.zeros(3)
 
-        self.W_lin_vel_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.baseLinTwistImuW_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.baseLinPoseImuW_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
 
         self.zmp = np.zeros(3)
         self.zmp_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
@@ -375,7 +374,7 @@ class Controller(BaseController):
         self.grForcesB_log[:, self.log_counter] = self.grForcesB
         self.contact_state_log[:, self.log_counter] = self.contact_state
 
-        self.W_base_lin_acc_log[:, self.log_counter] = self.W_base_lin_acc
+        self.baseLinAccW_log[:, self.log_counter] = self.baseLinAccW
 
 
         self.comVelW_leg_odom_log[:, self.log_counter] = self.comVelW_leg_odom
@@ -392,7 +391,8 @@ class Controller(BaseController):
             self.B_vel_contact_des_log[start:end, self.log_counter] = self.B_vel_contact_des[leg]
             self.W_vel_contact_des_log[start:end, self.log_counter] = self.W_vel_contact_des[leg]
 
-        self.W_lin_vel_log[:, self.log_counter] = self.imu_utils.W_lin_vel
+        self.baseLinTwistImuW_log[:, self.log_counter] = self.imu_utils.baseLinTwistImuW
+        self.baseLinPoseImuW_log[:, self.log_counter] = self.imu_utils.baseLinPoseImuW
         self.zmp_log[:, self.log_counter] = self.zmp
 
         self.wrench_fbW_log[:, self.log_counter] = self.wrench_fbW
@@ -470,7 +470,7 @@ class Controller(BaseController):
         self.initVars() # reset logged values
 
 
-        self.imu_utils.W_lin_vel = self.u.linPart(self.baseTwistW)
+        self.imu_utils.baseLinTwistImuW = self.u.linPart(self.baseTwistW)
 
 
 
@@ -798,7 +798,7 @@ class Controller(BaseController):
                                                                              self.wJ,
                                                                              self.u.angPart(self.baseTwistW),
                                                                              self.qd)
-        self.imu_utils.compute_lin_vel(self.W_base_lin_acc, self.loop_time)
+        self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
         super(Controller, self).updateKinematics()
 
     def startupProcedure(self):
@@ -851,7 +851,7 @@ class Controller(BaseController):
                 # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
                 while self.imu_utils.counter < self.imu_utils.timeout:
                     self.updateKinematics()
-                    self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+                    self.imu_utils.IMU_bias_estimation(self.b_R_w, self.baseLinAccB)
                     self.tau_ffwd[:] = 0.
                     self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
@@ -884,7 +884,7 @@ class Controller(BaseController):
 
         while self.imu_utils.counter < self.imu_utils.timeout:
             self.updateKinematics()
-            self.imu_utils.IMU_bias_estimation(self.b_R_w, self.B_imu_lin_acc)
+            self.imu_utils.IMU_bias_estimation(self.b_R_w, self.baseLinAccB)
             self.tau_ffwd[:] = 0.
 
             self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
