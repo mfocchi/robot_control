@@ -332,8 +332,10 @@ class JumpLegController(BaseControllerFixed):
         if not self.detectedApexFlag and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
+                p.pause_physics_client()
                 for i in range(10):
                     p.setJumpPlatformPosition(p.target_CoM)
+                p.unpause_physics_client()
                 p.contactForceW = np.zeros(3)
                 print(colored("APEX detected", "red"))
                 self.q_des[3:] = self.q_des_q0[3:]
@@ -457,9 +459,9 @@ class JumpLegController(BaseControllerFixed):
     def detectTouchDown(self):
         # foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
         # if (foot_pos_w[2] <= 0.017 ):
-        # print(p.contactForceW)
+        #print(p.contactForceW)
         contact_force = np.linalg.norm(p.contactForceW)
-        if contact_force > 0:
+        if contact_force > 1.:
             print(colored("TOUCHDOWN detected", "red"))
             return True
         else:
@@ -606,6 +608,17 @@ class JumpLegController(BaseControllerFixed):
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
 
+    def computeIdealLanding(self, com_f, comd_f, target_CoM):
+        #get time of flight
+        arg = comd_f[2]*comd_f[2] - 2*9.81*(target_CoM[2] - com_f[2])
+        if arg<0: #at apex
+            Tfl = comd_f[2]/9.81
+        else:  #beyond apex
+            Tfl = (comd_f[2] + math.sqrt(arg))/9.81 # we take the highest value
+
+        landing_location = com_f[:2] + Tfl*comd_f[:2]
+        return np.hstack((landing_location, target_CoM[2]))
+
 def talker(p):
 
     p.start()
@@ -614,7 +627,7 @@ def talker(p):
         p.ros_pub = RosPub("jumpleg")
         p.robot = getRobotModel("jumpleg")
     else:
-        additional_args=['gui:=false']
+        additional_args=['gui:=true']
         p.startSimulator("jump_platform.world", additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
@@ -622,7 +635,7 @@ def talker(p):
 
 
 
-    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/final_runs", model_name='latest', restore_train=False)
     # p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
     # p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
 
@@ -656,7 +669,7 @@ def talker(p):
         p.intermediate_com_position = []
         p.comd_lo = np.zeros(3)
         p.target_CoM = (p.target_service()).target_CoM
-        print(p.target_CoM)
+
         for i in range(10):
             p.setJumpPlatformPosition(com_0-[0,0,0.2])
 
@@ -684,6 +697,8 @@ def talker(p):
             p.T_th = action[0]
             com_f = np.array(action[1:4])
             comd_f = np.array(action[4:])
+            p.ideal_landing = p.computeIdealLanding(com_f, comd_f, p.target_CoM)
+            error = np.linalg.norm(p.ideal_landing - p.target_CoM)
             p.computeHeuristicSolutionBezier(com_0, com_f, comd_f)
             p.plotTrajectoryBezier(p.T_th)
         # OLD way
@@ -803,9 +818,11 @@ def talker(p):
                 p.base_offset + p.q[:3] + p.x_ee, np.array([0, 0, 1.]), p.mu, height=0.05, color="blue")
             # p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
-
+            # com at LIFT OFF
             p.ros_pub.add_marker(com_f, color="red", radius=0.1)
-            # reachabe space
+
+            p.ros_pub.add_marker(p.ideal_landing, color="green", radius=0.1)
+            #reachable space
             p.ros_pub.add_marker([0, 0, 0], color="green", radius=0.64)
 
             if not p.ACTION_TORQUES:
@@ -830,7 +847,7 @@ def talker(p):
             # wait for synconization of the control loop
             rate.sleep()
 
-            p.time = p.time + conf.robot_params[p.robot_name]['dt']
+            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
 
         # eval rewards
@@ -847,13 +864,14 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
+    finally:
         if conf.plotting:
             print("PLOTTING")
             # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
             # plotCoMLinear('contact force', 2, p.time_log,
             #               None, p.contactForceW_log)
             # plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-            #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            #            joint_names=conf.robot_params[p.robot_name]['joint_names'])
             # plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
             #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
             # plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
