@@ -93,9 +93,9 @@ robot_params['go1'] ={'dt': 0.002,
                       'kd_ang': np.array([10., 20., 20.]),
                       # real robot gains
                       # stand alone joint pid
-                      'kp_real': np.array([20., 20.,20.]*4),
+                      'kp_real': np.array([30., 30.,30.]*4),
                       'kd_real': np.array([.2, .2, .2]*4),
-                      'ki_real': np.array([0.2, 0.2, 0.2]*4),
+                      'ki_real': np.array([0.5, 0.5, 0.5]*4),
                       # joint pid + wbc (optional)
                       'kp_wbc_real': np.array([25., 25.,25.]*4),#np.array([10., 10., 10.]*4),
                       'kd_wbc_real': np.array([.2, .2, .2]*4),#np.array([.1, .1, .1]*4),
