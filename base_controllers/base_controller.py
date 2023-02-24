@@ -48,7 +48,7 @@ from ros_impedance_controller.msg import EffortPid
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
-robotName = "go1"
+robotName = "solo"
 
 
 class BaseController(threading.Thread):

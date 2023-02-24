@@ -124,7 +124,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_y': 0.0,
                       'spawn_z': 1.,
                       # use real robot or simulation
-                      'real_robot': True} # note the frames are all aligned with base for joints = 0
+                      'real_robot': False} # note the frames are all aligned with base for joints = 0
 
 robot_params['ur5'] ={'dt': 0.001, 
                        'kp': np.array([300, 300, 300,30,30,1]),
