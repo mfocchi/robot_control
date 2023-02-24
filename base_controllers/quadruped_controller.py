@@ -990,7 +990,7 @@ class Controller(BaseController):
                         print(colored("[startupProcedure t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
                         HStarttime = self.time
                         # 5-th order polynomial
-                        HPeriod = 5.0
+                        HPeriod = 3.0
                         B_feet_pose_init = copy.deepcopy( self.B_contacts_des)
                         B_feet_pose_fin = copy.deepcopy( self.B_contacts_des)
                         pos = [None, None, None, None]
