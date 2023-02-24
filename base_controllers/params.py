@@ -79,7 +79,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'buffer_size': 300001,
                       # simulation gains
                       # stand alone joint pid
-                      'kp': np.array([10., 10., 10.]*4),
+                      'kp': np.array([15., 15., 15.]*4),
                       'kd': np.array([1., 1., 1.]*4),
                       'ki': np.array([0.3, 0.3, 0.3]*4),
                       # joint pid + wbc (optional)
