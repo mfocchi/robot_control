@@ -207,6 +207,7 @@ class Controller(BaseController):
         # some extra variables
 
         self.tau_fb = np.zeros(self.robot.na)
+        self.tau_ffwd = np.zeros(self.robot.na)
         self.tau_des = np.zeros(self.robot.na)
 
         self.basePoseW_des = np.zeros(6) * np.nan
@@ -480,7 +481,7 @@ class Controller(BaseController):
 
     def gravityCompensation(self):
         # require the call to updateKinematics
-        self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
+        return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
 
     def virtualImpedanceWrench(self, des_pose, des_twist, des_acc = None, comControlled = True):
@@ -593,6 +594,8 @@ class Controller(BaseController):
         for leg in range(4):
             grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  self.h_joints-self.tau_des ))
             self.u.setLegJointState(leg, grf, self.grForcesW_des)
+
+        return self.tau_ffwd
 
     def projectionWBC(self, tol=1e-6):
         # NEMatrix is 6 x 12
@@ -1130,9 +1133,15 @@ class Controller(BaseController):
 
 if __name__ == '__main__':
     p = Controller('go1')
+    world_name = 'fast.world'
+    use_gui = True
     try:
         #p.startController(world_name='slow.world')
-        p.startController(additional_args=['gui:=False', 'go0_conf:=standDown'])
+        p.startController(world_name=world_name,
+                          use_ground_truth_pose=True,
+                          use_ground_truth_contacts=False,
+                          additional_args=['gui:='+str(use_gui),
+                                           'go0_conf:=standDown'])
         p.startupProcedure()
 
         while not ros.is_shutdown():
