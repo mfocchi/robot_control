@@ -13,7 +13,7 @@ class IMU_utils:
         # filters data
         self.alpha_accelerometer = 0.98
         self.alpha_velocity = np.array([0.21, 0.21, 0.21]) # X Y should be equal
-        self.W_lin_vel = np.zeros(3)
+        self.baseLinTwistImuW = np.zeros(3)
 
 
     def IMU_bias_estimation(self, b_R_w, IMU_accelerometer):
@@ -26,11 +26,11 @@ class IMU_utils:
 
 
     def compute_lin_vel(self, W_lin_acc, loop_dt):
-        self.W_lin_vel[0] = (1 - self.alpha_velocity[0] * loop_dt) * self.W_lin_vel[0] + loop_dt * W_lin_acc[0]
-        self.W_lin_vel[1] = (1 - self.alpha_velocity[1] * loop_dt) * self.W_lin_vel[1] + loop_dt * W_lin_acc[1]
-        self.W_lin_vel[2] = (1 - self.alpha_velocity[2] * loop_dt) * self.W_lin_vel[2] + loop_dt * W_lin_acc[2]
+        self.baseLinTwistImuW[0] = (1 - self.alpha_velocity[0] * loop_dt) * self.baseLinTwistImuW[0] + loop_dt * W_lin_acc[0]
+        self.baseLinTwistImuW[1] = (1 - self.alpha_velocity[1] * loop_dt) * self.baseLinTwistImuW[1] + loop_dt * W_lin_acc[1]
+        self.baseLinTwistImuW[2] = (1 - self.alpha_velocity[2] * loop_dt) * self.baseLinTwistImuW[2] + loop_dt * W_lin_acc[2]
         # print('alpha_velocity', self.alpha_velocity)
         # print('loop_dt', loop_dt)
-        # print('W_lin_vel', self.W_lin_vel)
+        # print('baseLinTwistImuW', self.baseLinTwistImuW)
         # print('W_lin_acc', W_lin_acc)
         #
