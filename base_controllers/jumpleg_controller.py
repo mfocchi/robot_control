@@ -44,9 +44,11 @@ class Cost():
         self.joint_range = 0
         self.joint_torques = 0
         self.error_vel_liftoff = 0
+        self.unfeasible_vertical_velocity =0
         self.target = 0
 
-        self.weights = np.array([0., 0., 0., 0., 0., 0., 0.])
+
+        self.weights = np.array([0., 0., 0., 0., 0., 0., 0., 0.])
 
     def reset(self):
         self.unilateral = 0
@@ -55,7 +57,9 @@ class Cost():
         self.joint_range = 0
         self.joint_torques = 0
         self.error_vel_liftoff = 0
+        self.unfeasible_vertical_velocity = 0
         self.target = 0
+
 
     def printCosts(self):
         return f"unil:{self.unilateral}  " \
@@ -64,7 +68,9 @@ class Cost():
                f"jointkin:{self.joint_range} " \
                f"torques:{self.joint_torques} " \
                f"error_vel_liftoff:{self.error_vel_liftoff} " \
+               f"unfeasible_vertical_velocity:{self.unfeasible_vertical_velocity}"\
                f"target:{self.target}"
+
 
     def printWeightedCosts(self):
         return f"unil:{self.weights[0]*self.unilateral}  " \
@@ -73,6 +79,7 @@ class Cost():
                f"jointkin:{self.weights[3]*self.joint_range} " \
                f"torques:{self.weights[4]*self.joint_torques} " \
                f"error_vel_liftoff:{self.weights[5]*self.error_vel_liftoff} " \
+               f"target:{self.weights[7] * self.unfeasible_vertical_velocity}"\
                f"target:{self.weights[6]*self.target}"
 
 
@@ -80,7 +87,7 @@ class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
-        self.AgentMode = 'inference'
+        self.AgentMode = 'train'
         self.ACTION_TORQUES = False
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
@@ -178,11 +185,11 @@ class JumpLegController(BaseControllerFixed):
 
         if self.ACTION_TORQUES:
             # self.cost.weights = np.array([10., 10., 10., 10., 10., 0., 1.])
-            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 0., 1.])
+            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 0.,  10., 1.])
         else:
-            #  unilateral  friction   singularity      joint_range  joint_torques   error_vel_liftoff  target = 0
+            #  unilateral  friction   singularity      joint_range  joint_torques   error_vel_liftoff  unfeasible vertical velocity target = 0
             # self.cost.weights = np.array([10., 10., 10., 10., 10., 100., 1.])
-            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 10., 1.])
+            self.cost.weights = np.array([1., 1., 10., 0.01, 1., 10.,10., 1.])
 
         self.mu = 0.8
 
@@ -292,39 +299,47 @@ class JumpLegController(BaseControllerFixed):
             0.5 * pow(conf.robot_params[self.robot_name]['dt'], 2) * qdd
 
     def computeFeedbackAction(self, start_idx, end_idx):
-        pd = 20* np.subtract(self.q_des[start_idx:end_idx], self.q[start_idx:end_idx]) \
+        pd = 30* np.subtract(self.q_des[start_idx:end_idx], self.q[start_idx:end_idx]) \
             + 10* np.subtract(self.qd_des[start_idx:end_idx], self.qd[start_idx:end_idx])
         return pd
 
-    def computeInverseDynamics(self):
-        # debug of idyn(stabilization of base) override references and set q0
-        # p.q_des = conf.robot_params[p.robot_name]['q_0']
-        # p.qd_des = np.zeros(6)
-        # p.qdd_des = np.zeros(6)
-        # # add fback on base
-        # pd = p.computeFeedbackAction(0, 3)
-        # # compute constraint consinstent joint accell
-        # p.qdd_des[3:] = np.linalg.inv(p.J).dot( -( p.qdd_des[:3] + pd)  -p.dJdq)
-        # qdd_ref = np.zeros(6)
-        # qdd_ref[:3] = p.qdd_des[:3] + pd
-        # qdd_ref[3:] = p.qdd_des[3:]
-
+    def computeInverseDynamics(self, contact=None):
+        S = np.vstack((np.zeros((3, 3)), np.eye(3)))
         # # add feedback part on the joints
         pd = p.computeFeedbackAction(3, 6)
-        # compute constraint consinstent base accell
-        p.base_accel = -p.J.dot(p.qdd_des[3:] + pd) - p.dJdq
-        qdd_ref = np.zeros(6)
-        qdd_ref[:3] =  p.base_accel
-        qdd_ref[3:] = p.qdd_des[3:] + pd # add pd also on base
+        if contact:
+            # debug of idyn(stabilization of base) override references and set q0
+            # p.q_des = conf.robot_params[p.robot_name]['q_0']
+            # p.qd_des = np.zeros(6)
+            # p.qdd_des = np.zeros(6)
+            # # add fback on base
+            # pd = p.computeFeedbackAction(0, 3)
+            # # compute constraint consinstent joint accell
+            # p.qdd_des[3:] = np.linalg.inv(p.J).dot( -( p.qdd_des[:3] + pd)  -p.dJdq)
+            # qdd_ref = np.zeros(6)
+            # qdd_ref[:3] = p.qdd_des[:3] + pd
+            # qdd_ref[3:] = p.qdd_des[3:]
 
-        # form matrix A , x = [tau_joints, f]
-        S = np.vstack((np.zeros((3, 3)), np.eye(3)))
-        A = np.zeros((6, 6))
-        A[:6, :3] = S
-        A[:6, 3:] = p.J6.T
-        x = np.linalg.pinv(A).dot(p.M.dot(qdd_ref) + p.h)
-        print(x)
-        return x[:3], x[3:]
+
+            # compute constraint consinstent base accell
+            p.base_accel = -p.J.dot(p.qdd_des[3:] + pd) - p.dJdq
+            qdd_ref = np.zeros(6)
+            qdd_ref[:3] =  p.base_accel
+            qdd_ref[3:] = p.qdd_des[3:] + pd # add pd also on base
+
+            # form matrix A , x = [tau_joints, f]
+            A = np.zeros((6, 6))
+            A[:6, :3] = S
+            A[:6, 3:] = p.J6.T
+            x = np.linalg.pinv(A).dot(p.M.dot(qdd_ref) + p.h)
+            tau_leg =x[:3]
+            feet_force = x[3:]
+        else:
+            qdd_ref = np.zeros(6)
+            qdd_ref[3:] = p.qdd_des[3:] + pd  # add pd also on base
+            tau_leg = S.T.dot(p.M.dot(qdd_ref) + p.h)
+            feet_force = np.zeros(3)
+        return tau_leg, feet_force
 
     def detectApex(self):
         foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
@@ -448,6 +463,16 @@ class JumpLegController(BaseControllerFixed):
             self.intermediate_com_position.append(
                 self.Bezier3(t[blob]/T_th, self.bezier_weights))
 
+    def plotTrajectoryFlight(self, com_f, comd_f, T_th):
+        self.number_of_blobs = 10
+        t = np.linspace(0, 0.3, self.number_of_blobs)
+        self.intermediate_flight_com_position = []
+        com = np.zeros(3)
+        for blob in range(self.number_of_blobs):
+            com[2] = com_f[2] + comd_f[2]*t[blob] + 0.5*(-9.81)*t[blob]*t[blob]
+            com[:2] = com_f[:2] + comd_f[:2]*t[blob]
+            self.intermediate_flight_com_position.append(com.copy())
+
     # 2 order bezier
     def Bezier2(self, t, weights):
         t2 = t * t
@@ -503,7 +528,7 @@ class JumpLegController(BaseControllerFixed):
 
     def evaluateRunningCosts(self):
 
-        singularity = False
+        inerruptEpisode = False
         cumsum_joint_range = 0
         cumsum_joint_torque = 0
 
@@ -545,9 +570,11 @@ class JumpLegController(BaseControllerFixed):
         if np.linalg.norm(self.x_ee) > 0.32:
             #self.cost.singularity = 1./(1e-05 + smallest_svalue)
             self.cost.singularity = 100
-            singularity = True
+            inerruptEpisode = True
             print(colored("Getting singular configuration", "red"))
-        return singularity
+
+
+        return inerruptEpisode
 
     def evalTotalReward(self, comd_f):
         colored("Evaluating costs", "blue")
@@ -562,12 +589,13 @@ class JumpLegController(BaseControllerFixed):
         print(colored("Costs: " + self.cost.printCosts(), "green"))
         print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
 
-        reward = self.cost.weights[6] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
+        reward = self.cost.weights[7] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
                                                        self.cost.weights[1]*self.cost.friction +
                                                        self.cost.weights[2] * self.cost.singularity +
                                                        self.cost.weights[3]*self.cost.joint_range +
                                                        self.cost.weights[4] * self.cost.joint_torques +
-                                                       self.cost.weights[5] * self.cost.error_vel_liftoff)
+                                                       self.cost.weights[5] * self.cost.error_vel_liftoff+
+                                                       self.cost.weights[6] * self.cost.unfeasible_vertical_velocity)
 
         if not self.ACTION_TORQUES:
             if (reward < 0):
@@ -615,7 +643,7 @@ class JumpLegController(BaseControllerFixed):
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
 
-    def computeIdealLanding(self, com_f, comd_f, target_CoM, landing_location):
+    def computeIdealLanding(self, com_f, comd_f, target_CoM):
         #get time of flight
         arg = comd_f[2]*comd_f[2] - 2*9.81*(target_CoM[2] - com_f[2])
         if arg<0:
@@ -623,7 +651,8 @@ class JumpLegController(BaseControllerFixed):
             return False
         else:  #beyond apex
             Tfl = (comd_f[2] + math.sqrt(arg))/9.81 # we take the highest value
-            landing_location = np.hstack((com_f[:2] + Tfl*comd_f[:2], target_CoM[2]))
+            self.ideal_landing = np.hstack((com_f[:2] + Tfl*comd_f[:2], target_CoM[2]))
+            return True
 
 
 def talker(p):
@@ -668,13 +697,14 @@ def talker(p):
     while True:
         p.time = 0.
         startTrust = 0.2
-        max_episode_time = 2
+        max_episode_time = 2.5
         p.number_of_episode += 1
         p.freezeBase(True)
         p.firstTime = True
         p.detectedApexFlag = False
         p.trustPhaseFlag = False
         p.intermediate_com_position = []
+        p.intermediate_flight_com_position = []
         p.comd_lo = np.zeros(3)
         p.ideal_landing = np.zeros(3)
         p.target_CoM = (p.target_service()).target_CoM
@@ -707,14 +737,14 @@ def talker(p):
             com_f = np.array(action[1:4])
             comd_f = np.array(action[4:])
 
-            p.T_th = 0.4851008642464877
-            com_f= np.array([-0.07669,  0.05105 , 0.25583])
-            comd_f= np.array([-0.878,    0.58451 , 0.83095])
-            # uncomment in inference mode
-            if (p.computeIdealLanding(com_f, comd_f, p.target_CoM, p.ideal_landing)):
-                error = np.linalg.norm(p.ideal_landing - p.target_CoM)
+            #debug
+            # p.T_th = 0.4851008642464877
+            # com_f= np.array([-0.07669,  0.05105 , 0.25583])
+            # comd_f= np.array([-0.878,    0.58451 , 0.83095])
+            # p.target_CoM = np.array([1,.0,1])
             p.computeHeuristicSolutionBezier(com_0, com_f, comd_f, p.T_th)
             p.plotTrajectoryBezier(p.T_th)
+            p.plotTrajectoryFlight(com_f, comd_f, p.T_th)
         # OLD way
         # p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
         # print(f"Actor action:\n"
@@ -754,6 +784,12 @@ def talker(p):
                         p.pid.setPDjoint(5, 0., 0., 0.)
                     p.trustPhaseFlag = True
 
+                    if (p.computeIdealLanding(com_f, comd_f, p.target_CoM)):
+                        error = np.linalg.norm(p.ideal_landing - p.target_CoM)
+                    else:
+                        p.cost.unfeasible_vertical_velocity = 100.
+                        break
+
                 # compute joint reference
                 if (p.trustPhaseFlag):
                     t = p.time - startTrust
@@ -771,6 +807,8 @@ def talker(p):
                             p.tau_ffwd[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) + p.a[i, 4] * pow(t, 4) + p.a[i, 5] * pow(t, 5)
                     else:
                         p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] = p.evalBezier(t, p.T_th)
+
+                    # uncomment in inference mode
 
                     if p.evaluateRunningCosts():
                         break
@@ -791,8 +829,11 @@ def talker(p):
 
                 # compute control action
                 if p.inverseDynamicsFlag:  # TODO fix this
-
-                     p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics()
+                    if (p.time < startTrust + p.T_th):
+                        contact = True
+                    else:
+                        contact = False
+                    p.tau_ffwd[3:], p.contactForceW = p.computeInverseDynamics(contact)
 
                 else:
                     if (p.time < startTrust + p.T_th):
@@ -814,7 +855,7 @@ def talker(p):
                 p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
             # log variables
-            p.logData()
+            #p.logData()
 
             # disturbance force
             # if (p.time > 3.0 and p.EXTERNAL_FORCE):
@@ -839,14 +880,18 @@ def talker(p):
 
             p.ros_pub.add_marker(p.ideal_landing, color="green", radius=0.1)
             #reachable space
-            p.ros_pub.add_marker([0, 0, 0], color="green", radius=0.64)
+            #p.ros_pub.add_marker([0, 0, 0], color="green", radius=0.64)
 
             if not p.ACTION_TORQUES:
-                p.ros_pub.add_arrow(com_f, comd_f, "red")
+                p.ros_pub.add_arrow(com_f, comd_f/10.0, "red")
                 # plot com intermediate positions
                 for blob in range(len(p.intermediate_com_position)):
                     p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[
                                          blob*1./p.number_of_blobs, blob*1./p.number_of_blobs, blob*1./p.number_of_blobs], radius=0.02)
+                # plot com intermediate positions
+                for blob in range(len(p.intermediate_flight_com_position)):
+                    p.ros_pub.add_marker(p.intermediate_flight_com_position[blob], color=[blob * 1. / p.number_of_blobs, blob * 1. / p.number_of_blobs,
+                                                    blob * 1. / p.number_of_blobs], radius=0.02)
                 p.ros_pub.add_marker(p.bezier_weights[:, 0], color=[
                                      0., 1., 0.],  radius=0.02)
                 p.ros_pub.add_marker(p.bezier_weights[:, 1], color=[
@@ -856,7 +901,7 @@ def talker(p):
                 p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[
                                      0., 1., 0.], radius=0.02)
                 if (not p.trustPhaseFlag):
-                    p.ros_pub.add_arrow(com_f, p.comd_lo, "green")
+                    p.ros_pub.add_arrow(com_f, p.comd_lo/10., "green")
 
             p.ros_pub.publishVisual()
 
@@ -870,7 +915,7 @@ def talker(p):
         p.evalTotalReward(comd_f)
         p.cost.reset()
         plt.cla()
-        break
+
 
 if __name__ == '__main__':
     p = JumpLegController(robotName)
