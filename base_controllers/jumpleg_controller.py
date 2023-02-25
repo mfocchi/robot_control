@@ -80,6 +80,7 @@ class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
+        self.AgentMode = 'train'
         self.ACTION_TORQUES = False
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
@@ -384,13 +385,13 @@ class JumpLegController(BaseControllerFixed):
 
         return poly_coeff
 
-    def computeHeuristicSolutionBezier(self, com_0, com_f, comd_f):
+    def computeHeuristicSolutionBezier(self, com_0, com_f, comd_f, T_th):
         self.bezier_weights = np.zeros([3, 4])
         self.bezier_weights_der = np.zeros([3, 3])
         comd_0 = np.zeros(3)
         self.bezier_weights[:, 0] = com_0
-        self.bezier_weights[:, 1] = comd_0 / 3. + com_0
-        self.bezier_weights[:, 2] = com_f - comd_f / 3.
+        self.bezier_weights[:, 1] = comd_0 *T_th/ 3. + com_0
+        self.bezier_weights[:, 2] = com_f - comd_f*T_th / 3.
         self.bezier_weights[:, 3] = com_f
         self.bezier_weights_der[:, 0] = 3 * \
             (self.bezier_weights[:, 1] - self.bezier_weights[:, 0])
@@ -405,7 +406,8 @@ class JumpLegController(BaseControllerFixed):
     def evalBezier(self, t_, T_th):
         t = t_ / T_th
         com = self.Bezier3(t, self.bezier_weights)
-        comd = self.Bezier2(t, self.bezier_weights_der)
+        # it is fundamental to scale the derivative of the bezier! cause it is on a different time frame
+        comd = 1/T_th*self.Bezier2(t, self.bezier_weights_der)
         q_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(
             -com,  conf.robot_params[p.robot_name]['ee_frame'],  p.q_des_q0[3:].copy(), verbose=False)
         # we need to recompute the jacobian  for the final joint position
@@ -611,8 +613,9 @@ class JumpLegController(BaseControllerFixed):
     def computeIdealLanding(self, com_f, comd_f, target_CoM):
         #get time of flight
         arg = comd_f[2]*comd_f[2] - 2*9.81*(target_CoM[2] - com_f[2])
-        if arg<0: #at apex
-            Tfl = comd_f[2]/9.81
+        print(arg)
+        if arg<0:
+            print(colored("Point Beyond Reach, tagret too high","red"))
         else:  #beyond apex
             Tfl = (comd_f[2] + math.sqrt(arg))/9.81 # we take the highest value
 
@@ -634,10 +637,11 @@ def talker(p):
         p.startupProcedure()
 
 
-
-    p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/final_runs", model_name='latest', restore_train=False)
-    # p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
-    # p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    if p.AgentMode == 'inference':
+        p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/final_runs", model_name='latest', restore_train=False)
+    else:
+        #p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+        p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
 
     p.initVars()
     ros.sleep(1.0)
@@ -697,9 +701,10 @@ def talker(p):
             p.T_th = action[0]
             com_f = np.array(action[1:4])
             comd_f = np.array(action[4:])
+            # uncomment in inference mode
             p.ideal_landing = p.computeIdealLanding(com_f, comd_f, p.target_CoM)
             error = np.linalg.norm(p.ideal_landing - p.target_CoM)
-            p.computeHeuristicSolutionBezier(com_0, com_f, comd_f)
+            p.computeHeuristicSolutionBezier(com_0, com_f, comd_f, p.T_th)
             p.plotTrajectoryBezier(p.T_th)
         # OLD way
         # p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
