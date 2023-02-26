@@ -464,9 +464,11 @@ class JumpLegController(BaseControllerFixed):
             self.intermediate_com_position.append(
                 self.Bezier3(t[blob]/T_th, self.bezier_weights))
 
-    def plotTrajectoryFlight(self, com_f, comd_f, T_th):
+    def plotTrajectoryFlight(self, com_f, comd_f, T_fl):
         self.number_of_blobs = 10
-        t = np.linspace(0, 0.3, self.number_of_blobs)
+        if T_fl is None:
+            T_fl = 0.3
+        t = np.linspace(0, T_fl, self.number_of_blobs)
         self.intermediate_flight_com_position = []
         com = np.zeros(3)
         for blob in range(self.number_of_blobs):
@@ -651,8 +653,8 @@ class JumpLegController(BaseControllerFixed):
             print(colored("Point Beyond Reach, tagret too high","red"))
             return False
         else:  #beyond apex
-            Tfl = (comd_f[2] + math.sqrt(arg))/9.81 # we take the highest value
-            self.ideal_landing = np.hstack((com_f[:2] + Tfl*comd_f[:2], target_CoM[2]))
+            self.T_fl = (comd_f[2] + math.sqrt(arg))/9.81 # we take the highest value
+            self.ideal_landing = np.hstack((com_f[:2] + self.T_fl*comd_f[:2], target_CoM[2]))
             return True
 
 
@@ -698,7 +700,7 @@ def talker(p):
     while True:
         p.time = 0.
         startTrust = 0.2
-        max_episode_time = 2.5
+        max_episode_time = 2.0
         p.number_of_episode += 1
         p.freezeBase(True)
         p.firstTime = True
@@ -745,7 +747,7 @@ def talker(p):
             # p.target_CoM = np.array([1,.0,1])
             p.computeHeuristicSolutionBezier(com_0, com_f, comd_f, p.T_th)
             p.plotTrajectoryBezier(p.T_th)
-            p.plotTrajectoryFlight(com_f, comd_f, p.T_th)
+
         # OLD way
         # p.a = p.computeHeuristicSolution(com_0, com_f, comd_f, p.T_th)
         # print(f"Actor action:\n"
@@ -784,13 +786,13 @@ def talker(p):
                         p.pid.setPDjoint(4, 0., 0., 0.)
                         p.pid.setPDjoint(5, 0., 0., 0.)
                     p.trustPhaseFlag = True
-
+                    p.T_fl = None
                     if (p.computeIdealLanding(com_f, comd_f, p.target_CoM)):
                         error = np.linalg.norm(p.ideal_landing - p.target_CoM)
-                    else:
-                        p.cost.unfeasible_vertical_velocity = 100.
-                        break
-
+                    # else:
+                    #     p.cost.unfeasible_vertical_velocity = 0.
+                    #     break
+                    p.plotTrajectoryFlight(com_f, comd_f, p.T_fl)
                 # compute joint reference
                 if (p.trustPhaseFlag):
                     t = p.time - startTrust
@@ -807,7 +809,7 @@ def talker(p):
                         for i in range(3):
                             p.tau_ffwd[3 + i] = p.a[i, 0] + p.a[i, 1] * t + p.a[i, 2] * pow(t, 2) + p.a[i, 3] * pow(t, 3) + p.a[i, 4] * pow(t, 4) + p.a[i, 5] * pow(t, 5)
                     else:
-                        p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] = p.evalBezier(t, p.T_th)
+                        p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] , p.comdd = p.evalBezier(t, p.T_th)
 
                     # uncomment in inference mode
 
@@ -840,7 +842,7 @@ def talker(p):
                     if (p.time < startTrust + p.T_th):
                         if not p.ACTION_TORQUES:
                             # add gravity compensation
-                            p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3])
+                            p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3])# +p.robot.robot_mass*p.comdd)
                     else:
                         if p.ACTION_TORQUES:
                             # restore PD during flyght
@@ -893,14 +895,10 @@ def talker(p):
                 for blob in range(len(p.intermediate_flight_com_position)):
                     p.ros_pub.add_marker(p.intermediate_flight_com_position[blob], color=[blob * 1. / p.number_of_blobs, blob * 1. / p.number_of_blobs,
                                                     blob * 1. / p.number_of_blobs], radius=0.02)
-                p.ros_pub.add_marker(p.bezier_weights[:, 0], color=[
-                                     0., 1., 0.],  radius=0.02)
-                p.ros_pub.add_marker(p.bezier_weights[:, 1], color=[
-                                     0., 1., 0.], radius=0.02)
-                p.ros_pub.add_marker(p.bezier_weights[:, 2], color=[
-                                     0., 1., 0.], radius=0.02)
-                p.ros_pub.add_marker(p.bezier_weights[:, 3], color=[
-                                     0., 1., 0.], radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 0], color="green",  radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 1], color="green", radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 2], color="green", radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 3], color="green", radius=0.02)
                 if (not p.trustPhaseFlag):
                     p.ros_pub.add_arrow(com_f, p.comd_lo/10., "green")
 
