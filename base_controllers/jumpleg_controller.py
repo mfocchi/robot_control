@@ -406,18 +406,18 @@ class JumpLegController(BaseControllerFixed):
         self.bezier_weights_2der = np.zeros([3, 2])
         comd_0 = np.zeros(3)
         self.bezier_weights[:, 0] = com_0
-        self.bezier_weights[:, 1] = comd_0 *T_th/ 3. + com_0
+        self.bezier_weights[:, 1] = comd_0*T_th / 3. + com_0
         self.bezier_weights[:, 2] = com_f - comd_f*T_th / 3.
         self.bezier_weights[:, 3] = com_f
-        self.bezier_weights_der[:, 0] = 3 * \
+        self.bezier_weights_der[:, 0] = 1/T_th * 3 * \
             (self.bezier_weights[:, 1] - self.bezier_weights[:, 0])
-        self.bezier_weights_der[:, 1] = 3 * \
+        self.bezier_weights_der[:, 1] = 1/T_th *  3 * \
             (self.bezier_weights[:, 2] - self.bezier_weights[:, 1])
-        self.bezier_weights_der[:, 2] = 3 * \
+        self.bezier_weights_der[:, 2] = 1/T_th *  3 * \
             (self.bezier_weights[:, 3] - self.bezier_weights[:, 2])
 
-        self.bezier_weights_2der[:, 0] = 2 * (self.bezier_weights_der[:, 1] - self.bezier_weights_der[:, 0])
-        self.bezier_weights_2der[:, 1] = 2 * (self.bezier_weights_der[:, 2] - self.bezier_weights_der[:, 1])
+        self.bezier_weights_2der[:, 0] = 1/(T_th*T_th) * 2 * (self.bezier_weights_der[:, 1] - self.bezier_weights_der[:, 0])
+        self.bezier_weights_2der[:, 1] = 1/(T_th*T_th) * 2 * (self.bezier_weights_der[:, 2] - self.bezier_weights_der[:, 1])
         # print(com_0)
         # print(com_f)
         # print(comd_f)
@@ -426,7 +426,7 @@ class JumpLegController(BaseControllerFixed):
         t = t_ / T_th
         com = self.Bezier3(t, self.bezier_weights)
         # it is fundamental to scale the derivative of the bezier! cause it is on a different time frame
-        comd = 1/T_th*self.Bezier2(t, self.bezier_weights_der)
+        comd = self.Bezier2(t, self.bezier_weights_der)
         q_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(
             -com,  conf.robot_params[p.robot_name]['ee_frame'],  p.q_des_q0[3:].copy(), verbose=False)
         # we need to recompute the jacobian  for the final joint position
@@ -437,10 +437,11 @@ class JumpLegController(BaseControllerFixed):
         Jdqd = self.robot.frameClassicAcceleration(np.hstack((np.zeros(3), q_leg)), np.hstack(
             (comd, qd_leg)), None, self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).linear
 
-        comdd = 1/(T_th*T_th)*(self.bezier_weights_2der[:,0]*(1-t) + self.bezier_weights_2der[:,1]*t)
+        comdd = (self.bezier_weights_2der[:,0]*(1-t) + self.bezier_weights_2der[:,1]*t)
+        comdd = (self.bezier_weights_2der[:,0]*(1-t) + self.bezier_weights_2der[:,1]*t)
         qdd_leg = np.linalg.inv(J).dot(comdd - Jdqd)
         qdd_leg = np.zeros(3)
-        return q_leg, qd_leg, qdd_leg
+        return q_leg, qd_leg, qdd_leg, comdd
 
     def plotTrajectory(self, T_th, poly_coeff):
         number_of_blobs = 10
