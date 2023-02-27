@@ -146,7 +146,7 @@ robot_params['starbot'] ={'dt': 0.001,
 
                        'q_0':  np.array([ 0, 0, 0, 0,
                        			0., 0., 0., 0.0,
-                                -0.15, -0.15, -0.15, -0.15,
+                                0., 0., 0., 0.,
                                 0., 0., 0., 0.0,
                                 0., 0., 0., 0.0 ]),
                        'joint_names': ['lf_bs_joint', 'rf_bs_joint',  'lh_bs_joint', 'rh_bs_joint',

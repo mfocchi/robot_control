@@ -569,8 +569,9 @@ def talker(p):
 
     ros.sleep(2.)
     print("State 0: init configuration")
-    p.freezeBase(True, basePoseW=np.hstack(( np.array([0, 4., 0.7]), alignToPipe(1.9 ,0.707) )))
-    w_R_d = p.math_utils.eul2Rot(0.33, 0., 0.)
+    p.freezeBase(True, basePoseW=np.hstack(( np.array([0, 4., 0.802]), alignToPipe(1.833 ,0.7854) )))
+    w_R_d = p.math_utils.eul2Rot(np.array([0.15, 0., 0.]))
+    delta_sing = np.array([1, -1, -1, 1])
 
     while not ros.is_shutdown():
         act_time = p.time-start_time_simulation
@@ -586,33 +587,52 @@ def talker(p):
         if (state_flag == 0) and p.time > 1.:
             state_flag = 1
 
-
             for leg in range(4):
                 p.contact_normal[leg] = (p.u.linPart(p.basePoseW) - p.W_contacts[leg])/np.linalg.norm(p.u.linPart(p.basePoseW) - p.W_contacts[leg])
-        if (state_flag == 1):
+
+        if state_flag == 1:
             #approach kinematically
             p.q_des[p.prismatic_joints] += 0.0001
+
             # check contacts
             for leg in range(4):
-               if p.contact_normal[leg].dot(p.getLegContactForce(leg, p.grForcesW)) >= conf.robot_params[p.robot_name]['force_th']:
+                if p.contact_normal[leg].dot(p.getLegContactForce(leg, p.grForcesW)) >= conf.robot_params[p.robot_name]['force_th']:
                    p.pipeContact[leg] = True
-               else:
+                else:
                    p.pipeContact[leg] = False
             if all(p.pipeContact):
                 state_flag = 2
                 print("starting")
                 # approach with force (controller)
                 #TODO activate prismatic
-                #p.tau_ffwd[p.prismatic_joints] = 200
+                #p.tau_ffwd[p.prismatic_joints] = 50
                 #p.pid.setPDjoint(p.prismatic_joints, 0, 0, 0)
 
-                # this restores gravity (only when everyting works)
+                # this restores gravity (only when everything works)
                 #p.freezeBase(False)
-        if (state_flag == 2):
-            # go forward + orientation control + prewheel controller
-            p.q_des[p.wheel_joints]+=np.array([0.01,-0.01,-0.01,0.01 ])
+        if state_flag == 2:
+            # go forward + orientation control + pre_wheel controller
+            p.q_des[p.wheel_joints] += delta_sing*0.01
             # base orientation
             w_R_a = p.math_utils.eul2Rot(p.euler)
+
+            # compute rotation matrix from actual orientation of the base to the desired one
+            a_R_d = w_R_a.T.dot(w_R_d)
+            # compute the angle-axis representation of the associated orientation error
+            arg = (a_R_d[0,0]+ a_R_d[1,1]+ a_R_d[2,2]-1)/2
+            delta_theta = np.arccos(arg)
+            # compute the axis (deal with singularity)
+            if delta_theta == 0.0:
+                e_error_o = np.zeros(3)
+            else:
+                r_hat = 1/(2*np.sin(delta_theta))*np.array([a_R_d[2,1]-a_R_d[1,2], a_R_d[0,2]-a_R_d[2,0], a_R_d[1,0]-a_R_d[0,1]])
+                # compute the orientation error
+                e_error_o = delta_theta * r_hat
+            # we need to map it in the error back into world frame
+            w_error_o = w_R_a.dot(e_error_o)
+
+
+
 
         # initialization phase
         # if state_flag == 0:
