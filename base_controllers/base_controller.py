@@ -180,6 +180,7 @@ class BaseController(threading.Thread):
         self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
         self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
+
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
 
@@ -437,6 +438,7 @@ class BaseController(threading.Thread):
 
             if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
                 self.contact_state[leg] = True
+
             else:
                 self.contact_state[leg] = False
                 # if self.time % 100:
@@ -508,7 +510,7 @@ class BaseController(threading.Thread):
                 while ros.get_time() - start_t < 0.5:
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
                     ros.sleep(0.01)
-                self.pid.setPDs(0.0, 0.0, 0.0)
+                #self.pid.setPDs(0.0, 0.0, 0.0)
 
             if (self.robot_name == 'solo'):
                 start_t = ros.get_time()
