@@ -151,16 +151,9 @@ class Controller(BaseController):
         self.quaternion[2] = msg.pose.pose.orientation.z
         self.quaternion[3] = msg.pose.pose.orientation.w
 
-        if any(self.contact_state):
-            self.baseTwistW[self.u.sp_crd["LX"]] = self.basePoseW_legOdom[0]
-            self.baseTwistW[self.u.sp_crd["LY"]] = self.basePoseW_legOdom[1]
-            self.baseTwistW[self.u.sp_crd["LZ"]] = self.basePoseW_legOdom[2]
-        else:
-            # these are not reliable
-            self.baseTwistW[self.u.sp_crd["LX"]] = self.imu_utils.baseLinPoseImuW[0]
-            self.baseTwistW[self.u.sp_crd["LY"]] = self.imu_utils.baseLinPoseImuW[1]
-            self.baseTwistW[self.u.sp_crd["LZ"]] = self.imu_utils.baseLinPoseImuW[2]
-
+        self.basePoseW[self.u.sp_crd["LX"]] = self.basePoseW_legOdom[0]
+        self.basePoseW[self.u.sp_crd["LY"]] = self.basePoseW_legOdom[1]
+        self.basePoseW[self.u.sp_crd["LZ"]] = self.basePoseW_legOdom[2]
 
         self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
@@ -802,7 +795,8 @@ class Controller(BaseController):
                                                                              self.b_R_w,
                                                                              self.wJ,
                                                                              self.u.angPart(self.baseTwistW),
-                                                                             self.qd)
+                                                                             self.qd,
+                                                                             self.real_robot)
         self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
         super(Controller, self).updateKinematics()
 

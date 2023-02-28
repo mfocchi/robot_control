@@ -81,7 +81,7 @@ class LegOdometry:
         return self.w_p_b_update, self.w_v_b_update
 
 
-    def base_in_world(self, contact_state,  B_contacts, b_R_w, wJ, ang_vel, qd):
+    def base_in_world(self, contact_state,  B_contacts, b_R_w, wJ, ang_vel, qd, real_robot=False):
         '''
         same idea of the above, but faster
         '''
@@ -92,11 +92,21 @@ class LegOdometry:
             if any(contact_state):
                 self.w_p_b_update[:] = 0.
                 self.w_v_b_update[:] = 0.
-                for k, value in enumerate(contact_state):
-                    if value:
-                        nc+=1
-                        w_p_b_foot = self.w_feet_pos_init[:, k] - b_R_w@ B_contacts[k]
-                        w_v_b_foot = -pin.skew(ang_vel) @  b_R_w @ B_contacts[k] - wJ[k] @ self.u.getLegJointState(k, qd)
+                if real_robot == False:
+                    for k, value in enumerate(contact_state):
+                        if value:
+                            nc+=1
+                            w_p_b_foot = self.w_feet_pos_init[:, k] - b_R_w@ B_contacts[k]
+                            w_v_b_foot = -pin.skew(ang_vel) @  b_R_w @ B_contacts[k] - wJ[k] @ self.u.getLegJointState(k, qd)
+
+                            self.w_p_b_update += w_p_b_foot
+                            self.w_v_b_update += w_v_b_foot
+                else:
+                    for k, value in enumerate(contact_state):
+                        nc = 4
+                        w_p_b_foot = self.w_feet_pos_init[:, k] - b_R_w @ B_contacts[k]
+                        w_v_b_foot = -pin.skew(ang_vel) @ b_R_w @ B_contacts[k] - wJ[k] @ self.u.getLegJointState(k,
+                                                                                                                  qd)
 
                         self.w_p_b_update += w_p_b_foot
                         self.w_v_b_update += w_v_b_foot
