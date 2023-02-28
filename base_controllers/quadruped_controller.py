@@ -482,7 +482,7 @@ class Controller(BaseController):
 
     def self_weightCompensation(self):
         # require the call to updateKinematics
-        gravity_torques = self.g_joints
+        gravity_torques = np.zeros(12)#self.g_joints
         return gravity_torques
 
     def gravityCompensation(self):

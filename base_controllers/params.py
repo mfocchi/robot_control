@@ -81,7 +81,7 @@ robot_params['go1'] ={'dt': 0.002,
                       # stand alone joint pid
                       'kp': np.array([15., 15., 15.]*4),
                       'kd': np.array([1., 1., 1.]*4),
-                      'ki': np.array([0.3, 0.3, 0.3]*4),
+                      'ki': np.array([0., 0., 0.]*4),
                       # joint pid + wbc (optional)
                       'kp_wbc': np.array([10., 10., 10.]*4),
                       'kd_wbc': np.array([1., 1., 1.]*4),
@@ -89,8 +89,8 @@ robot_params['go1'] ={'dt': 0.002,
                       # virtual impedance wrench control
                       'kp_lin': np.array([800, 500., 900.]),  # x y z
                       'kd_lin': np.array([100, 100., 100.]),
-                      'kp_ang': np.array([100, 300., 100.]),  # R P Y
-                      'kd_ang': np.array([10., 20., 20.]),
+                      'kp_ang': np.array([100, 200., 100.]),  # R P Y
+                      'kd_ang': np.array([10., 30., 10.]),
                       # real robot gains
                       # stand alone joint pid
                       'kp_real': np.array([30., 30.,30.]*4),
