@@ -170,3 +170,10 @@ class PidManager:
         self.set_pd_service(self.req_msg)
 
 
+    def __repr__(self):
+        string = f"Joint PID controller"
+        for joint_pid in self.joint_pid_log:
+            string += f"\njoint name: {joint_pid.joint_name} \t Kp: {joint_pid.p_value} \t Kd: {joint_pid.d_value} \t Ki: {joint_pid.i_value}"
+        return string
+
+
