@@ -347,9 +347,6 @@ class Controller(BaseController):
 
 
     def logData(self):
-        self.log_counter += 1
-        self.log_counter %= conf.robot_params[self.robot_name]['buffer_size']
-
         # full with new values
         self.comPosB_log[:, self.log_counter] = self.comPosB
         self.comVelB_log[:, self.log_counter] = self.comVelB
@@ -408,6 +405,8 @@ class Controller(BaseController):
 
 
         self.time_log[self.log_counter] = self.time
+        self.log_counter += 1
+        self.log_counter %= conf.robot_params[self.robot_name]['buffer_size']
 
     def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=[]):
 
