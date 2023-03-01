@@ -559,7 +559,10 @@ class Controller(BaseController):
     def WBC(self, des_pose, des_twist, des_acc = None, comControlled = True, type = 'projection'):
         # does side effect on tau_ffwd
         self.virtualImpedanceWrench(des_pose, des_twist, des_acc, comControlled)
-        self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
+        if self.real_robot:
+            self.wrench_desW = self.wrench_fbW + self.wrench_gW
+        else:
+            self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
 
         # wrench = NEMatrix @ grfs
         for leg in range(self.robot.nee):
