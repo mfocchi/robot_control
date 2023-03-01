@@ -540,6 +540,9 @@ class Controller(BaseController):
                 w_des_omega_dot = Jomega @ self.u.angPart(des_acc) + Jomega_dot @ self.u.angPart(des_twist)
                 self.wrench_ffW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = w_I @ w_des_omega_dot
 
+        else:
+            self.wrench_fbW[:] = 0
+            self.wrench_ffW[:] = 0
         # GRAVITY WRENCH
         # ---> linear part
         # self.wrench_gW[self.u.sp_crd["LZ"]+1] = self.robot.robotMass * self.g_mag (to avoid unuseful repetition, this is in the definiton of wrench_gW)
