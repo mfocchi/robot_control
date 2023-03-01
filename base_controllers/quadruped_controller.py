@@ -159,7 +159,7 @@ class Controller(BaseController):
         self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
 
-        if any(self.contact_state):
+        if False:#any(self.contact_state):
             self.baseTwistW[self.u.sp_crd["LX"]] = self.baseTwistW_legOdom[0]
             self.baseTwistW[self.u.sp_crd["LY"]] = self.baseTwistW_legOdom[1]
             self.baseTwistW[self.u.sp_crd["LZ"]] = self.baseTwistW_legOdom[2]
