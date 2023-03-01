@@ -561,6 +561,7 @@ class Controller(BaseController):
         self.virtualImpedanceWrench(des_pose, des_twist, des_acc, comControlled)
         if self.real_robot:
             self.wrench_desW = self.wrench_fbW + self.wrench_gW
+            self.wrench_ffW[:] = 0
         else:
             self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
 
