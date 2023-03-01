@@ -789,14 +789,15 @@ class Controller(BaseController):
         # self.ros_pub.add_marker_fixed(self.zmp)
         self.ros_pub.publishVisual()
 
-    def updateKinematics(self):
+    def updateKinematics(self, update_legOdom=True):
         self.basePoseW_legOdom, self.baseTwistW_legOdom = self.leg_odom.base_in_world(self.contact_state,
                                                                              self.B_contacts,
                                                                              self.b_R_w,
                                                                              self.wJ,
                                                                              self.u.angPart(self.baseTwistW),
                                                                              self.qd,
-                                                                             self.real_robot)
+                                                                             self.real_robot,
+                                                                             update_legOdom)
         self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
         super(Controller, self).updateKinematics()
 
