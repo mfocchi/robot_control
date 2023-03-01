@@ -83,9 +83,9 @@ robot_params['go1'] ={'dt': 0.002,
                       'kd': np.array([1., 1., 1.]*4),
                       'ki': np.array([0., 0., 0.]*4),
                       # joint pid + wbc (optional)
-                      'kp_wbc': np.array([10., 10., 10.]*4),
-                      'kd_wbc': np.array([1., 1., 1.]*4),
-                      'ki_wbc': np.array([0.3, 0.3, 0.3]*4),
+                      'kp_wbc': np.array([15., 15., 15.]*4),#np.array([10., 10., 10.]*4),
+                      'kd_wbc': np.array([1., 1., 1.]*4),#np.array([1., 1., 1.]*4),
+                      'ki_wbc': np.array([0., 0., 0.]*4),#np.array([0.3, 0.3, 0.3]*4),
                       # virtual impedance wrench control
                       'kp_lin': np.array([800, 500., 900.]),  # x y z
                       'kd_lin': np.array([100, 100., 100.]),
@@ -97,9 +97,9 @@ robot_params['go1'] ={'dt': 0.002,
                       'kd_real': np.array([.2, .2, .2]*4),
                       'ki_real': np.array([0.5, 0.5, 0.5]*4),
                       # joint pid + wbc (optional)
-                      'kp_wbc_real': np.array([25., 25.,25.]*4),#np.array([10., 10., 10.]*4),
-                      'kd_wbc_real': np.array([.2, .2, .2]*4),#np.array([.1, .1, .1]*4),
-                      'ki_wbc_real': np.array([0.4, 0.4, 0.4]*4),#np.array([0.05, 0.05, 0.05]*4),
+                      'kp_wbc_real': np.array([10., 10., 10.]*4),        # 25
+                      'kd_wbc_real': np.array([.1, .1, .1]*4),           # .1
+                      'ki_wbc_real': np.array([0.05, 0.05, 0.05]*4),     #.04
                       # virtual impedance wrench control
                       # 'kp_lin_real': np.array([300, 300., 300.]), # x y z
                       # 'kd_lin_real': np.array([30., 30., 30.]),
