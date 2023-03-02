@@ -38,6 +38,8 @@ class StarbotController(BaseController):
         self.prismatic_joints = np.array([8, 9, 10,11])
         self.wheel_joints = np.array([16, 17, 18, 19])
 
+        self.wheels_position = np.zeros((4,3))
+
     def initVars(self):
         super().initVars()
         ## add your variables to initialize here
@@ -105,6 +107,8 @@ class StarbotController(BaseController):
             self.J[leg] = self.robot.frameJacobian(neutral_fb_jointstate, self.robot.model.getFrameId(ee_frames[leg]),
                                                    pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, leg_joints]
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
+
+            self.wheels_position[leg] = self.robot.framePlacement(neutral_fb_jointstate, self.robot.model.getFrameId(ee_frames[leg])).translation
 
         # Pinocchio Update the joint and frame placements
         gen_velocities = np.hstack((b_X_w.dot(self.baseTwistW), self.mapToPinocchio(self.qd)))
@@ -204,6 +208,10 @@ class StarbotController(BaseController):
             tau_leg [4] = 0.0
             self.setLegJointTorques(leg, tau_leg, pin_gravity_torques)
         return self.mapFromPinocchio(pin_gravity_torques)
+
+# return skew symmetric matrix of vector x
+def skew(x):
+    return np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
 
 # function to generate trajectories given start position, final position, motion time and actual time
 def quinitic_trajectory(q0, qf, tf, time):
@@ -502,7 +510,7 @@ def carTostar_state(p, joints, prev_state, carTostar_motion_time, act_time, whee
 
     return joints, q_des
 
-    # find euler angles to align to pipe according to ros convention correspondent to perform a rotation about X followed by a one about Z
+# find euler angles to align to pipe according to ros convention correspondent to perform a rotation about X followed by a one about Z
 def alignToPipe(roll, yaw):
     c_roll = np.cos(roll)
     s_roll = np.sin(roll)
@@ -569,9 +577,19 @@ def talker(p):
 
     ros.sleep(2.)
     print("State 0: init configuration")
-    p.freezeBase(True, basePoseW=np.hstack(( np.array([0, 4., 0.802]), alignToPipe(1.833 ,0.7854) )))
-    w_R_d = p.math_utils.eul2Rot(np.array([0.15, 0., 0.]))
+    p.freezeBase(True, basePoseW=np.hstack((np.array([0, 4., 0.802]), alignToPipe(1.833, 0.7854))))
+    w_R_d = p.math_utils.eul2Rot(alignToPipe(1.833, 0.7854))
+
     delta_sing = np.array([1, -1, -1, 1])
+    S_a = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 1]])
+    n_p = p.math_utils.eul2Rot(np.array([0.2618, 0, 0])).dot(np.array([0, 1, 0]))
+    print(n_p)
+    K_p = 60
+    base_velocity = 1
+    J_w = np.array([[delta_sing[0]/0.07, 0, 0, 0],
+                              [0, delta_sing[1]/0.07, 0, 0],
+                              [0, 0, delta_sing[2]/0.07, 0],
+                              [0, 0, 0, delta_sing[3]/0.07]])
 
     while not ros.is_shutdown():
         act_time = p.time-start_time_simulation
@@ -605,14 +623,14 @@ def talker(p):
                 print("starting")
                 # approach with force (controller)
                 #TODO activate prismatic
-                #p.tau_ffwd[p.prismatic_joints] = 50
-                #p.pid.setPDjoint(p.prismatic_joints, 0, 0, 0)
+                p.tau_ffwd[p.prismatic_joints] = 50
+                p.pid.setPDjoint(p.prismatic_joints, 0, 0, 0)
 
                 # this restores gravity (only when everything works)
                 #p.freezeBase(False)
         if state_flag == 2:
             # go forward + orientation control + pre_wheel controller
-            p.q_des[p.wheel_joints] += delta_sing*0.01
+            #p.q_des[p.wheel_joints] += delta_sing*0.01
             # base orientation
             w_R_a = p.math_utils.eul2Rot(p.euler)
 
@@ -622,14 +640,28 @@ def talker(p):
             arg = (a_R_d[0,0]+ a_R_d[1,1]+ a_R_d[2,2]-1)/2
             delta_theta = np.arccos(arg)
             # compute the axis (deal with singularity)
-            if delta_theta == 0.0:
-                e_error_o = np.zeros(3)
-            else:
-                r_hat = 1/(2*np.sin(delta_theta))*np.array([a_R_d[2,1]-a_R_d[1,2], a_R_d[0,2]-a_R_d[2,0], a_R_d[1,0]-a_R_d[0,1]])
-                # compute the orientation error
-                e_error_o = delta_theta * r_hat
+            # if delta_theta == 0.0:
+            #     e_error_o = np.zeros(3)
+            # else:
+            r_hat = 1/(2*np.sin(delta_theta))*np.array([a_R_d[2,1]-a_R_d[1,2], a_R_d[0,2]-a_R_d[2,0], a_R_d[1,0]-a_R_d[0,1]])
+            # compute the orientation error
+            e_error_o = delta_theta * r_hat
             # we need to map it in the error back into world frame
-            w_error_o = w_R_a.dot(e_error_o)
+            w_error_o = w_R_a.dot(S_a.dot(e_error_o))
+
+            #computation of J_b matrix
+            J_b = np.array([(-n_p.T.dot(skew(p.mapBaseToWorld(p.wheels_position[0])))),
+                            (-n_p.T.dot(skew(p.mapBaseToWorld(p.wheels_position[1])))),
+                            (-n_p.T.dot(skew(p.mapBaseToWorld(p.wheels_position[2])))),
+                            (-n_p.T.dot(skew(p.mapBaseToWorld(p.wheels_position[3]))))])
+
+            W_w = J_w.dot(np.array([base_velocity, base_velocity, base_velocity, base_velocity])) - J_w.dot((J_b*K_p).dot(w_error_o))
+
+            print(W_w)
+
+            # Forward Euler integration
+            p.q_des[p.wheel_joints] += W_w*conf.robot_params[p.robot_name]['dt']
+            print(p.q_des[p.wheel_joints])
 
 
 
