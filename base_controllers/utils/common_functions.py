@@ -202,19 +202,11 @@ def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None
     fig = plt.figure(figure_id)                
     fig.suptitle(name, fontsize=20)
 
-    labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift", "3 - Elbow", "4 - Wrist 1", "5 - Wrist 2", "6 - Wrist 3"]
-    labels_hyq = ["LF_HAA", "LF_HFE","LF_KFE","RF_HAA", "RF_HFE","RF_KFE","LH_HAA", "LH_HFE","LH_KFE","RH_HAA", "RH_HFE","RH_KFE"]
-    labels_flywheel2 = ["LF_HAA", "LF_HFE", "LF_KFE", "RF_HAA", "RF_HFE", "RF_KFE", "LH_HAA", "LH_HFE", "LH_KFE",
-                        "RH_HAA", "RH_HFE", "RH_KFE", "left_wheel", "right_wheel"]
-    labels_flywheel4 = ["LF_HAA", "LF_HFE", "LF_KFE", "RF_HAA", "RF_HFE", "RF_KFE", "LH_HAA", "LH_HFE", "LH_KFE",
-                        "RH_HAA", "RH_HFE", "RH_KFE",
-                        "back_wheel", "front_wheel", "left_wheel", "right_wheel"]
-
     if joint_names is None:
         if njoints <= 6:
             labels = labels_ur
         if njoints == 12:
-            labels = labels_hyq
+            labels = labels_quadruped
         if njoints == 14:
             labels = labels_flywheel2
         if njoints == 16:
