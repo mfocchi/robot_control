@@ -40,7 +40,7 @@ from base_controllers.utils.pidManager import PidManager
 from base_controllers.utils.math_tools import *
 from numpy import nan
 import matplotlib.pyplot as plt
-from base_controllers.utils.common_functions import plotCoM, plotJoint
+from base_controllers.utils.common_functions import *
 import pinocchio as pin
 from base_controllers.utils.common_functions import getRobotModel
 from ros_impedance_controller.msg import EffortPid
@@ -684,8 +684,10 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
         if conf.plotting:
-            plotJoint('position',0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log, p.joint_names)
-            plotCoM('position', 1, p.time_log, None, p.basePoseW_log, None, p.baseTwistW_log, None, None)
+            plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
+                      start=0, end=-1)
+            plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
+                      title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
 
 

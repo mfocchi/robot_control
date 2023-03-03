@@ -1159,12 +1159,11 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-
-    import matplotlib
-
-    matplotlib.use('TkAgg')
+        
     from base_controllers.utils.common_functions import *
 
-    plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,)
-    plotJoint('torque', 1, p.time_log.flatten(), tau_log=p.tau_log, tau_des_log=p.tau_ffwd_log)
-    plotFeet(2, p.time_log, act_feet=p.W_contacts_log)
+    if conf.plotting:
+        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
+                  start=0, end=-1)
+        plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
+                  title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
