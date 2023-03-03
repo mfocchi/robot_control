@@ -269,8 +269,8 @@ class Controller(BaseController):
         except KeyError:
             self.force_th = 0.
 
-        self.W_vel_contact_des = self.u.full_listOfArrays(4, 3)
-        self.B_vel_contact_des = self.u.full_listOfArrays(4, 3)
+        self.W_vel_contacts_des = self.u.full_listOfArrays(4, 3)
+        self.B_vel_contacts_des = self.u.full_listOfArrays(4, 3)
 
         # imu
         self.baseLinAccB = np.full(3, np.nan)
@@ -313,8 +313,8 @@ class Controller(BaseController):
         self.B_contacts_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.B_contacts_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
-        self.B_vel_contact_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
-        self.W_vel_contact_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.B_vel_contacts_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.W_vel_contacts_des_log = np.full((3 * self.robot.nee, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.contact_state_log = np.empty((self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
@@ -383,8 +383,8 @@ class Controller(BaseController):
             self.W_contacts_log[start:end, self.log_counter] = self.W_contacts[leg]
             self.W_contacts_des_log[start:end, self.log_counter] = self.W_contacts_des[leg]
 
-            self.B_vel_contact_des_log[start:end, self.log_counter] = self.B_vel_contact_des[leg]
-            self.W_vel_contact_des_log[start:end, self.log_counter] = self.W_vel_contact_des[leg]
+            self.B_vel_contacts_des_log[start:end, self.log_counter] = self.B_vel_contacts_des[leg]
+            self.W_vel_contacts_des_log[start:end, self.log_counter] = self.W_vel_contacts_des[leg]
 
         self.baseLinTwistImuW_log[:, self.log_counter] = self.imu_utils.baseLinTwistImuW
         self.zmp_log[:, self.log_counter] = self.zmp
@@ -651,10 +651,10 @@ class Controller(BaseController):
         # feet ref in B
         for leg in range(4):
             self.B_contacts_des[leg] = b_R_w_des @ (self.W_contacts_des[leg] - self.u.linPart(self.basePoseW_des))
-            self.B_vel_contact_des[leg] = b_R_w_des @ (
+            self.B_vel_contacts_des[leg] = b_R_w_des @ (
                     omega_skew.T @ (self.W_contacts_des[leg] - self.u.linPart(self.basePoseW_des))
                     - self.u.linPart(self.baseTwistW_des))
-            # self.B_vel_contact_des[leg] = 5 * (self.B_contacts_des[leg]-self.B_contacts[leg])
+            # self.B_vel_contacts_des[leg] = 5 * (self.B_contacts_des[leg]-self.B_contacts[leg])
 
     def Wbase2Joints_des(self):
         # before the first call, please set
@@ -682,11 +682,11 @@ class Controller(BaseController):
         elif self.log_counter % 4 == 2:
             for leg in range(4):
                 qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
-                                                 B_v_foot=self.B_vel_contact_des[leg],
+                                                 B_v_foot=self.B_vel_contacts_des[leg],
                                                  leg=self.leg_names[leg],
                                                  update=leg == 0)  # update Jacobians only with the first leg
 
-                # qd_leg_des = self.J_inv[leg] @ self.B_vel_contact_des[leg]
+                # qd_leg_des = self.J_inv[leg] @ self.B_vel_contacts_des[leg]
 
                 self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
         else:
