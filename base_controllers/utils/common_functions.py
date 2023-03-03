@@ -1098,4 +1098,54 @@ def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
     return fig, ax
 
     
+def plotWrenches(name, figure_id, time_log, wrench_fb_log=None, wrench_ffwd_log=None, wrench_g_log=None):
+    labels = ["FX", "FY", "FZ", "MX", "MY", "MZ"]
+    lin_unit = '[N]'
+    ang_unit = '[Nm]'
+    plot_var_des_log = None
+    if name=='feedback' or name=='fb':
+        plot_var_des_log = des_Wrench_fb_log
+    elif name=='feedforward' or name=='ffwd':
+        plot_var_des_log = des_Wrench_ffwd_log
+    elif name=='gravity' or name=='g':
+        plot_var_des_log = des_Wrench_g_log
 
+    # neet to transpose the matrix other wise it cannot be plot with numpy array
+    fig = plt.figure(figure_id)
+    fig.suptitle('Wrench ' + name, fontsize=20)
+    plt.subplot(3, 2, 1)
+    plt.ylabel(labels[0])
+    plt.plot(time_log, plot_var_des_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des, color='red')
+    plt.grid()
+
+    plt.subplot(3, 2, 3)
+    plt.ylabel(labels[1])
+    plt.plot(time_log, plot_var_des_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des, color='red')
+    plt.grid()
+
+    plt.subplot(3, 2, 5)
+    plt.ylabel(labels[2])
+    plt.xlabel("Time [s]")
+    plt.plot(time_log, plot_var_des_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des, color='red')
+    plt.grid()
+
+    plt.subplot(3, 2, 2)
+    plt.ylabel(labels[3] )
+    plt.plot(time_log, plot_var_des_log[3, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des, color='red')
+    plt.grid()
+
+    plt.subplot(3, 2, 4)
+    plt.ylabel(labels[4] )
+    plt.plot(time_log, plot_var_des_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des, color='red')
+    plt.grid()
+
+    plt.subplot(3, 2, 6)
+    plt.ylabel(labels[5] )
+    plt.xlabel("Time [s]")
+    plt.plot(time_log, plot_var_des_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des, color='red')
+    plt.grid()
+
+    fig.align_ylabels(fig.axes[:3])
+    fig.align_ylabels(fig.axes[3:])
+
+    return fig
