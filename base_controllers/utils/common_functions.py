@@ -176,28 +176,43 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
     plot_var_des_log = None
     if name == 'position':
         unit = '[rad]'
-        plot_var_log = q_log
+        if   (q_log is not None):
+            plot_var_log = q_log
+        else:
+            plot_var_log = None
         if   (q_des_log is not None):
             plot_var_des_log = q_des_log
         else:
             plot_var_des_log = None
+
     elif name == 'velocity':
         unit = '[rad/s]'
-        plot_var_log = qd_log
+        if   (qd_log is not None):
+            plot_var_log = qd_log
+        else:
+            plot_var_log = None
         if   (qd_des_log is not None):
             plot_var_des_log  = qd_des_log
         else:
             plot_var_des_log = None
+
     elif name == 'acceleration':
         unit = '[rad/s^2]'
-        plot_var_log = qdd_log
+        if   (qdd_log is not None):
+            plot_var_log = qdd_log
+        else:
+            plot_var_log = None
         if   (qdd_des_log is not None):
             plot_var_des_log  = qdd_des_log
         else:
             plot_var_des_log = None
+
     elif name == 'torque':
         unit = '[Nm]'
-        plot_var_log = tau_log
+        if   (tau_log is not None):
+            plot_var_log = tau_log
+        else:
+            plot_var_log = None
         if   (tau_des_log is not None):
             plot_var_des_log  = tau_des_log
         else:
