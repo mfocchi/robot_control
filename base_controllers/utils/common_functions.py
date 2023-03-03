@@ -352,91 +352,116 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
     plt.plot(time_log, f_norm, lw=2, color='blue')
     plt.ylabel("norm of ee force")
     plt.grid()
-    
-def plotCoM(name,  figure_id, time_log, des_basePoseW=None, basePoseW=None, des_baseTwistW=None, baseTwistW=None, baseAccW=None, des_baseAccW=None,  wrenchW=None, title = None):
+
+def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc=None, Acc=None,
+              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
     plot_var_des_log = None
     if name == 'position':
-        labels = ["CoM X", "CoM Y", "CoM Z", "Roll", "Pitch", "Yaw"]
+        labels = ["x", "y", "z", "R", "P", "Y"]
         lin_unit = '[m]'
         ang_unit = '[rad]'
-        plot_var_log = basePoseW
-        if   (des_basePoseW is not None):
-            plot_var_des_log = des_basePoseW
+        if Pose_log is not None:
+            plot_var_log = Pose_log
+        if (des_Pose_log is not None):
+            plot_var_des_log = des_Pose_log
     elif name == 'velocity':
-        labels = ["CoM X", "CoM Y", "CoM Z", "Roll", "Pitch", "Yaw"]
+        labels = ["x", "y", "z", "R", "P", "Y"]
         lin_unit = '[m/s]'
         ang_unit = '[rad/s]'
-        plot_var_log = baseTwistW
-        if   (des_baseTwistW is not None):
-            plot_var_des_log  = des_baseTwistW
+        if Twist_log is not None:
+            plot_var_log = Twist_log
+        if   (des_Twist_log is not None):
+            plot_var_des_log  = des_Twist_log
     elif name == 'acceleration':
-        labels = ["CoM X", "CoM Y", "CoM Z", "Roll", "Pitch", "Yaw"]
+        labels = ["x", "y", "z", "R", "P", "Y"]
         lin_unit = '[m/s^2]'
         ang_unit = '[rad/s^2]'
-        plot_var_log = baseAccW
-        if   (des_baseAccW is not None):
-            plot_var_des_log  = des_baseAccW    
+        if Acc is not None:
+            plot_var_log = Acc
+        if   (des_Acc is not None):
+            plot_var_des_log  = des_Acc
     elif name == 'wrench':
         labels = ["FX", "FY", "FZ", "MX", "MY", "MX"]
         lin_unit = '[N]'
         ang_unit = '[Nm]'
-        plot_var_log  = wrenchW
+        if Wrench_log is not None:
+            plot_var_log = Wrench_log
+        if (des_Wrench_log is not None):
+            plot_var_des_log = des_Wrench_log
     else:
        print("wrong choice")
 
     if title is None:
         title = name
+    else:
+        title = title + ' ' + name
+    if frame is not None:
+        title+= ' ' + frame
 
-    # neet to transpose the matrix other wise it cannot be plot with numpy array
+    dt = time_log[1] - time_log[0]
+    if type(start) == str:
+        start = int(float(start)/dt + 1)
+    if type(end) == str:
+        end = int(float(end)/dt + 1)
+
+    if len(plt.get_fignums()) == 0:
+        figure_id = 1
+    else:
+        figure_id = max(plt.get_fignums()) + 1
     fig = plt.figure(figure_id)
     fig.suptitle(title, fontsize=20)
-    plt.subplot(3, 2, 1)
+    ax = subplot(3, 2, 1, sharex=False, sharey=False, ax_to_share=None)
     plt.ylabel(labels[0] + " "+lin_unit)
     if (plot_var_des_log is not None):
-        plt.plot(time_log, plot_var_des_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
-                 color='red')
-    plt.plot(time_log, plot_var_log[0, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
+        plt.plot(time_log[start:end], plot_var_des_log[0, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_des, color='red')
+    if plot_var_log is not None:
+        plt.plot(time_log[start:end], plot_var_log[0, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     plt.grid()
 
-    plt.subplot(3, 2, 3)
+    subplot(3, 2, 3, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[1] + " "+lin_unit)
     if (plot_var_des_log is not None):
-       plt.plot(time_log, plot_var_des_log[1, :], linestyle='-', lw=lw_des, color='red')
-    plt.plot(time_log, plot_var_log[1, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+       plt.plot(time_log[start:end], plot_var_des_log[1, start:end], linestyle='-', lw=lw_des, color='red')
+    if plot_var_log is not None:
+        plt.plot(time_log[start:end], plot_var_log[1, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
 
-    plt.subplot(3, 2, 5)
+    subplot(3, 2, 5, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[2] + " "+lin_unit)
     plt.xlabel("Time [s]")
     if (plot_var_des_log is not None):
-       plt.plot(time_log, plot_var_des_log[2, :], linestyle='-', lw=lw_des, color='red')
-    plt.plot(time_log, plot_var_log[2, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+       plt.plot(time_log[start:end], plot_var_des_log[2, start:end], linestyle='-', lw=lw_des, color='red')
+    if plot_var_log is not None:
+        plt.plot(time_log[start:end], plot_var_log[2, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
 
-    plt.subplot(3, 2, 2)
+    subplot(3, 2, 2, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[3] + " "+ang_unit)
     if (plot_var_des_log is not None):
-       plt.plot(time_log, plot_var_des_log[3, :], linestyle='-', lw=lw_des, color='red')
-    plt.plot(time_log, plot_var_log[3, :].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+       plt.plot(time_log[start:end], plot_var_des_log[3, start:end], linestyle='-', lw=lw_des, color='red')
+    if plot_var_log is not None:
+        plt.plot(time_log[start:end], plot_var_log[3, start:end].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
 
-    plt.subplot(3, 2, 4)
+    subplot(3, 2, 4, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[4] + " "+ang_unit)
     if (plot_var_des_log is not None):
-       plt.plot(time_log, plot_var_des_log[4, :], linestyle='-', lw=lw_des, color='red')
-    plt.plot(time_log, plot_var_log[4, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+       plt.plot(time_log[start:end], plot_var_des_log[4, start:end], linestyle='-', lw=lw_des, color='red')
+    if plot_var_log is not None:
+        plt.plot(time_log[start:end], plot_var_log[4, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
 
-    plt.subplot(3, 2, 6)
+    subplot(3, 2, 6, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[5] + " "+ang_unit)
     plt.xlabel("Time [s]")
     if (plot_var_des_log is not None):
-       plt.plot(time_log, plot_var_des_log[5, :], linestyle='-', lw=lw_des, color='red')
-    plt.plot(time_log, plot_var_log[5, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
+       plt.plot(time_log[start:end], plot_var_des_log[5, start:end], linestyle='-', lw=lw_des, color='red')
+    if plot_var_log is not None:
+        plt.plot(time_log[start:end], plot_var_log[5, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
 
