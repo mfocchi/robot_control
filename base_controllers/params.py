@@ -118,7 +118,7 @@ robot_params['go1'] ={'dt': 0.002,
                                       'rh_haa_joint',  'rh_hfe_joint', 'rh_kfe_joint'],
                       # ee params
                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
-                      'force_th': 10.,
+                      'force_th': 15.,
                       # simulation spawn
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,
