@@ -161,6 +161,18 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, ad
     return robot                    
 
 def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None):
+
+def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=None):
+    if sharex and sharey:
+        ax = plt.subplot(n_rows, n_cols, n_subplot, sharex=ax_to_share, sharey=ax_to_share)
+    if sharex and not sharey:
+        ax = plt.subplot(n_rows, n_cols, n_subplot, sharex=ax_to_share)
+    if not sharex and sharey:
+        ax = plt.subplot(n_rows, n_cols, n_subplot, sharey=ax_to_share)
+    if not sharex and not sharey:
+        ax = plt.subplot(n_rows, n_cols, n_subplot)
+    return ax
+
     plot_var_des_log = None
     if name == 'position':
         unit = '[rad]'
