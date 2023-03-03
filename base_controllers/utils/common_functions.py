@@ -160,7 +160,6 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, ad
     
     return robot                    
 
-def plotJoint(name, figure_id, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None):
 
 def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=None):
     if sharex and sharey:
@@ -173,6 +172,8 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
         ax = plt.subplot(n_rows, n_cols, n_subplot)
     return ax
 
+def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None,
+              sharex=True, sharey=True, start=0, end=-1):
     plot_var_des_log = None
     if name == 'position':
         unit = '[rad]'
@@ -219,13 +220,20 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
           plot_var_des_log = None                                                
     else:
        print(colored("plotJoint error: wrong input string", "red") )
-       return                                   
+       return
 
-    
+    dt = time_log[1] - time_log[0]
+    if type(start) == str:
+        start = max(0, int(float(start) / dt + 1))
+    if type(end) == str:
+        end = min(int(float(end) / dt + 1), time_log.shape[0])
 
     njoints = min(plot_var_log.shape)
 
-    #neet to transpose the matrix other wise it cannot be plot with numpy array    
+    if len(plt.get_fignums()) == 0:
+        figure_id = 1
+    else:
+        figure_id = max(plt.get_fignums())+1
     fig = plt.figure(figure_id)                
     fig.suptitle(name, fontsize=20)
 
@@ -241,27 +249,40 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
     else:
         labels = joint_names
 
+    if (njoints % 3 == 0): #divisible by 3
+        n_rows = int(njoints/ 3)
+        n_cols = 3
+    elif (njoints % 2 == 0): #divisible by 3
+        n_rows = int(njoints / 2)
+        n_cols = 2
+    else:  # put in a single columnn
+        n_rows = njoints
+        n_cols = 1
+
+
     for jidx in range(njoints):
         if (njoints % 3 == 0): #divisible by 3
-            plt.subplot(int(njoints / 3), 3, jidx + 1)
-            if jidx + 3 >= njoints:
+            if jidx == 0:
+                ax = subplot(n_rows, n_cols, jidx + 1)
+            else:
+                subplot(n_rows, n_cols, jidx + 1, sharex=sharex, sharey=sharey, ax_to_share=ax)
+
+            if jidx + n_cols >= njoints:
                 plt.xlabel("Time [s]")
-        elif (njoints % 2 == 0):  # divisible by 2
-            plt.subplot(int(njoints / 2), 2, jidx + 1)
-            if jidx + 2 >= njoints:
-                plt.xlabel("Time [s]")
-        else: # put in a single columnn
-            plt.subplot(njoints, 1, jidx + 1)
+
 
         plt.ylabel(labels[jidx] + ' '+ unit)
-        if name == 'torque' and tau_ffwd_log is not None:
-            plt.plot(time_log, tau_ffwd_log[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
-                     color='green')
+
         if   (plot_var_des_log is not None):
-             plt.plot(time_log, plot_var_des_log[jidx,:], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
-        plt.plot(time_log, plot_var_log[jidx,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
+             plt.plot(time_log[start:end], plot_var_des_log[jidx, start:end], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
+        if (plot_var_log is not None):
+            plt.plot(time_log, plot_var_log[jidx,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
+
+        if name == 'torque' and tau_ffwd_log is not None:
+            plt.plot(time_log[start:end], tau_ffwd_log[jidx, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
+                     color='green')
         if (q_adm is not None):
-            plt.plot(time_log, q_adm[jidx, :], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
+            plt.plot(time_log[start:end], q_adm[jidx, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
         plt.grid()
 
     if njoints == 12:
@@ -270,10 +291,8 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
         fig.align_ylabels(fig.axes[2:12:4])
 
     return fig
-                
-    
 
-                
+
 def plotEndeff(name, figure_id, time_log, plot_var_log, plot_var_des_log = None):
 
     fig = plt.figure(figure_id)
