@@ -8,7 +8,7 @@ class IMU_utils:
         self.dt = dt
         self.IMU_accelerometer_bias = np.zeros(3)
         self.IMU_accelerometer_bias_log = np.full((3, timeout), np.nan)
-        self.g0 = np.array([0., 0., 9.81])
+        self.g0 = np.array([0., 0., 9.806])
 
         # filters data
         self.alpha_accelerometer = 0.98
