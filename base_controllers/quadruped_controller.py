@@ -183,7 +183,7 @@ class Controller(BaseController):
 
         self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
         self.IK = InverseKinematics(self.robot)
-        self.leg_odom = LegOdometry(self.robot)
+        self.leg_odom = LegOdometry(self.robot, self.real_robot)
         self.legConfig = {}
         if 'solo' in self.robot_name:  # either solo or solo_fw
             self.legConfig['lf'] = ['HipDown', 'KneeInward']
@@ -795,14 +795,13 @@ class Controller(BaseController):
         self.ros_pub.publishVisual()
 
     def updateKinematics(self, update_legOdom=True):
-        self.basePoseW_legOdom, self.baseTwistW_legOdom = self.leg_odom.base_in_world(self.contact_state,
-                                                                             self.B_contacts,
-                                                                             self.b_R_w,
-                                                                             self.wJ,
-                                                                             self.u.angPart(self.baseTwistW),
-                                                                             self.qd,
-                                                                             self.real_robot,
-                                                                             update_legOdom)
+        self.basePoseW_legOdom, self.baseTwistW_legOdom = self.leg_odom.base_in_world(contact_state=self.contact_state,
+                                                                                      B_contacts=self.B_contacts,
+                                                                                      b_R_w=self.b_R_w,
+                                                                                      wJ=self.wJ,
+                                                                                      ang_vel=self.u.angPart(self.baseTwistW),
+                                                                                      qd=self.qd,
+                                                                                      update_legOdom=update_legOdom)
         self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
         super(Controller, self).updateKinematics()
 

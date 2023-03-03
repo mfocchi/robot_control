@@ -4,8 +4,10 @@ import time
 from base_controllers.utils.utils import Utils
 
 class LegOdometry:
-    def __init__(self, robot):
+    def __init__(self, robot, real_robot = False):
         self.robot = robot
+        self.real_robot = real_robot
+
         self.u = Utils()
 
         self.w_feet_pos_init = np.empty([3, len(self.robot.getEndEffectorsFrameId)]) * np.nan
@@ -81,9 +83,9 @@ class LegOdometry:
         return self.w_p_b_update, self.w_v_b_update
 
 
-    def base_in_world(self, contact_state,  B_contacts, b_R_w, wJ, ang_vel, qd, real_robot=False, update_legOdom=True):
+    def base_in_world(self, contact_state,  B_contacts, b_R_w, wJ, ang_vel, qd, update_legOdom=True):
         '''
-        same idea of the above, but faster
+        same idea of the above, but faster. to be used togeter with Controller in quadruped_controller.py
         '''
 
         if update_legOdom:
@@ -92,14 +94,14 @@ class LegOdometry:
                 if any(contact_state):
                     self.w_p_b_update[:] = 0.
                     self.w_v_b_update[:] = 0.
-                    if real_robot == False:
+                    if self.real_robot == False:
                         for k, value in enumerate(contact_state):
                             if value:
                                 nc+=1
                                 w_p_b_foot = self.w_feet_pos_init[:, k] - b_R_w@ B_contacts[k]
                                 w_v_b_foot = -pin.skew(ang_vel) @  b_R_w @ B_contacts[k] - wJ[k] @ self.u.getLegJointState(k, qd)
 
-                                self.w_p_b_update += w_p_b_foot + 0.02 # this are the foot radius
+                                self.w_p_b_update += w_p_b_foot
                                 self.w_v_b_update += w_v_b_foot
                     else:
                         for k, value in enumerate(contact_state):
@@ -108,7 +110,7 @@ class LegOdometry:
                             w_v_b_foot = -pin.skew(ang_vel) @ b_R_w @ B_contacts[k] - wJ[k] @ self.u.getLegJointState(k,
                                                                                                                       qd)
 
-                            self.w_p_b_update += w_p_b_foot
+                            self.w_p_b_update += w_p_b_foot  + 0.02 # this is the foot radius
                             self.w_v_b_update += w_v_b_foot
 
                     self.w_p_b = self.w_p_b_update/nc
