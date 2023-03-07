@@ -614,7 +614,7 @@ def talker(p):
 
             # check contacts
             for leg in range(4):
-                if p.contact_normal[leg].dot(p.getLegContactForce(leg, p.grForcesW)) >= conf.robot_params[p.robot_name]['force_th']:
+                if p.contact_normal[leg].dot(p.getLegContactForce(leg, p.grForcesW)) >= 200:
                    p.pipeContact[leg] = True
                 else:
                    p.pipeContact[leg] = False
@@ -763,8 +763,10 @@ def talker(p):
                                 "green")
             p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg] * p.getLegContactForce(leg, p.grForcesW_des / (6 * p.robot.robot_mass)),
                                 "blue")
-
-            p.ros_pub.add_marker(p.W_contacts[leg], radius=0.1)
+            if p.contact_state[leg]:
+                p.ros_pub.add_marker(p.W_contacts[leg], radius=0.1, color="green")
+            else:
+                p.ros_pub.add_marker(p.W_contacts[leg], radius=0.1, color="red")
             p.ros_pub.add_marker(p.pipeContact[leg]*p.W_contacts[leg], color="green", radius=0.1)
             if (p.use_ground_truth_contacts):
                 p.ros_pub.add_arrow(p.W_contacts[leg], p.getLegContactForce(leg, p.grForcesW_gt / (6 * p.robot.robot_mass)),
