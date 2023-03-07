@@ -184,6 +184,7 @@ class StarbotController(BaseController):
 
         # clean the matrix
         self.NEMatrix[:, :] = 0.
+        self.grForcesW_des = np.zeros(12)
         # wrench = NEMatrix @ grfs
         for leg in range(len(ee_frames)):
             if self.contact_state[leg]:
@@ -610,11 +611,12 @@ def talker(p):
     p.freezeBase(True, basePoseW=np.hstack((np.array([0, 4., 0.802]), alignToPipe(1.833, 0.7854))))
     w_R_d = p.math_utils.eul2Rot(alignToPipe(1.833, 0.7854))
 
-    delta_sing = np.array([1, -1, -1, 1])
+    delta_sing = np.array([1, -1, -1, 1]) # -1 it means that a positive rotation of the wheel contributes negatively to the base forward speed (along -Z axis)
     S_a = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 1]])
     n_p = p.math_utils.eul2Rot(np.array([0.2618, 0, 0])).dot(np.array([0, 1, 0]))
     print(n_p)
-    K_p = 60
+    K_p = 100
+    K_d = 25
     base_velocity = 1
     J_w = np.array([[delta_sing[0]/0.07, 0, 0, 0],
                               [0, delta_sing[1]/0.07, 0, 0],
@@ -652,12 +654,14 @@ def talker(p):
                 state_flag = 2
                 print("starting")
                 # approach with force (controller)
-                #TODO activate prismatic
-                p.tau_ffwd[p.prismatic_joints] = 50
+                #TODO fix this
+                # p.tau_ffwd = p.computeGravityTorques(['lh_wheel', 'lh_wheel'])
+                # p.tau_ffwd[p.prismatic_joints] += 100
+                p.tau_ffwd[p.prismatic_joints] += 100
                 p.pid.setPDjoint(p.prismatic_joints, 0, 0, 0)
 
                 # this restores gravity (only when everything works)
-                #p.freezeBase(False)
+                p.freezeBase(False)
         if state_flag == 2:
             # go forward + orientation control + pre_wheel controller
             #p.q_des[p.wheel_joints] += delta_sing*0.01
@@ -685,13 +689,14 @@ def talker(p):
                             (-n_p.T.dot(skew(p.mapBaseToWorld(p.wheels_position[2])))),
                             (-n_p.T.dot(skew(p.mapBaseToWorld(p.wheels_position[3]))))])
 
-            W_w = J_w.dot(np.array([base_velocity, base_velocity, base_velocity, base_velocity])) - J_w.dot((J_b*K_p).dot(w_error_o))
+            omega_fbk  = K_p*w_error_o - K_d*p.u.angPart(p.baseTwistW)
+            W_w = J_w.dot(np.array([base_velocity, base_velocity, base_velocity, base_velocity])) + J_w.dot(J_b.dot(omega_fbk))
 
-            print(W_w)
+            #print(W_w)
 
             # Forward Euler integration
             p.q_des[p.wheel_joints] += W_w*conf.robot_params[p.robot_name]['dt']
-            print(p.q_des[p.wheel_joints])
+            #print(p.q_des[p.wheel_joints])
 
 
 
