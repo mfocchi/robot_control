@@ -18,6 +18,9 @@ from base_controllers.utils.common_functions import plotCoM, plotJoint
 import pinocchio as pin
 import  params as conf
 import numpy as np
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.srv import SetModelStateRequest
+from gazebo_msgs.msg import ModelState
 from base_controllers.utils.math_tools import cross_mx
 robotName = "starbot"
 
@@ -208,6 +211,33 @@ class StarbotController(BaseController):
             tau_leg [4] = 0.0
             self.setLegJointTorques(leg, tau_leg, pin_gravity_torques)
         return self.mapFromPinocchio(pin_gravity_torques)
+
+    def freezeBase(self, flag, basePoseW=None, baseTwistW=None):
+
+        if flag:
+            self.setGravity(0)
+
+            # create the message
+            req_reset_world = SetModelStateRequest()
+            # create model state
+            model_state = ModelState()
+            model_state.model_name = self.robot_name
+
+            model_state.pose.position.x = self.u.linPart(basePoseW)[0]
+            model_state.pose.position.y = self.u.linPart(basePoseW)[1]
+            model_state.pose.position.z = self.u.linPart(basePoseW)[2]
+            quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.u.angPart(basePoseW)))
+            model_state.pose.orientation.x = quaternion.x
+            model_state.pose.orientation.y = quaternion.y
+            model_state.pose.orientation.z = quaternion.z
+            model_state.pose.orientation.w = quaternion.w
+            req_reset_world.model_state = model_state
+            # send request and get response (in this case none)
+            self.reset_world(req_reset_world)
+
+        else:
+            self.setGravity(-9.81)
+
 
 # return skew symmetric matrix of vector x
 def skew(x):
