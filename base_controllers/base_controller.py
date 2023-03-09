@@ -520,8 +520,10 @@ class BaseController(threading.Thread):
             print(colored("finished startup -- starting controller", "red"))
 
     def initVars(self):
-        self.comPoseW = np.zeros(6)
+        self.basePoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
+        self.comPoseW = np.zeros(6)
+        self.comTwistsW = np.zeros(6)
         self.stance_legs = np.array([True, True, True, True])
         self.centroidalInertiaB = np.eye(3)
         self.compositeRobotInertiaB = np.eye(3)
@@ -542,7 +544,7 @@ class BaseController(threading.Thread):
         self.grForcesW = np.zeros(self.robot.na)
         self.grForcesLocal_gt = np.zeros(self.robot.na)
         self.grForcesW_gt = np.zeros(self.robot.na)
-        self.basePoseW = np.zeros(6)
+
         self.J = self.u.listOfArrays(4, np.zeros((3,3)))
         self.wJ = self.u.listOfArrays(4, np.zeros((3,3)))
         self.J_inv = self.u.listOfArrays(4, np.zeros((3,3)))
@@ -558,6 +560,8 @@ class BaseController(threading.Thread):
         #log vars
         self.basePoseW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.baseTwistW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.comPoseW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.comTwistW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.q_des_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)    
         self.q_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)   
         self.qd_des_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)    
@@ -686,7 +690,7 @@ if __name__ == '__main__':
         if conf.plotting:
             plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
                       start=0, end=-1)
-            plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
+            plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
                       title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
 

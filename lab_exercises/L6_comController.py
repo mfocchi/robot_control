@@ -18,7 +18,7 @@ import copy
 
 # L5 Controller specific
 from base_controllers.components.controlRoutines import projectionBasedController, QPController
-from base_controllers.utils.common_functions import plotCoM, plotGRFs, plotConstraitViolation, plotJoint
+from base_controllers.utils.common_functions import plotFrame, plotContacts, plotConstraitViolation, plotJoint
 from scipy.linalg import block_diag
 from base_controllers.utils.math_tools import motionVectorTransform
 from base_controllers.utils.common_functions import State
@@ -225,15 +225,21 @@ if __name__ == '__main__':
         p.deregister_node()
         if conf.plotting:
             if not p.params.isCoMControlled:
-                plotCoM('position', 0, p.time_log, p.des_PoseW_log, p.basePoseW_log, title='base lin/ang position')
+                plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_log, Pose_log=p.comPoseW_log,
+                          title='base lin/ang position', frame='W', sharex=True, sharey=False, start=0, end=-1)
+
             else:
-                plotCoM('position', 0, p.time_log, p.des_PoseW_log, p.comPoseW_log, title='com lin/ang position')
+                plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
+                      title='com lin/ang position', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
-            plotCoM('acceleration', 4, p.time_log, baseAccW=p.des_AccW_log, title='des accel')
-            plotCoM('velocity', 5, p.time_log, baseTwistW=p.des_TwistW_log, title='des twist')
-            plotCoM('wrench', 2, p.time_log, wrenchW=p.Wffwd_log)
+            plotFrame('acceleration', time_log=p.time_log, des_Acc_log=p.des_AccW_log,
+                      title='acceleration', frame='W', sharex=True, sharey=False, start=0, end=-1)
+            plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.des_TwistW_log,
+                      title='velocity', frame='W', sharex=True, sharey=False, start=0, end=-1)
+            plotFrame('wrench', time_log=p.time_log, des_Wrench_log=p.Wffwd_log,
+                      title='wrench', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
-            # plotCoM('wrench', 1, p.time_log, wrenchW = p.Wffwd_log  + p.Wfbk_log + p.Wg_log)
-            # plotGRFs(2, p.time_log, p.des_forcesW_log, p.grForcesW_log)
+            plotContacts('GRFs', time_log=p.time_log, des_Forces_log=p.grForcesW_des_log, Forces_log=p.grForcesW_log, frame='W',
+                         sharex=True, sharey=False, start=0, end=-1)
             # plotConstraitViolation(3,p.constr_viol_log)
             # plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)

@@ -14,7 +14,7 @@ from utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import matplotlib.pyplot as plt
 from base_controller import BaseController
-from base_controllers.utils.common_functions import plotCoM, plotJoint
+from base_controllers.utils.common_functions import plotFrame, plotJoint
 import pinocchio as pin
 import  params as conf
 import numpy as np
@@ -397,5 +397,6 @@ if __name__ == '__main__':
         if conf.plotting:
             plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log,
                       p.tau_ffwd_log, joint_names=p.joint_names)
-            plotCoM('position', 1, p.time_log, basePoseW=p.basePoseW_log, title='base lin/ang position')
+            plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_log, Pose_log=p.comPoseW_log,
+                      title='base lin/ang position', frame='W', sharex=True, sharey=False, start=0, end=-1)
 

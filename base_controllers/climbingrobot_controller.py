@@ -12,7 +12,7 @@ import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import matplotlib.pyplot as plt
 from numpy import nan
-from utils.common_functions import plotJoint, plotCoMLinear
+from utils.common_functions import plotJoint, plotFrameLinear
 from termcolor import colored
 import os
 from rospy import Time
@@ -255,8 +255,8 @@ class ClimbingrobotController(BaseControllerFixed):
     def plotStuff(self):
         if p.numberOfJumps < 2: # do plots only for one jump
             print("PLOTTING")
-            # plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-            # plotCoMLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
+            # plotFrameLinear('com position', 1, p.time_log, None, p.com_log)
+            # plotFrameLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
             traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame
             time_gazebo = p.time_log - p.start_logging
             plotJoint('position', 0, time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])

@@ -21,7 +21,7 @@ from gazebo_msgs.msg import ContactsState
 import roslaunch
 import os
 from termcolor import colored
-from base_controllers.utils.common_functions import plotJoint, plotCoMLinear
+from base_controllers.utils.common_functions import plotJoint, plotFrameLinear
 from numpy import nan
 import matplotlib.pyplot as plt
 
@@ -927,8 +927,8 @@ if __name__ == '__main__':
     finally:
         if conf.plotting:
             print("PLOTTING")
-            plotCoMLinear('com position', 1, p.time_log, None, p.com_log)
-            # plotCoMLinear('contact force', 2, p.time_log,
+            plotFrameLinear('com position', 1, p.time_log, None, p.com_log)
+            # plotFrameLinear('contact force', 2, p.time_log,
             #               None, p.contactForceW_log)
             plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
                         joint_names=conf.robot_params[p.robot_name]['joint_names'])

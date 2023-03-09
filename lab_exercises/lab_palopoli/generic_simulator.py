@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import rospkg
 from base_controllers.base_controller import BaseController
 from base_controllers.base_controller_fixed import BaseControllerFixed
-from base_controllers.utils.common_functions import plotCoM, plotJoint
+from base_controllers.utils.common_functions import plotFrame, plotJoint
 
 import params as conf
 robotName = "myrobot" # needs to inherit BaseController

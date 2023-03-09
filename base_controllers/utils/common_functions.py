@@ -35,12 +35,13 @@ marker_size= 0
 
 u = Utils()
 
-class Twist:
 # globals
 labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift", "3 - Elbow", "4 - Wrist 1", "5 - Wrist 2", "6 - Wrist 3"]
 labels_quadruped = ["LF_HAA", "LF_HFE","LF_KFE","LH_HAA", "LH_HFE","LH_KFE","RF_HAA", "RF_HFE","RF_KFE","RH_HAA", "RH_HFE","RH_KFE"]
 labels_flywheel2 = labels_quadruped.append(["left_wheel", "right_wheel"])
 labels_flywheel4 = labels_quadruped.append(["back_wheel", "front_wheel", "left_wheel", "right_wheel"])
+
+class Twist:
     linear = np.empty((3))*np.nan
     angular = np.empty((3))*np.nan
     def set(self, value):
@@ -355,7 +356,7 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
     plt.ylabel("norm of ee force")
     plt.grid()
 
-def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc=None, Acc=None,
+def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc_log=None, Acc_log=None,
               des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
     plot_var_des_log = None
     if name == 'position':
@@ -378,10 +379,10 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
         labels = ["x", "y", "z", "R", "P", "Y"]
         lin_unit = '[m/s^2]'
         ang_unit = '[rad/s^2]'
-        if Acc is not None:
-            plot_var_log = Acc
-        if   (des_Acc is not None):
-            plot_var_des_log  = des_Acc
+        if Acc_log is not None:
+            plot_var_log = Acc_log
+        if   (des_Acc_log is not None):
+            plot_var_des_log  = des_Acc_log
     elif name == 'wrench':
         labels = ["FX", "FY", "FZ", "MX", "MY", "MX"]
         lin_unit = '[N]'
@@ -757,11 +758,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx,start:end],linestyle='-',lw=lw_des,color = 'red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6, 2, 3, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LF_y " + unit +"$", fontsize=10)
@@ -770,11 +771,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx+1, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6, 2, 5, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LF_z " + unit +"$", fontsize=10)
@@ -783,11 +784,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx+2, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx+2, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx+2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     idx = u.leg_map['RF']
     ax1 = subplot(6,2,2, sharex=sharex, sharey=sharey, ax_to_share=ax)
@@ -797,11 +798,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6,2,4, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RF_y " + unit +"$", fontsize=10)
@@ -810,11 +811,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx+1, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6,2,6, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RF_z " + unit +"$", fontsize=10)
@@ -823,11 +824,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx+2, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx+2, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx+2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     idx = u.leg_map['LH']
     ax1 = subplot(6,2,7, sharex=sharex, sharey=sharey, ax_to_share=ax)
@@ -837,11 +838,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6,2,9, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LH_y " + unit +"$", fontsize=10)
@@ -850,11 +851,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx+1, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6, 2, 11, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LH_z " + unit +"$", fontsize=10)
@@ -864,11 +865,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx + 2, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     idx = u.leg_map['RH']
     ax1 = subplot(6, 2, 8, sharex=sharex, sharey=sharey, ax_to_share=ax)
@@ -878,11 +879,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6, 2, 10, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RH_y " + unit +"$", fontsize=10)
@@ -891,11 +892,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx + 1, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx + 1, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx + 1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     ax1 = subplot(6, 2, 12, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RH_z " + unit +"$", fontsize=10)
@@ -905,11 +906,11 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if des_LinPose_log is not None:
         plt.plot(time_log[start:end], des_LinPose_log[idx + 2, start:end], linestyle='-', lw=lw_des, color='red')
     if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_forces[idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
+        plt.plot(time_log[start:end], gt_Forces_log[idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-    ax2.grid()
+        ax2.grid()
 
     axes = fig.axes
     for i in range(6):
