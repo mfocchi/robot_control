@@ -487,6 +487,28 @@ class Controller(BaseController):
         return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
 
+    def Hframe2World(self, des_pose, des_dpose=None, des_ddpose=None):
+        w_R_des_hf = pin.rpy.rpyToMatrix(0, 0, self.u.angPart(des_pose)[2])
+
+        des_poseW = np.empty(6)
+        des_poseW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = w_R_des_hf @ self.u.linPart(des_pose)
+        des_poseW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(des_pose)
+
+        if des_dpose is not None:
+            des_dposeW = np.empty(6)
+            des_dposeW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] =  w_R_des_hf @ self.u.linPart(des_dpose)
+            des_dposeW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(des_dpose)
+
+            if des_ddpose is not None:
+                des_ddposeW = np.empty(6)
+                des_ddposeW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = w_R_des_hf @ self.u.linPart(des_ddpose)
+                des_ddposeW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(des_ddpose)
+                return des_poseW, des_dposeW, des_ddposeW
+
+            return des_poseW, des_dposeW
+
+        return des_poseW
+
     def WBCgainsInWorld(self):
         # this function is equivalent to execute R.T @ K @ R, but faster
         w_R_hf = pin.rpy.rpyToMatrix(0, 0, self.u.angPart(self.basePoseW)[2])
