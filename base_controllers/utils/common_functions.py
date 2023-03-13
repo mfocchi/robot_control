@@ -750,176 +750,237 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     fig = plt.figure(figure_id)
     fig.suptitle(title, fontsize=20)
 
+    ##########
+    # LF leg #
+    ##########
+    # x
     idx = u.leg_map['LF']
     ax = subplot(6, 2, 1)
     plt.ylabel("$LF_x " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx,start:end],linestyle='-',lw=lw_act,color = 'blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx,start:end],linestyle='-',lw=lw_des,color = 'red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax.twinx()
-        plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax.plot(time_log[start:end], plot_var_des_log[3 * idx, start:end], linestyle='-', lw=lw_des, color='red')
+    if plot_var_log is not None:
+        ax.plot(time_log[start:end], plot_var_log[3 * idx, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax.plot(time_log[start:end], gt_Forces_log[3*idx, start:end], linestyle='-', lw=lw_act, color='green')
+    ax.grid()
 
+
+    # y
     ax1 = subplot(6, 2, 3, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LF_y " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx+1, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx+1, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
-        ax2 = ax.twinx()
-        plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2 = ax1.twinx()
+        ax2.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 1, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    # z
     ax1 = subplot(6, 2, 5, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LF_z " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx+2, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx+2, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx+2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
-        ax2 = ax.twinx()
+        ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
 
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 2, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
+
+    ##########
+    # RF leg #
+    ##########
+    # x
     idx = u.leg_map['RF']
     ax1 = subplot(6,2,2, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RF_x " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    # y
     ax1 = subplot(6,2,4, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RF_y " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx+1, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx+1, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 1, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    # z
     ax1 = subplot(6,2,6, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RF_z " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx+2, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx+2, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx+2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 2, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    ##########
+    # LH leg #
+    ##########
+    # x
     idx = u.leg_map['LH']
     ax1 = subplot(6,2,7, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LH_x " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3 * idx, start:end], linestyle='-', lw=lw_des, color='red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    # y
     ax1 = subplot(6,2,9, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LH_y " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx+1, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx+1, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx+1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 1, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    # z
     ax1 = subplot(6, 2, 11, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$LH_z " + unit +"$", fontsize=10)
     plt.xlabel("Time [s]")
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx + 2, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx + 2, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 2, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    ##########
+    # RH leg #
+    ##########
+    # x
     idx = u.leg_map['RH']
     ax1 = subplot(6, 2, 8, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RH_x " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    # y
     ax1 = subplot(6, 2, 10, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RH_y " + unit +"$", fontsize=10)
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx + 1, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx + 1, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx + 1, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 1, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 1, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
+
+    # z
     ax1 = subplot(6, 2, 12, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel("$RH_z " + unit +"$", fontsize=10)
     plt.xlabel("Time [s]")
-    if plot_var_log is not None:
-        plt.plot(time_log[start:end], plot_var_log[idx + 2, start:end], linestyle='-', lw=lw_act, color='blue')
-    if des_LinPose_log is not None:
-        plt.plot(time_log[start:end], des_LinPose_log[idx + 2, start:end], linestyle='-', lw=lw_des, color='red')
-    if name == 'GRFs' and gt_Forces_log is not None:
-        plt.plot(time_log[start:end], gt_Forces_log[idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
     if contact_states is not None:
         ax2 = ax1.twinx()
         plt.plot(time_log[start:end], contact_states[idx, start:end], linestyle='-', lw=2, color='black')
-        ax2.grid()
+        ax2.set_ylim([-1.5, 1.5])
+        ax2.set_yticks([0, 1])
+    if plot_var_des_log is not None:
+        ax1.plot(time_log[start:end], plot_var_des_log[3*idx + 2, start:end], linestyle='-', lw=lw_des, color = 'red')
+    if plot_var_log is not None:
+        ax1.plot(time_log[start:end], plot_var_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='blue')
+    if name == 'GRFs' and gt_Forces_log is not None:
+        ax1.plot(time_log[start:end], gt_Forces_log[3*idx + 2, start:end], linestyle='-', lw=lw_act, color='green')
+    ax1.grid()
 
-    axes = fig.axes
-    for i in range(6):
-        yticks = axes[i].get_yticks()
-        ymin = min(-0.01, min(yticks))
-        ymax = max(0.01, max(yticks))
-        axes[i].set_ylim([ymin, ymax])
-        yticks = axes[i].get_yticks()
-        axes[i].set_yticks(np.unique(np.around(yticks, 2)))
+    
+
+    # axes = fig.axes
+    # for i in range(6):
+    #     yticks = axes[i].get_yticks()
+    #     ymin = min(-0.01, min(yticks))
+    #     ymax = max(0.01, max(yticks))
+    #     axes[i].set_ylim([ymin, ymax])
+    #     yticks = axes[i].get_yticks()
+    #     axes[i].set_yticks(np.unique(np.around(yticks, 2)))
 
 
     fig.align_ylabels(fig.axes[0:12:4])
