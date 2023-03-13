@@ -525,6 +525,7 @@ class Controller(BaseController):
             self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.kp_ang @ w_err + \
                                                                        self.kd_ang @ ( Jomega @ (self.u.angPart(des_twist) - self.u.angPart(act_twist)))
 
+
             # FEED-FORWARD WRENCH
             if not (des_acc is None):
                 # ---> linear part
@@ -895,6 +896,8 @@ class Controller(BaseController):
 
         self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
 
+        # Going to fold config
+        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Going to fold configuration", "blue"))
         ref_timeout = int(self.imu_utils.timeout / 2)
         ref_counter = 0
         while ref_counter < ref_timeout:
@@ -948,11 +951,12 @@ class Controller(BaseController):
                             break
 
                     if not switch_cond:
+                        h_R_w = self.b_R_w @ pin.rpy.rpyToMatrix(0, 0, self.u.angPart(self.basePoseW)[2])
+
                         for leg in range(4):
                             # update feet task
                             self.B_contacts_des[leg][2] -= delta_z * self.dt
-
-                            q_des_leg, isFeasible = self.IK.ik_leg(self.b_R_w.T@ self.B_contacts_des[leg],
+                            q_des_leg, isFeasible = self.IK.ik_leg(h_R_w.T@ self.B_contacts_des[leg],
                                                                    self.leg_names[leg],
                                                                    self.legConfig[self.leg_names[leg]][0],
                                                                    self.legConfig[self.leg_names[leg]][1])
@@ -973,6 +977,12 @@ class Controller(BaseController):
 
                     else:
                         print(colored("[startupProcedure t: " + str(self.time[0]) + "s] appling gravity compensation", "blue"))
+                        self.basePoseW_des = self.basePoseW.copy()
+                        self.baseTwistW_des[:] = 0
+                        self.comPoseW_des = self.comPoseW.copy()
+                        self.comTwistW_des[:] = 0
+                        self.q_des = self.q.copy()
+                        self.qd_des[:] = 0
                         # base height
                         base_height = 0.
                         for leg in range(4):
@@ -995,45 +1005,26 @@ class Controller(BaseController):
                         HStarttime = self.time
                         # 5-th order polynomial
                         HPeriod = 3.0
-                        B_feet_pose_init = copy.deepcopy( self.B_contacts_des)
-                        B_feet_pose_fin = copy.deepcopy( self.B_contacts_des)
-                        pos = [None, None, None, None]
-                        vel = [None, None, None, None]
-                        for leg in range(4):
-                            B_feet_pose_fin[leg][2]=-self.robot_height
-                            pos[leg], vel[leg], acc = polynomialRef(B_feet_pose_init[leg][2], B_feet_pose_fin[leg][2],
-                                                                    0., 0.,
-                                                                    0., 0.,
-                                                                    HPeriod)
+                        final_comPose_des = self.comPoseW.copy()
+                        final_comPose_des[2] = self.robot_height+0.02
+                        pos, vel, acc = polynomialRef(self.comPoseW, final_comPose_des,
+                                                      np.zeros(6), np.zeros(6),
+                                                      np.zeros(6), np.zeros(6),
+                                                      HPeriod)
+                        self.W_contacts_des = self.W_contacts.copy()
                         state = 2
 
                 if state == 2:
-                    Htime = self.time-HStarttime
-                    if Htime < HPeriod:
-                        for leg in range(4):
-                            foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
-                            # 5-th order polynomial
-                            self.B_contacts_des[leg][2] = pos[leg](Htime)
-                            q_des_leg, isFeasible = self.IK.ik_leg(self.B_contacts_des[leg],
-                                                                   self.leg_names[leg],
-                                                                   self.legConfig[self.leg_names[leg]][0],
-                                                                   self.legConfig[self.leg_names[leg]][1])
-                            self.u.setLegJointState(leg, q_des_leg, self.q_des)
-
-
-                        for leg in range(4):
-                            B_feet_vel[leg][2] = vel[leg](Htime)
-                            foot_name = conf.robot_params[self.robot_name]['ee_frames'][leg]
-                            qd_leg_des = qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
-                                                               B_v_foot=B_feet_vel[leg],
-                                                               leg=self.leg_names[leg],
-                                                               update=leg == 0)
-                            self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
-
+                    if self.time - HStarttime < HPeriod:
+                        self.comPoseW_des = pos(self.time - HStarttime)
+                        self.comTwistW_des = vel(self.time - HStarttime)
+                        self.Wcom2Joints_des()
                         self.gravityCompensation()
 
                     else:
                         print(colored("[startupProcedure t: " + str(self.time[0]) + "s] desired height reached", "blue"))
+                        self.baseTwistW_des[:] = 0.
+                        self.comTwistW_des[:] = 0.
                         state = 3
                         WTime = self.time
 
@@ -1045,7 +1036,7 @@ class Controller(BaseController):
                     else:
                         # enter
                         # if any of the joint velocities is larger than 0.02 or
-                        # if the watchdog timer is not expired (1 sec)
+                        # if the watchdog timer is not expired (0.5 sec)
                         self.gravityCompensation()
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
