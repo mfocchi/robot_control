@@ -12,6 +12,14 @@ robot_params['hyq'] = {'dt': 0.004,
                         'kp': np.array([400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400]),
                         'kd': np.array([6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]),
                         'q_0':  np.array([-0.2, 0.7, -1.4,  -0.2, -0.7, 1.4, -0.2, 0.7, -1.4, -0.2, -0.7, 1.4]),
+                        'kp_wbc': np.array([15., 15., 15.]*4),#np.array([10., 10., 10.]*4),
+                        'kd_wbc': np.array([1., 1., 1.]*4),#np.array([1., 1., 1.]*4),
+                        'ki_wbc': np.array([0., 0., 0.]*4),#np.array([0.3, 0.3, 0.3]*4),
+                        # virtual impedance wrench control
+                        'kp_lin': np.array([2000., 2000., 2000.]),  # x y z
+                        'kd_lin': np.array([200., 200., 200.]),
+                        'kp_ang': np.array([1000., 1000., 1000.]),  # R P Y
+                        'kd_ang': np.array([100., 100., 100.]),
                         'joint_names': ['lf_haa_joint', 'lf_hfe_joint', 'lf_kfe_joint',
                                         'lh_haa_joint', 'lh_hfe_joint', 'lh_kfe_joint',
                                         'rf_haa_joint', 'rf_hfe_joint', 'rf_kfe_joint',
