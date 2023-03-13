@@ -17,7 +17,7 @@ ee_reference = np.array([-0.3, 0.5, -0.5])
 des_orient = np.array([ -1.9, -0.5, -0.1])
 
 # EXE L8-2.1: admittance control
-admittance_control = False
+admittance_control = True
 
 # EXE L8-2.5: obstacle avoidance
 obstacle_avoidance = False

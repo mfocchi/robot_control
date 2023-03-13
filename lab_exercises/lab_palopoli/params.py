@@ -27,9 +27,9 @@ robot_params['ur5'] ={'dt': 0.001,
                        'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
                        'ee_frame': 'tool0',
                        'control_mode': 'point', # 'trajectory','point'
-                       'real_robot': False,
+                       'real_robot': True,
                        'control_type': 'position', # 'position', 'torque'
-                       'gripper_sim': False, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
+                       'gripper_sim': True, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
                        'soft_gripper': False, # False: 3 finger rigid gripper, True: 2 finger soft gripper
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,

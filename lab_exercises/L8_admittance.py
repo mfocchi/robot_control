@@ -95,7 +95,7 @@ class LabAdmittanceController(BaseControllerFixed):
         print("Initialized L8 admittance  controller---------------------------------------------------------------")
 
     def startRealRobot(self):
-        os.system("killall rosmaster rviz gzserver gzclient")
+        os.system("killall  rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
 
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
@@ -111,10 +111,10 @@ class LabAdmittanceController(BaseControllerFixed):
         parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
 
         if (not rosgraph.is_master_online()) or ("/" + self.robot_name + "/ur_hardware_interface" not in rosnode.get_node_names()):
-            #print(colored('ERROR: You should first launch the ur driver!', 'red'))
-            #sys.exit()
-            print(colored('Launching the ur driver!', 'blue'))
-            parent.start()
+            print(colored('ERROR: You should first launch the ur driver!', 'red'))
+            sys.exit()
+            #print(colored('Launching the ur driver!', 'blue'))
+            #parent.start()
 
 
         # run rviz
@@ -126,7 +126,7 @@ class LabAdmittanceController(BaseControllerFixed):
         launch.start()
         process = launch.launch(node)
 
-        self.controller_manager.gripper_manager.resend_robot_program()
+
 
     def loadModelAndPublishers(self, xacro_path):
         super().loadModelAndPublishers(xacro_path)
@@ -178,8 +178,8 @@ class LabAdmittanceController(BaseControllerFixed):
         contactMomentTool0[0] = msg.wrench.torque.x
         contactMomentTool0[1] = msg.wrench.torque.y
         contactMomentTool0[2] = msg.wrench.torque.z
-        self.contactForceW = self.w_R_tool0.dot(contactForceTool0)
-        self.contactMomentW = self.w_R_tool0.dot(contactMomentTool0)
+        self.contactForceW = self.w_R_tool0_without_gripper.dot(contactForceTool0)
+        self.contactMomentW = self.w_R_tool0_without_gripper.dot(contactMomentTool0)
 
     def deregister_node(self):
         print( "deregistering nodes"     )
@@ -203,6 +203,7 @@ class LabAdmittanceController(BaseControllerFixed):
         # this is expressed in a workdframe with the origin attached to the base frame origin
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
         self.w_R_tool0 = self.robot.framePlacement(self.q, self.robot.model.getFrameId(conf.robot_params[self.robot_name]['ee_frame'])).rotation
+        self.w_R_tool0_without_gripper = self.robot.framePlacement(self.q, self.robot.model.getFrameId('tool0_without_gripper')).rotation
         self.x_ee = self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
 
         # compute jacobian of the end effector in the world frame
@@ -551,15 +552,15 @@ def talker(p):
             #p.q_des = np.copy(p.q_des_q0)
 
             # test gripper
-            if p.gripper:
-                if p.time > 5.0 and (gripper_on == 0):
-                    print("gripper 30")
-                    p.controller_manager.gm.move_gripper(30)
-                    gripper_on = 1
-                if (gripper_on == 1) and p.time > 10.0:
-                    print("gripper 100")
-                    p.controller_manager.gm.move_gripper(100)
-                    gripper_on = 2
+            # if p.gripper:
+            #     if p.time > 5.0 and (gripper_on == 0):
+            #         print("gripper 30")
+            #         p.controller_manager.gm.move_gripper(30)
+            #         gripper_on = 1
+            #     if (gripper_on == 1) and p.time > 10.0:
+            #         print("gripper 100")
+            #         p.controller_manager.gm.move_gripper(100)
+            #         gripper_on = 2
 
             # EXE L8-1.2: set sinusoidal joint reference
             # p.q_des  = p.q_des_q0  + lab_conf.amplitude * np.sin(2*np.pi*lab_conf.frequency*p.time)
@@ -638,7 +639,7 @@ def talker(p):
                 p.logData()
 
             # disturbance force
-            if (p.time > 3.0 and p.EXTERNAL_FORCE):
+            if (p.time > 10.0 and p.EXTERNAL_FORCE):
                 p.applyForce()
                 p.EXTERNAL_FORCE = False
 
