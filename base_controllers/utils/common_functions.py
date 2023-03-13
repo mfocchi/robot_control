@@ -474,8 +474,8 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
 
     return fig
 
-def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc=None, Acc=None,
-              des_Wrench=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
+def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc_log=None, Acc_log=None,
+              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
     plot_var_log = None
     plot_var_des_log = None
     if name == 'position':
@@ -587,7 +587,7 @@ def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_
     return fig
 
 
-def plotFrameAngular(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc=None, Acc=None,
+def plotFrameAngular(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc_log=None, Acc_log=None,
                     des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
     plot_var_log = None
     plot_var_des_log = None
