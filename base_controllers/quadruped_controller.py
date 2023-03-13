@@ -179,13 +179,13 @@ class Controller(BaseController):
                                        ros.Time.now(), '/base_link', '/world')
     def initVars(self):
         super().initVars()
-        self.q_des = self.u.mapToRos(conf.robot_params[self.robot_name]['q_fold'])
+        self.q_des = np.zeros_like(self.q)
 
         self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
         self.IK = InverseKinematics(self.robot)
         self.leg_odom = LegOdometry(self.robot, self.real_robot)
         self.legConfig = {}
-        if 'solo' in self.robot_name:  # either solo or solo_fw
+        if 'solo' in self.robot_name or  self.robot_name == 'hyq':  # either solo or solo_fw
             self.legConfig['lf'] = ['HipDown', 'KneeInward']
             self.legConfig['lh'] = ['HipDown', 'KneeInward']
             self.legConfig['rf'] = ['HipDown', 'KneeInward']
