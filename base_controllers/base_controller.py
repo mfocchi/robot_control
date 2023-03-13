@@ -105,7 +105,10 @@ class BaseController(threading.Thread):
         self.robot_name = robot_name
         self.base_offset = np.array([conf.robot_params[self.robot_name]['spawn_x'],
                                      conf.robot_params[self.robot_name]['spawn_y'],
-                                     conf.robot_params[self.robot_name]['spawn_z']])
+                                     conf.robot_params[self.robot_name]['spawn_z'],
+                                     conf.robot_params[self.robot_name].get('spawn_R', 0.),
+                                     conf.robot_params[self.robot_name].get('spawn_P', 0.),
+                                     conf.robot_params[self.robot_name].get('spawn_Y', 0.)])
 
         self.joint_names = conf.robot_params[self.robot_name]['joint_names']
         self.u = Utils()
@@ -146,6 +149,9 @@ class BaseController(threading.Thread):
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z']),
+                    'spawn_R:=' + str(conf.robot_params[self.robot_name].get('spawn_R', 0.)),
+                    'spawn_P:=' + str(conf.robot_params[self.robot_name].get('spawn_P', 0.)),
+                    'spawn_Y:=' + str(conf.robot_params[self.robot_name].get('spawn_Y', 0.)),
                     'real_robot:=' + str(self.real_robot)]
         if world_name is not None:
             print(colored("Setting custom model: "+str(world_name), "blue"))
@@ -479,7 +485,7 @@ class BaseController(threading.Thread):
                     [24.2571, 1.92, 50.5,  21.3801, -2.08377, -44.9598, 24.2, 1.92, 50.5739, 21.3858, -2.08365, -44.9615])
                                                         
                 print("reset posture...")
-                self.freezeBase(1, basePoseW=np.hstack( (self.base_offset, np.array([0.,0.,0.]))) )
+                self.freezeBase(1, basePoseW=self.base_offset )
                 start_t = ros.get_time()
                 while ros.get_time() - start_t < 1.0:
                     self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)

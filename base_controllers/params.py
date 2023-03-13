@@ -21,6 +21,9 @@ robot_params['hyq'] = {'dt': 0.004,
                         'spawn_x': 0.0,
                         'spawn_y': 0.0,
                         'spawn_z': 0.8,
+                        'spawn_R': 0.0,
+                        'spawn_P': 0.0,
+                        'spawn_Y': np.pi/2,
                        'buffer_size': 30001}
 robot_params['solo'] ={'dt': 0.002,
                        'kp': [5., 5., 5., 5., 5., 5., 5., 5., 5., 5., 5., 5.],
@@ -119,10 +122,13 @@ robot_params['go1'] ={'dt': 0.002,
                       # ee params
                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
                       'force_th': 15.,
-                      # simulation spawn
+                      # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,
-                      'spawn_z': 1.,
+                      'spawn_z': .27,
+                      'spawn_R': 0.0,
+                      'spawn_P': 0.0,
+                      'spawn_Y': np.pi/2,
                       # use real robot or simulation
                       'real_robot': False} # note the frames are all aligned with base for joints = 0
 

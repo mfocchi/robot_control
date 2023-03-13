@@ -73,7 +73,7 @@ class AdvancedController(BaseController):
 def talker(p):
     p.start()
     #p.startSimulator(additional_args=['gui:=false'])
-    p.startSimulator(world_name='slow.world', additional_args=['gui:=false', 'spawn_yaw:=1.57'])
+    p.startSimulator(world_name='slow.world', additional_args=['gui:=false'])
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()
