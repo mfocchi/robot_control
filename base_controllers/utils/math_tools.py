@@ -54,7 +54,7 @@ class Math:
     def compute_z_component_of_plane(self, xy_components, plane_normal, z_intercept):
         return -plane_normal[0]/plane_normal[2]*xy_components[0] - \
                plane_normal[1]/plane_normal[2]*xy_components[1] + z_intercept
-
+    # from the rpy angles into ZYX configuration returns b_R_w
     def rpyToRot(self, *args):
         if len(args) == 3:  # equivalent to rpyToRot(self, roll, pitch, yaw)
             roll = args[0]
@@ -506,19 +506,45 @@ def skew_simToVec(Ra):
 
     return v
 
-def rotMatToRotVec(Ra):
-    c = 0.5 * (Ra[0, 0] + Ra[1, 1] + Ra[2, 2] - 1)
-    w = -skew_simToVec(Ra)
-    s = np.linalg.norm(w) # w = sin(theta) * axis
+# this function computes the orientation error (expressed in the world frame) to drive the frame  is expressed in the end-effector frame
+def computeOrientationError(w_R_e, w_R_des):
+    #This has a bug
+    # c = 0.5 * (Ra[0, 0] + Ra[1, 1] + Ra[2, 2] - 1)
+    # w = -skew_simToVec(Ra)
+    # s = np.linalg.norm(w) # w = sin(theta) * axis
+    #
+    # if abs(s) <= 1e-10:
+    #     err = np.zeros(3)
+    # else:
+    #     angle = math.atan2(s, c)
+    #     axis = w / s
+    #     err = angle * axis
+    # return err
 
-    if abs(s) <= 1e-10:
-        err = np.zeros(3)
+    # compute the relative rotation to move w_R_b into w_R_des
+    #w_R_des = w_R_b * b_R_des  => b_R_des = w_R_b.T * w_R_des
+    e_R_des = w_R_e.T.dot(w_R_des)
+
+    # compute the angle-axis representation of the associated orientation error
+    # compute the angle: method 1) with arc cos
+    arg = (e_R_des[0, 0] + e_R_des[1, 1] + e_R_des[2, 2] - 1) / 2
+
+    # compute the angle: method 2) with atan2
+    delta_theta = math.atan2(np.sqrt(
+        pow(e_R_des[2, 1] - e_R_des[1, 2], 2) + pow(e_R_des[0, 2] - e_R_des[2, 0], 2) + pow(
+            e_R_des[1, 0] - e_R_des[0, 1], 2)), e_R_des[0, 0] + e_R_des[1, 1] + e_R_des[2, 2] - 1)
+    # compute the axis (deal with singularity)
+    if delta_theta == 0.0:
+        e_error_o = np.zeros(3)
     else:
-        angle = math.atan2(s, c)
-        axis = w / s
-        err = angle * axis
-    return err
-
+        r_hat = 1 / (2 * np.sin(delta_theta)) * np.array(
+            [e_R_des[2, 1] - e_R_des[1, 2], e_R_des[0, 2] - e_R_des[2, 0], e_R_des[1, 0] - e_R_des[0, 1]])
+        # compute the orientation error
+        e_error_o = delta_theta * r_hat
+    #    # the error is expressed in the end-effector frame
+    #    # we need to map it in the world frame to compute the moment because the jacobian is in the WF
+    w_error_o = w_R_e.dot(e_error_o)
+    return w_error_o
 
 # epsilon for testing whether a number is close to zero
 _EPS = np.finfo(float).eps * 4.0

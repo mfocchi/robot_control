@@ -42,8 +42,8 @@ class AdvancedController(BaseController):
         super().initVars()
 
         self.des_PoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size']))*nan
-        self.des_TwistW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
-        self.des_AccW_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.des_Twist_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
+        self.des_Acc_log = np.empty((6,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.des_forcesW_log = np.empty((12,conf.robot_params[self.robot_name]['buffer_size'] ))*nan
         self.comPoseW_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.Wffwd_log = np.empty((6, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
@@ -58,9 +58,9 @@ class AdvancedController(BaseController):
 
     def logData(self):
         if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
-            self.des_PoseW_log[:, self.log_counter] = self.des_pose
-            self.des_TwistW_log[:, self.log_counter] =  self.des_twist
-            self.des_AccW_log[:, self.log_counter] =  self.des_acc
+            self.des_PoseW_log[:, self.log_counter] = self.des_poseW
+            self.des_Twist_log[:, self.log_counter] =  self.des_twist
+            self.des_Acc_log[:, self.log_counter] =  self.des_acc
             self.comPoseW_log[:, self.log_counter] = self.comPoseW
             self.des_forcesW_log[:, self.log_counter] =  self.des_forcesW
             self.Wffwd_log[:, self.log_counter] =  self.Wffwd            
@@ -73,7 +73,7 @@ class AdvancedController(BaseController):
 def talker(p):
     p.start()
     #p.startSimulator(additional_args=['gui:=false'])
-    p.startSimulator(world_name='slow.world', additional_args=['gui:=false'])
+    p.startSimulator(world_name='slow.world', additional_args=['gui:=false', 'spawn_yaw:=1.57'])
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()
@@ -103,9 +103,20 @@ def talker(p):
 
         # EXERCISE 1: Sinusoidal Reference Generation
         # Reference Generation
-        p.des_pose  = p.x0 +  lab_conf.amp*(np.cos(p.two_pi_f*p.time + lab_conf.phi) -1)
-        p.des_twist  = -p.two_pi_f_amp * np.sin(p.two_pi_f*p.time + lab_conf.phi)
-        p.des_acc = -p.two_pi_f_squared_amp * np.cos(p.two_pi_f*p.time + lab_conf.phi)
+        # for user convenience we assume the XYZ
+        des_euler_angles = (p.x0 +  lab_conf.amp*(np.cos(p.two_pi_f*p.time + lab_conf.phi) -1))[3:6]
+        w_R_des_hf = p.math_utils.eul2Rot(np.array([0,0,des_euler_angles[2]]))
+        p.des_poseW = np.zeros(6)
+        p.des_poseW[0:3] = w_R_des_hf @ ((p.x0 +  lab_conf.amp*(np.cos(p.two_pi_f*p.time + lab_conf.phi) -1))[0:3])
+        p.des_poseW[3:6] = des_euler_angles
+        # IMPORTANT! these is improperly called des_twist des_acc but we are filling the angular part with euler_rates and derivative of euler rates!
+        p.des_twist = np.zeros(6)
+        p.des_twist[0:3]  = w_R_des_hf @ (( -p.two_pi_f_amp * np.sin(p.two_pi_f*p.time + lab_conf.phi))[0:3])
+        p.des_twist[3:6] = ( -p.two_pi_f_amp * np.sin(p.two_pi_f*p.time + lab_conf.phi))[3:6]
+        p.des_acc = np.zeros(6)
+        p.des_acc[0:3]  = w_R_des_hf @ ((-p.two_pi_f_squared_amp * np.cos(p.two_pi_f*p.time + lab_conf.phi))[0:3])
+        p.des_acc[3:6] = (-p.two_pi_f_squared_amp * np.cos(p.two_pi_f*p.time + lab_conf.phi))[3:6]
+
         #use this to compute acceleration for a custom trajectory
         #des_acc = np.subtract(des_twist, p.des_twist_old)/p.Ts
         #p.des_twist_old = des_twist
@@ -121,7 +132,7 @@ def talker(p):
 #            p.stance_legs[p.u.leg_map["RH"]] = False       
    
         #time1 = time.time()-startTime #3 ms
-        des_state.pose.set(p.des_pose)
+        des_state.pose.set(p.des_poseW)
         des_state.twist.set(p.des_twist)
         des_state.accel.set(p.des_acc)
 
@@ -225,21 +236,22 @@ if __name__ == '__main__':
         p.deregister_node()
         if conf.plotting:
             if not p.params.isCoMControlled:
-                plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_log, Pose_log=p.comPoseW_log,
+                plotFrame('position', time_log=p.time_log, des_Pose_log=p.des_PoseW_log, Pose_log=p.basePoseW_log,
                           title='base lin/ang position', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
             else:
-                plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
+                plotFrame('position', time_log=p.time_log, des_Pose_log=p.des_PoseW_log, Pose_log=p.comPoseW_log,
                       title='com lin/ang position', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
-            plotFrame('acceleration', time_log=p.time_log, des_Acc_log=p.des_AccW_log,
+            #plot des_acc (desired derivetive of euler rates) and des_twist(desired euler rates)
+            plotFrame('acceleration', time_log=p.time_log, Acc_log=p.des_Acc_log,
                       title='acceleration', frame='W', sharex=True, sharey=False, start=0, end=-1)
-            plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.des_TwistW_log,
+            plotFrame('velocity', time_log=p.time_log, Twist_log=p.des_Twist_log,
                       title='velocity', frame='W', sharex=True, sharey=False, start=0, end=-1)
-            plotFrame('wrench', time_log=p.time_log, des_Wrench_log=p.Wffwd_log,
+            plotFrame('wrench', time_log=p.time_log, Wrench_log=p.Wffwd_log,
                       title='wrench', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
-            plotContacts('GRFs', time_log=p.time_log, des_Forces_log=p.grForcesW_des_log, Forces_log=p.grForcesW_log, frame='W',
+            plotContacts('GRFs', time_log=p.time_log, des_Forces_log=p.des_forcesW_log, Forces_log=p.grForcesW_log, frame='W',
                          sharex=True, sharey=False, start=0, end=-1)
             # plotConstraitViolation(3,p.constr_viol_log)
             # plotJoint('torque',4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, None, None, p.tau_log, p.tau_ffwd_log)

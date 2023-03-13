@@ -20,7 +20,7 @@ q0  = np.matrix([ 0.0, -0.6, 0.6, -1.67, -1.57, 0.0]).T
 qd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 qdd0 = np.matrix([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T
 
-# Parameters of Joint Reference Trajectories (X,Y, Z, Roll, Pitch, Yaw)
+# Parameters of Joint Reference Trajectories (X,Y, Z, Roll, Pitch, Yaw), (X,Y we assume them in the horizontal frame (as base frame but aligned with gravity)
 amp                  = np.array([ 0.0, 0.0, 0.03, 0.0, 0.1, 0.0]).T     # amplitude
 freq                 = np.array([ 0.0, 0.0, 0.5, 0.0, 1.0, 0.0]).T           # frequency (time 2 PI)
 phi                  = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T     # phase
@@ -28,7 +28,6 @@ phi                  = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).T     # phase
 buffer_size = 30001
 
 # Gains for the virtual model
-
 control_params = {}
 control_params['hyq'] = {'Kp_lin_x': 2000, 'Kp_lin_y': 2000, 'Kp_lin_z': 2000,    
                        'Kd_lin_x': 200, 'Kd_lin_y': 200, 'Kd_lin_z': 200,                       

@@ -21,38 +21,31 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     # Load math functions 
     mathJet = Math()
 
+    # actual orientation
+    w_R_b = mathJet.eul2Rot(act_state.pose.orientation)
+    # Desired Orientation
+    w_R_des = mathJet.eul2Rot(des_state.pose.orientation)
+
+    w_R_hf = mathJet.eul2Rot((np.array([0, 0, act_state.pose.orientation[2]])))
     # Feedback wrench (Virtual PD)
-    Kp_lin = np.diag([conf['Kp_lin_x'], conf['Kp_lin_y'], conf['Kp_lin_z']])
-    Kd_lin = np.diag([conf['Kd_lin_x'], conf['Kd_lin_x'], conf['Kd_lin_x']])
-    Kp_ang = np.diag([conf['KpRoll'], conf['KpPitch'], conf['KpYaw']])
-    Kd_ang = np.diag([conf['KdRoll'], conf['KdPitch'], conf['KdYaw']])
+    # assume gains are given in BF for convenience
+    Kp_lin = w_R_hf.T @ np.diag([conf['Kp_lin_x'], conf['Kp_lin_y'], conf['Kp_lin_z']]) @ w_R_hf
+    Kd_lin = w_R_hf.T @ np.diag([conf['Kd_lin_x'], conf['Kd_lin_x'], conf['Kd_lin_x']]) @ w_R_hf
+    Kp_ang = w_R_hf.T @ np.diag([conf['KpRoll'], conf['KpPitch'], conf['KpYaw']]) @ w_R_hf
+    Kd_ang = w_R_hf.T @  np.diag([conf['KdRoll'], conf['KdPitch'], conf['KdYaw']]) @ w_R_hf
 
     Wfbk = np.zeros(6)
                 
     # linear part                
     Wfbk[util.sp_crd["LX"]:util.sp_crd["LX"] + 3] = Kp_lin.dot(des_state.pose.position - act_state.pose.position) + Kd_lin.dot(des_state.twist.linear - act_state.twist.linear)
     # angular part                
-    # actual orientation 
+    w_err = computeOrientationError(w_R_b, w_R_des)
 
-    b_R_w = mathJet.rpyToRot(act_state.pose.orientation)
-                
-    # Desired Orientation
-    Rdes = mathJet.rpyToRot(des_state.pose.orientation)
-    
-      
-
-    # compute orientation error
-    Re = Rdes.dot(b_R_w.transpose())
-    # express orientation error in angle-axis form                 
-    err = rotMatToRotVec(Re)                  
-                
-    #the orient error is expressed in the base_frame so it should be rotated wo have the wrench in the world frame
-    w_err = b_R_w.transpose().dot(err)        
     # map des euler tates into des omega
     Jomega =  mathJet.Tomega(act_state.pose.orientation)
    
-    # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an Euclidean space with Jomega                
-    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_ang.dot(w_err) + Kd_ang.dot(Jomega.dot((des_state.twist.angular - act_state.twist.angular)))
+    # Note we defined the angular part of the des_twist as euler rates not as omega so we need to map them to an Euclidean space with Jomega
+    Wfbk[util.sp_crd["AX"]:util.sp_crd["AX"] + 3] = Kp_ang.dot(w_err) + Kd_ang.dot(Jomega.dot(des_state.twist.angular) - act_state.twist.angular)
 
 
     #EXERCISE 3: Compute graviy wrench
@@ -69,8 +62,8 @@ def computeVirtualImpedanceWrench(conf, act_state, des_state, W_contacts, stance
     if (params.ffwdOn):    
         ffdLinear = params.robot.robotMass * des_state.accel.linear
        # compute inertia in the WF  w_I = R' * B_I * R
-        W_Inertia = np.dot(b_R_w.transpose(), np.dot(params.robotInertiaB, b_R_w))
-        # compute w_des_omega_dot  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates
+        W_Inertia = np.dot(w_R_b, np.dot(params.robotInertiaB, w_R_b.T))
+        # compute w_des_omega_dot  Jomega*des_euler_rates_dot + Jomega_dot*des euler_rates
         Jomega_dot =  mathJet.Tomega_dot(des_state.pose.orientation,  des_state.twist.angular)
         w_des_omega_dot = Jomega.dot(des_state.accel.angular) + Jomega_dot.dot(des_state.twist.angular)                
         ffdAngular = W_Inertia.dot(w_des_omega_dot) 
