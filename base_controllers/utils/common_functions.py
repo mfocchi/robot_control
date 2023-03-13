@@ -38,8 +38,8 @@ u = Utils()
 # globals
 labels_ur = ["1 - Shoulder Pan", "2 - Shoulder Lift", "3 - Elbow", "4 - Wrist 1", "5 - Wrist 2", "6 - Wrist 3"]
 labels_quadruped = ["LF_HAA", "LF_HFE","LF_KFE","LH_HAA", "LH_HFE","LH_KFE","RF_HAA", "RF_HFE","RF_KFE","RH_HAA", "RH_HFE","RH_KFE"]
-labels_flywheel2 = labels_quadruped.append(["left_wheel", "right_wheel"])
-labels_flywheel4 = labels_quadruped.append(["back_wheel", "front_wheel", "left_wheel", "right_wheel"])
+labels_flywheel2 = labels_quadruped + ["left_wheel", "right_wheel"]
+labels_flywheel4 = labels_quadruped + ["back_wheel", "front_wheel", "left_wheel", "right_wheel"]
 
 class Twist:
     linear = np.empty((3))*np.nan
