@@ -423,6 +423,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
     if plot_var_log is not None:
         plt.plot(time_log[start:end], plot_var_log[0, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='blue')
     plt.grid()
+    ax.ticklabel_format(useOffset=False)
 
     subplot(3, 2, 3, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[1] + " "+lin_unit)
@@ -432,6 +433,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
         plt.plot(time_log[start:end], plot_var_log[1, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
+    plt.ticklabel_format(useOffset=False)
 
     subplot(3, 2, 5, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[2] + " "+lin_unit)
@@ -442,6 +444,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
         plt.plot(time_log[start:end], plot_var_log[2, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
+    plt.ticklabel_format(useOffset=False)
 
     subplot(3, 2, 2, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[3] + " "+ang_unit)
@@ -451,6 +454,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
         plt.plot(time_log[start:end], plot_var_log[3, start:end].T, linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
+    plt.ticklabel_format(useOffset=False)
 
     subplot(3, 2, 4, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[4] + " "+ang_unit)
@@ -460,6 +464,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
         plt.plot(time_log[start:end], plot_var_log[4, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
+    plt.ticklabel_format(useOffset=False)
 
     subplot(3, 2, 6, sharex=sharex, sharey=sharey, ax_to_share=ax)
     plt.ylabel(labels[5] + " "+ang_unit)
@@ -470,6 +475,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
         plt.plot(time_log[start:end], plot_var_log[5, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act,
             color='blue')
     plt.grid()
+    plt.ticklabel_format(useOffset=False)
 
 
     fig.align_ylabels(fig.axes[:3])
