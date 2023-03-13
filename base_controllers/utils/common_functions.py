@@ -231,7 +231,10 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
     if type(end) == str:
         end = min(int(float(end) / dt + 1), time_log.shape[0])
 
-    njoints = min(plot_var_log.shape)
+    if plot_var_log is not None:
+        njoints = min(plot_var_log.shape)
+    elif plot_var_des_log is not None:
+        njoints = min(plot_var_des_log.shape)
 
     if len(plt.get_fignums()) == 0:
         figure_id = 1
@@ -276,14 +279,14 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
 
         plt.ylabel(labels[jidx] + ' '+ unit)
 
-        if   (plot_var_des_log is not None):
-             plt.plot(time_log[start:end], plot_var_des_log[jidx, start:end], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
-        if (plot_var_log is not None):
-            plt.plot(time_log, plot_var_log[jidx,:],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
-
         if name == 'torque' and tau_ffwd_log is not None:
             plt.plot(time_log[start:end], tau_ffwd_log[jidx, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
                      color='green')
+        if   (plot_var_des_log is not None):
+             plt.plot(time_log[start:end], plot_var_des_log[jidx, start:end], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
+        if (plot_var_log is not None):
+            plt.plot(time_log[start:end], plot_var_log[jidx,start:end],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
+
         if (q_adm is not None):
             plt.plot(time_log[start:end], q_adm[jidx, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
         plt.grid()
