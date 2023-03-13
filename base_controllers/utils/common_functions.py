@@ -1163,7 +1163,7 @@ def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
     return fig, ax
 
     
-def plotWrenches(name, figure_id, time_log, wrench_fb_log=None, wrench_ffwd_log=None, wrench_g_log=None):
+def plotWrenches(name, figure_id, time_log, des_Wrench_fb_log=None, des_Wrench_ffwd_log=None, des_Wrench_g_log=None):
     labels = ["FX", "FY", "FZ", "MX", "MY", "MZ"]
     lin_unit = '[N]'
     ang_unit = '[Nm]'
