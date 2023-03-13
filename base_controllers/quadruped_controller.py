@@ -245,6 +245,13 @@ class Controller(BaseController):
         self.kp_ang = np.diag(conf.robot_params[self.robot_name].get('kp_ang'+real_str, np.zeros(3)))
         self.kd_ang = np.diag(conf.robot_params[self.robot_name].get('kd_ang'+real_str, np.zeros(3)))
 
+        # updated in WBC
+        self.kp_linW = np.zeros_like(self.kp_lin)
+        self.kd_linW = np.zeros_like(self.kd_lin)
+
+        self.kp_angW = np.zeros_like(self.kp_ang)
+        self.kd_angW = np.zeros_like(self.kd_ang)
+
         # joint pid with wbc
         self.kp_wbc_j = conf.robot_params[self.robot_name].get('kp_wbc'+real_str, np.zeros(self.robot.na))
         self.kd_wbc_j = conf.robot_params[self.robot_name].get('kd_wbc'+real_str, np.zeros(self.robot.na))
@@ -480,6 +487,16 @@ class Controller(BaseController):
         return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
 
+    def WBCgainsInWorld(self):
+        # this function is equivalent to execute R.T @ K @ R, but faster
+        w_R_hf = pin.rpy.rpyToMatrix(0, 0, self.u.angPart(self.basePoseW)[2])
+
+        self.kp_linW = w_R_hf.T @ self.kp_lin @ w_R_hf
+        self.kd_linW = w_R_hf.T @ self.kd_lin @ w_R_hf
+        self.kp_angW = w_R_hf.T @ self.kp_ang @ w_R_hf
+        self.kd_angW = w_R_hf.T @ self.kd_ang @ w_R_hf
+
+
     def virtualImpedanceWrench(self, des_pose, des_twist, des_acc = None, comControlled = True):
         if not(des_pose is None or des_twist is None):
             if comControlled:
@@ -488,31 +505,28 @@ class Controller(BaseController):
             else:
                 act_pose = self.basePoseW
                 act_twist = self.baseTwistW
+
+            self.WBCgainsInWorld()
             # FEEDBACK WRENCH
             # ---> linear part
-            self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.kp_lin @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
-                                                                       self.kd_lin @ (self.u.linPart(des_twist) - self.u.linPart(act_twist))
+            self.wrench_fbW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.kp_linW @ (self.u.linPart(des_pose)  - self.u.linPart(act_pose)) + \
+                                                                       self.kd_linW @ (self.u.linPart(des_twist) - self.u.linPart(act_twist))
 
             # ---> angular part
             # actual orientation: self.b_R_w
             # Desired Orientation
 
-            # the following are equivalent but the second is faster
+            # the following codes are equivalent but the second is faster
+            # w_err = computeOrientationError(self.b_R_w.T, w_R_des)
 
-            # b_Rdes_w = self.math_utils.rpyToRot(self.u.angPart(des_pose))
-            # # compute orientation error
-            # b_Re_w = b_Rdes_w @ self.b_R_w.T
-            # # express orientation error in angle-axis form
-            # b_err = rotMatToRotVec(b_Re_w)
-
-            b_Rdes_w = pin.rpy.rpyToMatrix(self.u.angPart(des_pose)).T
+            # faster
+            start = time.time()
+            w_R_des = pin.rpy.rpyToMatrix(self.u.angPart(des_pose))
             # compute orientation error
-            b_Re_w = b_Rdes_w @ self.b_R_w.T
+            b_R_des = self.b_R_w @ w_R_des
             # express orientation error in angle-axis form
-            aa_err = pin.AngleAxis(b_Re_w.T)
-            b_err = aa_err.axis * aa_err.angle
-
-
+            aa_err = pin.AngleAxis(b_R_des)
+            b_err = aa_err.angle * aa_err.axis
             # the orientation error is expressed in the base_frame so it should be rotated to have the wrench in the
             # world frame
             w_err = self.b_R_w.T @ b_err
@@ -522,8 +536,7 @@ class Controller(BaseController):
 
             # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an
             # Euclidean space with Jomega
-            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.kp_ang @ w_err + \
-                                                                       self.kd_ang @ ( Jomega @ (self.u.angPart(des_twist) - self.u.angPart(act_twist)))
+            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.kp_angW @ w_err + self.kd_angW @ ( Jomega @ (self.u.angPart(des_twist)) - self.u.angPart(act_twist) )
 
 
             # FEED-FORWARD WRENCH
