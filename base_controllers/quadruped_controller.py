@@ -487,27 +487,73 @@ class Controller(BaseController):
         return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
 
-    def Hframe2World(self, des_pose, des_dpose=None, des_ddpose=None):
-        w_R_des_hf = pin.rpy.rpyToMatrix(0, 0, self.u.angPart(des_pose)[2])
+    def Hframe2World(self, poseH, dposeH=None, ddposeH=None):
+        # returns variables from Hframe to World frame
+        # dposeH is the rate (d/dt poseH) and ddposeH its time derivative
+        # dposeH is mapped into twist and ddposeH into acceleration
+        w_R_des_hf = pin.rpy.rpyToMatrix(0, 0, self.u.angPart(self.basePoseW)[2])
 
-        des_poseW = np.empty(6)
-        des_poseW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = w_R_des_hf @ self.u.linPart(des_pose)
-        des_poseW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(des_pose)
+        poseW = np.empty(6)
+        poseW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = w_R_des_hf @ self.u.linPart(poseH)
+        poseW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(poseH)
+        #poseW[self.u.sp_crd['AZ']] += np.pi/2#self.u.angPart(self.basePoseW)[2]
 
-        if des_dpose is not None:
-            des_dposeW = np.empty(6)
-            des_dposeW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] =  w_R_des_hf @ self.u.linPart(des_dpose)
-            des_dposeW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(des_dpose)
+        if dposeH is not None:
+            twistW = np.empty(6)
 
-            if des_ddpose is not None:
-                des_ddposeW = np.empty(6)
-                des_ddposeW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = w_R_des_hf @ self.u.linPart(des_ddpose)
-                des_ddposeW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(des_ddpose)
-                return des_poseW, des_dposeW, des_ddposeW
+            twistW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] =  w_R_des_hf @ self.u.linPart(dposeH)
 
-            return des_poseW, des_dposeW
+            # map euler rates into omega
+            Jomega = self.math_utils.Tomega(self.u.angPart(self.basePoseW))
+            twistW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = Jomega @ (self.u.angPart(dposeH))
 
-        return des_poseW
+            if ddposeH is not None:
+                accW = np.empty(6)
+                accW[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = w_R_des_hf @ self.u.linPart(ddposeH)
+                accW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(ddposeH)
+
+                # compute w_omega_dot =  Jomega* euler_rates_dot + Jomega_dot*euler_rates (Jomega already computed, see above)
+                Jomega_dot = self.math_utils.Tomega_dot(self.u.angPart(self.basePoseW), self.u.angPart(self.baseTwistW))
+                accW[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = Jomega @ self.u.angPart(ddposeH) + \
+                                                                    Jomega_dot @ self.u.angPart(dposeH)
+                return poseW, twistW, accW
+
+            return poseW, twistW
+
+        return poseW
+
+
+    def World2Hframe(self, poseW, twistW=None, accW=None):
+        # inverse of the previous function
+        # returns variables from World frame to Hframe
+        # twist is mapped into dposeH and acceleration into ddposeH
+        hf_R_des_w = pin.rpy.rpyToMatrix(0, 0, self.u.angPart(poseW)[2]).T
+
+        poseH = np.empty(6)
+        poseH[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = hf_R_des_w @ self.u.linPart(poseW)
+        poseH[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.u.angPart(poseW)[0:3]
+        # poseH[self.u.sp_crd['AZ']] = 0.
+
+        if twistW is not None:
+            dposeH = np.empty(6)
+            dposeH[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] =  hf_R_des_w @ self.u.linPart(twistW)
+            # map omega into euler rate
+            Jomega_inv = self.math_utils.Tomega_inv(self.u.angPart(poseW))
+            dposeH[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = Jomega_inv @ self.u.angPart(twistW)
+
+            if accW is not None:
+                ddposeH = np.empty(6)
+                ddposeH[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = hf_R_des_w @ self.u.linPart(accW)
+                # compute euler_rates_dot = Jomega_inv *( w_omega_dot - Jomega_dot*euler_rates) (Jomega_inv already computed, see above)
+                Jomega_dot = self.math_utils.Tomega_dot(self.u.angPart(poseW), self.u.angPart(twistW))
+
+                ddposeH[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = Jomega_inv @ (self.u.angPart(accW) - Jomega_dot @ self.u.angPart(dposeH) )
+                return poseH, dposeH, ddposeH
+
+            return poseH, dposeH
+
+        return poseH
+
 
     def WBCgainsInWorld(self):
         # this function is equivalent to execute R.T @ K @ R, but faster
