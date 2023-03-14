@@ -21,6 +21,7 @@ class Math:
     def __init__(self):
         self._Tomega_mat = np.diag([0.,0.,1.])
         self._Tomega_dot_mat = np.zeros([3,3])
+        self._Tomega_inv_mat = np.zeros([3,3])
 
     def normalize(self, n):
         norm1 = np.linalg.norm(n)
@@ -217,7 +218,7 @@ class Math:
 
         # Tomega = np.array([[np.cos(pitch)*np.cos(yaw),       -np.sin(yaw),                    0],
         #                    [ np.cos(pitch)*np.sin(yaw),       np.cos(yaw),                    0],
-        #                    [ -np.sin(pitch),      0 ,                                         1]])
+        #                    [ -np.sin(pitch),                           0 ,                    1]])
         # return Tomega
 
         # faster way
@@ -233,6 +234,35 @@ class Math:
         self._Tomega_mat[1, 1] = cy
 
         return self._Tomega_mat
+
+    def Tomega_inv(self, rpy):
+
+        # convention yaw pitch roll
+
+        roll = rpy[0]
+        pitch = rpy[1]
+        yaw = rpy[2]
+
+        # Tomega_inv = 1/np.cos(pitch) * np.array([[                np.cos(yaw),                np.sin(yaw),             0],
+        #                                          [ -np.cos(pitch)*np.sin(yaw),  np.cos(pitch)*np.cos(yaw),             0],
+        #                                          [ -np.sin(pitch)*np.cos(yaw), -np.sin(pitch)*np.sin(yaw), np.cos(pitch)]])
+        # return Tomega
+
+        # faster way
+
+        cp = np.cos(pitch)
+        sp = np.sin(pitch)
+        cy = np.cos(yaw)
+        sy = np.sin(yaw)
+        self._Tomega_inv_mat[0, 0] = cy
+        self._Tomega_inv_mat[1, 0] = -cp * sy
+        self._Tomega_inv_mat[2, 0] = -sp * cy
+        self._Tomega_inv_mat[0, 1] = sy
+        self._Tomega_inv_mat[1, 1] = cp * cy
+        self._Tomega_inv_mat[2, 1] = -sp * sy
+        self._Tomega_inv_mat[2, 2] = cp
+
+        return self._Tomega_inv_mat/cp
 
     ##################
     # Geometry Utils
