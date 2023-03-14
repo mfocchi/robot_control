@@ -598,27 +598,21 @@ class Controller(BaseController):
             # the orientation error is expressed in the base_frame so it should be rotated to have the wrench in the
             # world frame
             w_err = self.b_R_w.T @ b_err
-            # map des euler rates into des omega
-            Jomega = self.math_utils.Tomega(self.u.angPart(self.comPoseW))
 
-
-            # Note we defined the angular part of the des twist as euler rates not as omega so we need to map them to an
-            # Euclidean space with Jomega
-            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.kp_angW @ w_err + self.kd_angW @ ( Jomega @ (self.u.angPart(des_twist)) - self.u.angPart(act_twist) )
+            # Note we defined the angular part of the des twist as omega
+            self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.kp_angW @ w_err + \
+                                                                           self.kd_angW @ ( self.u.angPart(des_twist) - self.u.angPart(act_twist) )
 
 
             # FEED-FORWARD WRENCH
             if not (des_acc is None):
                 # ---> linear part
-                self.wrench_ffW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.robot.robotMass * self.u.linPart(
-                    des_acc)
+                self.wrench_ffW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.robot.robotMass * self.u.linPart(des_acc)
                 # ---> angular part
                 # compute inertia in the world frame:  w_I = R' * B_I * R
                 w_I = self.b_R_w.T @ self.centroidalInertiaB @ self.b_R_w
-                # compute w_des_omega_dot =  Jomega*des euler_rates_dot + Jomega_dot*des euler_rates (Jomega already computed, see above)
-                Jomega_dot = self.math_utils.Tomega_dot(self.u.angPart(self.comPoseW), self.u.angPart(self.comTwistW))
-                w_des_omega_dot = Jomega @ self.u.angPart(des_acc) + Jomega_dot @ self.u.angPart(des_twist)
-                self.wrench_ffW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = w_I @ w_des_omega_dot
+
+                self.wrench_ffW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = w_I @ self.u.angPart(des_acc)
 
         else:
             self.wrench_fbW[:] = 0
