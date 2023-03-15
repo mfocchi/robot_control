@@ -97,10 +97,11 @@ class Controller(BaseController):
                                                      tcp_nodelay=True)
 
     def _receive_imu_acc_real(self, msg):
+        # baseLinAccB is with gravity
         self.baseLinAccB[0] = msg.x
         self.baseLinAccB[1] = msg.y
         self.baseLinAccB[2] = msg.z
-
+        # baseLinAccW is without gravity
         self.baseLinAccW = self.b_R_w.T @ (self.baseLinAccB - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
     def _receive_imu_acc(self, msg):
@@ -283,9 +284,6 @@ class Controller(BaseController):
         self.baseLinAccB = np.full(3, np.nan)
         self.baseLinAccW = np.full(3, np.nan)
 
-        self.baseLinAccB = np.full(3, np.nan)
-        self.baseLinAccW = np.full(3, np.nan)
-
 
         self.comPosB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
         self.comVelB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
@@ -326,7 +324,7 @@ class Controller(BaseController):
         self.contact_state_log = np.empty((self.robot.nee, conf.robot_params[self.robot_name]['buffer_size'])) * np.nan
 
         self.baseLinAccW_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
-        self.baseLinAccW = np.zeros(3)
+        self.baseLinAccB_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.baseLinTwistImuW_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
@@ -377,7 +375,7 @@ class Controller(BaseController):
         self.contact_state_log[:, self.log_counter] = self.contact_state
 
         self.baseLinAccW_log[:, self.log_counter] = self.baseLinAccW
-
+        self.baseLinAccB_log[:, self.log_counter] = self.baseLinAccB
 
         self.comVelW_leg_odom_log[:, self.log_counter] = self.comVelW_leg_odom
 
