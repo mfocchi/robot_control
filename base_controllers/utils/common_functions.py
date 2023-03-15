@@ -518,16 +518,16 @@ def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_
     elif name == 'acceleration':
         labels = ["x", "y", "z"]
         lin_unit = '[m/s^2]'
-        if Acc is not None:
-            if Acc.shape[0] == 6:
-                plot_var_log = u.linPart(Acc)
-            elif Acc.shape[0] == 3:
-                plot_var_log = Acc
-        if (des_Acc is not None):
-            if des_Acc.shape[0] == 6:
-                plot_var_des_log = u.linPart(des_Acc)
+        if Acc_log is not None:
+            if Acc_log.shape[0] == 6:
+                plot_var_log = u.linPart(Acc_log)
+            elif Acc_log.shape[0] == 3:
+                plot_var_log = Acc_log
+        if (des_Acc_log is not None):
+            if des_Acc_log.shape[0] == 6:
+                plot_var_des_log = u.linPart(des_Acc_log)
             elif des_Acc.shape[0] == 3:
-                plot_var_des_log = Acc
+                plot_var_des_log = des_Acc_log
 
     elif name == 'wrench':
         labels = ["FX", "FY", "FZ"]
@@ -631,16 +631,16 @@ def plotFrameAngular(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist
     elif name == 'acceleration':
         labels = ["R", "P", "Y"]
         ang_unit = '[rad]'
-        if Acc is not None:
-            if Acc.shape[0] == 6:
-                plot_var_log = u.angPart(Acc)
-            elif Acc.shape[0] == 3:
-                plot_var_log = Acc
-        if (des_Acc is not None):
-            if des_Acc.shape[0] == 6:
-                plot_var_des_log = u.angPart(des_Acc)
+        if Acc_log is not None:
+            if Acc_log.shape[0] == 6:
+                plot_var_log = u.angPart(Acc_log)
+            elif Acc_log.shape[0] == 3:
+                plot_var_log = Acc_log
+        if (des_Acc_log is not None):
+            if des_Acc_log.shape[0] == 6:
+                plot_var_des_log = u.angPart(des_Acc_log)
             elif des_Acc.shape[0] == 3:
-                plot_var_des_log = Acc
+                plot_var_des_log = des_Acc_log
 
     elif name == 'wrench':
         labels = ["MX", "MY", "MZ"]
