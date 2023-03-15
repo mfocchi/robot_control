@@ -109,7 +109,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'ki_real': np.array([1., 1., 1.]*4),
                       # joint pid + wbc (optional)
                       'kp_wbc_real': np.array([20., 20., 20.]*4),
-                      'kd_wbc_real': np.array([.3, .4, .4]*4),
+                      'kd_wbc_real': np.array([.3, .3, .4]*4),
                       'ki_wbc_real': np.array([1., 1., 1.]*4),
                       # virtual impedance wrench control
                       # 'kp_lin_real': np.array([300, 300., 300.]), # x y z
