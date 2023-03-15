@@ -26,6 +26,9 @@ class IMU_utils:
 
 
     def compute_lin_vel(self, W_lin_acc, loop_dt):
+        if self.counter < self.timeout:
+            self.baseLinTwistImuW[:] = 0.
+
         self.baseLinTwistImuW[0] = (1 - self.alpha_velocity[0] * loop_dt) * self.baseLinTwistImuW[0] + loop_dt * W_lin_acc[0]
         self.baseLinTwistImuW[1] = (1 - self.alpha_velocity[1] * loop_dt) * self.baseLinTwistImuW[1] + loop_dt * W_lin_acc[1]
         self.baseLinTwistImuW[2] = (1 - self.alpha_velocity[2] * loop_dt) * self.baseLinTwistImuW[2] + loop_dt * W_lin_acc[2]
