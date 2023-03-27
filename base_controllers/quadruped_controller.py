@@ -471,7 +471,7 @@ class Controller(BaseController):
         self.initVars() # reset logged values
 
 
-        self.imu_utils.baseLinTwistImuW = self.u.linPart(self.baseTwistW)
+        self.imu_utils.baseLinTwistImuW = self.u.linPart(self.baseTwistW).copy()
 
 
 
