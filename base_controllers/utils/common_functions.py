@@ -499,7 +499,7 @@ def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_
             if des_Pose_log.shape[0] == 6:
                 plot_var_des_log = u.linPart(des_Pose_log)
             elif des_Pose_log.shape[0] == 3:
-                plot_var_des_log = Pose_log
+                plot_var_des_log = des_Pose_log
 
     elif name == 'velocity':
         labels = ["x", "y", "z"]
@@ -513,7 +513,7 @@ def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_
             if des_Twist_log.shape[0] == 6:
                 plot_var_des_log = u.linPart(des_Twist_log)
             elif des_Twist_log.shape[0] == 3:
-                plot_var_des_log = Twist_log
+                plot_var_des_log = des_Twist_log
 
     elif name == 'acceleration':
         labels = ["x", "y", "z"]
@@ -997,6 +997,8 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     fig.align_ylabels(fig.axes[2:12:4])
     fig.align_ylabels(fig.axes[3:12:4])
 
+    return fig
+
 
 
 def plotConstraitViolation(figure_id,constr_viol_log):
@@ -1064,6 +1066,8 @@ def plotEndeffImpedance(name, figure_id, x_log, x_des_log, f_log):
     axs[2, 2].plot((x_log[2,:].T-x_des_log[2,:].T), f_log[2,:].T, lw=lw_act, color = 'blue')
     axs[2, 2].set_title('Fz vs Z')
     axs[2, 2].grid()
+
+    return fig
     
 def plotJointImpedance(name, q_log, q_des_log, tau_log):
     
