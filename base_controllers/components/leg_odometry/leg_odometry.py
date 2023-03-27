@@ -30,7 +30,7 @@ class LegOdometry:
         pin.updateFramePlacements(self.robot.model, self.robot.data)
         for i, index in enumerate(self.robot.getEndEffectorsFrameId):
             self.w_feet_pos_init[:, i] = self.robot.data.oMf[index].translation.copy()
-
+            self.w_feet_pos_init[2, i] += 0.02                                          # this is foot radius
 
     def reset(self, q):
         self.compute_feet_position(q)
@@ -110,7 +110,7 @@ class LegOdometry:
                             w_v_b_foot = -pin.skew(ang_vel) @ b_R_w @ B_contacts[k] - wJ[k] @ self.u.getLegJointState(k,
                                                                                                                       qd)
 
-                            self.w_p_b_update += w_p_b_foot  + 0.02 # this is the foot radius
+                            self.w_p_b_update += w_p_b_foot
                             self.w_v_b_update += w_v_b_foot
 
                     self.w_p_b = self.w_p_b_update/nc
