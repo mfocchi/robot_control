@@ -328,9 +328,6 @@ class Controller(BaseController):
 
         self.baseLinTwistImuW_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
-        self.zmp = np.zeros(3)
-        self.zmp_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
-
         # robot height is the height of the robot base frame in home configuration
         self.robot_height = 0.
 
@@ -392,7 +389,6 @@ class Controller(BaseController):
             self.W_vel_contacts_des_log[start:end, self.log_counter] = self.W_vel_contacts_des[leg]
 
         self.baseLinTwistImuW_log[:, self.log_counter] = self.imu_utils.baseLinTwistImuW
-        self.zmp_log[:, self.log_counter] = self.zmp
 
         self.wrench_fbW_log[:, self.log_counter] = self.wrench_fbW
         self.wrench_ffW_log[:, self.log_counter] = self.wrench_ffW
