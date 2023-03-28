@@ -859,7 +859,7 @@ class Controller(BaseController):
         #                           self.B_contacts_des[2],
         #                           self.B_contacts_des[0]], "green", visual_frame="base_link")
         #
-        # self.ros_pub.add_marker_fixed(self.zmp)
+
         self.ros_pub.publishVisual()
 
     def updateKinematics(self, update_legOdom=True):
