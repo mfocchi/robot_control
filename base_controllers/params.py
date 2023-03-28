@@ -99,7 +99,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'ki_wbc': np.array([0., 0., 0.]*4),#np.array([0.3, 0.3, 0.3]*4),
                       # virtual impedance wrench control
                       'kp_lin': np.array([800, 500., 900.]),  # x y z
-                      'kd_lin': np.array([100, 100., 100.]),
+                      'kd_lin': np.array([100, 100., 200.]),
                       'kp_ang': np.array([100, 200., 100.]),  # R P Y
                       'kd_ang': np.array([10., 30., 10.]),
                       # real robot gains
@@ -136,7 +136,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_z': .27,
                       'spawn_R': 0.0,
                       'spawn_P': 0.0,
-                      'spawn_Y': np.pi/2,
+                      'spawn_Y': 0.0,
                       # use real robot or simulation
                       'real_robot': False} # note the frames are all aligned with base for joints = 0
 
