@@ -431,12 +431,10 @@ class Controller(BaseController):
             self.world_name_str = world_name
         if 'camera' in self.world_name_str:
             # check if some old jpg are still in /tmp
-            print('number of files /tmp/camera_save/default_camera_link_my_camera*: ')
-            n_files = os.system('ls /tmp/camera_save/ | grep "default_camera_link_my_camera*" | wc -l')
-            if n_files != 0:
-                remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
-                os.system(remove_jpg_cmd)
-                print(colored('Jpg files removed', 'blue'), flush=True)
+
+            remove_jpg_cmd = "rm /tmp/camera_save/*"
+            os.system(remove_jpg_cmd)
+            print(colored('Jpg files removed', 'blue'), flush=True)
 
         self.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
         #self.resetGravity(True)
