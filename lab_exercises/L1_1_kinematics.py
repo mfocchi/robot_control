@@ -13,7 +13,7 @@ from base_controllers.utils.kin_dyn_utils import directKinematics
 from base_controllers.utils.kin_dyn_utils import computeEndEffectorJacobian
 from base_controllers.utils.kin_dyn_utils import numericalInverseKinematics as ik
 from base_controllers.utils.kin_dyn_utils import fifthOrderPolynomialTrajectory as coeffTraj
-from base_controllers.utils.kin_dyn_utils import geometric2analyticJacobian as g2a
+from base_controllers.utils.kin_dyn_utils import geometric2analyticJacobian
 from base_controllers.utils.math_tools import Math
 import matplotlib.pyplot as plt
 from base_controllers.utils.common_functions import plotJoint
@@ -75,7 +75,7 @@ print("Direct Kinematics - ee Gometric Jacobian (6X4 matrix), differece with Pin
 ##################
 # exercise 2.3
 ##################
-J_a = g2a(J, T_0e)
+J_a = geometric2analyticJacobian(J, T_0e)
 #print("Analytic Jacobian:\n", J_a)
 
 ##################
@@ -95,8 +95,11 @@ q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi])
 
 # solution of the numerical ik
 q_f, log_err, log_grad = ik(p, q_i, line_search = False, wrap = False)
+
 # EXE 2.5
 #q_f, log_err, log_grad = ik(p, conf.q0, line_search = False, wrap = True)
+
+# sanity check
 # compare solution with values obtained through direct kinematics
 T_01, T_02, T_03, T_04, T_0e = directKinematics(q_f)
 rpy = math_utils.rot2eul(T_0e[:3,:3])
@@ -118,15 +121,16 @@ plt.xlabel("number of iterations")
 plt.semilogy(log_grad, linestyle='-', color='blue')
 plt.grid()
 
-# tm.sleep(2.)
-# ros_pub.add_marker(p[:3])
-# ros_pub.publish(robot, q_i)
-# tm.sleep(2.)
-# ros_pub.add_marker(p[:3])
-# ros_pub.publish(robot, q_f)
-# tm.sleep(2.)
-# ros_pub.add_marker(p[:3])
-
+# EXE 2.5 comment this part
+tm.sleep(2.)
+ros_pub.add_marker(p[:3])
+ros_pub.publish(robot, q_i)
+tm.sleep(2.)
+ros_pub.add_marker(p[:3])
+ros_pub.publish(robot, q_f)
+tm.sleep(2.)
+ros_pub.add_marker(p[:3])
+sys.exit()
 
 #######################################
 ##exercise 2.5: polynomial trajectory
@@ -160,7 +164,7 @@ while np.count_nonzero(q - q_f) :
     if ros_pub.isShuttingDown():
         print ("Shutting Down")
         break
-plotJoint('position', 0 , time_log.T, q_log.T)
+plotJoint('position', time_log, q_log.T)
 
 
 ros_pub.deregister_node()  

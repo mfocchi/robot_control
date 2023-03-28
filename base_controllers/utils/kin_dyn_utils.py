@@ -101,6 +101,7 @@ def directKinematics(q):
                       [math.sin(q1), math.cos(q1),  0, 0],
                       [0,               0,              1, 0],
                       [0,               0,              0, 1]])
+    # local hom. transform from link frame 0 to link frame 1
     T_01 = T_01r.dot(T_1r1)
 
 
@@ -116,6 +117,7 @@ def directKinematics(q):
                      [              0, 1,            0,        0],
                      [-math.sin(q2), 0, math.cos(q2), 0],
                      [              0, 0,              0, 1]])
+    # local hom. transform from link frame 1 to link frame 2
     T_12 = T_12r.dot(T_2r2)
 
 
@@ -131,6 +133,7 @@ def directKinematics(q):
                        [            0,  1,            0,   0],
                        [-math.sin(q3),  0, math.cos(q3),   0],
                        [            0,  0,            0,   1]])
+    #local hom. transform from link frame 2 to link frame 3
     T_23 = T_23r.dot(T_3r3)
 
 
@@ -146,6 +149,7 @@ def directKinematics(q):
                      [              0, 1,              0, 0],
                      [-math.sin(q4), 0, math.cos(q4), 0],
                      [              0, 0,              0, 1]])
+    #local hom. transform from link frame 3 to link frame 4
     T_34 = T_34r.dot(T_4r4)
 
     # end-effector
@@ -163,6 +167,9 @@ def directKinematics(q):
 
     return T_01, T_02, T_03, T_04, T_0e 
 
+'''
+    This function computes the Geometric Jacobian of the end-effector expressed in the base link frame 
+'''
 def computeEndEffectorJacobian(q):
 
     # compute direct kinematics 
@@ -227,7 +234,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
     lambda_ = 1e-08  # Regularization or damping factor (1e-08->0.01)
     max_iter = 200  # Maximum number of iterations
     # For line search only
-    gamma = 0.5
+    #gamma = 0.5
     beta = 0.5 # Step size reduction
 
     # initialization of variables
@@ -251,6 +258,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
         # error
         e_bar = p_e - p_d
         J_bar = geometric2analyticJacobian(J,T_0e)
+        # take first 4 rows correspondent to our task
         J_bar = J_bar[:4,:]
         # evaluate the gradient
         grad = J_bar.T.dot(e_bar)
@@ -275,7 +283,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
             q1 = q0 + dq * alpha
             q0 = q1
         else:
-            print("Itern # :", iter)
+            print("Iter # :", iter)
             # line search loop
             while True:
                 #update

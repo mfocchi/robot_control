@@ -180,7 +180,7 @@ The link tag represents a single link of a robot. Using this tag, we
 can model a robot link and its dynamic properties. The syntax is as follows:
 	
 \begin{Verbatim}	
-<link name="<name of the link>">
+<link name="name of the link">
 	<inertial>...........</inertial>
 	<visual> ............</visual>
 	<collision>..........</collision>
@@ -203,7 +203,7 @@ A  joint is formed between two links; the first is called the Parent link
 and the second is the Child link. The syntax is as follows:
 
 \begin{Verbatim}	
-<joint name="<name of the joint>" type"<type of the joint>"
+<joint name="name of the joint" type="type of the joint">
 	<parent link="link1"/>
 	<child link="link2"/>
 	<origin  xyz="..." rpy="..."/>
@@ -226,7 +226,7 @@ its link:
 \end{figure}
 
 In this picture the frame supporting the \textit{child} link is coincident with the joint frame so it means that the joint variable is 0.
-Its position / orientation is expressed via a rigid transform (with the tag origin) with  respect to the \textit{parent} link frame. 
+The position / orientation of the joint frame is expressed via a rigid transform (with the tag origin) with  respect to the \textit{parent} link frame. 
 %The axis of the joint is also defined with respect to the parent link frame (not the %inertial frame!). 
 \\
 
@@ -276,14 +276,15 @@ Again, you will visualize the described model and you can modify the value of th
 	roslaunch ros_impedance_controller visualize.launch robot_name:=ur4  
 \end{verbatim} 
 \normalsize
-Note that we did not have to specify the robot since \codeword{ur4_robot} is the default value of the argument \codeword{robot_name}. This will launch RVIZ and it will allow us to move around all four joints of our manipulator.\\
+Note that we could have not specified the robot name since \codeword{ur4} is the default value of the argument \codeword{robot_name}. This will launch RVIZ and it will allow us to move around all four joints of our manipulator.\\
 
 \textbf{1.4 ROS topics.} So far we have only mentioned that a node can publish a message, but where is this message "published to"? Messages are published to \textit{topics}, and this makes them available to other nodes that can \textit{subscribe} to a specific topic. In our case, our launch file (\codeword{visualize.launch}), runs a node called \codeword{joint_state_publisher_gui}, which is in charge, as its name indicates, to publish the joint values on to the topic \codeword{joint_states}. With the publisher, it also launches a gui that allows us to manually set the \codeword{joint_states} topic. Pay attention that usually this  will come directly from the robot or the simulator. Now let's check the content of the \codeword{joint_states} topic. Run again (in case you have stopped it) the command from the previous step and in a separate terminal run the following command:
 %
 \begin{verbatim}
 	rostopic echo /joint_states
 \end{verbatim}
-This will give a series of information about the \codeword{joint_states} topic, including the name and value for each of the joints of our manipulator. Change the values using the GUI and verify that the values of the joints are changing. In essence, the \codeword{joint_state_publisher} node is publishing the value of the joints on to the \codeword{joint_states} topic and the node running RVIZ subscribes to this topic to display it in the visualizer.
+
+This will give a series of information about the \codeword{joint_states} topic, including the name and value for each of the joints of our manipulator. Change the values using the GUI and verify that the values of the joints are changing. In essence, the \codeword{joint_state_publisher} node is publishing the value of the joints on to the \codeword{joint_states} topic and the node running RVIZ subscribes to this topic to display it in the visualizer. You can check the communication tree running the command  \codeword{rqt_graph}. 
 The \codeword{robot_state_publisher} node, instead, it computes the homogeneous transforms TF (i.e. the direct kinematics) for all the links, making RVIZ able to properly visualize the robot. 
 
 \section{Robot kinematics}
@@ -296,7 +297,7 @@ Once the model visualization is finished, we now proceed to derive and analyze t
 \end{verbatim}
 %
 Once PyCharm is opened, go to \codeword{File} and then \codeword{Open...} and select the folder where locosim is located (\codeword{/home/student/ros_ws/src/locosim}, and referred to as \codeword{LOCOSIM} from now on). To verify that everything is working properly, open the file \codeword{L2_joint_space_control} \codeword{space_control.py} inside of the \codeword{robot_control} and hit \codeword{Ctrl + Shift + F10}. You should see the manipulator going up and down. 
-Verify that the interpreter is set Python 2.7 (File/Settings/Project Interpreter).
+Verify that the interpreter is set to Python 3.X (File/Settings/Project Interpreter).
 This file was just for testing and we will use that in  the next lab session.
 %
 %
@@ -401,14 +402,20 @@ and implement it in the function \codeword{geometric2analyticJacobian}.\\
 To start simple, consider your task space variables to be the Cartesian space position (i.e., $x,y,z$) and the roll angle $\psi$ of the end-effector. 
 Why can't the full orientation be defined in the task? (hint: check which row in the Jacobians goes to zero).
 %You will need to adequately choose the rows of interest of the analytical Jacobian $\mathbf{J}_r$. 
-Since we have 4 task variables and 4 DoFs then   $\mathbf{J}_a$ is a square matrix and we expect $\mathbf{J}_a^T\mathbf{J}_a$ to be always invertible (out of singularities).  After implementing your function, try to find the corresponding joint angles for $p = \mat{-0.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to the roll angle $\psi$ of the end-effector frame. Set your hyper-parameters for the algorithm as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$, $\gamma = 0.5$ and $\beta = 0.5$. 
-First, implement the algorithm without line search (i.e., with constant step size $\alpha$) and then compare it with the adjustable step size. Is there any difference in the number of iterations?  (you should notice that the line search might take a smaller number of iterations, 10 instead of 24). What is the influence of the initial condition? 
-Check that the algorithm converges to different joint configurations depending on how you initialize it. Try to set it in order to converge to the elbow up or elbow down configuration.  Are the output values for the trajectory "safe"? 
+Since we have 4 task variables and 4 DoFs then   $\mathbf{J}_a$ is a square matrix and we expect $\mathbf{J}_a^T\mathbf{J}_a$ to be always invertible (out of singularities).  After implementing your function, try to find the corresponding joint angles for $p = \mat{-0.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to the roll angle $\psi$ of the end-effector frame. Set your hyper-parameters for the algorithm as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$ and $\beta = 0.5$ where $\beta$ is the coefficient of step-size reduction in the line search, and $\epsilon$ is the termination tolerance. 
+First, implement the algorithm without line search (i.e., with constant step size $\alpha$) and then compare it with the adjustable step size. Is there any difference in the number of iterations?  (you should notice that the line search might take a smaller number of iterations, 10 instead of 35). What is the influence of the initial condition? 
+Check that the algorithm converges to different joint configurations depending on how you initialize it and that the number of iterations changes. 
+Try to set it in order to converge to the elbow up or elbow down configuration.  
+%Are the output values for the trajectory "safe"? 
 
-In case of a bad initialization, you might notice that the values of the joint variables $q$ are very large. Is this the case? You will have to implement a "wrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
- 
 Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles obtained from the inverse kinematics and verify the error is close to zero.  
 %Then you  can compute the norm of the error between the position that was asked and the final position reached.
+ 
+
+Despite the correct result (no error at the end-effector), 
+you might notice that the values of the joint variables $q$ are very large. Why is this? 
+You will have to implement a "wrapping" function to keep the joint angles between $-2\pi$ and $2\pi$. 
+
  
 Now,  compare different outputs of the numerical inverse kinematics function  using the line search algorithm but limiting the maximum number of iteration to 3, 4 and 5, how much is the difference between the final position and the target? 
 
