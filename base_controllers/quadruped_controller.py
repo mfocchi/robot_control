@@ -1113,16 +1113,79 @@ class Controller(BaseController):
             self.deregister_node()
 
 
-    def save_reference(self, filename):
+
+    def saveData(self, path, filename='DATA.mat', EXTRADATA={},start=0, stop=-1, verbose = conf.verbose):
         DATA = {}
-        DATA['last_sample'] = self.log_counter
-        DATA['q_des'] = self.q_des_log[:, :self.log_counter]
-        DATA['qd_des'] = self.qd_des_log[:, :self.log_counter]
-        DATA['tau_ffwd'] = self.tau_ffwd_log[:, :self.log_counter]
+        DATA['comPosB_log'] = self.comPosB_log[:, start:stop]
+        DATA['comVelB_log'] = self.comVelB_log[:, start:stop]
+        DATA['comPoseW_log'] = self.comPoseW_log[:, start:stop]
+        DATA['comTwistW_log'] = self.comTwistW_log[:, start:stop]
+        DATA['comPoseW_des_log'] = self.comPoseW_des_log[:, start:stop]
+        DATA['comTwistW_des_log'] = self.comTwistW_des_log[:, start:stop]
+        DATA['basePoseW_log'] = self.basePoseW_log[:, start:stop]
+        DATA['baseTwistW_log'] = self.baseTwistW_log[:, start:stop]
+        DATA['basePoseW_des_log'] = self.basePoseW_des_log[:, start:stop]
+        DATA['baseTwistW_des_log'] = self.baseTwistW_des_log[:, start:stop]
 
-        savemat(filename, DATA)
+        DATA['basePoseW_legOdom_log'] = self.basePoseW_legOdom_log[:, start:stop]
+        DATA['baseTwistW_legOdom_log'] = self.baseTwistW_legOdom_log[:, start:stop]
+        DATA['q_des_log'] = self.q_des_log
+        DATA['q_log'] = self.q_log
+        DATA['qd_des_log'] = self.qd_des_log
+        DATA['qd_log'] = self.qd_log
+        DATA['tau_fb_log'] = self.tau_fb_log
+        DATA['tau_ffwd_log'] = self.tau_ffwd_log[:, start:stop]
 
-        print('Reference saved in', filename)
+
+        DATA['tau_des_log'] = self.tau_des_log[:, start:stop]
+        DATA['tau_log'] = self.tau_log
+        DATA['grForcesW_log'] = self.grForcesW_log[:, start:stop]
+        DATA['grForcesW_des_log'] = self.grForcesW_des_log[:, start:stop]
+        DATA['grForcesW_wbc_log'] = self.grForcesW_wbc_log[:, start:stop]
+        DATA['grForcesW_gt_log'] = self.grForcesW_gt_log[:, start:stop]
+        DATA['grForcesB_log'] = self.grForcesB_log[:, start:stop]
+        DATA['contact_state_log'] = self.contact_state_log[:, start:stop]
+
+        DATA['baseLinAccW_log'] = self.baseLinAccW_log[:, start:stop]
+        DATA['baseLinAccB_log'] = self.baseLinAccB_log[:, start:stop]
+
+        DATA['comVelW_leg_odom_log'] = self.comVelW_leg_odom_log[:, start:stop]
+
+
+        DATA['B_contacts_log'] = self.B_contacts_log[:, start:stop]
+        DATA['B_contacts_des_log'] = self.B_contacts_des_log[:, start:stop]
+
+        DATA['W_contacts_log'] = self.W_contacts_log[:, start:stop]
+        DATA['W_contacts_des_log'] = self.W_contacts_des_log[:, start:stop]
+
+        DATA['B_vel_contacts_des_log'] = self.B_vel_contacts_des_log[:, start:stop]
+        DATA['W_vel_contacts_des_log'] = self.W_vel_contacts_des_log[:, start:stop]
+
+        DATA['baseLinTwistImuW_log'] = self.baseLinTwistImuW_log[:, start:stop]
+
+
+        DATA['wrench_fbW_log'] = self.wrench_fbW_log[:, start:stop]
+        DATA['wrench_ffW_log'] = self.wrench_ffW_log[:, start:stop]
+        DATA['wrench_gW_log'] = self.wrench_gW_log[:, start:stop]
+        DATA['wrench_desW_log'] = self.wrench_desW_log[:, start:stop]
+
+
+        DATA['time_log'] = self.time_log[start:stop]
+        DATA['log_counter'] = self.log_counter
+
+        for key in EXTRADATA.keys():
+            if key in DATA.keys():
+                print("Key '" + key + "' found in EXTRADATA. Ignored", flush=True)
+            else:
+                DATA[key] = EXTRADATA[key]
+
+        if filename[-4:] != ".mat":
+            filename+=".mat"
+
+        savemat(path+"/"+filename, DATA)
+
+        if verbose:
+            print('Log data saved in '+ path+"/"+filename, flush=True)
 
     def get_current_frame_file(self):
         allfiles = [f for f in os.listdir('/tmp/camera_save') if os.path.isfile(os.path.join('/tmp/camera_save', f))]
