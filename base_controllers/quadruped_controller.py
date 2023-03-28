@@ -1194,11 +1194,11 @@ class Controller(BaseController):
         else:
             None
 
-    def save_video(self, path, start_file=None, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=True):
+    def saveVideo(self, path, start_file=None, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=False):
         # only if camera_xxx.world has been used
         # for details on commands, check https://ffmpeg.org/ffmpeg.html
         if 'camera' not in self.world_name_str:
-            print(colored('Cannot create a video of a not camera world (world_name:'+self.world_name_str+')', 'red'), flush=True)
+            print('Cannot create a video of a not camera world (world_name:'+self.world_name_str+')', flush=True)
             return
         #
         # # kill gazebo
@@ -1227,11 +1227,11 @@ class Controller(BaseController):
             saved = ' saved'
         else:
             saved = ' did not saved'
-        print(colored('Video '+videoname+saved, color='green'), flush=True)
+        print('Video '+videoname+saved, flush=True)
 
 
         if speedUpDown <= 0:
-            print(colored('speedUpDown must be greather than 0.0','red'))
+            print('speedUpDown must be greather than 0.0', flush=True)
         else:
             if speedUpDown != 1:
                 pts_multiplier = int(1 / speedUpDown)
@@ -1243,12 +1243,12 @@ class Controller(BaseController):
                     saved= ' saved'
                 else:
                     saved = ' did not saved'
-                print(colored('Video ' + videoname_speedUpDown+saved, color='green'), flush=True)
+                print('Video ' + videoname_speedUpDown+saved, flush=True)
 
         if remove_jpg:
             remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
             os.system(remove_jpg_cmd)
-            print(colored('Jpg files removed', color='green'), flush=True)
+            print('Jpg files removed', flush=True)
 
 
 
