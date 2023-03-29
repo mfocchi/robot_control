@@ -1310,12 +1310,12 @@ class Controller(BaseController):
                     saved= ' saved'
                 else:
                     saved = ' did not saved'
-                print('Video ' + videoname_speedUpDown+saved, flush=True)
+                #print('Video ' + videoname_speedUpDown+saved, flush=True)
 
         if remove_jpg:
             remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
             os.system(remove_jpg_cmd)
-            print('Jpg files removed', flush=True)
+            #print('Jpg files removed', flush=True)
 
 
 
