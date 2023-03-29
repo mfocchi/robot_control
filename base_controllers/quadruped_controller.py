@@ -339,6 +339,7 @@ class Controller(BaseController):
             self.robot_height += self.robot.data.oMf[id].translation[2]
         self.robot_height /= -4.
 
+        self.loop_time_log = np.full((conf.robot_params[self.robot_name]['buffer_size']), np.nan)
 
     def logData(self):
         # full with new values
@@ -397,6 +398,8 @@ class Controller(BaseController):
 
 
         self.time_log[self.log_counter] = self.time
+        self.loop_time_log[self.log_counter] = self.loop_time
+
         self.log_counter += 1
         self.log_counter %= conf.robot_params[self.robot_name]['buffer_size']
 
@@ -1170,7 +1173,19 @@ class Controller(BaseController):
         DATA['wrench_desW_log'] = self.wrench_desW_log[:, start:stop]
 
 
+        DATA['kp_j'] = self.kp_j
+        DATA['kd_j'] = self.kd_j
+        DATA['ki_j'] = self.ki_j
+        DATA['kp_lin'] = self.kp_lin
+        DATA['kd_lin'] = self.kd_lin
+        DATA['kp_ang'] = self.kp_ang
+        DATA['kd_ang'] = self.kd_ang
+        DATA['kp_wbc_j'] = self.kp_wbc_j
+        DATA['kd_wbc_j'] = self.kd_wbc_j
+        DATA['ki_wbc_j'] = self.ki_wbc_j
+
         DATA['time_log'] = self.time_log[start:stop]
+        DATA['loop_time_log'] = self.loop_time_log[start:stop]
         DATA['log_counter'] = self.log_counter
 
         for key in EXTRADATA.keys():
