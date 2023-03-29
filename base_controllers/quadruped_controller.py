@@ -272,10 +272,8 @@ class Controller(BaseController):
 
         self.NEMatrix = np.zeros([6, 3*self.robot.nee]) # Newton-Euler matrix
 
-        try:
-            self.force_th = conf.robot_params[self.robot_name]['force_th']
-        except KeyError:
-            self.force_th = 0.
+        self.force_th = conf.robot_params[self.robot_name].get('force_th', 0.)
+        self.contact_th = conf.robot_params[self.robot_name].get('contact_th', 0.)
 
         self.W_vel_contacts_des = self.u.full_listOfArrays(4, 3)
         self.B_vel_contacts_des = self.u.full_listOfArrays(4, 3)
@@ -340,6 +338,21 @@ class Controller(BaseController):
         self.robot_height /= -4.
 
         self.loop_time_log = np.full((conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+
+        half_lenght = self.robot.collision_model.geometryObjects[0].geometry.halfSide[0]
+        half_width = self.robot.collision_model.geometryObjects[0].geometry.halfSide[1]
+        half_height = self.robot.collision_model.geometryObjects[0].geometry.halfSide[2]
+        self.bControlPoints = [ np.array([half_lenght, half_width, -half_height]),# lf_bottom
+                                np.array([-half_lenght, half_width, -half_height])  ,# lh_bottom
+                                np.array([half_lenght, -half_width, -half_height])  ,# rf_bottom
+                                np.array([-half_lenght, -half_width, -half_height]) , # rf_bottom
+                                np.array([half_lenght, half_width, half_height])  ,# lf_top
+                                np.array([-half_lenght, half_width, half_height]) , # lh_top
+                                np.array([half_lenght, -half_width, half_height]) , # rf_top
+                                np.array([-half_lenght, -half_width, half_height])]  # rf_top
+
+        self.kfe_idx = [self.robot.model.getFrameId(leg + '_kfe_joint') for leg in ['lf', 'lh', 'rf', 'rh']]
+
 
     def logData(self):
         # full with new values
@@ -875,6 +888,45 @@ class Controller(BaseController):
                                                                                       update_legOdom=update_legOdom)
         self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
         super(Controller, self).updateKinematics()
+
+
+    def checkGroundCollisions(self):
+        # retrun codes
+        # -1 no collisions
+        # base collisions
+        # 0 lf_bottom
+        # 1 lh_bottom
+        # 2 rf_bottom
+        # 3 rf_bottom
+        # 4 lf_top
+        # 5 lh_top
+        # 6 rf_top
+        # 7 rf_top
+        # kfe collisions
+        # 8 lf_kfe
+        # 9 lf_kfe
+        # 10 lf_kfe
+        # 11 lf_kfe
+
+        # return True/False
+
+        # base control points
+        for i, pt in enumerate(self.bControlPoints):
+            wControlPoint = self.mapBaseToWorld(pt)
+            print(wControlPoint)
+            if wControlPoint[2] < self.contact_th:
+                #return i
+                return True
+
+        # kfe collision
+        for i, id in enumerate(self.kfe_idx):
+            wKfe_pos = self.mapBaseToWorld(self.robot.data.oMf[id].translation) # update kin computes quantity in base frame
+            if wKfe_pos[2] < self.contact_th:
+                #return self.bControlPoints+i
+                return True
+
+        # return -1
+        return False
 
     def startupProcedure(self):
         ros.sleep(.5)
