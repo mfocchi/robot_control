@@ -472,7 +472,7 @@ class Controller(BaseController):
         if resetPid:
             self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
         gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
-        for k in range(100): # for 100 iteration keep the position, needed for restore joints
+        while np.linalg.norm(self.qd)>0.05: # for 100 iteration keep the position, needed for restore joints
             self.send_command(q_des, qd_des, tau_ffwd)
         if baseTwistW is None:
             baseTwistW = np.zeros(6)
