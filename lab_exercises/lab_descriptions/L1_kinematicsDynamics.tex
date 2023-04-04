@@ -386,9 +386,43 @@ where $\mathbf{T}_{RPY}^{-1}$ is the transformation matrix from angular velocity
 \end{equation*}
 
 and implement it in the function \codeword{geometric2analyticJacobian}.\\
+Let's have a look to the structure of the Analytical Jacobian and compare with the Geometrical one both computed at the $q_0$ configuration. 
+There is a rows of zeros in the angular (the lienar part is the same) part in two different directions, why is that?
+
+\begin{verbatim}
+Geometric Jacobian:
+[ 0.11015 -0.43244 -0.2698   0.0414 ]
+[-0.68538  0.       0.      -0.     ]
+[ 0.      -0.68538 -0.29273 -0.05395]
+[ 0.      -0.      -0.      -0.     ]
+[ 0.      -1.      -1.      -1.     ]
+[ 1.       0.       0.       0.     ]
+
+Analytic Jacobian:
+[ 0.11015 -0.43244 -0.2698   0.0414 ]
+[-0.68538  0.       0.      -0.     ]
+[ 0.      -0.68538 -0.29273 -0.05395]
+[ 0.       1.       1.       1.     ]
+[ 0.       0.       0.       0.     ]
+[ 1.       0.       0.       0.     ]
+\end{verbatim}
 
 
+This fact gives us the chance to deeply understand the difference between the two Jacobian. Let's have a loot to the orientation of the end-effector frame 
+in the $q_0$ configuration, illustrated in Fig. \ref{fig:init_conf}
 
+\begin{figure}[bht]
+	\centering
+	\includegraphics[width=8cm]{pics/init_config.png}
+	\caption{End-effector and world frames at the initial configuration $q_0$}
+	\label{fig:init_conf}
+\end{figure}
+
+
+In the case of the Geometric Jacobian the row of zeros is the 3rd one, while in the Analitic is the 4th. 
+This is reasonable because in the Geometric we have $\omega$ as output which is defined in in the world frame (Euclidean). 
+Considering the kinematic structure of the robot there is no motion of the joints that can create a change of of orientation for the end effector 
+about the X axis (red arrow). In the case of the Geometric Jacobian is the 4th row instead. This is meaningful if we consider that the Geometric Jacobian maps into Euler Rates which are subsequent rotations of the end-effector axes. In this case  it is intuitive to see that there is no motion of the joints that can create a rotation about the pitch (Y axis green) of the end-effector.
 
 \textbf{2.4 Numerical inverse kinematics (lecture E4).} Now you have all the necessary ingredients to compute the manipulator's inverse kinematics. Since we have 4-DoF, the analytical solution of the inverse kinematics problems is not straightforward, so we suggest to take the iterative approach given by the algorithm described in Fig.~\ref{fig:CLIK}.  
 %
