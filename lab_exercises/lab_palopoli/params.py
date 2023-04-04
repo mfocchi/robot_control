@@ -22,12 +22,12 @@ robot_params['myrobot'] ={'dt': 0.001,
 
 
 robot_params['tractor'] ={'dt': 0.001,
-                        'kp': np.array([10.,   10.,    10.,  10.]),
-                        'kd':  np.array([1.,    1.,    1.,   1.  ]),
+                        'kp': np.array([100.,   100.,    100.,  100.]),
+                        'kd':  np.array([10.,    10.,    10.,   10.  ]),
                         'q_0':  np.array([0, 0, 0, 0]),
                         'joint_names': ['front_left_wheel_joint', 'front_right_wheel_joint',  'rear_left_wheel_joint', 'rear_right_wheel_joint'],
                         'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
-                        'spawn_x': 0.0,
+                        'spawn_x': -0.5,
                         'spawn_y': 0.0,
                         'spawn_z': 1.0,
                         'buffer_size': 30001}
@@ -41,7 +41,7 @@ robot_params['ur5'] ={'dt': 0.001,
                        'control_mode': 'point', # 'trajectory','point'
                        'real_robot': False,
                        'control_type': 'position', # 'position', 'torque'
-                       'gripper_sim': True, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
+                       'gripper_sim': False, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
                        'soft_gripper': False, # False: 3 finger rigid gripper, True: 2 finger soft gripper
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,

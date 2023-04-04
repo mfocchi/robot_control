@@ -21,7 +21,7 @@ class GenericSimulator(BaseController):
     def __init__(self, robot_name="tractor"):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.freezeBaseFlag = False
-        self.torque_control = True
+        self.torque_control = False
         print("Initialized murobot controller---------------------------------------------------------------")
 
     def initVars(self):
@@ -38,15 +38,14 @@ class GenericSimulator(BaseController):
 def talker(p):
     p.start()
     additional_args = None #'gui:=false'
-    p.startSimulator(additional_args = additional_args)
+    #p.startSimulator(additional_args = ['spawn_Y:=3.14'])
+    p.startSimulator(world_name='tractor.world', additional_args=['spawn_Y:=3.14'])
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()
     p.startupProcedure()
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
-
-
 
     p.q_des = np.copy(p.q_des_q0)
     # for torque control
@@ -57,11 +56,13 @@ def talker(p):
     # p.pid.setPDjoint(1, 0.0, 0.0, 0.0)
     # p.pid.setPDjoint(2, 0.0, 0.0, 0.0)
     # p.pid.setPDjoint(3, 0.0, 0.0, 0.0)
+    forward_speed = -0.007
+
     while not ros.is_shutdown():
-        p.qd_des = 0.007 * np.ones(4)
-        p.q_des = p.q_des + 0.007*np.ones(4)
+        p.qd_des = forward_speed * np.ones(4)
+        p.q_des = p.q_des + forward_speed*np.ones(4)
         if p.torque_control:
-            p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des, p.q) - conf.robot_params[p.robot_name]['kd'] * p.qd
+            p.tau_ffwd = 30*conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des, p.q) -2* conf.robot_params[p.robot_name]['kd'] * p.qd
         else:
             p.tau_ffwd = np.zeros(p.robot.na)
 
