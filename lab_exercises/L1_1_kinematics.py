@@ -87,7 +87,7 @@ p = np.array([-0.5, -0.2, 0.5, math.pi/3])
 #p = np.array([-1.0, -0.2, 0.5, math.pi/3])
 
 # initial guess (elbow up)
-q_i  = np.array([ 0.5, -1.0, -0.8, -math.pi])
+q_i  = np.array([ 0.5, -1.5, 1.0, -math.pi])
 # initial guess (elbow down)
 #q_i  = np.array([ -0.5, 1.0, -0.8, -math.pi])
 # initial guess (bad initialization)
