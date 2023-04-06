@@ -408,13 +408,15 @@ Analytic Jacobian:
 \end{verbatim}
 
 
+
+
 This fact gives us the chance to deeply understand the difference between the two Jacobian. Let's have a loot to the orientation of the end-effector frame 
 in the $q_0$ configuration, illustrated in Fig. \ref{fig:init_conf}
 
 \begin{figure}[bht]
 	\centering
 	\includegraphics[width=8cm]{pics/init_config.png}
-	\caption{End-effector and world frames at the initial configuration $q_0$}
+	\caption{End-effector and world frames at the initial configuration $q_0 = ( \pi, -\pi/8, -\pi/6, 0 ) $   }
 	\label{fig:init_conf}
 \end{figure}
 
@@ -422,7 +424,61 @@ in the $q_0$ configuration, illustrated in Fig. \ref{fig:init_conf}
 In the case of the Geometric Jacobian the row of zeros is the 3rd one, while in the Analitic is the 4th. 
 This is reasonable because in the Geometric we have $\omega$ as output which is defined in in the world frame (Euclidean). 
 Considering the kinematic structure of the robot there is no motion of the joints that can create a change of of orientation for the end effector 
-about the X axis (red arrow). In the case of the Geometric Jacobian is the 4th row instead. This is meaningful if we consider that the Geometric Jacobian maps into Euler Rates which are subsequent rotations of the end-effector axes. In this case  it is intuitive to see that there is no motion of the joints that can create a rotation about the pitch (Y axis green) of the end-effector.
+about the X axis (red arrow). In the case of the Geometric Jacobian is the 4th row instead. This is meaningful if we consider that the Geometric Jacobian maps into Euler Rates which are subsequent rotations of the end-effector axes. In this case  it is intuitive to see that there is no motion of the joints that can create a local rotation about the pitch (Y axis green) of the end-effector.
+Are all this findings are specific of the $q_0$ configuration or there is something more structural? Let's recompute the Jacobians after subtracting $90^\circ$ to the \codeword{shoulder_pan_joint}? (see Fig. \ref{fig:init_conf90}):
+
+\begin{figure}[bht]
+	\centering
+	\includegraphics[width=8cm]{pics/init_config_pan_90.png}
+	\caption{End-effector and world frames at the configuration $q = ( \pi/2, -\pi/8, -\pi/6, 0 )  $ }
+	\label{fig:init_conf90}
+\end{figure}
+
+\begin{verbatim}
+Geometric Jacobian:
+[[-0.68538  0.       0.      -0.     ]
+[-0.11015  0.43244  0.2698  -0.0414 ]
+[ 0.      -0.68538 -0.29273 -0.05395]
+[ 0.      -1.      -1.      -1.     ]
+[ 0.       0.       0.       0.     ]
+[ 1.       0.       0.       0.     ]]
+
+Analytic Jacobian:
+[[-0.68538  0.       0.      -0.     ]
+[-0.11015  0.43244  0.2698  -0.0414 ]
+[ 0.      -0.68538 -0.29273 -0.05395]
+[ 0.       1.       1.       1.     ]
+[ 0.       0.       0.       0.     ]
+[ 1.       0.       0.       0.     ]]
+\end{verbatim}
+
+In this case the rows of zeros in both Jacobians is the 4-th one, which related to the fact that, in this configuration, 
+no joint can change orientation of the end-effector frame w.r.t to the Y axis of the base link (in the case of the  Geometric Jacobian). The linear part is also the same but different from the previous case.
+If we move only $45^\circ$ the \codeword{shoulder_pan_joint} instead we get these results:
+
+
+\begin{verbatim}
+Geometric Jacobian:
+[-0.40675 -0.30578 -0.19078  0.02927]
+[-0.56253  0.30578  0.19078 -0.02927]
+[ 0.      -0.68538 -0.29273 -0.05395]
+[ 0.      -0.70711 -0.70711 -0.70711]
+[ 0.      -0.70711 -0.70711 -0.70711]
+[ 1.       0.       0.       0.     ]
+
+Analytic Jacobian:
+[-0.40675 -0.30578 -0.19078  0.02927]
+[-0.56253  0.30578  0.19078 -0.02927]
+[ 0.      -0.68538 -0.29273 -0.05395]
+[ 0.       1.       1.       1.     ]
+[ 0.      -0.      -0.      -0.     ]
+[ 1.       0.       0.       0.    ]
+\end{verbatim}
+
+Again, the linear part changed w.r.t the previous case, but while the Analytic Jacobian still maintain the 4th row of zeros, the Geometric Jacobian no longer has it. 
+This highlights the fact that, being the Euler Angles subsequent rotations, and the Euler Rates the infinitesimal changes of these angles, they are expresssed  about the end-effector axes,
+hence they have a "local" meaning. This is independent by the overall orientation of the arm w.r.t to the base link (dictated by the  \codeword{shoulder_pan_joint}). 
+Instead, the  Geometric Jacobian (orientation part) always spits out the vector $\omega$ of angular velocity, which represents the rate of change of the orientation of the end-effector axes with respect to the base frame axes, hence it is affected by the  \codeword{shoulder_pan_joint}.
 
 \textbf{2.4 Numerical inverse kinematics (lecture E4).} Now you have all the necessary ingredients to compute the manipulator's inverse kinematics. Since we have 4-DoF, the analytical solution of the inverse kinematics problems is not straightforward, so we suggest to take the iterative approach given by the algorithm described in Fig.~\ref{fig:CLIK}.  
 %
