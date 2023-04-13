@@ -196,13 +196,13 @@ class JumpLegController(BaseControllerFixed):
 
         self.set_state = ros.ServiceProxy(
             '/gazebo/set_model_state', SetModelState)
-        print("JumplegAgent services ready")
+        print("JumplegAgentTorque services ready")
         self.action_service = ros.ServiceProxy(
-            'JumplegAgent/get_action', get_action)
+            'JumplegAgentTorque/get_action', get_action)
         self.target_service = ros.ServiceProxy(
-            'JumplegAgent/get_target', get_target)
+            'JumplegAgentTorque/get_target', get_target)
         self.reward_service = ros.ServiceProxy(
-            'JumplegAgent/set_reward', set_reward)
+            'JumplegAgentTorque/set_reward', set_reward_original)
 
     def logData(self):
         if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
@@ -334,7 +334,7 @@ class JumpLegController(BaseControllerFixed):
     def loadRLAgent(self, mode='train', data_path=None, model_name='latest', restore_train=False):
         print(colored(f"Starting RLagent in  {mode} mode", "red"))
         package = 'jumpleg_rl'
-        executable = 'JumplegAgent.py'
+        executable = 'JumplegAgentTorque.py'
         name = 'rlagent'
         namespace = '/'
         args = f'--mode {mode} --data_path {data_path} --model_name {model_name} --restore_train {restore_train}'
@@ -345,10 +345,10 @@ class JumpLegController(BaseControllerFixed):
         process = self.launch.launch(node)
 
         # wait for agent service to start
-        print("Waiting for JumplegAgent services")
-        ros.wait_for_service('JumplegAgent/get_action')
-        ros.wait_for_service('JumplegAgent/get_target')
-        ros.wait_for_service('JumplegAgent/set_reward')
+        print("Waiting for JumplegAgentTorque services")
+        ros.wait_for_service('JumplegAgentTorque/get_action')
+        ros.wait_for_service('JumplegAgentTorque/get_target')
+        ros.wait_for_service('JumplegAgentTorque/set_reward')
 
     def computeActivationFunction(self, activationType, value, lower, upper):
 
@@ -406,7 +406,7 @@ class JumpLegController(BaseControllerFixed):
         target_cost = np.log(1+target_cost)*1000
         # evaluate final com velocity error at lift off cost
 
-        msg = set_rewardRequest()
+        msg = set_reward_originalRequest()
 
         if done == 1:
             print(colored("EPISODE DONE", "red"))
@@ -477,9 +477,9 @@ def talker(p):
 
 
 
-    # p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
-    # p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
-    p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=False)
+    # p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_torque", model_name='latest', restore_train=False)
+    # p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_torque", model_name='latest', restore_train=False)
+    p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs_torque", model_name='latest', restore_train=False)
 
     p.initVars()
     ros.sleep(1.0)
@@ -547,14 +547,17 @@ def talker(p):
                     p.trustPhaseFlag = True
 
                 # Ask for torque value
+                p.pause_physics_client()
                 state = np.concatenate((p.q, p.qd, p.target_CoM))
+                print(f"Agent state:\n {state}\n")
                 action = p.action_service(state).action
-                #print(f"Actor action with torques:\n {action}\n")
+                print(f"Actor action with torques:\n {action}\n")
 
                 # Apply action
                 p.tau_ffwd[3] = np.array(action[0])
                 p.tau_ffwd[4] = np.array(action[1])
                 p.tau_ffwd[5] = np.array(action[2])
+                p.unpause_physics_client()
 
                 if p.evaluateRunningCosts():
                     break # robot has fallen
