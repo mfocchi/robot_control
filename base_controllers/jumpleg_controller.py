@@ -346,17 +346,17 @@ class JumpLegController(BaseControllerFixed):
         return tau_leg, feet_force
 
     def detectApex(self):
-        foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
+        foot_pos_w = self.base_offset + self.q[:3] + self.x_ee
         # foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.017)
         if not self.detectedApexFlag and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
-                p.pause_physics_client()
+                self.pause_physics_client()
                 for i in range(10):
-                    p.setJumpPlatformPosition(p.target_CoM)
-                p.unpause_physics_client()
-                p.contactForceW = np.zeros(3)
+                    self.setJumpPlatformPosition(self.target_CoM)
+                self.unpause_physics_client()
+                self.contactForceW = np.zeros(3)
                 print(colored("APEX detected", "red"))
                 self.q_des[3:] = self.q_des_q0[3:]
 
@@ -499,7 +499,7 @@ class JumpLegController(BaseControllerFixed):
         # foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
         # if (foot_pos_w[2] <= 0.017 ):
         #print(p.contactForceW)
-        contact_force = np.linalg.norm(p.contactForceW)
+        contact_force = np.linalg.norm(self.contactForceW)
         if contact_force > 1.:
             print(colored("TOUCHDOWN detected", "red"))
             return True
@@ -629,7 +629,7 @@ class JumpLegController(BaseControllerFixed):
         os.system(" pkill rosmaster")
 
     def setJumpPlatformPosition(self, target):
-        if not p.no_gazebo:
+        if not self.no_gazebo:
             # create the message
             set_platform_position = SetModelStateRequest()
             # create model state
