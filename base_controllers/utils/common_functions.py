@@ -176,7 +176,7 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
     return ax
 
 def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None,
-              sharex=True, sharey=True, start=0, end=-1):
+              sharex=False, sharey=False, start=0, end=-1):
     plot_var_des_log = None
     if name == 'position':
         unit = '[rad]'
@@ -360,7 +360,7 @@ def plotAdmittanceTracking(figure_id, time_log, x_log, x_des_log, x_des_log_adm,
     plt.grid()
 
 def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc_log=None, Acc_log=None,
-              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
+              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=False, sharey=False, start=0, end=-1):
     plot_var_des_log = None
     if name == 'position':
         labels = ["x", "y", "z", "R", "P", "Y"]
