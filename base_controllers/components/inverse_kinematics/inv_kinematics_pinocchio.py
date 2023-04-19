@@ -334,7 +334,7 @@ class robotKinematics():
                 q1 = q0 + dq * alpha
                 self.robot.computeAllTerms(q1, np.zeros(6))
                 ee_pos1 = self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).translation
-                w_R_e1 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).rotation
+                w_R_e1 = self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).rotation
 
                 e_bar_new = np.hstack((ee_pos_des - ee_pos1, w_R_e1.dot(self.errorInSO3(w_R_e1, w_R_e_des))))
                 # print "e_bar_new", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)

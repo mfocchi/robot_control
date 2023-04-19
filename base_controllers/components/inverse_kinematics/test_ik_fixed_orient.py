@@ -27,7 +27,7 @@ ee_frame = 'tool0'
 
 ## IMPORTANT these value is reasonable only for ur_description urdf ! not for the one in example robot data! they have base frames rotated!
 ee_pos_des = np.array([-0.52636,  0.48073, -0.491 ])
-#This is the result it should get close (not that there are infinite solutions without the postural task!)
+#This is the result it should get close 
 qtest = np.array([ 0.76689, -1.17447,  1.08174, -6.18935,  2.33769,  1.57316])
 
 #orient reference
