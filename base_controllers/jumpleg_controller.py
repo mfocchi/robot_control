@@ -99,6 +99,7 @@ class JumpLegController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         self.agentMode = 'train'
         self.restoreTrain = False
+        self.gui = False
 
 
         self.EXTERNAL_FORCE = False
@@ -197,7 +198,8 @@ class JumpLegController(BaseControllerFixed):
         self.cost = Cost()
 
         # unilateral friction singularity joint_range joint_torques error_vel_liftoff error_pos_liftoff unfeasible_vertical_velocity no_touchdown target
-        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 300., 1000., 10., 10., 1.])
+        # self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 300., 1000., 10., 10., 1.])
+        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 30., 100., 100., 10., 1.])
 
         self.mu = 0.8
 
@@ -459,9 +461,9 @@ class JumpLegController(BaseControllerFixed):
 
 
 
-        print(q_full.T)
-        print(J)
-        print("\n")
+        # print(q_full.T)
+        # print(J)
+        # print("\n")
 
         qd_leg = np.linalg.pinv(J).dot(-comd)
 
@@ -634,33 +636,46 @@ class JumpLegController(BaseControllerFixed):
         print(colored("Costs: " + self.cost.printCosts(), "green"))
         print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
 
-        reward = self.cost.weights[9] * target_cost - (self.cost.weights[0] * self.cost.unilateral +
-                                                       self.cost.weights[1] * self.cost.friction +
-                                                       self.cost.weights[2] * self.cost.singularity +
-                                                       self.cost.weights[3] * self.cost.joint_range +
-                                                       self.cost.weights[4] * self.cost.joint_torques +
-                                                       self.cost.weights[5] * self.cost.error_vel_liftoff+
-                                                       self.cost.weights[6] * self.cost.error_pos_liftoff+
-                                                       self.cost.weights[7] * self.cost.unfeasible_vertical_velocity+
-                                                       self.cost.weights[8] * self.cost.no_touchdown)
+        total_cost = (self.cost.weights[0] * self.cost.unilateral +
+                       self.cost.weights[1] * self.cost.friction +
+                       self.cost.weights[2] * self.cost.singularity +
+                       self.cost.weights[3] * self.cost.joint_range +
+                       self.cost.weights[4] * self.cost.joint_torques +
+                       self.cost.weights[5] * self.cost.error_vel_liftoff +
+                       self.cost.weights[6] * self.cost.error_pos_liftoff +
+                       self.cost.weights[7] * self.cost.unfeasible_vertical_velocity +
+                       self.cost.weights[8] * self.cost.no_touchdown)
+
+        reward = self.cost.weights[9] * target_cost - total_cost
 
 
         if (reward < 0):
             reward = 0
 
-        # unil  friction sing jointrange torques target
         msg.next_state = np.concatenate((self.com, self.target_CoM))
         msg.reward = reward
-        msg.target_cost = target_cost
-        msg.unilateral = self.cost.unilateral
-        msg.friction = self.cost.friction
-        msg.singularity = self.cost.singularity
-        msg.joint_range = self.cost.joint_range
-        msg.joint_torques = self.cost.joint_torques
-        msg.error_vel_liftoff = self.cost.error_vel_liftoff
-        msg.error_pos_liftoff = self.cost.error_pos_liftoff
-        msg.unfeasible_vertical_velocity = self.cost.unfeasible_vertical_velocity
-        msg.no_touchdown = self.cost.no_touchdown
+        # msg.target_cost = target_cost
+        # msg.unilateral = self.cost.unilateral
+        # msg.friction = self.cost.friction
+        # msg.singularity = self.cost.singularity
+        # msg.joint_range = self.cost.joint_range
+        # msg.joint_torques = self.cost.joint_torques
+        # msg.error_vel_liftoff = self.cost.error_vel_liftoff
+        # msg.error_pos_liftoff = self.cost.error_pos_liftoff
+        # msg.unfeasible_vertical_velocity = self.cost.unfeasible_vertical_velocity
+        # msg.no_touchdown = self.cost.no_touchdown
+
+        msg.target_cost = self.cost.weights[9] * target_cost
+        msg.unilateral = self.cost.weights[0] * self.cost.unilateral
+        msg.friction = self.cost.weights[1] * self.cost.friction
+        msg.singularity = self.cost.weights[2] * self.cost.singularity
+        msg.joint_range = self.cost.weights[3] * self.cost.joint_range
+        msg.joint_torques = self.cost.weights[4] * self.cost.joint_torques
+        msg.error_vel_liftoff = self.cost.weights[5] * self.cost.error_vel_liftoff
+        msg.error_pos_liftoff = self.cost.weights[6] * self.cost.error_pos_liftoff
+        msg.unfeasible_vertical_velocity = self.cost.weights[7] * self.cost.unfeasible_vertical_velocity
+        msg.no_touchdown = self.cost.weights[8] * self.cost.no_touchdown
+        msg.total_cost = total_cost
 
         self.reward_service(msg)
 
@@ -718,7 +733,7 @@ def talker(p):
         if p.DEBUG:
             additional_args=['gui:=true']
         else:
-            additional_args = ['gui:=false']
+            additional_args = [f'gui:={p.gui}']
         p.startSimulator("jump_platform.world", additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
