@@ -6,6 +6,9 @@ Created on Fri Nov  2 16:52:08 2018
 """
 
 from __future__ import print_function
+
+import sys
+
 import base_controllers.params as conf
 from jumpleg_rl.srv import *
 from gazebo_msgs.srv import SetModelStateRequest
@@ -99,6 +102,7 @@ class JumpLegController(BaseControllerFixed):
 
 
         self.EXTERNAL_FORCE = False
+        self.DEBUG = False
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
         self.no_gazebo = False
@@ -740,6 +744,8 @@ def talker(p):
             print(colored("# RECIVED STOP TARGET_COM SIGNAL #", "red"))
             break
 
+        if p.DEBUG: # overwrite target
+            p.target_CoM = np.array([0.3,0,0.25])
         state = np.concatenate((com_0, p.target_CoM))
         action = p.action_service(state).action
         #print("Action from agent:", action)
@@ -845,7 +851,9 @@ def talker(p):
                 p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
             # log variables
-            #p.logData()
+
+            if p.DEBUG:
+                p.logData()
 
             # disturbance force
             # if (p.time > 3.0 and p.EXTERNAL_FORCE):
@@ -901,7 +909,8 @@ def talker(p):
         p.evalTotalReward(com_lo, comd_lo)
         p.cost.reset()
         plt.cla()
-        p.unpause_physics_client()
+        if p.DEBUG:
+            break
 
 
 if __name__ == '__main__':
@@ -915,13 +924,13 @@ if __name__ == '__main__':
     finally:
         if conf.plotting:
             print("PLOTTING")
-            # plotFrameLinear('com position', 1, p.time_log, None, p.com_log)
-            # # plotFrameLinear('contact force', 2, p.time_log,
+            #plotFrameLinear('com position', p.time_log, None, p.com_log)
+            # # plotFrameLinear('contact force', p.time_log,
             # #               None, p.contactForceW_log)
-            # plotJoint('position', 3, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-            #             joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            # plotJoint('velocity', 4, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-            #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            # plotJoint('acceleration', 5, p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+            plotJoint('position', p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                         joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('velocity', p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
+                       joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            # plotJoint('acceleration', p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
             #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
 
