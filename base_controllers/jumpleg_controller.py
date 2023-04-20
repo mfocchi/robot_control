@@ -443,9 +443,28 @@ class JumpLegController(BaseControllerFixed):
         q_leg, ik_success, initial_out_of_workspace = p.ikin.invKinFoot(
             -com,  conf.robot_params[p.robot_name]['ee_frame'],  p.q_des_q0[3:].copy(), verbose=False)
         # we need to recompute the jacobian  for the final joint position
-        J= p.robot.frameJacobian(np.hstack((np.zeros(3), q_leg)),   p.robot.model.getFrameId(
-            conf.robot_params[p.robot_name]['ee_frame']), True,   pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+        q_full = np.zeros(6)
+        q_full[3:] = q_leg
+
+        pin.forwardKinematics(self.robot.model, self.robot.data, q_full, np.zeros(self.robot.model.nv),
+                              np.zeros(self.robot.model.nv))
+        pin.computeJointJacobians(self.robot.model, self.robot.data)
+        pin.computeFrameJacobian(self.robot.model, self.robot.data, q_full,
+                                 p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']))
+        J = pin.getFrameJacobian(self.robot.model, self.robot.data,
+                                 p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']),
+                                 pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+        # this creates spikes in qd
+        #J = p.robot.frameJacobian(q_full, p.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame']), True,   pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
+
+
+
+        print(q_full.T)
+        print(J)
+        print("\n")
+
         qd_leg = np.linalg.pinv(J).dot(-comd)
+
         # we assume it stops decelerating
         Jdqd = self.robot.frameClassicAcceleration(np.hstack((np.zeros(3), q_leg)), np.hstack(
             (comd, qd_leg)), None, self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).linear
@@ -936,4 +955,5 @@ if __name__ == '__main__':
             plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             #plotJoint('acceleration', p.time_log, qdd_log=p.qdd_log,qdd_des_log=p.qdd_des_log,joint_names=conf.robot_params[p.robot_name]['joint_names'])
-
+        ros.signal_shutdown("killed")
+        p.deregister_node()
