@@ -671,7 +671,13 @@ For this part of the assignment, we will use these three main files:
 %	
 	\mathbf{a}_{ci} &= \mathbf{a}_{i} + \dot{\boldsymbol{\omega}}_{i} \times \mathbf{p}_{i,c} + \boldsymbol{\omega}_{i} 	\times (\boldsymbol{\omega}_{i} \times \mathbf{p}_{i,c})
 \end{align*} 
-where the last equations is the acceleration of the CoM, and vector $\mathbf{p}_{i,c}$ is the vector from joint frame $i$ to the CoM frame. This expression will be used to compute the forces and moments along the entire chain. It is important to note that the forward pass will be computed from the base link, which is not moving and it is only subject to the acceleration of gravity (i.e., $\boldsymbol{\omega}_0 = 0$, $\dot{\boldsymbol{\omega}}_0 = 0$, $\mathbf{v}_0 = 0$ and $\mathbf{a}_0 = -\mathbf{g}$). This simplifies the computation of the forces since the acceleration of gravity is already considered in the forward pass. For the backward pass, we will begin our computation from the end-effector frame. Consider that if the end effector is performing free-motion, then the forces and moments are equal to zero (i.e., $\mathbf{f}_{ee} =0$ and $\mathbf{m}_{ee} = 0$), however, if the end-effector is in contact with an object, a measurement or approximation of the forces and moments is needed. The backward pass equations for the moments and forces are
+where the last equations is the acceleration of the CoM, and vector $\mathbf{p}_{i,c}$ is the vector from joint frame $i$ to the CoM frame.
+This expression will be used to compute the velocities and the accelerations  along the entire  kinematic chain.
+It is important to note that the forward pass will be computed from the base link, which is not moving and it is only subject to the acceleration of gravity (i.e., $\boldsymbol{\omega}_0 = 0$, 
+$\dot{\boldsymbol{\omega}}_0 = 0$, $\mathbf{v}_0 = 0$ and $\mathbf{a}_0 = -\mathbf{g}$). This simplifies the computation of the forces since the acceleration of gravity is already considered in the forward pass. 
+For the backward pass, we will begin our computation from the end-effector frame. Consider that if the end effector is performing free-motion, then the forces and moments are equal to zero (i.e., $\mathbf{f}_{ee} 
+=0$ and $\mathbf{m}_{ee} = 0$), however, if the end-effector is in contact with an object, a measurement or approximation of the forces and moments is needed. The backward pass equations for the moments and forces 
+are
 \begin{align*}
 	\mathbf{f}_i &= \mathbf{f}_{i+1} + \mathbf{m}_i\mathbf{a}_{ci} \\
 	\mathbf{m}_i &= \mathbf{m}_{i+1} - \mathbf{p}_{c,i} \times \mathbf{f}_i + \mathbf{p}_{c,i+1} \times \mathbf{f}_{i+1} + \mathbf{I}_i \dot{\boldsymbol{\omega}}_i + \boldsymbol{\omega}_i  \times \mathbf{I}_i \boldsymbol{\omega}_i
