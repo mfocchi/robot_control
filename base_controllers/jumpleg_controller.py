@@ -203,12 +203,15 @@ class JumpLegController(BaseControllerFixed):
 
         self.qdd_des = np.zeros(self.robot.na)
         self.base_accel = np.zeros(3)
+        self.com_des =np.zeros(3)
+        self.comd_des = np.zeros(3)
+        self.comdd_des = np.zeros(3)
         # init new logged vars here
-        self.com_log = np.empty(
-            (3, conf.robot_params[self.robot_name]['buffer_size']))*nan
-        self.comd_log = np.empty(
-            (3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        #self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.com_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size']))*nan
+        self.comd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.com_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size']))*nan
+        self.comd_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.comdd_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.qdd_des_log = np.empty(
             (self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
@@ -233,7 +236,9 @@ class JumpLegController(BaseControllerFixed):
         if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
             self.com_log[:, self.log_counter] = self.com
             self.comd_log[:, self.log_counter] = self.comd
-            #self.comdd_log[:, self.log_counter] = self.comdd
+            self.com_des_log[:, self.log_counter] = self.com_des
+            self.comd_des_log[:, self.log_counter] = self.comd_des
+            #self.comdd_des_log[:, self.log_counter] = self.comdd_des
             self.qdd_des_log[:, self.log_counter] = self.qdd_des
         super().logData()
 
@@ -440,7 +445,7 @@ class JumpLegController(BaseControllerFixed):
         # we need to recompute the jacobian  for the final joint position
         J= p.robot.frameJacobian(np.hstack((np.zeros(3), q_leg)),   p.robot.model.getFrameId(
             conf.robot_params[p.robot_name]['ee_frame']), True,   pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 3:]
-        qd_leg = np.linalg.inv(J).dot(-comd)
+        qd_leg = np.linalg.pinv(J).dot(-comd)
         # we assume it stops decelerating
         Jdqd = self.robot.frameClassicAcceleration(np.hstack((np.zeros(3), q_leg)), np.hstack(
             (comd, qd_leg)), None, self.robot.model.getFrameId(conf.robot_params[p.robot_name]['ee_frame'])).linear
@@ -449,7 +454,7 @@ class JumpLegController(BaseControllerFixed):
 
         qdd_leg = np.linalg.inv(J).dot(comdd - Jdqd)
         qdd_leg = np.zeros(3)
-        return q_leg, qd_leg, qdd_leg, comdd
+        return q_leg, qd_leg, qdd_leg, com, comd, comdd
 
     def plotTrajectory(self, T_th, poly_coeff):
         number_of_blobs = 10
@@ -691,7 +696,10 @@ def talker(p):
         p.robot = getRobotModel("jumpleg")
 
     else:
-        additional_args=['gui:=false']
+        if p.DEBUG:
+            additional_args=['gui:=true']
+        else:
+            additional_args = ['gui:=false']
         p.startSimulator("jump_platform.world", additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
@@ -805,10 +813,7 @@ def talker(p):
                 # compute joint reference
                 if (p.trustPhaseFlag):
                     t = p.time - startTrust
-
-                    p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] , p.comdd = p.evalBezier(t, p.T_th)
-
-                    # uncomment in inference mode
+                    p.q_des[3:], p.qd_des[3:], p.qdd_des[3:] , p.com_des, p.comd_des, p.comdd_des = p.evalBezier(t, p.T_th)
 
                     if p.evaluateRunningCosts():
                         break
@@ -817,12 +822,14 @@ def talker(p):
                         # sample actual com position and velocity
                         p.actual_comd_lo = np.copy(p.comd)
                         p.actual_com_lo = np.copy(p.com)
-
+                        #we se this here to have enough retraction (important)
+                        p.q_des[3:] = p.q_des_q0[3:]
+                        p.qd_des[3:] = np.zeros(3)
                 else:
                     # apex detection
                     p.detectApex()
                     if (p.detectedApexFlag):
-                        p.q_des[3:] = p.q_des_q0[3:]
+
                         # set jump position (avoid collision in jumping)
                         if p.detectTouchDown():
                             break
@@ -924,13 +931,9 @@ if __name__ == '__main__':
     finally:
         if conf.plotting:
             print("PLOTTING")
-            #plotFrameLinear('com position', p.time_log, None, p.com_log)
-            # # plotFrameLinear('contact force', p.time_log,
-            # #               None, p.contactForceW_log)
-            plotJoint('position', p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                         joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plotJoint('velocity', p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-                       joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            # plotJoint('acceleration', p.time_log, p.q_log, p.q_des_log, p.qd_log, p.qd_des_log, p.qdd_des_log, None,
-            #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotFrameLinear('velocity', p.time_log, des_Twist_log=p.comd_des_log)
+            plotFrameLinear('wrench', p.time_log,  Wrench_log=p.contactForceW_log)
+            plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            #plotJoint('acceleration', p.time_log, qdd_log=p.qdd_log,qdd_des_log=p.qdd_des_log,joint_names=conf.robot_params[p.robot_name]['joint_names'])
 
