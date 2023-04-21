@@ -470,7 +470,7 @@ def talker(p):
         p.robot = getRobotModel("jumpleg")
     else:
         additional_args=['gui:=false']
-        p.startSimulator("jump_platform.world", additional_args=additional_args)
+        p.startSimulator("jump_platform_torque.world", additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
         p.startupProcedure()
@@ -547,17 +547,15 @@ def talker(p):
                     p.trustPhaseFlag = True
 
                 # Ask for torque value
-                p.pause_physics_client()
                 state = np.concatenate((p.q, p.qd, p.target_CoM))
-                print(f"Agent state:\n {state}\n")
+                #print(f"Agent state:\n {state}\n")
                 action = p.action_service(state).action
-                print(f"Actor action with torques:\n {action}\n")
+                #print(f"Actor action with torques:\n {action}\n")
 
                 # Apply action
                 p.tau_ffwd[3] = np.array(action[0])
                 p.tau_ffwd[4] = np.array(action[1])
                 p.tau_ffwd[5] = np.array(action[2])
-                p.unpause_physics_client()
 
                 if p.evaluateRunningCosts():
                     break # robot has fallen

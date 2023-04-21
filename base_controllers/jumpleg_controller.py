@@ -539,7 +539,7 @@ class JumpLegController(BaseControllerFixed):
         contact_force = np.linalg.norm(self.contactForceW)
         if contact_force > 1.:
             print(colored("TOUCHDOWN detected", "red"))
-            p.cost.no_touchdown = 0
+            self.cost.no_touchdown = 0
             return True
         else:
             return False
