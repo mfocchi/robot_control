@@ -100,6 +100,7 @@ class JumpLegController(BaseControllerFixed):
         self.agentMode = 'train'
         self.restoreTrain = False
         self.gui = False
+        self.model_name = 'latest'
 
 
         self.EXTERNAL_FORCE = False
@@ -740,7 +741,7 @@ def talker(p):
         p.startupProcedure()
 
 
-    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name='latest', restore_train=p.restoreTrain)
+    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name=p.model_name, restore_train=p.restoreTrain)
 
     p.initVars()
     ros.sleep(1.0)
