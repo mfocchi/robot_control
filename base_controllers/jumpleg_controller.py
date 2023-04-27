@@ -215,8 +215,8 @@ class JumpLegController(BaseControllerFixed):
         self.com_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.comd_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.comdd_des_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.qdd_des_log = np.empty(
-            (self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.qdd_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.w_x_ee_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
 
@@ -243,6 +243,7 @@ class JumpLegController(BaseControllerFixed):
             self.comd_des_log[:, self.log_counter] = self.comd_des
             #self.comdd_des_log[:, self.log_counter] = self.comdd_des
             self.qdd_des_log[:, self.log_counter] = self.qdd_des
+            self.w_x_ee_log[:, self.log_counter] = self.w_x_ee
         super().logData()
 
     def resetBase(self):
