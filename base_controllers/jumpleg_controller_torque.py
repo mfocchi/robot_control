@@ -77,6 +77,11 @@ class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
+        self.agentMode = 'train'
+        self.restoreTrain = False
+        self.gui = False
+        self.model_name = 'latest'
+
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
@@ -469,17 +474,13 @@ def talker(p):
         p.ros_pub = RosPub("jumpleg")
         p.robot = getRobotModel("jumpleg")
     else:
-        additional_args=['gui:=false']
+        additional_args=[f'gui:={p.gui}']
         p.startSimulator("jump_platform_torque.world", additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
         p.startupProcedure()
 
-
-
-    # p.loadRLAgent(mode='inference', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_torque", model_name='latest', restore_train=False)
-    # p.loadRLAgent(mode='test', data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_torque", model_name='latest', restore_train=False)
-    p.loadRLAgent(mode='train', data_path=os.environ["LOCOSIM_DIR"]+"/robot_control/jumpleg_rl/runs_torque", model_name='latest', restore_train=False)
+    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_torque", model_name=p.model_name, restore_train=p.restoreTrain)
 
     p.initVars()
     ros.sleep(1.0)
