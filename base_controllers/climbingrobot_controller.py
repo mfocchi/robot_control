@@ -155,7 +155,7 @@ class ClimbingrobotController(BaseControllerFixed):
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
 
         # from ground truth
-        self.com = self.base_pos + robotComB
+        self.com = self.robot.robotComW(self.q)
         mountain_pos = np.array([conf.robot_params[self.robot_name]['spawn_x'] - self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')

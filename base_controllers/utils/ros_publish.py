@@ -107,7 +107,7 @@ class RosPub():
 
 
 
-        #self.delete_all_markers()
+        self.delete_all_markers()
 
     def add_marker(self, pos, radius = 0.1, color = "red"):
         marker = Marker()

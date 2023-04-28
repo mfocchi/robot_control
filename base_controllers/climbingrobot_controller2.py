@@ -54,17 +54,17 @@ class ClimbingrobotController(BaseControllerFixed):
         self.r_leg = 0.3
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
-    def applyForce(self, Fx, Fy, Fz, interval):
+    def applyWrench(self, Fx=0, Fy=0, Fz=0, Mx=0, My=0, Mz=0,  time_interval=0):
         wrench = Wrench()
         wrench.force.x = Fx
         wrench.force.y = Fy
         wrench.force.z = Fz
-        wrench.torque.x = 0.
-        wrench.torque.y = 0.
-        wrench.torque.z = 0.
+        wrench.torque.x = Mx
+        wrench.torque.y = My
+        wrench.torque.z = Mz
         reference_frame = "world" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
         reference_point = Point(x = 0., y = 0., z = 0.)
-        self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point, wrench=wrench, start_time=ros.Time(),  duration=ros.Duration(interval))
+        self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point, wrench=wrench, start_time=ros.Time(),  duration=ros.Duration(time_interval))
 
     def loadModelAndPublishers(self, xacro_path=None):
         xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -107,9 +107,15 @@ class ClimbingrobotController(BaseControllerFixed):
 
         self.w_R_b = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).rotation
         self.x_ee =  self.robot.framePlacement(self.q, self.robot.model.getFrameId(frame_name)).translation
+        self.base_rpy = self.math_utils.rot2eul(self.w_R_b)
+
+        self.Jb = self.robot.frameJacobian(self.q, self.robot.model.getFrameId('base_link'), True,  pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
+        self.omega_b =  self.Jb[3:, :].dot(self.qd)
 
         self.hoist_l_pos = self.base_pos +  self.w_R_b.dot(np.array([0.0, -0.05, 0.05]))
         self.hoist_r_pos = self.base_pos + self.w_R_b.dot(np.array([0.0, 0.05, 0.05]))
+        self.rope_direction = (p.hoist_l_pos - p.anchor_pos) / np.linalg.norm(p.hoist_l_pos  - p.anchor_pos)
+        self.rope_direction2 = (p.hoist_r_pos - p.anchor_pos2) / np.linalg.norm(p.hoist_r_pos - p.anchor_pos2)
 
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
         self.J = self.robot.frameJacobian(self.q , self.robot.model.getFrameId(frame_name), True, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,:]
@@ -128,11 +134,12 @@ class ClimbingrobotController(BaseControllerFixed):
         # WF matlab to WF Gazebo offset
         self.mat2Gazebo = self.anchor_pos
 
-        # compute com variables accordint to a frame located at the foot
+        # compute com variables
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
 
         # from ground truth
-        self.com = self.base_pos + robotComB
+        self.com = self.robot.robotComW(self.q)
+
         # the mountain is always wrt to world
         mountain_pos = np.array([- self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
@@ -150,6 +157,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.contactForceW = self.robot.framePlacement(self.q,  self.robot.model.getFrameId("lower_link")).rotation.dot(grf)
 
     def _receive_contact_landing_l(self, msg):
+        self.contactForceW_l = np.zeros(3)
         grf = np.zeros(3)
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] = msg.states[0].wrenches[0].force.y
@@ -157,6 +165,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.contactForceW_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId("wheel_l")).rotation.dot(grf)
 
     def _receive_contact_landing_r(self, msg):
+        self.contactForceW_r = np.zeros(3)
         grf = np.zeros(3)
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] = msg.states[0].wrenches[0].force.y
@@ -170,13 +179,14 @@ class ClimbingrobotController(BaseControllerFixed):
         self.contactForceW_r = np.zeros(3)
         self.qdd_des =  np.zeros(self.robot.na)
         self.base_accel = np.zeros(3)
+        self.base_rpy = np.zeros(3)
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
 
         self.simp_model_state_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.ldot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-
+        self.base_rpy_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
         self.time_jump_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
@@ -184,12 +194,14 @@ class ClimbingrobotController(BaseControllerFixed):
 
 
     def logData(self):
-            # if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
-            #     self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
-            #     self.ldot_log[self.log_counter] = self.ldot
-            #     self.base_pos_log[:, self.log_counter] = self.base_pos
-            #     #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
-            #     pass
+            if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
+                # self.simp_model_state_log[:, self.log_counter] = np.array([self.theta, self.phi, self.l])
+                # self.ldot_log[self.log_counter] = self.ldot
+                self.base_pos_log[:, self.log_counter] = self.base_pos
+                self.base_rpy_log[:, self.log_counter] = self.base_rpy
+                #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
+                pass
+
             super().logData()
 
     def deregister_node(self):
@@ -287,6 +299,34 @@ class ClimbingrobotController(BaseControllerFixed):
         return [mountain_wire_pitch_r, mountain_wire_roll_r,  wire_base_prismatic_r, 0., wire_base_roll_r, 0.,
                 mountain_wire_pitch_l, mountain_wire_roll_l,  wire_base_prismatic_l, 0., wire_base_roll_l, 0.]
 
+    def computeOrientationControl(self, des_roll, des_pitch):
+        # compute desired orientation
+        w_R_des = self.math_utils.eul2Rot(np.array([des_roll, 0., des_pitch]))
+        # compute rotation matrix from actual orientation of ee to the desired
+        b_R_des = self.w_R_b.T.dot(w_R_des)
+        # compute the angle-axis representation of the associated orientation error
+        # compute the angle:
+        delta_theta = math.atan2(np.sqrt(pow(b_R_des[2,1]-b_R_des[1,2], 2) +  pow(b_R_des[0,2]-b_R_des[2,0], 2) + pow(b_R_des[1,0]-b_R_des[0,1], 2)),
+                                 b_R_des[0,0]+ b_R_des[1,1]+ b_R_des[2,2]-1 )
+        # compute the axis (deal with singularity)
+        if delta_theta == 0.0:
+            e_error_o = np.zeros(3)
+        else:
+            r_hat = 1/(2*np.sin(delta_theta))*np.array([b_R_des[2,1]-b_R_des[1,2], b_R_des[0,2]-b_R_des[2,0], b_R_des[1,0]-b_R_des[0,1]])
+            # compute the orientation error
+            e_error_o = delta_theta * r_hat
+        # the error is expressed in the end-effector frame
+        # we need to map it in the world frame to compute the moment because the jacobian is in the WF
+        w_error_o = self.w_R_b.dot(e_error_o)
+
+
+        # compute the virtual moment (angular part of the wrench) to realize the orientation task
+        Gamma_des =  np.multiply(conf.robot_params[p.robot_name]['Ko'], w_error_o)# + np.multiply(conf.robot_params[p.robot_name]['Do'],dot(- self.omega_b))
+        # build jacobian (3x1)
+        J_p = np.hstack((  (self.math_utils.skew(p.hoist_l_pos - p.base_pos).dot(self.rope_direction)).reshape(3,1), (self.math_utils.skew(p.hoist_r_pos - p.base_pos).dot(self.rope_direction2)).reshape(3,1) ))
+        f_r_fbk = J_p.T.dot(Gamma_des)
+        return f_r_fbk[0], f_r_fbk[1]
+
 def talker(p):
     p.start()
     p.startSimulator(world_name="accurate.world", additional_args= ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
@@ -303,12 +343,11 @@ def talker(p):
     p.updateKinematicsDynamics()
 
     # jump parameters
-    p.startJump = 2.5
     p.orientTime = 0.5
     # p0 is defined wrt anchor1 pos
     p0 = np.array([0.0, 2.5, -6])
     p.q_des[:12] = p.computeJointVariables(p0)
-    jumpN = 0
+    #jumpN = 0
     # while not ros.is_shutdown():
     #     p.updateKinematicsDynamics()
     #     #multiple jump test
@@ -316,21 +355,21 @@ def talker(p):
     #         p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
     #         p0 = np.array([0.0, 3, -8])
     #         print(colored(f"Jumpping to {p0}", "red"))
-    #         p.applyForce(100, 0, 0., 0.02)
+    #         p.applyWrench(100, 0, 0., time_interval=0.02)
     #         p.q_des[:12] = p.computeJointVariables(p0)
     #         print(p.q_des[:12])
     #         jumpN += 1
     #     if (jumpN == 1) and (p.time > 5.5):  # change target
     #         p0 = np.array([0.0, 4.5, -8])
     #         print(colored(f"Jumpping to {p0}", "red"))
-    #         p.applyForce(100, 0, 0., 0.02)
+    #         p.applyWrench(100, 0, 0., time_interval=0.02)
     #         p.q_des[:12] = p.computeJointVariables(p0)
     #         print(p.q_des[:12])
     #         jumpN += 1
     #     if (jumpN == 2) and (p.time > 10):  # change target
     #         p0 = np.array([0.0, 2, -6])
     #         print(colored(f"Jumpping to {p0}", "red"))
-    #         p.applyForce(100, 0, 0., 0.02)
+    #         p.applyWrench(100, 0, 0., time_interval=0.02)
     #         p.q_des[:12] = p.computeJointVariables(p0)
     #         print(p.q_des[:12])
     #         jumpN += 1
@@ -346,49 +385,63 @@ def talker(p):
     #     p.ros_pub.publishVisual()
     #     rate.sleep()
 
-    # validation test matlab
+    # validation test matlab (do a jump with constant fr)
     Fr_l = 0
     Fr_r = 0
+    jump_state = 'start'
+    # the jump will start after 2 seconds where the robot will have settled down to the init config
+    p.startJump = 2.5
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
-        if (jumpN == 0) and (p.time >p.startJump): #change target
+        if (jump_state == 'start') and (p.time >p.startJump): #set the  impulse
             print(colored(f"Start Matlab Validation Test", "red"))
             p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
             p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
             if p.landing:
-                Fr_l = -90
-                Fr_r = -120
-                Fleg = 1000
+                Fr_l0 = -90
+                Fr_r0 = -120
+                Fleg = 1000 #with landing you need higher impulse
             else:
-                Fr_l = -30
-                Fr_r = -40
+                Fr_l0 = -30
+                Fr_r0 = -40
                 Fleg = 200
-            p.tau_ffwd[p.rope_index[0]] = Fr_l
-            p.tau_ffwd[p.rope_index[1]] = Fr_r
+
             p.w_Fleg = np.array([Fleg, 0., 0.])
             if p.EXTERNAL_FORCE:
-                p.applyForce(Fleg, 0, 0., 0.05)
-            jumpN+=1
-        if (jumpN ==1):
+                p.applyWrench(Fleg[0], Fleg[1], Fleg[2], time_interval=0.05)
+            jump_state = 'thrusting'
+
+        if (jump_state == 'thrusting'):
             if not p.EXTERNAL_FORCE and p.time<(p.startJump + 0.05):
                 p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
                 p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / 20., "red", scale=4.5)
             else:
+                p.applyWrench(Mz=200, time_interval=0.1)
                 p.tau_ffwd[p.leg_index] = np.zeros(3)
-
                 if  p.landing:
                     # retract knee joint and extend landing joints
                     p.tau_ffwd[p.landing_joints] = np.zeros(2)
+                    #retract leg and move langing elements
                     p.q_des[p.leg_index[2]] = 0.3
                     p.q_des[p.landing_joints] = np.array([-0.8, 0.8])
+                jump_state = 'wait_for_td'
+
+        if (jump_state == 'wait_for_td'):# use forces
+            # compute orientation controller
+            Fr_l_fbk, Fr_r_fbk = p.computeOrientationControl(0.,0.)
+            print(Fr_l_fbk)
+            print(Fr_r_fbk)
+            Fr_l = Fr_l0 + Fr_l_fbk
+            Fr_r = Fr_r0 + Fr_r_fbk
+            p.tau_ffwd[p.rope_index[0]] = Fr_l
+            p.tau_ffwd[p.rope_index[1]] = Fr_r
             if (p.base_pos[0] < conf.robot_params[p.robot_name]['spawn_x']):
                 print(colored(f"target in matlab is: {p.base_pos-p.mat2Gazebo}"))
                 break
 
-        rope_direction = (p.hoist_l_pos - p.anchor_pos) / np.linalg.norm(p.hoist_l_pos  - p.anchor_pos)
-        p.ros_pub.add_arrow(p.hoist_l_pos, rope_direction * Fr_l / 50., "red", scale=4.5)
-        rope_direction2 = (p.hoist_r_pos - p.anchor_pos2) / np.linalg.norm(p.hoist_r_pos  - p.anchor_pos2)
-        p.ros_pub.add_arrow(p.hoist_r_pos, rope_direction2 * Fr_r / 50., "red", scale=4.5)
+
+        p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (Fr_l) / 50., "red", scale=4.5)
+        p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (Fr_r) / 50., "red", scale=4.5)
 
 
         p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
@@ -406,11 +459,11 @@ def talker(p):
         p.logData()
         rate.sleep()
 
-    import sys
-    sys.exit()
-    #p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
-    p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+    p.deregister_node()
 
+
+
+################################
 
     #override with matlab stuff
     if p.LOAD_MATLAB_TRAJ:
@@ -447,7 +500,7 @@ def talker(p):
             #     p.resetBase(p.jumps[p.jumpNumber]["p0"])
             if (p.EXTERNAL_FORCE):
                 print(colored("Start applying force", "red"))
-                p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.jumps[p.jumpNumber]["thrustDuration"])
+                p.applyWrench( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.jumps[p.jumpNumber]["thrustDuration"])
                 p.stateMachine = 'thrusting'
                 p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
                 p.end_thrusting = p.startJump + p.jumps[p.jumpNumber]["thrustDuration"]
@@ -530,8 +583,11 @@ def talker(p):
                     delta_t = p.time - p.end_orienting
                 Fr =  p.jumps[p.jumpNumber]["Fr"][p.getIndex(delta_t)]
 
+
             p.tau_ffwd[p.rope_index[0]] = Fr
             p.tau_ffwd[p.rope_index[1]] = Fr
+
+
             rope_direction =  (p.base_pos - p.anchor_pos)/np.linalg.norm(p.base_pos - p.anchor_pos)
             rope_direction2 = (p.base_pos - p.anchor_pos2) / np.linalg.norm(p.base_pos - p.anchor_pos2)
             p.ros_pub.add_arrow( p.base_pos, rope_direction*Fr/50., "red", scale=4.5)
@@ -627,12 +683,20 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log,
+        plotJoint('position', p.time_log, p.q_log, p.q_des_log,
                   joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('torque', 1, p.time_log, tau_log=p.tau_log, tau_ffwd_log = p.tau_ffwd_log,
+        plotJoint('torque', p.time_log, tau_log=p.tau_log, tau_ffwd_log = p.tau_ffwd_log,
                   joint_names=conf.robot_params[p.robot_name]['joint_names'])
+
     finally:
-        pass
+        ros.signal_shutdown("killed")
+        p.deregister_node()
+        plotFrameLinear('position', p.time_log, Pose_log=p.base_rpy_log)
+
+        # plotJoint('position', p.time_log, p.q_log, p.q_des_log,
+        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        # plotJoint('torque', p.time_log, tau_log=p.tau_log, tau_ffwd_log = p.tau_ffwd_log,
+        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
         # if conf.plotting:
         #     p.plotStuff()
 
