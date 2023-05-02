@@ -321,7 +321,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
 
         # compute the virtual moment (angular part of the wrench) to realize the orientation task
-        Gamma_des =  np.multiply(conf.robot_params[p.robot_name]['Ko'], w_error_o)# + np.multiply(conf.robot_params[p.robot_name]['Do'],dot(- self.omega_b))
+        Gamma_des =  np.multiply(conf.robot_params[p.robot_name]['Ko'], w_error_o) + np.multiply(conf.robot_params[p.robot_name]['Do'],-self.omega_b)
         # build jacobian (3x1)
         J_p = np.hstack((  (self.math_utils.skew(p.hoist_l_pos - p.base_pos).dot(self.rope_direction)).reshape(3,1), (self.math_utils.skew(p.hoist_r_pos - p.base_pos).dot(self.rope_direction2)).reshape(3,1) ))
         f_r_fbk = J_p.T.dot(Gamma_des)
@@ -429,8 +429,6 @@ def talker(p):
         if (jump_state == 'wait_for_td'):# use forces
             # compute orientation controller
             Fr_l_fbk, Fr_r_fbk = p.computeOrientationControl(0.,0.)
-            print(Fr_l_fbk)
-            print(Fr_r_fbk)
             Fr_l = Fr_l0 + Fr_l_fbk
             Fr_r = Fr_r0 + Fr_r_fbk
             p.tau_ffwd[p.rope_index[0]] = Fr_l

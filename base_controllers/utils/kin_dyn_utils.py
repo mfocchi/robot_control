@@ -186,8 +186,8 @@ def computeEndEffectorJacobian(q):
     # z vectors for rotations
     z1 = T_01[:3,2] # Z axis
     z2 = T_02[:3,1] # Y axis
-    z3 = T_02[:3,1] # Y axis
-    z4 = T_02[:3,1] # Y axis
+    z3 = T_03[:3,1] # Y axis
+    z4 = T_04[:3,1] # Y axis
 
     # vectors from link i to end-effector
     p_0_1e = p_0e - p_01
