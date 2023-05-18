@@ -53,7 +53,6 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
-        self.error_vel_liftoff = 0
         self.target = 0
 
     def printCosts(self):
@@ -77,7 +76,7 @@ class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
-        self.agentMode = 'train'
+        self.agentMode = 'test'
         self.restoreTrain = False
         self.gui = False
         self.model_name = 'latest'
@@ -177,7 +176,7 @@ class JumpLegController(BaseControllerFixed):
         self.cost = Cost()
 
         #  unilateral  friction   singularity   joint_range  joint_torques target 
-        self.cost.weights = np.array([1., 1., 10., 0.01, 1., 1.])
+        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 1.])
 
         self.mu = 0.8
 
@@ -424,6 +423,9 @@ class JumpLegController(BaseControllerFixed):
                                                        self.cost.weights[3]*self.cost.joint_range +
                                                        self.cost.weights[4] * self.cost.joint_torques)
 
+        if reward < 0:
+            reward = 0
+
         # unil  friction sing jointrange torques target
         msg.next_state = np.concatenate((self.q, self.qd,  self.target_CoM))
 
@@ -549,9 +551,19 @@ def talker(p):
 
                 # Ask for torque value
                 state = np.concatenate((p.q, p.qd, p.target_CoM))
-                #print(f"Agent state:\n {state}\n")
+
+                if any(np.isnan(state)):
+                    print(f"Agent state:\n {state}\n")
+                    print(colored('NAN IN STATE!!!','red'))
+                    quit()
+
                 action = p.action_service(state).action
-                #print(f"Actor action with torques:\n {action}\n")
+                # print(f"Actor action with torques:\n {action}\n")
+                if any(np.isnan(action)):
+                    print(f"Agent state:\n {state}\n")
+                    print(f"Actor action with torques:\n {action}\n")
+                    print(colored('NAN IN ACTION!!!','red'))
+                    quit()
 
                 # Apply action
                 p.tau_ffwd[3] = np.array(action[0])
@@ -568,36 +580,31 @@ def talker(p):
                             break # END STATE
 
                 # send commands to gazebo
-                if p.no_gazebo:
-                    p.forwardEulerIntegration(p.tau_ffwd, p.contactForceW)
-                    p.ros_pub.publish(p.robot, p.q)
+            if p.no_gazebo:
+                p.forwardEulerIntegration(p.tau_ffwd, p.contactForceW)
+                p.ros_pub.publish(p.robot, p.q)
 
-                if not p.no_gazebo:
-                    p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            if not p.no_gazebo:
+                #TODO: q_des, qd_des not cvhanging !!!
+                p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-                #send reward with done state = 0
-                p.evalTotalReward(0)
-
+            #send reward with done state = 0
+            p.evalTotalReward(0)
 
             # plot end-effector and contact force
-            # if not p.use_ground_truth_contacts:
-            #     p.ros_pub.add_arrow(
-            #         p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
-            # else:
-            #     p.ros_pub.add_arrow(
-            #         p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "red")
+            if not p.use_ground_truth_contacts:
+                p.ros_pub.add_arrow(
+                    p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "green")
+            else:
+                p.ros_pub.add_arrow(
+                    p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "red")
             #plot end-effector
-            #p.ros_pub.add_marker(p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
-            # p.ros_pub.add_cone(
-            #     p.base_offset + p.q[:3] + p.x_ee, np.array([0, 0, 1.]), p.mu, height=0.05, color="blue")
-            # # p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
-            #p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
+            p.ros_pub.add_marker(p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
+            p.ros_pub.add_cone(
+                p.base_offset + p.q[:3] + p.x_ee, np.array([0, 0, 1.]), p.mu, height=0.05, color="blue")
+            p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
 
-            # p.ros_pub.add_marker(com_f, color="red", radius=0.1)
-            # reachabe space
-            # p.ros_pub.add_marker([0, 0, 0], color="green", radius=0.64)
-
-            # p.ros_pub.publishVisual()
+            p.ros_pub.publishVisual()
 
             # wait for synconization of the control loop
             rate.sleep()
