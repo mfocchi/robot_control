@@ -76,9 +76,9 @@ class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
-        self.agentMode = 'test'
+        self.agentMode = 'train'
         self.restoreTrain = False
-        self.gui = False
+        self.gui = True
         self.model_name = 'latest'
 
         self.EXTERNAL_FORCE = False
@@ -310,7 +310,7 @@ class JumpLegController(BaseControllerFixed):
     def detectApex(self):
         foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
         # foot tradius is 0.015
-        foot_lifted_off = (foot_pos_w[2] > 0.017)
+        foot_lifted_off = (foot_pos_w[2] > 0.04)
         if not self.detectedApexFlag and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
@@ -328,8 +328,8 @@ class JumpLegController(BaseControllerFixed):
         # foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
         # if (foot_pos_w[2] <= 0.017 ):
         # print(p.contactForceW)
-        contact_force = np.linalg.norm(p.contactForceW)
-        if contact_force > 0:
+        contact_force = p.contactForceW[2]
+        if contact_force > 1.0:
             print(colored("TOUCHDOWN detected", "red"))
             return True
         else:
@@ -503,9 +503,9 @@ def talker(p):
 
     # here the RL loop...
     while True:
-        ros.sleep(0.3)
+        #ros.sleep(0.3)
         p.time = 0.
-        startTrust = 0.2
+        startTrust = 0.0
         max_episode_time = 2
         p.number_of_episode += 1
         p.freezeBase(True)
@@ -536,17 +536,10 @@ def talker(p):
                 # release base
                 if p.firstTime:
                     p.firstTime = False
-
                     p.freezeBase(False)
-
                     print("\n\n")
                     print(colored(f"STARTING A NEW EPISODE--------------------------------------------# :{p.number_of_episode}", "red"))
                     print("Target position from agent:", p.target_CoM)
-
-                    # setting leg pd = 0
-                    p.pid.setPDjoint(3, 0., 0., 0.)
-                    p.pid.setPDjoint(4, 0., 0., 0.)
-                    p.pid.setPDjoint(5, 0., 0., 0.)
                     p.trustPhaseFlag = True
 
                 # Ask for torque value
@@ -566,27 +559,23 @@ def talker(p):
                     quit()
 
                 # Apply action
-                p.tau_ffwd[3] = np.array(action[0])
-                p.tau_ffwd[4] = np.array(action[1])
-                p.tau_ffwd[5] = np.array(action[2])
+                p.q_des[3] = np.array(action[0])
+                p.q_des[4] = np.array(action[1])
+                p.q_des[5] = np.array(action[2])
+                p.qd_des[3:] = np.zeros(3)
+                p.tau_ffwd = np.zeros(6)
 
                 if p.evaluateRunningCosts():
                     break # robot has fallen
 
-                p.detectApex() # just to set jump platform 
+                p.detectApex() # just to set jump platform
                 if (p.detectedApexFlag):
                         # set jump platform (avoid collision in jumping)
                         if p.detectTouchDown():
                             break # END STATE
 
-                # send commands to gazebo
-            if p.no_gazebo:
-                p.forwardEulerIntegration(p.tau_ffwd, p.contactForceW)
-                p.ros_pub.publish(p.robot, p.q)
-
-            if not p.no_gazebo:
-                #TODO: q_des, qd_des not cvhanging !!!
-                p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            # send commands to gazebo
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
             #send reward with done state = 0
             p.evalTotalReward(0)
