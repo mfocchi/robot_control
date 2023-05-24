@@ -78,7 +78,7 @@ class JumpLegController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         self.agentMode = 'train'
         self.restoreTrain = False
-        self.gui = True
+        self.gui = False
         self.model_name = 'latest'
 
         self.EXTERNAL_FORCE = False
@@ -91,6 +91,7 @@ class JumpLegController(BaseControllerFixed):
             self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
                                                  callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24, tcp_nodelay=True)
         print("Initialized jump leg controller---------------------------------------------------------------")
+        np.random.seed(136)
 
     def applyForce(self):
         from geometry_msgs.msg import Wrench, Point
@@ -308,9 +309,10 @@ class JumpLegController(BaseControllerFixed):
         return x[:3], x[3:]
 
     def detectApex(self):
-        foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
+        foot_pos_w = self.base_offset + self.q[:3] + self.x_ee
         # foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.04)
+        com_up = (self.com[2] > 0.26)
         if not self.detectedApexFlag and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
@@ -427,7 +429,7 @@ class JumpLegController(BaseControllerFixed):
             reward = 0
 
         # unil  friction sing jointrange torques target
-        msg.next_state = np.concatenate((self.q, self.qd,  self.target_CoM))
+        msg.next_state = np.concatenate((self.q, self.qd,  self.target_CoM, np.linalg.norm([self.target_CoM, self.com], axis = 0)))
 
         msg.reward = reward
         msg.done = done
@@ -482,7 +484,7 @@ def talker(p):
         p.loadModelAndPublishers()
         p.startupProcedure()
 
-    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_torque", model_name=p.model_name, restore_train=p.restoreTrain)
+    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_joints", model_name=p.model_name, restore_train=p.restoreTrain)
 
     p.initVars()
     ros.sleep(1.0)
@@ -543,7 +545,7 @@ def talker(p):
                     p.trustPhaseFlag = True
 
                 # Ask for torque value
-                state = np.concatenate((p.q, p.qd, p.target_CoM))
+                state = np.concatenate((p.q, p.qd, p.target_CoM, np.linalg.norm([p.target_CoM, p.com], axis=0)))
 
                 if any(np.isnan(state)):
                     print(f"Agent state:\n {state}\n")
@@ -551,6 +553,7 @@ def talker(p):
                     quit()
 
                 action = p.action_service(state).action
+
                 # print(f"Actor action with torques:\n {action}\n")
                 if any(np.isnan(action)):
                     print(f"Agent state:\n {state}\n")
