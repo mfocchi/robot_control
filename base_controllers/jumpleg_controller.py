@@ -965,6 +965,8 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
     finally:
+        ros.signal_shutdown("killed")
+        p.deregister_node()
         if conf.plotting:
             print("PLOTTING")
             plotFrameLinear('velocity', p.time_log, des_Twist_log=p.comd_des_log)

@@ -21,7 +21,7 @@ from gazebo_msgs.msg import ContactsState
 import roslaunch
 import os
 from termcolor import colored
-from base_controllers.utils.common_functions import plotJoint
+from base_controllers.utils.common_functions import plotJoint, plotFrameLinear
 from numpy import nan
 import matplotlib.pyplot as plt
 
@@ -80,7 +80,7 @@ class JumpLegController(BaseControllerFixed):
         self.restoreTrain = False
         self.gui = False
         self.model_name = 'latest'
-
+        self.DEBUG = False
         self.EXTERNAL_FORCE = False
         self.freezeBaseFlag = False
         self.inverseDynamicsFlag = False
@@ -313,7 +313,7 @@ class JumpLegController(BaseControllerFixed):
         # foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.04)
         com_up = (self.com[2] > 0.26)
-        if not self.detectedApexFlag and foot_lifted_off:
+        if not self.detectedApexFlag and com_up and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
                 #for i in range(10):
@@ -517,6 +517,9 @@ def talker(p):
         p.intermediate_com_position = []
         p.comd_lo = np.zeros(3)
         p.target_CoM = (p.target_service()).target_CoM
+        if p.DEBUG:  # overwrite target
+            p.target_CoM = np.array([0.3, 0, 0.25])
+
         p.pause_physics_client()
         for i in range(10):
             p.setJumpPlatformPosition(com_0-[0,0,0.2])
@@ -601,14 +604,20 @@ def talker(p):
             # wait for synconization of the control loop
             rate.sleep()
 
+            if p.DEBUG:
+                p.logData()
+
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
         # send reward with state = 1
         p.evalTotalReward(1)
 
         p.cost.reset()
-        plt.cla()
 
+        if p.DEBUG:
+            break
+        else:
+            plt.cla()
 
 if __name__ == '__main__':
     p = JumpLegController(robotName)
@@ -618,3 +627,14 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
+    finally:
+        ros.signal_shutdown("killed")
+        p.deregister_node()
+        if conf.plotting:
+            print("PLOTTING")
+            plotFrameLinear('wrench', p.time_log, Wrench_log=p.contactForceW_log)
+            plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            # plotJoint('acceleration', p.time_log, qdd_log=p.qdd_log,qdd_des_log=p.qdd_des_log,joint_names=conf.robot_params[p.robot_name]['joint_names'])
