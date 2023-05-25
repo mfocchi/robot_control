@@ -318,7 +318,7 @@ class JumpLegController(BaseControllerFixed):
         # foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.017)
         com_up = (self.com[2] > 0.26)
-        if not self.detectedApexFlag  and compup and  foot_lifted_off:
+        if not self.detectedApexFlag  and com_up and  foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
                 #for i in range(10):
