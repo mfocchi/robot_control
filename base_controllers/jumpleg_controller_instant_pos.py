@@ -6,6 +6,7 @@ Created on Fri Nov  2 16:52:08 2018
 """
 
 from __future__ import print_function
+
 import base_controllers.params as conf
 from jumpleg_rl.srv import *
 from gazebo_msgs.srv import SetModelStateRequest
@@ -43,9 +44,10 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
+        self.no_touchdown = 100
         self.target = 0
 
-        self.weights = np.array([0., 0., 0., 0., 0., 0.])
+        self.weights = np.array([0., 0., 0., 0., 0., 0., 0.])
 
     def reset(self):
         self.unilateral = 0
@@ -53,6 +55,7 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
+        self.no_touchdown = 100
         self.target = 0
 
     def printCosts(self):
@@ -61,6 +64,7 @@ class Cost():
                f"sing: {self.singularity} " \
                f"jointkin:{self.joint_range} " \
                f"torques:{self.joint_torques} " \
+               f"no_touchdown:{self.no_touchdown} " \
                f"target:{self.target}"
 
     def printWeightedCosts(self):
@@ -69,7 +73,8 @@ class Cost():
                f"sing: {self.weights[2]*self.singularity} " \
                f"jointkin:{self.weights[3]*self.joint_range} " \
                f"torques:{self.weights[4]*self.joint_torques} " \
-               f"target:{self.weights[5]*self.target}"
+               f"no_touchdown:{self.weights[5] * self.no_touchdown} " \
+               f"target:{self.weights[6]*self.target}"
 
 
 class JumpLegController(BaseControllerFixed):
@@ -176,8 +181,8 @@ class JumpLegController(BaseControllerFixed):
         self.a = np.empty((3, 6))
         self.cost = Cost()
 
-        #  unilateral  friction   singularity   joint_range  joint_torques target 
-        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 1.])
+        #  unilateral  friction   singularity   joint_range  joint_torques no_touchdown target
+        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 10, 1.])
 
         self.mu = 0.8
 
@@ -323,8 +328,8 @@ class JumpLegController(BaseControllerFixed):
                 p.unpause_physics_client()
                 p.contactForceW = np.zeros(3)
                 print(colored("APEX detected", "red"))
-                # not apply initial configuration
-                # self.q_des[3:] = self.q_des_q0[3:]
+                # apply initial configuration
+                self.q_des[3:] = self.q_des_q0[3:]
 
     def detectTouchDown(self):
         # foot_pos_w = p.base_offset + p.q[:3] + p.x_ee
@@ -333,6 +338,7 @@ class JumpLegController(BaseControllerFixed):
         contact_force = p.contactForceW[2]
         if contact_force > 1.0:
             print(colored("TOUCHDOWN detected", "red"))
+            self.cost.no_touchdown = 0
             return True
         else:
             return False
@@ -419,19 +425,23 @@ class JumpLegController(BaseControllerFixed):
             print(colored("Costs: " + self.cost.printCosts(), "green"))
             print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
 
-        reward = self.cost.weights[5] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
+        reward = self.cost.weights[6] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
                                                        self.cost.weights[1]*self.cost.friction +
                                                        self.cost.weights[2] * self.cost.singularity +
                                                        self.cost.weights[3]*self.cost.joint_range +
-                                                       self.cost.weights[4] * self.cost.joint_torques)
+                                                       self.cost.weights[4] * self.cost.joint_torques +
+                                                       self.cost.weights[5] * self.cost.no_touchdown)
 
         if reward < 0:
             reward = 0
 
-        # unil  friction sing jointrange torques target
-        msg.next_state = np.concatenate((self.q, self.qd,  self.target_CoM, np.linalg.norm([self.target_CoM, self.com], axis = 0)))
+        self.total_reward += reward
 
-        msg.reward = reward
+        # unil  friction sing jointrange torques target
+        msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, self.old_q.flatten(), self.old_qd.flatten()))
+
+        msg.reward = self.total_reward
+        # print(self.total_reward)
         msg.done = done
         msg.target_cost = target_cost
         msg.unilateral = self.cost.unilateral
@@ -508,7 +518,12 @@ def talker(p):
         #ros.sleep(0.3)
         p.time = 0.
         startTrust = 0.0
+        p.old_q = np.array([p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy()])
+        p.old_qd = np.zeros((3,3))
+        n_old_state = 3
+        state_index = 0
         max_episode_time = 2
+        p.total_reward = 0
         p.number_of_episode += 1
         p.freezeBase(True)
         p.firstTime = True
@@ -547,13 +562,25 @@ def talker(p):
                     print("Target position from agent:", p.target_CoM)
                     p.trustPhaseFlag = True
 
+                # update old state
+                p.old_q[state_index] = p.q[3:].copy()
+                p.old_qd[state_index] = p.qd[3:].copy()
+                state_index = (state_index + 1) % n_old_state
+
                 # Ask for torque value
-                state = np.concatenate((p.q, p.qd, p.target_CoM, np.linalg.norm([p.target_CoM, p.com], axis=0)))
+                state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, p.old_q.flatten(), p.old_qd.flatten()))
+                # print(state)
 
                 if any(np.isnan(state)):
                     print(f"Agent state:\n {state}\n")
                     print(colored('NAN IN STATE!!!','red'))
                     quit()
+
+                # if not p.detectedApexFlag:
+                #     action = p.action_service(state).action
+                # else:
+                #     print('stop asking for question')
+                #     action = p.q_des_q0
 
                 action = p.action_service(state).action
 
