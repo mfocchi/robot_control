@@ -235,6 +235,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         njoints = min(plot_var_log.shape)
     elif plot_var_des_log is not None:
         njoints = min(plot_var_des_log.shape)
+    print("Nubmer of Joints", njoints)
 
     if len(plt.get_fignums()) == 0:
         figure_id = 1
@@ -258,23 +259,24 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
     if (njoints % 3 == 0): #divisible by 3
         n_rows = int(njoints/ 3)
         n_cols = 3
-    elif (njoints % 2 == 0): #divisible by 3
+    elif (njoints % 2 == 0): #divisible by 2
         n_rows = int(njoints / 2)
         n_cols = 2
+        print(n_rows)
     else:  # put in a single columnn
         n_rows = njoints
         n_cols = 1
 
 
     for jidx in range(njoints):
-        if (njoints % 3 == 0): #divisible by 3
-            if jidx == 0:
-                ax = subplot(n_rows, n_cols, jidx + 1)
-            else:
-                subplot(n_rows, n_cols, jidx + 1, sharex=sharex, sharey=sharey, ax_to_share=ax)
 
-            if jidx + n_cols >= njoints:
-                plt.xlabel("Time [s]")
+        if jidx == 0:
+            ax = subplot(n_rows, n_cols, jidx + 1)
+        else:
+            subplot(n_rows, n_cols, jidx + 1, sharex=sharex, sharey=sharey, ax_to_share=ax)
+
+        if jidx + n_cols >= njoints:
+            plt.xlabel("Time [s]")
 
 
         plt.ylabel(labels[jidx] + ' '+ unit)
