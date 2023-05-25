@@ -230,11 +230,11 @@ class JumpLegController(BaseControllerFixed):
         req_reset_joints.joint_names = self.joint_names
         req_reset_joints.joint_positions = self.q_des_q0
         # send request and get response (in this case none)
-        # for i in range(10):
-        #     self.reset_joints(req_reset_joints)
-        # return True
+        for i in range(10):
+            self.reset_joints(req_reset_joints)
+        return True
 
-        self.reset_joints(req_reset_joints)
+        #self.reset_joints(req_reset_joints)
 
     def freezeBase(self, flag):
         if not self.no_gazebo:
@@ -316,9 +316,9 @@ class JumpLegController(BaseControllerFixed):
     def detectApex(self):
         foot_pos_w = self.base_offset + self.q[:3] + self.x_ee
         # foot tradius is 0.015
-        foot_lifted_off = (foot_pos_w[2] > 0.04)
+        foot_lifted_off = (foot_pos_w[2] > 0.017)
         com_up = (self.com[2] > 0.26)
-        if not self.detectedApexFlag and com_up and foot_lifted_off:
+        if not self.detectedApexFlag  and compup and  foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
                 #for i in range(10):
@@ -401,7 +401,7 @@ class JumpLegController(BaseControllerFixed):
         # smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
         # if smallest_svalue <= 0.035:
         #if np.linalg.norm(self.x_ee) > 0.32:
-        if p.q[2]<0.05:
+        if p.q[2]<0.08:
             #self.cost.singularity = 1./(1e-05 + smallest_svalue)
             self.cost.singularity = 100
             singularity = True
@@ -432,8 +432,8 @@ class JumpLegController(BaseControllerFixed):
                                                        self.cost.weights[4] * self.cost.joint_torques +
                                                        self.cost.weights[5] * self.cost.no_touchdown)
 
-        if reward < 0:
-            reward = 0
+        # if reward < 0:
+        #     reward = 0
 
         self.total_reward += reward
 
@@ -517,7 +517,7 @@ def talker(p):
     while True:
         #ros.sleep(0.3)
         p.time = 0.
-        startTrust = 0.0
+        startTrust = 0.2
         p.old_q = np.array([p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy()])
         p.old_qd = np.zeros((3,3))
         n_old_state = 3
@@ -603,9 +603,9 @@ def talker(p):
 
                 p.detectApex() # just to set jump platform
                 if (p.detectedApexFlag):
-                        # set jump platform (avoid collision in jumping)
-                        if p.detectTouchDown():
-                            break # END STATE
+                    # set jump platform (avoid collision in jumping)
+                    if p.detectTouchDown():
+                        break # END STATE
 
             # send commands to gazebo
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
