@@ -98,7 +98,7 @@ class BaseController(threading.Thread):
 
     """
     
-    def __init__(self, robot_name="hyq", launch_file=None, external_conf = None):
+    def __init__(self, robot_name="hyq", launch_file=None, external_conf = None, broadcast_world = True):
         threading.Thread.__init__(self)
         if (external_conf is not None):
             conf.robot_params = external_conf.robot_params
@@ -122,6 +122,7 @@ class BaseController(threading.Thread):
         self.broadcaster = tf.TransformBroadcaster()
         self.use_torque_control = False
         self.real_robot = conf.robot_params[self.robot_name].get('real_robot', False)
+        self.broadcast_world = broadcast_world
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
@@ -241,7 +242,7 @@ class BaseController(threading.Thread):
         self.u.setLegJointState(self.u.leg_map["RH"], grf, self.grForcesLocal_gt)
 
     def _receive_pose(self, msg):
-        
+
         self.quaternion[0]=    msg.pose.pose.orientation.x
         self.quaternion[1]=    msg.pose.pose.orientation.y
         self.quaternion[2]=    msg.pose.pose.orientation.z
@@ -262,11 +263,13 @@ class BaseController(threading.Thread):
         self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
         self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
 
-        # compute orientation matrix                                
+        # compute orientation matrix
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
-        self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+        if self.broadcast_world:
+            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
+
     def _receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
