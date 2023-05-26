@@ -200,6 +200,7 @@ class JumpLegController(BaseControllerFixed):
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
 
         self.joint_names = conf.robot_params[self.robot_name]['joint_names']
+        self.action = np.zeros(3)
 
         if self.no_gazebo:
             self.q = conf.robot_params[self.robot_name]['q_0']
@@ -438,7 +439,7 @@ class JumpLegController(BaseControllerFixed):
         self.total_reward += reward
 
         # unil  friction sing jointrange torques target
-        msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, self.old_q.flatten(), self.old_qd.flatten()))
+        msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, self.old_q.flatten(),self.old_qd.flatten(), self.old_action.flatten()))
 
         msg.reward = self.total_reward
         # print(self.total_reward)
@@ -508,8 +509,8 @@ def talker(p):
 
     # initial com posiiton
     com_0 = np.array([-0.01303,  0.00229,  0.25252])
-
-    plt.ion()
+    if not p.DEBUG:
+        plt.ion()
     figure = plt.figure(figsize=(15, 10))
     p.number_of_episode = 0
 
@@ -520,6 +521,7 @@ def talker(p):
         startTrust = 0.2
         p.old_q = np.array([p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy()])
         p.old_qd = np.zeros((3,3))
+        p.old_action = np.zeros((3, 3))
         n_old_state = 3
         state_index = 0
         max_episode_time = 2
@@ -565,10 +567,11 @@ def talker(p):
                 # update old state
                 p.old_q[state_index] = p.q[3:].copy()
                 p.old_qd[state_index] = p.qd[3:].copy()
+                p.old_action[state_index] = p.action.copy()
                 state_index = (state_index + 1) % n_old_state
 
                 # Ask for torque value
-                state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, p.old_q.flatten(), p.old_qd.flatten()))
+                state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, p.old_q.flatten(), p.old_qd.flatten(), p.old_action.flatten()))
                 # print(state)
 
                 if any(np.isnan(state)):
@@ -582,20 +585,19 @@ def talker(p):
                 #     print('stop asking for question')
                 #     action = p.q_des_q0
 
-                action = p.action_service(state).action
+                p.action = np.asarray(p.action_service(state).action)
 
                 # print(f"Actor action with torques:\n {action}\n")
-                if any(np.isnan(action)):
+                if any(np.isnan(p.action)):
                     print(f"Agent state:\n {state}\n")
-                    print(f"Actor action with torques:\n {action}\n")
+                    print(f"Actor action with des positions:\n {p.action}\n")
                     print(colored('NAN IN ACTION!!!','red'))
                     quit()
 
                 # Apply action
-                p.q_des[3] = np.array(action[0])
-                p.q_des[4] = np.array(action[1])
-                p.q_des[5] = np.array(action[2])
-                p.qd_des[3:] = np.zeros(3)
+                p.q_des[3:] = p.q_des_q0[3:] + p.action
+
+                p.qd_des = np.zeros(6)
                 p.tau_ffwd = np.zeros(6)
 
                 if p.evaluateRunningCosts():
@@ -606,6 +608,9 @@ def talker(p):
                     # set jump platform (avoid collision in jumping)
                     if p.detectTouchDown():
                         break # END STATE
+
+                if p.DEBUG:
+                    p.logData()
 
             # send commands to gazebo
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -631,8 +636,7 @@ def talker(p):
             # wait for synconization of the control loop
             rate.sleep()
 
-            if p.DEBUG:
-                p.logData()
+
 
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
@@ -659,9 +663,9 @@ if __name__ == '__main__':
         p.deregister_node()
         if conf.plotting:
             print("PLOTTING")
-            plotFrameLinear('wrench', p.time_log, Wrench_log=p.contactForceW_log)
+            #plotFrameLinear('wrench', p.time_log, Wrench_log=p.contactForceW_log)
             plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log,
                       joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log,
-                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            #plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log,
+            #         joint_names=conf.robot_params[p.robot_name]['joint_names'])
             # plotJoint('acceleration', p.time_log, qdd_log=p.qdd_log,qdd_des_log=p.qdd_des_log,joint_names=conf.robot_params[p.robot_name]['joint_names'])
