@@ -439,8 +439,7 @@ class JumpLegController(BaseControllerFixed):
         self.total_reward += reward
 
         # unil  friction sing jointrange torques target
-        msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, self.old_q.flatten(),self.old_qd.flatten(), self.old_action.flatten()))
-
+        msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, [np.linalg.norm([p.com-p.target_CoM])], np.linalg.norm([self.com,self.target_CoM], axis=0), self.old_q.flatten(),self.old_qd.flatten(), self.old_action.flatten()))
         msg.reward = self.total_reward
         # print(self.total_reward)
         msg.done = done
@@ -571,7 +570,7 @@ def talker(p):
                 state_index = (state_index + 1) % n_old_state
 
                 # Ask for torque value
-                state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, p.old_q.flatten(), p.old_qd.flatten(), p.old_action.flatten()))
+                state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, [np.linalg.norm([p.com-p.target_CoM])] ,np.linalg.norm([p.com,p.target_CoM], axis=0), p.old_q.flatten(), p.old_qd.flatten(), p.old_action.flatten()))
                 # print(state)
 
                 if any(np.isnan(state)):
