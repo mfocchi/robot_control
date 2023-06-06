@@ -98,7 +98,7 @@ class Ur5Generic(BaseControllerFixed):
         # run rviz
         package = 'rviz'
         executable = 'rviz'
-        args = '-d ' + rospkg.RosPack().get_path('ros_impedance_controller') + '/config/operator.rviz'
+        args = '-d ' + rospkg.RosPack().get_path('ur_description') + '/rviz/single_robot.rviz'
         node = roslaunch.core.Node(package, executable, args=args)
         launch = roslaunch.scriptapi.ROSLaunch()
         launch.start()
