@@ -40,13 +40,19 @@ import time
 from base_controllers.components.controller_manager import ControllerManager
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import PointCloud2
-
+from tf.transformations import quaternion_from_euler
 
 class Ur5Generic(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
         self.real_robot = conf.robot_params[self.robot_name]['real_robot']
+        # get this data after running "rosrun zed_wrapper camera_calibration.py"
+        self.camera_pos = np.array([-1.00689257, 0.21422226, -0.34962005])
+        self.camera_roll = 0.02216
+        self.camera_pitch = 0.40428
+        self.camera_yaw = -0.0211
+        self.center_pointW = np.zeros(3)
         self.homing_flag = True
         if (conf.robot_params[self.robot_name]['control_type'] == "torque"):
             self.use_torque_control = 1
@@ -133,6 +139,7 @@ class Ur5Generic(BaseControllerFixed):
         self.active_controller = self.available_controllers[0]
 
         self.broadcaster = tf.TransformBroadcaster()
+        self.broadcaster2= tf.TransformBroadcaster()
         # store in the param server to be used from other planners
         self.utils = Utils()
         self.utils.putIntoGlobalParamServer("gripper_sim", self.gripper)
@@ -151,14 +158,9 @@ class Ur5Generic(BaseControllerFixed):
         self.contactForceW = self.w_R_tool0.dot(contactForceTool0)
         self.contactMomentW = self.w_R_tool0.dot(contactMomentTool0)
 
-    def deregister_node(self):
-        print( "deregistering nodes"     )
-        self.ros_pub.deregister_node()
-        if not self.real_robot:
-            os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
-            os.system(" rosnode kill /gzserver /gzclient")
-                                                                                                                                     
+
     def updateKinematicsDynamics(self):
+
         # q is continuously updated
         # to compute in the base frame  you should put neutral base
         self.robot.computeAllTerms(self.q, self.qd)
@@ -180,18 +182,28 @@ class Ur5Generic(BaseControllerFixed):
         else:
             # left_camera_optical_frame is the frame where point cloud is generated in SIMULATION
             pointcloud_frame = "zed2_left_camera_optical_frame"
-        # offset of the camera in the world frame
-        self.x_c= self.robot.framePlacement(self.q, self.robot.model.getFrameId(pointcloud_frame)).translation
-        self.w_R_c = self.robot.framePlacement(self.q, self.robot.model.getFrameId(pointcloud_frame)).rotation
 
         # compute jacobian of the end effector in the base or world frame (they are aligned so in terms of velocity they are the same)
         self.J6 = self.robot.frameJacobian(self.q, self.robot.model.getFrameId(frame_name), False, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)                    
         # take first 3 rows of J6 cause we have a point contact            
         self.J = self.J6[:3,:] 
+
         # broadcast base world TF
         self.broadcaster.sendTransform(self.base_offset, (0.0, 0.0, 0.0, 1.0), Time.now(), '/base_link', '/world')
+        # in Sim the camera joints are part of the URDF in real robot no, and you should broadcast the TF for the camera position /orientation
+        if self.real_robot:
+            self.broadcast_camera_tf()
+        else:
+            # offset of the camera in the world frame
+            self.x_c = self.base_offset +  self.robot.framePlacement(self.q, self.robot.model.getFrameId(pointcloud_frame)).translation
+            self.w_R_c = self.robot.framePlacement(self.q, self.robot.model.getFrameId(pointcloud_frame)).rotation
 
-
+    def broadcast_camera_tf(self):
+        # offset of the camera in the world frame
+        self.x_c = self.base_offset + self.camera_pos
+        self.w_R_c = self.math_utils.eul2Rot(np.array([self.camera_roll, self.camera_pitch, self.camera_yaw]))
+        self.broadcaster2.sendTransform(self.camera_pos,
+                                        quaternion_from_euler(self.camera_yaw, self.camera_pitch, self.camera_roll, 'szyx'),Time.now(), '/root_camera_link', '/base_link')
     def startupProcedure(self):
         if (self.use_torque_control):
             #set joint pdi gains
@@ -226,10 +238,11 @@ class Ur5Generic(BaseControllerFixed):
         super().deregister_node()
         if not self.real_robot:
             os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
-            os.system(" rosnode kill /gzserver /gzclient")
+            os.system(" rosnode kill gazebo")
+
 
     def plotStuff(self):
-        plotJoint('position', 0, self.time_log, self.q_log, self.q_des_log)
+        plotJoint('position',time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log)
 
     def homing_procedure(self, dt, v_des, q_home, rate):
         # broadcast base world TF
@@ -264,8 +277,8 @@ class Ur5Generic(BaseControllerFixed):
         for data in point_cloud2.read_points(msg, field_names=['x','y','z'], skip_nans=False, uvs=[(center_x, center_y)]):
             points_list.append([data[0], data[1], data[2]])
         #print("Data Optical frame: ", points_list)
-        pointW = self.w_R_c.dot(points_list[0]) + self.x_c + self.base_offset
-        #print("Data World frame: ", pointW)
+        self.center_pointW = self.w_R_c.dot(points_list[0]) + self.x_c
+        #print("Data World frame: ", self.pointW)
 
 def talker(p):
     p.start()
@@ -299,7 +312,7 @@ def talker(p):
         if p.real_robot:
             v_des = 0.2
         else:
-            v_des = 0.6
+            v_des = 3.0
         p.homing_procedure(conf.robot_params[p.robot_name]['dt'], v_des, conf.robot_params[p.robot_name]['q_0'], rate)
 
     gripper_on = 0
@@ -312,6 +325,7 @@ def talker(p):
 
     #control loop (runs every dt seconds)
     while not ros.is_shutdown():
+
         p.updateKinematicsDynamics()
 
 
@@ -339,6 +353,7 @@ def talker(p):
         p.logData()
         # plot end-effector
         p.ros_pub.add_marker(p.x_ee + p.base_offset)
+        p.ros_pub.add_marker(p.center_pointW, color='blue')
         p.ros_pub.publishVisual()
 
         #wait for synconization of the control loop
