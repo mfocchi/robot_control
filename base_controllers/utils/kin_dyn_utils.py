@@ -340,7 +340,7 @@ def fifthOrderPolynomialTrajectory(tf,start_pos,end_pos, start_vel = 0, end_vel 
 
     return polyCoeff
     
-def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
+def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3), joint_types = ['revolute', 'revolute','revolute','revolute']):
 
     # setting values of inertia tensors w.r.t. to their CoMs from urdf and link masses
     _, tensors, m, coms = setRobotParameters()
@@ -381,7 +381,7 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
     F = np.array([zeroV, zeroV, zeroV, zeroV, zeroV, Fee])
     M = np.array([zeroV, zeroV, zeroV, zeroV, zeroV, Mee])
 
-    tau = np.array([0.0, 0.0, 0.0, 0.0])
+    effort = np.array([0.0, 0.0, 0.0, 0.0])
 
     # obtaining joint axes vectors required in the computation of the velocities and accelerations (expressed in the world frame)
     _,z1,z2,z3,z4 = computeEndEffectorJacobian(q)
@@ -431,6 +431,7 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
 
     # forward pass: compute accelerations from link 0 to  link 4, range(n+1) = (0, 1, 2, 3, 4)
     for i in range(n+1):
+        joint_idx = i-1
         if i == 0: # we start from base link 0
             p_ = p[0]
             #base frame is still (not true for a legged robot!)
@@ -439,13 +440,20 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
             omega_dot[0] = zeroV
             a[0] = -g0 # if we consider gravity as  acceleration (need to move to right hand side of the Newton equation) we can remove it from all the Netwon equations
         else:
-            p_ = p[i] - p[i-1] # p_i-1,i
-            omega[i] = omega[i-1] + qd_link[i]*z[i]
-            omega_dot[i] = omega_dot[i-1] + qdd_link[i]*z[i] + qd_link[i]*np.cross(omega[i-1],z[i])
-
-            v[i] = v[i-1] + np.cross(omega[i-1],p_)
-            a[i] = a[i-1] + np.cross(omega_dot[i-1],p_) + np.cross(omega[i-1],np.cross(omega[i-1],p_))
-
+            if joint_types[joint_idx] == 'prismatic':  # prismatic joint
+                p_ = p[i] - p[i - 1]
+                omega[i] = omega[i - 1]
+                omega_dot[i] = omega_dot[i - 1]
+                v[i] = v[i - 1] + qd_link[i] * z[i] + np.cross(omega[i], p_)
+                a[i] = a[i - 1] + qdd_link[i] * z[i] + 2 * qd_link[i] * np.cross(omega[i], z[i]) + np.cross(omega_dot[i], p_) + np.cross(omega[i], np.cross(omega[i], p_))
+            elif joint_types[joint_idx] == 'revolute':
+                p_ = p[i] - p[i - 1]
+                omega[i] = omega[i - 1] + qd_link[i] * z[i]
+                omega_dot[i] = omega_dot[i - 1] + qdd_link[i] * z[i] + qd_link[i] * np.cross(omega[i - 1], z[i])
+                v[i] = v[i - 1] + np.cross(omega[i - 1], p_)
+                a[i] = a[i - 1] + np.cross(omega_dot[i - 1], p_) + np.cross(omega[i - 1], np.cross(omega[i - 1], p_))
+            else:
+                print("wrong joint type")
         pc_ = pc[i] - p[i] # p_i,c
         
         #compute com quantities
@@ -469,22 +477,26 @@ def RNEA(g0,q,qd,qdd, Fee = np.zeros(3), Mee = np.zeros(3)):
 
     # compute torque for all joints (revolute) by projection
     for joint_idx in range(n):
-        tau[joint_idx] = np.dot(z[joint_idx+1],M[joint_idx+1])
-
-    return tau
+        if joint_types[joint_idx] == 'prismatic':
+            effort[joint_idx] = np.dot(z[joint_idx + 1], F[joint_idx + 1])
+        elif joint_types[joint_idx] == 'revolute':
+            effort[joint_idx] = np.dot(z[joint_idx + 1], M[joint_idx + 1])
+        else:
+            print("wrong joint type")
+    return effort
 
 # computation of gravity terms
-def getg(q,robot):
+def getg(q,robot, joint_types = ['revolute', 'revolute','revolute','revolute']):
     qd = np.array([0.0, 0.0, 0.0, 0.0])
     qdd = np.array([0.0, 0.0, 0.0, 0.0])
     # Pinocchio
     # g = pin.rnea(robot.model, robot.data, q,qd ,qdd)
-    g = RNEA(np.array([0.0, 0.0, -9.81]),q,qd,qdd)   
+    g = RNEA(np.array([0.0, 0.0, -9.81]),q,qd,qdd, joint_types=joint_types)
     return g
 
 
 # computation of generalized mass matrix
-def getM(q,robot):
+def getM(q,robot, joint_types = ['revolute', 'revolute','revolute','revolute']):
     n = len(q)
     M = np.zeros((n,n))
     for i in range(n):
@@ -493,18 +505,18 @@ def getM(q,robot):
         # Pinocchio
         #g = getg(q,robot)
         # tau_p = pin.rnea(robot.model, robot.data, q, np.array([0,0,0,0]),ei) -g      
-        tau = RNEA(np.array([0.0, 0.0, 0.0]), q, np.array([0.0, 0.0, 0.0, 0.0]),ei)
+        tau = RNEA(np.array([0.0, 0.0, 0.0]), q, np.array([0.0, 0.0, 0.0, 0.0]),ei, joint_types=joint_types)
         # fill in the column of the inertia matrix
         M[:4,i] = tau        
         
     return M
 
-def getC(q,qd,robot):   
+def getC(q,qd,robot, joint_types = ['revolute', 'revolute','revolute','revolute']):
     qdd = np.array([0.0, 0.0, 0.0, 0.0])
     # Pinocchio
     # g = getg(q,robot)
     # C = pin.rnea(robot.model, robot.data,q,qd,qdd) - g    
-    C = RNEA(np.array([0.0, 0.0, 0.0]), q, qd, qdd)
+    C = RNEA(np.array([0.0, 0.0, 0.0]), q, qd, qdd, joint_types=joint_types)
     return C      
 
     
