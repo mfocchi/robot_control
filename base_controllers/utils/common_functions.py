@@ -225,7 +225,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
        print(colored("plotJoint error: wrong input string", "red") )
        return
 
-    dt = time_log[1] - time_log[0]
+    dt = np.round(time_log[1] - time_log[0], 3)
     if type(start) == str:
         start = max(0, int(float(start) / dt + 1))
     if type(end) == str:
@@ -406,7 +406,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
     if frame is not None:
         title+= ' ' + frame
 
-    dt = time_log[1] - time_log[0]
+    dt = np.round(time_log[1] - time_log[0], 3)
     if type(start) == str:
         start = int(float(start)/dt + 1)
     if type(end) == str:
@@ -554,7 +554,7 @@ def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_
     if frame is not None:
         title+= ' ' + frame
 
-    dt = time_log[1] - time_log[0]
+    dt = np.round(time_log[1] - time_log[0], 3)
     if type(start) == str:
         start = max(0, int(float(start) / dt + 1))
     if type(end) == str:
@@ -667,7 +667,7 @@ def plotFrameAngular(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist
     if frame is not None:
         title += ' ' + frame
 
-    dt = time_log[1] - time_log[0]
+    dt = np.round(time_log[1] - time_log[0], 3)
     if type(start) == str:
         start = max(0, int(float(start) / dt + 1))
     if type(end) == str:
@@ -748,7 +748,7 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     if frame is not None:
         title += ' ' + frame
 
-    dt = time_log[1] - time_log[0]
+    dt = np.round(time_log[1] - time_log[0], 3)
     if type(start) == str:
         start = max(0, int(float(start) / dt + 1))
     if type(end) == str:
