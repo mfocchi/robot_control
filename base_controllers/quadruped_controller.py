@@ -447,8 +447,9 @@ class Controller(BaseController):
             self.world_name_str = world_name
         if 'camera' in self.world_name_str:
             # check if some old jpg are still in /tmp
-
-            remove_jpg_cmd = "rm /tmp/camera_save/*"
+            # this command prevent for Argument list too long in bash http://mywiki.wooledge.org/BashFAQ/095
+            print(colored('Removing jpg files', 'blue'), flush=True)
+            remove_jpg_cmd = 'for f in /tmp/camera_save/*; do rm "$f"; done'
             os.system(remove_jpg_cmd)
             print(colored('Jpg files removed', 'blue'), flush=True)
 
