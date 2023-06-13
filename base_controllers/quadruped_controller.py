@@ -464,23 +464,33 @@ class Controller(BaseController):
 
 
     def reset(self, basePoseW=None, baseTwistW=None, resetPid=False):
-        if basePoseW is None:
-            basePoseW = np.hstack([self.base_offset, np.zeros(3)])
-        self.freezeBase(flag=True, basePoseW=basePoseW)
-        q_des = conf.robot_params[self.robot_name]['q_0']
-        qd_des = np.zeros(self.robot.na)
-        tau_ffwd = np.zeros(self.robot.na)
+        self.q_des = conf.robot_params[self.robot_name]['q_0'].copy()
+        self.qd_des = np.zeros(self.robot.na)
+        self.tau_ffwd = np.zeros(self.robot.na)
         if resetPid:
             self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
+        if basePoseW is None:
+            basePoseW = np.hstack([self.base_offset, np.zeros(3)])
+
+
+        self.freezeBase(flag=True, basePoseW=basePoseW)
+        ros.sleep(0.5)
+
+
         gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
-        while np.linalg.norm(self.qd)>0.05: # for 100 iteration keep the position, needed for restore joints
-            self.send_command(q_des, qd_des, tau_ffwd)
+        while np.linalg.norm(self.qd)>0.05 or np.linalg.norm(self.q-self.q_des)>0.05:
+            self.updateKinematics()
+            self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+            if np.linalg.norm(self.u.linPart(self.basePoseW-basePoseW))>1:
+                self.freezeBase(flag=True, basePoseW=basePoseW)
+                ros.sleep(0.5)
+
         if baseTwistW is None:
             baseTwistW = np.zeros(6)
 
         self.freezeBase(flag=True, basePoseW=basePoseW, baseTwistW=baseTwistW)
-        self.initVars() # reset logged values
 
+        self.initVars() # reset logged values
 
         self.imu_utils.baseLinTwistImuW = self.u.linPart(self.baseTwistW).copy()
 
