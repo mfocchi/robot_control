@@ -1298,52 +1298,54 @@ class Controller(BaseController):
         #
         # # kill gazebo
         # os.system("killall rosmaster rviz gzserver gzclient")
+        try:
+            if start_file != None:
+                # delete all the files before start_file
+                allfiles = [f for f in os.listdir('/tmp/camera_save') if os.path.isfile(os.path.join('/tmp/camera_save', f))]
+                for f in allfiles:
+                    if f < start_file:
+                        #parentheses are not supported by bash
+                        f = f.replace('(', '\(')
+                        f = f.replace(')', '\)')
+                        cmd = 'rm /tmp/camera_save/' + f
+                        os.system(cmd)
 
-        if start_file != None:
-            # delete all the files before start_file
-            allfiles = [f for f in os.listdir('/tmp/camera_save') if os.path.isfile(os.path.join('/tmp/camera_save', f))]
-            for f in allfiles:
-                if f < start_file:
-                    #parentheses are not supported by bash
-                    f = f.replace('(', '\(')
-                    f = f.replace(')', '\)')
-                    cmd = 'rm /tmp/camera_save/' + f
-                    os.system(cmd)
-
-        if '.' in filename:
-            filename=filename[:, filename.find('.')]
-        if path[-1] != '/':
-            path+='/'
-        videoname = path + filename + '.' + format
-        save_video_cmd = "ffmpeg -hide_banner -loglevel error -r "+str(fps)+" -pattern_type glob -i '/tmp/camera_save/default_camera_link_my_camera*.jpg' -c:v libx264 "+videoname
-        ret = os.system(save_video_cmd)
-        saved = ''
-        if ret == 0:
-            saved = ' saved'
-        else:
-            saved = ' did not saved'
-        print('Video '+videoname+saved, flush=True)
+            if '.' in filename:
+                filename=filename[:, filename.find('.')]
+            if path[-1] != '/':
+                path+='/'
+            videoname = path + filename + '.' + format
+            save_video_cmd = "ffmpeg -hide_banner -loglevel error -r "+str(fps)+" -pattern_type glob -i '/tmp/camera_save/default_camera_link_my_camera*.jpg' -c:v libx264 "+videoname
+            ret = os.system(save_video_cmd)
+            saved = ''
+            if ret == 0:
+                saved = ' saved'
+            else:
+                saved = ' did not saved'
+            #print('Video '+videoname+saved, flush=True)
 
 
-        if speedUpDown <= 0:
-            print('speedUpDown must be greather than 0.0', flush=True)
-        else:
-            if speedUpDown != 1:
-                pts_multiplier = int(1 / speedUpDown)
-                videoname_speedUpDown = path + filename + str(speedUpDown).replace('.', '')+'x.'+format
-                speedUpDown_cmd = "ffmpeg -hide_banner -loglevel error -i "+videoname+" -filter:v 'setpts="+str(pts_multiplier)+"*PTS' "+videoname_speedUpDown
-                ret = os.system(speedUpDown_cmd)
-                saved = ''
-                if ret == 0:
-                    saved= ' saved'
-                else:
-                    saved = ' did not saved'
-                #print('Video ' + videoname_speedUpDown+saved, flush=True)
+            if speedUpDown <= 0:
+                print('speedUpDown must be greather than 0.0', flush=True)
+            else:
+                if speedUpDown != 1:
+                    pts_multiplier = int(1 / speedUpDown)
+                    videoname_speedUpDown = path + filename + str(speedUpDown).replace('.', '')+'x.'+format
+                    speedUpDown_cmd = "ffmpeg -hide_banner -loglevel error -i "+videoname+" -filter:v 'setpts="+str(pts_multiplier)+"*PTS' "+videoname_speedUpDown
+                    ret = os.system(speedUpDown_cmd)
+                    saved = ''
+                    if ret == 0:
+                        saved= ' saved'
+                    else:
+                        saved = ' did not saved'
+                    #print('Video ' + videoname_speedUpDown+saved, flush=True)
 
-        if remove_jpg:
-            remove_jpg_cmd = "rm /tmp/camera_save/default_camera_link_my_camera*.jpg"
-            os.system(remove_jpg_cmd)
-            #print('Jpg files removed', flush=True)
+            if remove_jpg:
+                remove_jpg_cmd = 'for f in /tmp/camera_save/*; do rm "$f"; done'
+                os.system(remove_jpg_cmd)
+                #print('Jpg files removed', flush=True)
+        except:
+            pass
 
 
 
