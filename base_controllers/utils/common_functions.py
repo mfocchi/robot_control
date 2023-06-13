@@ -1110,13 +1110,27 @@ def plotJointImpedance(name, q_log, q_des_log, tau_log):
         plt.grid()
 
 
-def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
+def polar_chart(name, figure_id, phase_deg, mag_solid, mag_dashed, legend = None):
     import matplotlib as mpl
-    size_font = 24
+    from screeninfo import get_monitors
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    width_inches = 0.
+    height_inches = 0.
+    mm2inches = 0.0393701
+    for m in get_monitors():
+        if m.is_primary:
+            width_inches = m.width_mm * mm2inches
+            height_inches = m.height_mm * mm2inches
+            break
+
+
+    size_font = 16
     mpl.rcdefaults()
     mpl.rcParams['lines.linewidth'] = 10
     mpl.rcParams['lines.markersize'] = 6
-    mpl.rcParams['patch.linewidth'] = 2
+    #mpl.rcParams['patch.linewidth'] = 4
     mpl.rcParams['axes.grid'] = True
     mpl.rcParams['axes.labelsize'] = size_font
     mpl.rcParams['font.family'] = 'sans-serif'
@@ -1126,11 +1140,12 @@ def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
                                   'Century Schoolbook L', 'Utopia', 'ITC Bookman', 'Bookman', 'Nimbus Roman No9 L',
                                   'Palatino',
                                   'Charter', 'serif']
-    mpl.rcParams['text.usetex'] = True
-    mpl.rcParams['legend.fontsize'] = size_font
+    mpl.rcParams['text.usetex'] = False
+    mpl.rcParams['legend.fontsize'] = 16
+    plt.rcParams['legend.title_fontsize'] = 16
     mpl.rcParams['legend.loc'] = 'best'
     mpl.rcParams['figure.facecolor'] = 'white'
-    mpl.rcParams['figure.figsize'] = 14, 14
+    mpl.rcParams['figure.figsize'] = 6.5,6
     mpl.rcParams['savefig.format'] = 'pdf'
 
     phase_rad = []
@@ -1138,39 +1153,61 @@ def polar_char(name, figure_id, phase_deg, mag0, mag1=None, mag2=None):
         rad = deg * np.pi/180
         phase_rad.append(rad)
 
-    patches = []
-    for mag in [mag0, mag1, mag2]:
+    patches_solid = []
+    for mag in mag_solid:
         if mag is not None:
             poly = np.zeros((len(phase_rad), 2))
             for i in range(len(phase_rad)):
                 poly[i, :] = np.array([phase_rad[i], mag[i]])
-            patches.append(Polygon(poly))
+            patches_solid.append(Polygon(poly))
+
+    patches_dashed = []
+    for mag in mag_dashed:
+        if mag is not None:
+            poly = np.zeros((len(phase_rad), 2))
+            for i in range(len(phase_rad)):
+                poly[i, :] = np.array([phase_rad[i], mag[i]])
+            patches_dashed.append(Polygon(poly))
 
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
     # plt.subplots_adjust(left=0.04, bottom=0.04, top=0.96, right=0.96)
 
-    p = PatchCollection(patches, alpha=0.7)
-    fcolors = ['g', 'dodgerblue', 'coral']
-    ecolors = ['darkgreen', 'b', 'r']
-    p.set_edgecolor(ecolors)
-    p.set_facecolor(fcolors)
+
+    fcolors = ['none']*3
+    ecolors = ['darkgreen', 'b', 'r', 'orange']
+
+    p_solid = PatchCollection(patches_solid, alpha=1, linewidth=4)
+    p_solid.set_edgecolor(ecolors)
+    p_solid.set_facecolor(fcolors)
+
+    p_dashed = PatchCollection(patches_dashed, alpha=1, linestyles='--', linewidth=4)
+    p_dashed.set_edgecolor(ecolors)
+    p_dashed.set_facecolor(fcolors)
+
 
 
     ax.set_rmax(3)
     step = np.abs(phase_deg[0]-phase_deg[1])
     phase_rad =np.arange(0,360, step)*np.pi/180
     ax.set_xticks(phase_rad)
-    ax.tick_params(axis='x', which='major', pad=15)
+    ax.tick_params(axis='x', which='major', pad=8)
 
     rticks = np.arange(0,4,0.5)
     ax.set_rticks(rticks)
 
     #rticks_show = np.arange(0, 4, 1)
-    ax.set_yticklabels(['0', '', '1', '', '2', '', '3'])
-    ax.add_collection(p)
+    ax.set_yticklabels(['0', '', '1', '', '2', '', '3', 'm/s'])
+    ax.add_collection(p_solid)
+    ax.add_collection(p_dashed)
+
+    if legend is not None:
+        legend_elements = [Line2D([0], [0], color=ecolors[i], lw=4, label=legend[i]) for i in range(len(legend))]
+        ax.legend(handles=legend_elements, loc='upper center', ncol=4, bbox_to_anchor=(0.5,1.35), title="drop height [m]")
 
     fig.suptitle(name)
 
+
+    fig.tight_layout()
     plt.show()
     return fig, ax
 
