@@ -1071,7 +1071,10 @@ class Controller(BaseController):
         neutral_fb_jointstate[7:] = self.q.copy()#conf.robot_params[self.robot_name]['q_0']
 
         # increase of the motion (m/s)
-        delta_z = 0.1
+        if self.real_robot:
+            delta_z = 0.005
+        else:
+            delta_z = 0.01
         update = [True, True, True, True]
         ########################
         # FINITE STATE MACHINE #
