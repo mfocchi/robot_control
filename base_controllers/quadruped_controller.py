@@ -901,6 +901,22 @@ class Controller(BaseController):
         super(Controller, self).updateKinematics()
 
 
+    def checkBaseCollisions(self):
+        # base control points
+        for i, pt in enumerate(self.bControlPoints):
+            wControlPoint = self.mapBaseToWorld(pt)
+            if wControlPoint[2] < self.contact_th:
+                return True
+        return False
+
+    def checkKFECollisions(self):
+        # kfe collision
+        for i, id in enumerate(self.kfe_idx):
+            wKfe_pos = self.mapBaseToWorld(self.robot.data.oMf[id].translation)  # update kin computes quantity in base frame
+            if wKfe_pos[2] < self.contact_th:
+                return True
+        return False
+
     def checkGroundCollisions(self):
         # retrun codes
         # -1 no collisions
@@ -924,7 +940,6 @@ class Controller(BaseController):
         # base control points
         for i, pt in enumerate(self.bControlPoints):
             wControlPoint = self.mapBaseToWorld(pt)
-            print(wControlPoint)
             if wControlPoint[2] < self.contact_th:
                 #return i
                 return True
