@@ -1213,16 +1213,15 @@ class Controller(BaseController):
 
         DATA['basePoseW_legOdom_log'] = self.basePoseW_legOdom_log[:, start:stop]
         DATA['baseTwistW_legOdom_log'] = self.baseTwistW_legOdom_log[:, start:stop]
-        DATA['q_des_log'] = self.q_des_log
-        DATA['q_log'] = self.q_log
-        DATA['qd_des_log'] = self.qd_des_log
-        DATA['qd_log'] = self.qd_log
-        DATA['tau_fb_log'] = self.tau_fb_log
+        DATA['q_des_log'] = self.q_des_log[:, start:stop]
+        DATA['q_log'] = self.q_log[:, start:stop]
+        DATA['qd_des_log'] = self.qd_des_log[:, start:stop]
+        DATA['qd_log'] = self.qd_log[:, start:stop]
+        DATA['tau_fb_log'] = self.tau_fb_log[:, start:stop]
         DATA['tau_ffwd_log'] = self.tau_ffwd_log[:, start:stop]
-
-
         DATA['tau_des_log'] = self.tau_des_log[:, start:stop]
-        DATA['tau_log'] = self.tau_log
+        DATA['tau_log'] = self.tau_log[:, start:stop]
+
         DATA['grForcesW_log'] = self.grForcesW_log[:, start:stop]
         DATA['grForcesW_des_log'] = self.grForcesW_des_log[:, start:stop]
         DATA['grForcesW_wbc_log'] = self.grForcesW_wbc_log[:, start:stop]
@@ -1278,7 +1277,7 @@ class Controller(BaseController):
         if filename[-4:] != ".mat":
             filename+=".mat"
 
-        savemat(path+"/"+filename, DATA)
+        savemat(path+"/"+filename, DATA, do_compression=True)
 
         if verbose:
             print('Log data saved in '+ path+"/"+filename, flush=True)
