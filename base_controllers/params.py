@@ -87,7 +87,7 @@ robot_params['aliengo'] ={'dt': 0.002,
                           'spawn_z': 0.5,
                           'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 robot_params['go1'] ={'dt': 0.002,
-                      'buffer_size': 300001,
+                      'buffer_size': 60001, # 120 seconds
                       # simulation gains
                       # stand alone joint pid
                       'kp': np.array([15., 15., 15.]*4),
@@ -99,7 +99,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'ki_wbc': np.array([0., 0., 0.]*4),#np.array([0.3, 0.3, 0.3]*4),
                       # virtual impedance wrench control
                       'kp_lin': np.array([800, 500., 900.]),  # x y z
-                      'kd_lin': np.array([100, 100., 100.]),
+                      'kd_lin': np.array([100, 100., 200.]),
                       'kp_ang': np.array([100, 100., 100.]),  # R P Y
                       'kd_ang': np.array([10., 10., 10.]),
                       # real robot gains
@@ -109,7 +109,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'ki_real': np.array([1.5, 1.5, 1.5]*4),
                       # joint pid + wbc (optional)
                       'kp_wbc_real': np.array([20., 30., 40.]*4),
-                      'kd_wbc_real': np.array([.3, .3, .4]*4),
+                      'kd_wbc_real': np.array([.3, .3, .3]*4),
                       'ki_wbc_real': np.array([1.5, 1.5, 1.5]*4),
                       # virtual impedance wrench control
                       # 'kp_lin_real': np.array([300, 300., 300.]), # x y z
@@ -130,7 +130,7 @@ robot_params['go1'] ={'dt': 0.002,
                       # ee params
                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
                       'force_th': 18.,
-                      'contact_th': 0.03,
+                      'contact_th': 0.01,
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,
