@@ -259,7 +259,7 @@ class ClimbingrobotController(BaseControllerFixed):
             # plotFrameLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
             traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame
             time_gazebo = p.time_log - p.start_logging
-            plotJoint('position', 0, time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('position', time_gazebo, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             #plotJoint('torque', 1, time_gazebo, None, None, None, None, None,None, p.tau_ffwd_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
             plot3D('states', 3, ['theta', 'phi', 'l'], time_gazebo, p.simp_model_state_log[:3,:])
@@ -318,7 +318,7 @@ def talker(p):
     else:
         xacro_path = None
 
-    p.startSimulator("slow.world")
+    p.startSimulator(world_name="climbingrobot.world")
     p.loadModelAndPublishers(xacro_path = xacro_path)
 
     p.startupProcedure()
