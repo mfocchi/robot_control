@@ -332,8 +332,7 @@ def talker(p):
     p.updateKinematicsDynamics()
     p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
     p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-    # jump parameters
-    p.startJump = 0.5
+
 
 
     # with stiffness (does not reach target)
@@ -359,6 +358,8 @@ def talker(p):
             p.matvars = mio.loadmat('test_optim.mat', squeeze_me=True, struct_as_record=False)
             p.jumps = [{"thrustDuration" : p.matvars['T_th'], "p0": p.matvars['p0'],  "targetPos": p.matvars['pf'], "Fun": p.matvars['solution'].Fun, "Fut": p.matvars['solution'].Fut,  "Fr": p.matvars['solution'].Fr,  "K_rope": 0.0, "Tf": p.matvars['solution'].Tf -  p.matvars['T_th']}]
 
+    # jump parameters
+    p.startJump = 0.5
     p.orientTime = 0.5
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
@@ -376,9 +377,9 @@ def talker(p):
 
             p.l_0 = p.l
             if p.jumpNumber == 0: # do only once
+                # this also reorients the leg using the reset base that sets the wire_yaw_joint to the getImpulseAngle
                 p.resetBase(p.jumps[p.jumpNumber]["p0"])
             if (p.EXTERNAL_FORCE):
-
                     print(colored("Start applying force", "red"))
                     p.applyForce( p.jumps[p.jumpNumber]["Fun"], p.jumps[p.jumpNumber]["Fut"], 0., p.jumps[p.jumpNumber]["thrustDuration"])
                     p.stateMachine = 'thrusting'
@@ -386,11 +387,10 @@ def talker(p):
                     p.end_thrusting = p.startJump + p.jumps[p.jumpNumber]["thrustDuration"]
                     print(colored("Start Thrusting with EXT FORCE", "blue"))
             else:
-
+                # this phase is only to print the impulse angle and wait orientTime it does not do anything anymore
                 # strategy 1 - orientation hip roll joint
                 #p.q_des[self.hip_roll_joint] = p.getImpulseAngle()[0]
-                # strategy 2 -  align the body (keep HR to 1.57)
-                #p.q_des[self.wire_yaw_joint] = p.getImpulseAngle()[0]
+
                 print(colored(f"Start orienting leg to  : {p.getImpulseAngle()[0]}", "blue"))
                 p.stateMachine = 'orienting_leg'
                 #set the end of orienting
@@ -567,6 +567,7 @@ if __name__ == '__main__':
         p.deregister_node()
     finally:
         p.plotStuff()
+
 
 
         
