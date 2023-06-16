@@ -89,6 +89,14 @@ class ClimbingrobotController(BaseControllerFixed):
                                                  callback=self._receive_contact_landing_r, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
 
+    def getRobotMass(self):
+        robot_link_masses = []
+        #get link masses supported by joints
+        for idx in self.robot.model.inertias:
+            robot_link_masses.append(idx.mass)
+        # the robot is supported after this joint
+        total_robot_mass = sum(robot_link_masses[self.robot.model.getJointId('wire_base_yaw_l'):])
+        return total_robot_mass
 
     def updateKinematicsDynamics(self):
         # q is continuously updated
@@ -486,14 +494,18 @@ def talker(p):
 
     #3 --- whole pipeline with variable Fr_l Fr_r and the Fleg x,y,z
     # single jump
-    p.matvars = mio.loadmat('optimOK.mat', squeeze_me=True,struct_as_record=False)
-    p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['T_th'], "p0": p.matvars['p0'],
+    if p.landing:
+        p.matvars = mio.loadmat('test_matlab2landing.mat', squeeze_me=True,struct_as_record=False)
+    else:
+        p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
+    p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['solution'].T_th, "p0": p.matvars['p0'],
                 "targetPos": p.matvars['solution'].achieved_target,  "Fleg": p.matvars['solution'].Fleg,
                 "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
 
     # jump parameters
     p.startJump = 2.5
     p.orientTime = 0.05
+
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
     p.numberOfJumps = len(p.jumps)
@@ -559,7 +571,7 @@ def talker(p):
                     # retract knee joint and extend landing joints
                     p.tau_ffwd[p.landing_joints] = np.zeros(2)
                     #retract leg and move langing elements
-                    p.q_des[p.landing_joints] = np.array([-0.8, 0.8])
+                    p.q_des[p.landing_joints] = np.array([-0.4, 0.4])
 
         if (p.stateMachine == 'flying'):
             # compute orientation controller TODO
