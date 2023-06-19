@@ -227,14 +227,14 @@ robot_params['climbingrobot2'] ={'dt': 0.001,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
 robot_params['climbingrobot2landing'] ={'dt': 0.001,
-                       'kp': np.array([0 ,    0,    400,  40,    40,   40,
-                                       0 ,    0,    400,  40,    40,   40,
-                                       50, 30, 30,
-                                       30, 30., 30,30.
+                       'kp': np.array([0 ,    0,    1200,  40,    40,   40,
+                                       0 ,    0,    1200,  40,    40,   40,
+                                       50, 30, 80,
+                                       60, 30., 60,30.
                                        ]),
                        'kd':  np.array([20,    20,    100,   20,     20,   20,
                                         20,    20,    100,   20,     20,   20,
-                                        10,   10, 10,
+                                        10,   10, 30,
                                         10, 3, 10 ,3
                                         ]),
                        # this corresposnds to p = [0.03, 2.5, -6] from matlab WF  which is located in anchor_pos1
