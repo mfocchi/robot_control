@@ -423,9 +423,12 @@ class ClimbingrobotController(BaseControllerFixed):
 
 def talker(p):
     p.start()
-    p.startSimulator(world_name="climbingrobot2.world", additional_args= ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
-                                                     'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
-                                                     'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z'])])
+    additional_args = ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
+                       'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
+                       'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z'])]
+    if p.landing:
+        additional_args.append('wall_inclination:='+ str(conf.robot_params[p.robot_name]['wall_inclination']))
+    p.startSimulator(world_name="climbingrobot2.world",additional_args=additional_args)
     p.loadModelAndPublishers()
 
     p.startupProcedure()
