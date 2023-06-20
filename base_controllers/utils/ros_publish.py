@@ -191,6 +191,10 @@ class RosPub():
            marker.color.r = 1.0
            marker.color.g = 0.0
            marker.color.b = 0.0
+       if (color == "black"):
+           marker.color.r = 1.0
+           marker.color.g = 1.0
+           marker.color.b = 1.0
 
        marker.header.frame_id = self.visual_frame
        marker.type = marker.ARROW

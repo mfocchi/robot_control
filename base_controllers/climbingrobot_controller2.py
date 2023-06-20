@@ -6,7 +6,11 @@ Created on Fri Nov  2 16:52:08 2018
 """
 
 from __future__ import print_function
+
+import numpy as np
 import rospy as ros
+import scipy.linalg
+
 from utils.math_tools import *
 import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
@@ -28,10 +32,11 @@ import scipy.io.matlab as mio
 import distro
 import rospkg
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
+from scipy.linalg import block_diag
 
 import  params as conf
-#robotName = "climbingrobot2landing"
-robotName = "climbingrobot2"
+robotName = "climbingrobot2landing"
+#robotName = "climbingrobot2"
 
 class ClimbingrobotController(BaseControllerFixed):
     
@@ -46,8 +51,6 @@ class ClimbingrobotController(BaseControllerFixed):
         self.hip_roll_joint = 13
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
         self.anchor_passive_joints = np.array([0,1, 6,7])
-
-
 
         if robot_name == 'climbingrobot2landing':
             self.landing = True
@@ -169,6 +172,7 @@ class ClimbingrobotController(BaseControllerFixed):
             self.J_landing_r = self.robot.frameJacobian(self.q, self.robot.model.getFrameId('wheel_r'), True,  pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, :]
 
     def _receive_contact(self, msg):
+        self.contactForceW = np.zeros(3)
         grf = np.zeros(3)
         grf[0] = msg.states[0].wrenches[0].force.x
         grf[1] = msg.states[0].wrenches[0].force.y
@@ -205,6 +209,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r = 0
         self.touch_down_detected_l = False
         self.touch_down_detected_r = False
+        self.optimal_control_traj_finished = False
 
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
@@ -371,7 +376,7 @@ class ClimbingrobotController(BaseControllerFixed):
         return 0,0# f_r_fbk[0], f_r_fbk[1]
 
     def detectTouchDown(self):
-        force_th = 1.
+        force_th = 10.
         if not self.touch_down_detected_l and (self.wall_normal.dot(self.contactForceW_l) > force_th):
             self.touch_down_detected_l = True
         if not self.touch_down_detected_r  and (self.wall_normal.dot(self.contactForceW_r) > force_th):
@@ -379,37 +384,70 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if self.touch_down_detected_l and self.touch_down_detected_r:
             print(colored("TouchDown Detected", "blue"))
-            self.pid.setPDjoint(p.landing_joints, 0., 3, 0.)
-            # sample interdistance
-            self.x_tilde0 =  self.wall_normal.reshape(1, 3) @ (self.base_pos - self.x_p)
+            #TODO uncomment
+            #self.pid.setPDjoint(p.landing_joints, 0., 0, 0.)
+
+            # sample com pos
+            self.x_tilde0 =  self.wall_normal.reshape(1, 3) @ (self.com)# - self.x_p)
             return True
         else:
             return False
 
     def computeLandingControl(self):
-        self.ros_pub.add_marker(self.x_p, radius=0.05, color = "green")
+        #self.ros_pub.add_marker(self.x_p, radius=0.05, color = "green")
         #compute relative position wrt base and xp and project on landing leg plane (supposed to be aligned with wall normal)
-        x_tilde = (self.wall_normal.reshape(1,3))  @ (self.base_pos - self.x_p)
-        xd_tilde = (self.wall_normal.reshape(1,3))  @ self.base_vel
+        x_tilde = self.wall_normal.dot(self.com)# - self.x_p)
+        xd_tilde = self.wall_normal.dot(self.base_vel)
 
-        # compute impedance law
-        K_l =  100.
-        D_l = 2*math.sqrt(100. * self.getRobotMass())
-        if x_tilde < self.x_tilde0:
-            f_l =  K_l * (self.x_tilde0 - x_tilde) #+ D_l @ xd_tilde
-        else:
-            f_l = 0.
-        f_l_vec =  self.wall_normal.reshape(3,1).dot(f_l)
-        p.ros_pub.add_arrow( self.x_p ,f_l_vec/self.force_scale , "red", scale=3.5)
+        # compute impedance law for com
+        K_l =  10.
+        D_l = 2*math.sqrt(10. * self.getRobotMass())
+        f_com =  K_l * (self.x_tilde0 - x_tilde) - D_l * xd_tilde
+        if f_com <0:
+            f_com = 0.
+        f_com_vec =  self.wall_normal*f_com
+        self.ros_pub.add_arrow( self.base_pos ,f_com_vec/self.force_scale , "red", scale=3.5)
 
-        print("xtilde", x_tilde)
-        print("xtilde", self.x_tilde0)
-        print("f_l", f_l)
-        # compute jacobian
-        J_l = self.Jb[:3, :] - 0.5*(self.J_landing_l + self.J_landing_r)
-        tau = -J_l.T @ f_l_vec
-        # extract only the tau
-        return tau[self.landing_joints].reshape(2,)
+        # map into feet landing forces
+        A = np.zeros((6, 6))
+        #sum linear forces
+        A[:3, :3] = np.eye(3)
+        A[:3, 3:] = np.eye(3)
+        A[3:, :3] = self.math_utils.skew(self.x_landing_l - self.com)
+        A[3:, 3:] = self.math_utils.skew(self.x_landing_r - self.com)
+
+        # keep recomputing gravity comp TODO Pinocchio does not compute gravity comp because he does not know about the kin loop
+        # Todo implement it
+        #self.tau_ffwd[p.rope_index] = self.g[p.rope_index]
+        # for now we use the actual forces from the pd
+        self.Fr_r_actual  = 2*self.g[p.rope_index[1]] #self.tau[p.rope_index[0]] TODO fix this
+        self.Fr_l_actual  = self.g[p.rope_index[1]] #self.tau[p.rope_index[1]]
+
+        #print("fcom:", f_com_vec)
+        b = np.zeros(6)
+        b[:3] = - self.Fr_r_actual -self.Fr_l_actual - self.getRobotMass() * self.robot.model.gravity.vector[:3] + f_com_vec
+        b[3:] = -np.cross(self.hoist_l_pos - self.com, self.rope_direction * self.Fr_l_actual) - np.cross(self.hoist_r_pos - self.com, self.rope_direction2 * self.Fr_r_actual)
+
+        F_l = np.linalg.pinv(A).dot(b)  # Fl_l, Fl_r
+        #self.ros_pub.add_arrow(self.x_landing_l, F_l[:3] / self.force_scale, "red", scale=3.5)
+        #self.ros_pub.add_arrow(self.x_landing_r, F_l[3:] / self.force_scale, "red", scale=3.5)
+        #debug
+        # self.ros_pub.add_arrow(self.hoist_l_pos,  self.rope_direction *self.Fr_l_actual / self.force_scale, color = "black", scale=3.5)
+        # self.ros_pub.add_arrow(self.hoist_r_pos,self.rope_direction2*self.Fr_r_actual / self.force_scale, "blue", scale=3.5)
+        # self.ros_pub.add_arrow(self.com, self.getRobotMass() * self.robot.model.gravity.vector[:3] / self.force_scale, "red", scale=3.5)
+
+        # build jacobian extracting columbs from  geom landing jacobians
+        Jl = block_diag(self.J_landing_l[:, 15].reshape(3,1), self.J_landing_r[:, 17].reshape(3,1))
+
+        #debug
+        # feas_space_proj = np.linalg.pinv(Jl.T).dot(Jl.T)
+        # F_l_feas = feas_space_proj.dot(F_l)
+        # self.ros_pub.add_arrow(self.x_landing_l, F_l_feas[:3] / self.force_scale, "green", scale=3.5)
+        # self.ros_pub.add_arrow(self.x_landing_r, F_l_feas[3:] / self.force_scale, "green", scale=3.5)
+        # TODO uncomment
+        #tau = -Jl.T.dot(F_l)
+        tau = np.zeros(2)
+        return tau
 
     def resetRope(self):
         print(colored(f"RESTORING ROPE PD", "red"))
@@ -417,7 +455,11 @@ class ClimbingrobotController(BaseControllerFixed):
         # sample the new elongation
         self.q_des[p.rope_index[0]] = np.copy(p.q[p.rope_index[0]])
         self.q_des[p.rope_index[1]] = np.copy(p.q[p.rope_index[1]])
+        #print("resetting rope joints qdes : ", self.q_des[p.rope_index])
         # stop applying rope forces and restore PD gains on rope joints
+        # TODO apply gravity comp self.g[p.rope_index]
+        self.Fr_r = 0.
+        self.Fr_l = 0.
         self.tau_ffwd[p.rope_index] = np.zeros(2)
         self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
 
@@ -439,10 +481,7 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     p.updateKinematicsDynamics()
 
-    # p0 is defined wrt anchor1 pos in matlab convention
-    p0 = np.array([0.03, 2.5, -6])
-    # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
-    p.q_des[:12] = p.computeJointVariables(p0)
+
 
     # 1----very simple jump with apply wrench to detach from wall and kinematics
     #jumpN = 0
@@ -577,8 +616,15 @@ def talker(p):
     p.numberOfJumps = len(p.jumps)
     p.start_logging = np.inf
 
+    # p0 is defined wrt anchor1 pos in matlab convention
+    p0 = p.jumps[p.jumpNumber]["p0"] # np.array([0.5, 2.5, -6])
+    # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
+    p.q_des[:12] = p.computeJointVariables(p0)
+
     print(colored(f"Start orienting leg to (pitch, roll)  : {p.getImpulseAngle()}", "blue"))
     p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint]  = p.getImpulseAngle()
+
+    #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
     while not ros.is_shutdown():
 
@@ -632,16 +678,17 @@ def talker(p):
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
                 p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
                 p.stateMachine = 'flying'
-                print(colored("Start Flying", "blue"))
-                #retract   leg completely
-                p.q_des[p.leg_index[2]] = 0.25
+
                 # manage lander retracting leg
                 if  p.landing:
                     # retract knee joint and extend landing joints
                     p.tau_ffwd[p.landing_joints] = np.zeros(2)
                     #retract leg and move langing elements
-                    p.q_des[p.landing_joints] = np.array([-0.8, 0.8])
-                    p.stateMachine = 'flying_and_reorient_lander'
+                    p.q_des[p.leg_index[2]] = 0.25
+                    if p.impedance_landing:
+                        p.q_des[p.landing_joints] = np.array([-0.6, 0.6])
+                        p.stateMachine = 'flying_and_reorient_lander'
+                print(colored("Start "+ p.stateMachine, "blue"))
 
         if (p.stateMachine == 'flying'):
             # compute orientation controller TODO
@@ -663,6 +710,7 @@ def talker(p):
                 # reset the qdes
                 # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
                 p.resetRope()
+                matlab_target = p.jumps[p.jumpNumber]["targetPos"]
                 p.jumpNumber += 1
                 if (p.jumpNumber < p.numberOfJumps):
                     p.stateMachine = 'idle'
@@ -670,21 +718,31 @@ def talker(p):
                     p.startJump = p.time
                 else:
                     #p.pause_physics_client()
-                    matlab_target = p.jumps[p.jumpNumber]["targetPos"]
                     print(colored(f"target achieved (in matlab convention) is: {p.base_pos-p.mat2Gazebo}", "blue"))
                     print(colored(f" while it should be  {matlab_target}", "blue"))
                     break
 
         if (p.stateMachine == 'flying_and_reorient_lander'):
-            # applying forces to ropes
+            # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
             delta_t = p.time - p.end_orienting
-            if p.getIndex(delta_t) == -1:
-                p.resetRope()
-                p.Fr_r = 0.
-                p.Fr_l = 0.
-            else:
-                p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
-                p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+            if not p.optimal_control_traj_finished:
+                if p.getIndex(delta_t) == -1:
+                    # start again pid gains and reset qdes
+                    p.resetRope()
+                    p.optimal_control_traj_finished = True
+                else:
+                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
+                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+                # check for early td and in case reset rope
+                if p.detectTouchDown():
+                    p.resetRope()
+                    print(colored("Early TD detected, Start landing", "blue"))
+                    p.stateMachine = 'landing'
+            else: # you are checking for delayed TD you have already reset rope
+                if p.detectTouchDown():
+                    print(colored("Start landing", "blue"))
+                    p.stateMachine = 'landing'
+
             # plot forces
             p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
             p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
@@ -695,13 +753,10 @@ def talker(p):
             # reorient legs to land parallel
             rpy = p.math_utils.rot2eul(p.w_R_b)
             p.q_des[p.landing_joints] = np.array([-0.8, 0.8]) - np.array([rpy[2], rpy[2]])
-            if p.detectTouchDown():
-                print(colored("Start landing", "blue"))
-                p.stateMachine = 'landing'
+
 
         if (p.stateMachine == 'landing'):
             p.tau_ffwd[p.landing_joints] = p.computeLandingControl()
-            print(p.tau_ffwd[p.landing_joints])
 
         # plot ropes
         p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
@@ -763,39 +818,32 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        plotJoint('position', p.time_log, p.q_log, p.q_des_log,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plotJoint('torque', p.time_log, tau_log=p.tau_log, tau_ffwd_log = p.tau_ffwd_log,
-                  joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plt.figure()
-        plt.subplot(2, 1, 1)
-        plt.ylabel("Fr_l")
-        plt.plot(p.time_log-p.start_logging, p.Fr_l_log, color='red')
-        #plt.plot(p.time_log-p.start_logging,p.Fr_l_fbk_log, color='blue')
-        plt.grid()
-        plt.subplot(2, 1, 2)
-        plt.ylabel("Fr_r")
-        plt.plot(p.time_log-p.start_logging, p.Fr_r_log,color='red')
-        #plt.plot(p.time_log-p.start_logging,p.Fr_r_fbk_log, color='blue')
-        plt.grid()
+
     finally:
         ros.signal_shutdown("killed")
         p.deregister_node()
-        plotFrameLinear('position', p.time_log, Pose_log=p.base_rpy_log, title='Roll Pitch Yaw')
+
+        #plotFrameLinear('position', p.time_log, Pose_log=p.base_rpy_log, title='Roll Pitch Yaw')
         # plot rope forces
-        plt.figure()
-        plt.subplot(2, 1, 1)
-        plt.ylabel("Fr_l")
-        plt.plot(p.time_log, p.Fr_l_log, color='red')
-        plt.plot(p.time_log,p.Fr_l_fbk_log, color='blue')
-        plt.grid()
-        plt.subplot(2, 1, 2)
-        plt.ylabel("Fr_r")
-        plt.plot(p.time_log, p.Fr_r_log,color='red')
-        plt.plot(p.time_log,p.Fr_r_fbk_log, color='blue')
-        plt.grid()
-        # plotJoint('position', p.time_log, p.q_log, p.q_des_log,
-        #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        # plt.figure()
+        # plt.subplot(2, 1, 1)
+        # plt.ylabel("Fr_l")
+        # plt.plot(p.time_log, p.Fr_l_log, color='red')
+        # plt.plot(p.time_log,p.Fr_l_fbk_log, color='blue')
+        # plt.grid()
+        # plt.subplot(2, 1, 2)
+        # plt.ylabel("Fr_r")
+        # plt.plot(p.time_log, p.Fr_r_log,color='red')
+        # plt.plot(p.time_log,p.Fr_r_fbk_log, color='blue')
+        # plt.grid()
+
+        from operator import itemgetter
+        #plot rope joints
+        subset = p.rope_index
+        plotJoint('position', p.time_log, p.q_log[subset,:], p.q_des_log[subset,:],
+                  joint_names=itemgetter(*subset)(conf.robot_params[p.robot_name]['joint_names']))
+
+
         # plotJoint('torque', p.time_log, tau_log=p.tau_log, tau_ffwd_log = p.tau_ffwd_log,
         #           joint_names=conf.robot_params[p.robot_name]['joint_names'])
         if conf.plotting:
