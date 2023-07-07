@@ -168,6 +168,15 @@ robot_params['jumpleg'] ={'dt': 0.001,
                        'spawn_z' : 0.0,
                        'buffer_size': 1000} # note the frames are all aligned with base for joints = 0
 
+robot_params['mir'] ={'dt': 0.001,
+                       'q_0':  np.array([ 0.0, 0.0]),
+                       'joint_names': ['left_wheel_joint', 'right_wheel_joint'],
+                       'spawn_x' : 0.0,
+                       'spawn_y' : 0.0,
+                       'spawn_z' : 0.0,
+                       'buffer_size': 3000} # note the frames are all aligned with base for joints = 0
+
+
 robot_params['climbingrobot'] ={'dt': 0.001,
                        'kp': np.array([0 ,    0,    400,  100,    50,   50,    50, 30, 30]),
                        'kd':  np.array([0,    0,    10,   10,     10,   10,     4,   4, 4  ]),

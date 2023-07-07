@@ -23,7 +23,6 @@ class GenericSimulator(BaseController):
     
     def __init__(self, robot_name="tractor"):
         super().__init__(robot_name=robot_name, external_conf = conf)
-        self.freezeBaseFlag = False
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
@@ -102,9 +101,11 @@ class GenericSimulator(BaseController):
         if input == 'start':
             print("starting simulation")
             ros.wait_for_message('/simulationState', Bool, timeout=5.)
+            ros.sleep(1.5)
             msg = Bool()
-            msg.data = 1
-            self.startPub.publish(msg)
+            msg.data = True
+            for i in range(30):
+                self.startPub.publish(msg)
 
     def startupProcedure(self):
         if self.GAZEBO:
@@ -130,10 +131,11 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     p.q_des = np.copy(p.q_des_q0)
     if p.GAZEBO:
-        forward_speed = -0.07
+        forward_speed = -0.5
+        actuated_wheels = [0, 1, 2, 3]
     else:
         forward_speed = 1.
-    actuated_wheels = [0, 1]
+        actuated_wheels = [0, 1]
 
     while not ros.is_shutdown():
 
