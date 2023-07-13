@@ -544,7 +544,7 @@ class BaseController(threading.Thread):
         self.tau = np.zeros(self.robot.na)
         self.tau_fb = np.zeros(self.robot.na)
         self.q_des = np.zeros(self.robot.na)
-        self.quaternion = np.array([0., 0., 0., 1.])
+        self.quaternion = np.array([0., 0., 0., 1.]) #fundamental otherwise receivepose gets stuck
         self.q_des = conf.robot_params[self.robot_name]['q_0']
         self.qd_des = np.zeros(self.robot.na)
         self.tau_ffwd = np.zeros(self.robot.na)

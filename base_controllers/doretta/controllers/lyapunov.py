@@ -5,7 +5,7 @@ import numpy as np
 from ..utils.constants import DT
 from ..environment.trajectory import Trajectory, ModelsList
 from ..utils.tools import normalize_angle
-
+import math
 # ------------------------------------ #
 # CONTROLLER'S PARAMETERS
 # K_P = 8.0
@@ -31,19 +31,15 @@ class LyapunovController:
         self.draw_e_x = []
         self.draw_e_y = []
         self.draw_e_theta = []
-        self.draw_e_v = []
-        self.draw_e_omega = []
         self.goal_reached = False
 
-    def config(self, start_x, start_y, start_theta, start_time, velocity_generator):
-        self.trajectory = Trajectory(ModelsList.UNICYCLE, start_x, start_y, start_theta, velocity_generator)
+    def config(self, start_time, trajectory):
+        self.trajectory = trajectory
         self.total_time = len(self.trajectory.x) * DT
         self.start_time = start_time
         self.draw_e_x.append(0.0)
         self.draw_e_y.append(0.0)
         self.draw_e_theta.append(0.0)
-        self.draw_e_v.append(0.0)
-        self.draw_e_omega.append(0.0)
 
     def control(self, robot, current_time):
         """
@@ -51,50 +47,62 @@ class LyapunovController:
         """
         elapsed_time = current_time - self.start_time
         current_index = int(elapsed_time / DT)
+
         # quando arrivo all'indice dell'ultimo punto della traiettoria, la traiettoria è finita
         if current_index >= len(self.trajectory.v)-1:
             # target is considered reached
-            print("Lyapunov controller: target reached")
+            print("Lyapunov controller: trajectory finished")
             self.goal_reached = True
 
             # save errors for plotting
             self.draw_e_x.append(0.0)
             self.draw_e_y.append(0.0)
             self.draw_e_theta.append(0.0)
-            self.draw_e_v.append(0.0)
-            self.draw_e_omega.append(0.0)
 
-            return 0.0, 0.0
+
+            return 0.0, 0.0, 0., 0., 0., 0.
 
         assert current_index < len(self.trajectory.v)-1, "Lyapunov controller: index out of range"
+
 
         # compute errors
         ex = robot.x - self.trajectory.x[current_index]
         ey = robot.y - self.trajectory.y[current_index]
+
         etheta = robot.theta - self.trajectory.theta[current_index]
+
+
         etheta = normalize_angle(etheta)
         theta = robot.theta
-        alpha = theta - self.trajectory.theta[current_index]
+        alpha = theta + self.trajectory.theta[current_index]
         v_ref = self.trajectory.v[current_index]
         o_ref = self.trajectory.omega[current_index]
 
-        psi = np.arctan2(ey, ex)
-        exy = np.sqrt(ex**2 + ey**2)
 
-        dv = -self.K_P * exy * np.cos(theta - psi)
-        domega = - self.K_THETA * etheta - v_ref * np.sinc(0.5 * etheta) * np.sin(psi - 0.5 * alpha)
 
+
+        psi = math.atan2(ey, ex)
+        exy = math.sqrt(ex**2 + ey**2)
+
+        dv = -self.K_P * exy * math.cos(psi - theta)
+        # important ! the result is 15% different for the sinc function with python from matlab
+        domega = -self.K_THETA * etheta -v_ref * np.sinc(0.5 * etheta) * exy * math.sin(psi - 0.5 * alpha)
+
+
+        V = 1 / 2 * (ex ** 2 + ey ** 2+ etheta**2)
+        V_dot = -self.K_THETA * etheta**2 -self.K_P * exy * math.pow(math.cos(psi - theta),2)
+
+
+        #domega = - self.K_THETA * etheta - 2/etheta * v_ref * np.sin(0.5 * etheta)* np.sin(psi - 0.5 * alpha)
         # save errors for plotting
         self.draw_e_x.append(ex)
         self.draw_e_y.append(ey)
         self.draw_e_theta.append(etheta)
-        self.draw_e_v.append(dv)
-        self.draw_e_omega.append(domega)
 
         # print("ERRORS -> x:%.2f, y:%.2f, theta:%.2f" % (ex, ey, etheta))
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
 
 
-        return v_ref + dv, o_ref + domega
+        return v_ref + dv, o_ref + domega, v_ref, o_ref, V, V_dot
 
 

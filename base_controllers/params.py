@@ -174,7 +174,7 @@ robot_params['mir'] ={'dt': 0.001,
                        'spawn_x' : 0.0,
                        'spawn_y' : 0.0,
                        'spawn_z' : 0.0,
-                       'buffer_size': 3000} # note the frames are all aligned with base for joints = 0
+                       'buffer_size': 12000} # note the frames are all aligned with base for joints = 0
 
 
 robot_params['climbingrobot'] ={'dt': 0.001,

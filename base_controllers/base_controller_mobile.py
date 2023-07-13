@@ -64,6 +64,7 @@ from  base_controllers.doretta.environment.trajectory import Trajectory, ModelsL
 from  base_controllers.doretta.models.unicycle import Unicycle
 from  base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams
 import base_controllers.doretta.velocity_tests as vt
+from base_controllers.doretta.utils.tools import unwrap
 
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
@@ -151,8 +152,7 @@ class BaseControllerMobile(threading.Thread):
         # subscribers
         self.sub_jstate = ros.Subscriber("/joint_states", JointState,
                                          callback=self._receive_jstate, queue_size=1,buff_size = 2 ** 24, tcp_nodelay=True)
-        self.sub_pose = ros.Subscriber("/odom", Odometry, callback=self._receive_pose,
-                                       queue_size=1, tcp_nodelay=True)
+        self.sub_pose = ros.Subscriber("/odom", Odometry, callback=self._receive_pose)
     def _receive_jstate(self, msg):
          for msg_idx in range(len(msg.name)):
              for joint_idx in range(len(self.joint_names)):
@@ -173,9 +173,7 @@ class BaseControllerMobile(threading.Thread):
         self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
         self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
         self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
-        self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
-        self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
-        self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
+        self.basePoseW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"]+3]= unwrap(self.euler, self.euler_old)
 
         self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
         self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
@@ -217,6 +215,8 @@ class BaseControllerMobile(threading.Thread):
         self.basePoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
         self.euler = np.zeros(3)
+        self.euler_old = np.zeros(3)
+        self.quaternion = np.array([0.,0.,0.,1.])
 
         #log vars
         self.q_des_log = np.empty((self.n_joints, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
@@ -225,8 +225,13 @@ class BaseControllerMobile(threading.Thread):
         self.qd_log = np.empty((self.n_joints,conf.robot_params[self.robot_name]['buffer_size'] )) *nan
         self.tau_log = np.empty((self.n_joints, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.tau_ffwd_log = np.empty((self.n_joints, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*0.
+        self.time_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))
         self.basePoseW_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+
+        self.ctrl_v_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
+        self.ctrl_omega_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
+        self.v_ref_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
+        self.omega_ref_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
 
         self.log_counter = 0
         self.log_counter = 0
@@ -241,6 +246,11 @@ class BaseControllerMobile(threading.Thread):
             self.tau_log[:,self.log_counter] = self.tau
             self.tau_ffwd_log[:, self.log_counter] = self.tau_ffwd
             self.basePoseW_log[:, self.log_counter] = self.basePoseW
+
+            self.ctrl_v_log[self.log_counter] = self.ctrl_v
+            self.ctrl_omega_log[self.log_counter] = self.ctrl_omega
+            self.v_ref_log[self.log_counter] = self.v_ref
+            self.omega_ref_log[self.log_counter] = self.omega_ref
 
             self.time_log[self.log_counter] = self.time
             self.log_counter+=1
@@ -267,41 +277,50 @@ def talker(p):
     #p.unpause_physics_client()
     # p.startupProcedure()
 
+
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     # define traj
-    time_ref = np.linspace(0., 40., int(40./conf.robot_params[p.robot_name]['dt']))
-    omegar_ref = 0.5
-    x_ref = 1 + np.cos(omegar_ref *time_ref)
-    y_ref = np.sin(omegar_ref * time_ref)
-    theta_ref = omegar_ref*time_ref
+    # time_ref = np.linspace(0., 40., int(40./conf.robot_params[p.robot_name]['dt']))
+    # omegar_ref = 0.5
+    # x_ref = 1 + np.cos(omegar_ref *time_ref)
+    # y_ref = np.sin(omegar_ref * time_ref)
+    # theta_ref = omegar_ref*time_ref
     ros.sleep(1.)
-
-    vel_gen = vt.velocity_test2
-    _, _, s_test = vel_gen()
 
     class robot:
         pass
+
     robot.x = p.basePoseW[p.u.sp_crd["LX"]]
     robot.y = p.basePoseW[p.u.sp_crd["LY"]]
-    robot.theta = p.euler[2]
+    robot.theta = p.basePoseW[p.u.sp_crd["AZ"]]
     print(f"Initial pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
-    #robot = Unicycle(x=robot.x, y=robot.y, theta=robot.theta)
-    traj = Trajectory(ModelsList.UNICYCLE, robot.x, robot.y, robot.theta, vel_gen)
+
+    #vel_gen = vt.velocity_mir
+    vel_gen = vt.velocity_mir_smooth
+    initial_des_x = 0.1
+    initial_des_y = 0.1
+    initial_des_theta = 0.3
+    p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen)
     # Lyapunov controller parameters
-    K_P = 6.0
-    K_THETA = 6.0
+    K_P = 5.0
+    K_THETA = 1.0
     params = LyapunovParams(K_P=K_P, K_THETA=K_THETA)
     controller = LyapunovController(params=params)
-    controller.config(start_x=robot.x, start_y=robot.y, start_theta=robot.theta, start_time=p.time,
-                      velocity_generator=vel_gen)
-
+    controller.config(start_time=p.time, trajectory=p.traj)
 
     #control loop
     while not ros.is_shutdown():
+        #update kinematics
+        robot.x = p.basePoseW[p.u.sp_crd["LX"]]
+        robot.y = p.basePoseW[p.u.sp_crd["LY"]]
+        robot.theta = p.basePoseW[p.u.sp_crd["AZ"]]
+
+        # max mir speed i 1 m/s 1.5 rad/s
+
         # controllers
-        v, omega = controller.control(robot,p.time)
+        p.ctrl_v, p.ctrl_omega, p.v_ref, p.omega_ref, p.V, p.V_dot = controller.control(robot,p.time)
         # b = 0.5
         # r = .05
         # v_l = v - omega *b/2
@@ -313,7 +332,7 @@ def talker(p):
         # o = np.clip(o, -constants.MAX_ANGULAR_VELOCITY, constants.MAX_ANGULAR_VELOCITY)
 
         # send commands to gazebo
-        p.send_des_command(v, 0, omega)
+        p.send_des_command(p.ctrl_v, 0., p.ctrl_omega)
         # log variables
         p.logData()
 
@@ -330,8 +349,37 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
         if    conf.plotting:
-            pass
-            plotJoint('position', time_log=p.time_log, q_des_log=p.q_des_log, q_log=p.q_log, joint_names=p.joint_names)
+            plt.figure(1)
+            plt.plot(p.traj.x, p.traj.y, "-r", label="desired")
+            plt.plot(p.basePoseW_log[0,:], p.basePoseW_log[1,:], "-b", label="real")
+            plt.legend()
+            plt.xlabel("x[m]")
+            plt.ylabel("y[m]")
+            plt.axis("equal")
+            plt.grid(True)
+
+            # # VELOCITY
+            plt.figure(3)
+            plt.subplot(2, 1, 1)
+            plt.plot(p.time_log, p.ctrl_v_log, "-b", label="REAL")
+            plt.plot(p.time_log, p.v_ref_log, "-r", label="desired")
+            plt.legend()
+            plt.xlabel("time[sec]")
+            plt.ylabel("linear velocity[m/s]")
+            # plt.axis("equal")
+            plt.grid(True)
+
+            plt.subplot(2, 1, 2)
+            plt.plot(p.time_log, p.ctrl_omega_log, "-b", label="REAL")
+            plt.plot(p.time_log, p.omega_ref_log, "-r", label="desired")
+            plt.legend()
+            plt.xlabel("time[sec]")
+            plt.ylabel("angular velocity[rad/s]")
+            # plt.axis("equal")
+            plt.grid(True)
+
+
+            #plotJoint('position', time_log=p.time_log, q_des_log=p.q_des_log, q_log=p.q_log, joint_names=p.joint_names)
             plotFrame('position', time_log=p.time_log,  Pose_log=p.basePoseW_log,
                       title='CoM', frame='W', sharex=True)
 

@@ -29,16 +29,20 @@ class Unicycle:
         :param vel: (float) Linear velocity
         :param omega: (float) Angular velocity
         """
-
-        # TODO limit linear velocity
-        omega = np.clip(omega, -const.MAX_ANGULAR_VELOCITY, const.MAX_ANGULAR_VELOCITY)  # limit the steering angle
-
-        self.x += self.v * np.cos(self.theta) * const.DT
-        self.y += self.v * np.sin(self.theta) * const.DT
-        self.theta += omega * const.DT
-        self.theta = normalize_angle(self.theta)
         self.v = vel
         self.omega = omega
 
+        # eulers integration
+        # self.x += vel * np.cos(self.theta) * const.DT
+        # self.y += vel * np.sin(self.theta) * const.DT
+        # self.theta += omega * const.DT
+        # self.theta = normalize_angle(self.theta)
+
+        # proper integration with ZOH updtes considering the constant evolution of theta across the steps with constant omega and v
+        self.x += vel * const.DT  * np.sinc(omega*const.DT/2) * np.cos(self.theta + omega* const.DT/2)
+        self.y += vel * const.DT  * np.sinc(omega*const.DT/2) * np.sin(self.theta + omega* const.DT/2)
+        self.theta += omega * const.DT
+        self.theta = normalize_angle(self.theta)
+
     def state(self):
-        return self.x, self.y, self.theta, self.v, self.omega
+        return self.x, self.y, self.theta
