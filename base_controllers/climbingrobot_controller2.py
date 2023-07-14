@@ -297,11 +297,11 @@ class ClimbingrobotController(BaseControllerFixed):
             time_gazebo = p.time_log - p.start_logging
             #plotJoint('position', 0, time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             #plotJoint('torque', 1, time_gazebo, None, None, None, None, None,None, p.tau_ffwd_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['solution'].time, p.matvars['solution'].p )
+            plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo , p.matvars['time'], p.matvars['p'] )
             #plot3D('states', 3, ['theta', 'phi', 'l'], time_gazebo, p.simp_model_state_log)
-            mio.savemat('test_gazebo2.mat', {'solution': p.matvars['solution'], 'mu': p.matvars['mu'],
-                                            'Fleg':p.matvars['solution'].Fleg, 'Fr_max':p.matvars['Fr_max'], 'p0':p.matvars['p0'],'pf': p.matvars['pf'],
-                                            'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
+            # mio.savemat('test_gazebo2.mat', {'solution': p.matvars['solution'], 'mu': p.matvars['mu'],
+            #                                 'Fleg':p.matvars['solution'].Fleg, 'Fr_max':p.matvars['Fr_max'], 'p0':p.matvars['p0'],'pf': p.matvars['pf'],
+            #                                 'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
 
 
     def getIndex(self,t):
@@ -472,7 +472,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.tau_ffwd[p.rope_index] = np.zeros(2)
         self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
 
-    def initOptim(self):
+    def initOptim(self, p0, pf):
         ##offline optim vars
         self.Fleg_max = 300.
         self.Fr_max = 90.
@@ -506,12 +506,20 @@ class ClimbingrobotController(BaseControllerFixed):
             self.Fleg_max = 600.
             self.Fr_max = 300.
 
-        # jump params
-        p0 = matlab.double([0.5, 2.5, -6])  # there is singularity for px = 0!
-        pf = matlab.double([0.5, 4, -4])
 
-        self.matvars = self.eng.optimize_cpp_mex(p0, pf, self.Fleg_max, self.Fr_max, self.mu, self.optim_params)
+        self.matvars = self.eng.optimize_cpp_mex(matlab.double(p0.tolist()), matlab.double(pf.tolist()), self.Fleg_max, self.Fr_max, self.mu, self.optim_params)
         print(colored("offline optimization accomplished", "blue"))
+        # extract variables
+        self.ref_com  = self.mat_matrix2python(self.matvars['p'])
+        self.ref_time = self.mat_vector2python(self.matvars['time'])
+        self.Fr_l0 = self.mat_vector2python(self.matvars['Fr_l'])
+        self.Fr_r0 = self.mat_vector2python(self.matvars['Fr_r'])
+        self.Fleg = self.mat_vector2python(self.matvars['Fleg'])
+        self.targetPos =self.mat_vector2python(self.matvars['achieved_target'])
+
+        self.jumps = [{"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
+                    "targetPos": self.targetPos,  "Fleg":self.Fleg,
+                    "Fr_r": self.Fr_r0, "Fr_l": self.Fr_l0,  "Tf": self.matvars['Tf'] }]
 
         # MPC vars (need to perform optim to know Tf)
         self.mpc_N = int(0.4 * self.optim_params['N_dyn'])
@@ -532,20 +540,35 @@ class ClimbingrobotController(BaseControllerFixed):
 
 
     def computeMPC(self, delta_t):
-        self.mpc_index = p.getIndex(delta_t)
+        self.mpc_index = self.getIndex(delta_t)
         # eval ref
-        ref_com = matlab.double(self.matvars['solution'].p[:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-        Fr_l0 = matlab.double(self.matvars['solution'].Fr_l[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-        Fr_r0 = matlab.double(self.matvars['solution'].Fr_r[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        ref_com = matlab.double(self.matvars['p'][:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        Fr_l0 = matlab.double(self.matvars['Fr_l'][self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        Fr_r0 = matlab.double(self.matvars['Fr_r'][self.mpc_index:self.mpc_index + self.mpc_N].tolist())
         actual_t = matlab.double(self.matvars['solution'].time[self.mpc_index])
         actual_state =matlab.double([0.0937,    6.6182,    6.5577,    0.1738,    1.1335,    1.3561]).reshape(6,1)
         # computeStateFromCartesian(self.p, self.pd)
-        x = self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, Fr_max, mpc_N, params)
+        x = self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max, self.mpc_N, self.optim_params_mpc)
         print(x)
         deltaFr_l = x[:self.mpc_N]
         deltaFr_r = x[self.mpc_N:]
 
         return deltaFr_l[0],deltaFr_r[0]
+    def mat_matrix2python(self, input):
+        np_mat = np.zeros((input.size[0], input.size[1]))
+        for i in range(input.size[0]):
+            np_mat[i,:] = input[i][:]
+        return np_mat
+
+    def mat_vector2python(self, input):
+        arr_size = max(input.size[0], input.size[1])
+        np_arr = np.zeros((arr_size)) # force to row
+        for i in range(arr_size):
+            if input.size[0] > input.size[1]:
+                np_arr[i] = (input.reshape(input.size[1], input.size[0]))[0][i]
+            else:
+                np_arr[i] = input[0][i]
+        return np_arr
 
 def talker(p):
     p.start()
@@ -683,18 +706,20 @@ def talker(p):
 
     #3 --- whole pipeline with variable Fr_l Fr_r and the Fleg x,y,z
     # single jump
-    p.initOptim()
+    # p0 is defined wrt anchor1 pos in matlab convention
+    # jump params
+    p0 = np.array([0.5, 2.5, -6])  # there is singularity for px = 0!
+    pf = np.array([0.5, 4, -4])
+    p.initOptim(p0, pf)
 
-    if p.landing:
-        p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
-    else:
-        p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
-
-
-
-    p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['solution'].T_th, "p0": p.matvars['p0'],
-                "targetPos": p.matvars['solution'].achieved_target,  "Fleg": p.matvars['solution'].Fleg,
-                "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
+    # old way (before doing optim online)
+    # if p.landing:
+    #     p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
+    # else:
+    #     p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
+    # p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['solution'].T_th, "p0": p.matvars['p0'],
+    #             "targetPos": p.matvars['solution'].achieved_target,  "Fleg": p.matvars['solution'].Fleg,
+    #             "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
 
     # jump parameters
     p.startJump = 2.5
@@ -705,15 +730,15 @@ def talker(p):
     p.numberOfJumps = len(p.jumps)
     p.start_logging = np.inf
 
-    # p0 is defined wrt anchor1 pos in matlab convention
-    p0 = p.jumps[p.jumpNumber]["p0"] # np.array([0.5, 2.5, -6])
+
+
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     p.q_des[:12] = p.computeJointVariables(p0)
 
     print(colored(f"Start orienting leg to (pitch, roll)  : {p.getImpulseAngle()}", "blue"))
     p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint]  = p.getImpulseAngle()
 
-    #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+    p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
     while not ros.is_shutdown():
 
@@ -752,6 +777,8 @@ def talker(p):
             delta_t = p.time - p.end_orienting
             p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
             p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+
+
             # plot forces
             p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
             p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
@@ -797,6 +824,8 @@ def talker(p):
 
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+
+
             end_flying = p.startJump + p.orientTime +  p.jumps[p.jumpNumber]["Tf"]
 
             if (p.time >= end_flying):
@@ -829,6 +858,7 @@ def talker(p):
                 else:
                     p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] #+deltaFr_l0
                     p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] #+deltaFr_r0
+            
                 # check for early td and in case reset rope
                 if p.detectTouchDown():
                     p.resetRope()
@@ -857,13 +887,13 @@ def talker(p):
         # plot ropes
         p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
         p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
-
         # plot contact forces on landing legs
         if p.landing:
             p.ros_pub.add_arrow(p.x_landing_l, p.contactForceW_l / p.force_scale, "blue", scale=4.5)
             p.ros_pub.add_arrow(p.x_landing_r, p.contactForceW_r / p.force_scale, "blue", scale=4.5)
         # plot contact force on retractable leg
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=4.5)
+
         #plot target position
         p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3)
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
