@@ -34,6 +34,10 @@ import rospkg
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 from scipy.linalg import block_diag
 
+import matlab.engine
+import sys
+sys.path.insert(0,'./codegen')
+
 import  params as conf
 robotName = "climbingrobot2landing"
 #robotName = "climbingrobot2"
@@ -96,6 +100,9 @@ class ClimbingrobotController(BaseControllerFixed):
             self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_landing_r_bumper", ContactsState,
                                                  callback=self._receive_contact_landing_r, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
+        # this is for the matlab optim
+        self.eng = matlab.engine.start_matlab()
+        self.eng.addpath('./codegen', nargout=0)
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -225,6 +232,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r_fbk_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.wall_normal = np.array([1.,0.,0.])
+
+
 
 
     def logData(self):
@@ -463,6 +472,81 @@ class ClimbingrobotController(BaseControllerFixed):
         self.tau_ffwd[p.rope_index] = np.zeros(2)
         self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
 
+    def initOptim(self):
+        ##offline optim vars
+        self.Fleg_max = 300.
+        self.Fr_max = 90.
+        self.mu = 0.8
+
+        self.optim_params = {}
+        self.optim_params['jump_clearance'] = 1.
+        self.optim_params['m'] = self.getRobotMass()
+        self.optim_params['obstacle_avoidance'] = False
+        self.optim_params['num_params'] = 4.
+        self.optim_params['int_method'] = 'rk4'
+        self.optim_params['N_dyn'] = 30.
+        self.optim_params['FRICTION_CONE'] = 5.
+        self.optim_params['int_steps'] = 5.
+        self.optim_params['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
+        self.optim_params['b'] = 5.
+        self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
+        self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
+        self.optim_params['g'] = 9.81
+        self.optim_params['m'] = 5.08
+        self.optim_params['w1'] = 1.
+        self.optim_params['w2'] = 1.
+        self.optim_params['w3'] = 1.
+        self.optim_params['w4'] = 1.
+        self.optim_params['w5'] = 1.
+        self.optim_params['w6'] = 1.
+        self.optim_params['T_th'] = 0.05
+
+        if self.landing:
+            self.optim_params['m'] = 15.07
+            self.Fleg_max = 600.
+            self.Fr_max = 300.
+
+        # jump params
+        p0 = matlab.double([0.5, 2.5, -6])  # there is singularity for px = 0!
+        pf = matlab.double([0.5, 4, -4])
+
+        self.matvars = self.eng.optimize_cpp_mex(p0, pf, self.Fleg_max, self.Fr_max, self.mu, self.optim_params)
+        print(colored("offline optimization accomplished", "blue"))
+
+        # MPC vars (need to perform optim to know Tf)
+        self.mpc_N = int(0.4 * self.optim_params['N_dyn'])
+        self.Fr_max_mpc = 50.
+
+        self.optim_params_mpc = {}
+        self.optim_params_mpc['int_method'] = 'rk4'
+        self.optim_params_mpc['int_steps'] = 5.
+        self.optim_params_mpc['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
+        self.optim_params_mpc['b'] = 5.
+        self.optim_params_mpc['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
+        self.optim_params_mpc['p_a2'] = matlab.double([0., self.optim_params_mpc['b'], 0.]).reshape(3, 1)
+        self.optim_params_mpc['g'] = 9.81
+        self.optim_params_mpc['m'] = self.getRobotMass()
+        self.optim_params_mpc['w1'] = 1.
+        self.optim_params_mpc['w2'] = 1.
+        self.optim_params_mpc['mpc_dt'] = matlab.double(self.matvars['Tf'] / (self.optim_params['N_dyn'] - 1))
+
+
+    def computeMPC(self, delta_t):
+        self.mpc_index = p.getIndex(delta_t)
+        # eval ref
+        ref_com = matlab.double(self.matvars['solution'].p[:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        Fr_l0 = matlab.double(self.matvars['solution'].Fr_l[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        Fr_r0 = matlab.double(self.matvars['solution'].Fr_r[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        actual_t = matlab.double(self.matvars['solution'].time[self.mpc_index])
+        actual_state =matlab.double([0.0937,    6.6182,    6.5577,    0.1738,    1.1335,    1.3561]).reshape(6,1)
+        # computeStateFromCartesian(self.p, self.pd)
+        x = self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, Fr_max, mpc_N, params)
+        print(x)
+        deltaFr_l = x[:self.mpc_N]
+        deltaFr_r = x[self.mpc_N:]
+
+        return deltaFr_l[0],deltaFr_r[0]
+
 def talker(p):
     p.start()
     additional_args = ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
@@ -599,10 +683,15 @@ def talker(p):
 
     #3 --- whole pipeline with variable Fr_l Fr_r and the Fleg x,y,z
     # single jump
+    p.initOptim()
+
     if p.landing:
         p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
     else:
         p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
+
+
+
     p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['solution'].T_th, "p0": p.matvars['p0'],
                 "targetPos": p.matvars['solution'].achieved_target,  "Fleg": p.matvars['solution'].Fleg,
                 "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
@@ -690,6 +779,11 @@ def talker(p):
                         p.stateMachine = 'flying_and_reorient_lander'
                 print(colored("Start "+ p.stateMachine, "blue"))
 
+
+
+
+
+
         if (p.stateMachine == 'flying'):
             # compute orientation controller TODO
 
@@ -725,14 +819,16 @@ def talker(p):
         if (p.stateMachine == 'flying_and_reorient_lander'):
             # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
             delta_t = p.time - p.end_orienting
+            #deltaFr_l0,deltaFr_r0 = p.computeMPC(delta_t)
+
             if not p.optimal_control_traj_finished:
                 if p.getIndex(delta_t) == -1:
                     # start again pid gains and reset qdes
                     p.resetRope()
                     p.optimal_control_traj_finished = True
                 else:
-                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
-                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] #+deltaFr_l0
+                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] #+deltaFr_r0
                 # check for early td and in case reset rope
                 if p.detectTouchDown():
                     p.resetRope()
@@ -750,7 +846,7 @@ def talker(p):
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
             end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
 
-            # reorient legs to land parallel
+            # reorient legs to land parallel to the wall
             rpy = p.math_utils.rot2eul(p.w_R_b)
             p.q_des[p.landing_joints] = np.array([-0.8, 0.8]) - np.array([rpy[2], rpy[2]])
 
@@ -780,6 +876,7 @@ def talker(p):
             p.logData()
         # wait for synconization of the control loop
         rate.sleep()
+
 
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
