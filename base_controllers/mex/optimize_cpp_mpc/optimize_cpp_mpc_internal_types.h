@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * optimize_cpp_mpc_internal_types.h
@@ -19,6 +19,40 @@
 /* Type Definitions */
 #ifndef typedef_struct_T
 #define typedef_struct_T
+
+typedef struct {
+  boolean_T gradOK;
+  boolean_T fevalOK;
+  boolean_T done;
+  boolean_T stepAccepted;
+  boolean_T failedLineSearch;
+  int32_T stepType;
+} struct_T;
+
+#endif                                 /*typedef_struct_T*/
+
+#ifndef typedef_b_struct_T
+#define typedef_b_struct_T
+
+typedef struct {
+  char_T SolverName[7];
+  int32_T MaxIterations;
+  real_T StepTolerance;
+  real_T OptimalityTolerance;
+  real_T ConstraintTolerance;
+  real_T ObjectiveLimit;
+  real_T PricingTolerance;
+  real_T ConstrRelTolFactor;
+  real_T ProbRelTolFactor;
+  boolean_T RemainFeasible;
+  boolean_T IterDisplayQP;
+} b_struct_T;
+
+#endif                                 /*typedef_b_struct_T*/
+
+#ifndef typedef_k_struct_T
+#define typedef_k_struct_T
+
 typedef struct {
   real_T penaltyParam;
   real_T threshold;
@@ -36,53 +70,8 @@ typedef struct {
   real_T nlpComplError;
   real_T firstOrderOpt;
   boolean_T hasObjective;
-} struct_T;
-#endif /* typedef_struct_T */
-
-#ifndef typedef_b_struct_T
-#define typedef_b_struct_T
-typedef struct {
-  boolean_T gradOK;
-  boolean_T fevalOK;
-  boolean_T done;
-  boolean_T stepAccepted;
-  boolean_T failedLineSearch;
-  int32_T stepType;
-} b_struct_T;
-#endif /* typedef_b_struct_T */
-
-#ifndef typedef_k_struct_T
-#define typedef_k_struct_T
-typedef struct {
-  char_T SolverName[7];
-  int32_T MaxIterations;
-  real_T StepTolerance;
-  real_T ObjectiveLimit;
 } k_struct_T;
-#endif /* typedef_k_struct_T */
 
-#ifndef typedef_rtBoundsCheckInfo
-#define typedef_rtBoundsCheckInfo
-typedef struct {
-  int32_T iFirst;
-  int32_T iLast;
-  int32_T lineNo;
-  int32_T colNo;
-  const char_T *aName;
-  const char_T *fName;
-  const char_T *pName;
-  int32_T checkKind;
-} rtBoundsCheckInfo;
-#endif /* typedef_rtBoundsCheckInfo */
-
-#ifndef typedef_rtDesignRangeCheckInfo
-#define typedef_rtDesignRangeCheckInfo
-typedef struct {
-  int32_T lineNo;
-  int32_T colNo;
-  const char_T *fName;
-  const char_T *pName;
-} rtDesignRangeCheckInfo;
-#endif /* typedef_rtDesignRangeCheckInfo */
+#endif                                 /*typedef_k_struct_T*/
 
 /* End of code generation (optimize_cpp_mpc_internal_types.h) */

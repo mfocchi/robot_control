@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * factoryConstruct.c
@@ -17,8 +17,8 @@
 #include <string.h>
 
 /* Function Definitions */
-void factoryConstruct(int32_T nVarMax, int32_T mConstrMax,
-                      const emxArray_real_T *x0, g_struct_T *obj)
+void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, const emxArray_real_T
+                      *x0, d_struct_T *obj)
 {
   int32_T i;
   obj->nVarMax = nVarMax;
@@ -53,12 +53,10 @@ void factoryConstruct(int32_T nVarMax, int32_T mConstrMax,
   for (i = 0; i < mConstrMax; i++) {
     obj->lambdasqp->data[i] = 0.0;
   }
-  i = obj->lambdaStopTest->size[0];
-  obj->lambdaStopTest->size[0] = mConstrMax;
-  emxEnsureCapacity_real_T(obj->lambdaStopTest, i);
-  i = obj->lambdaStopTestPrev->size[0];
-  obj->lambdaStopTestPrev->size[0] = mConstrMax;
-  emxEnsureCapacity_real_T(obj->lambdaStopTestPrev, i);
+
+  i = obj->lambdasqp_old->size[0];
+  obj->lambdasqp_old->size[0] = mConstrMax;
+  emxEnsureCapacity_real_T(obj->lambdasqp_old, i);
   obj->steplength = 1.0;
   i = obj->delta_x->size[0];
   obj->delta_x->size[0] = nVarMax;
@@ -66,9 +64,13 @@ void factoryConstruct(int32_T nVarMax, int32_T mConstrMax,
   for (i = 0; i < nVarMax; i++) {
     obj->delta_x->data[i] = 0.0;
   }
+
   i = obj->socDirection->size[0];
   obj->socDirection->size[0] = nVarMax;
   emxEnsureCapacity_real_T(obj->socDirection, i);
+  i = obj->lambda_old->size[0];
+  obj->lambda_old->size[0] = mConstrMax;
+  emxEnsureCapacity_real_T(obj->lambda_old, i);
   i = obj->workingset_old->size[0];
   obj->workingset_old->size[0] = mConstrMax;
   emxEnsureCapacity_int32_T(obj->workingset_old, i);
@@ -89,6 +91,7 @@ void factoryConstruct(int32_T nVarMax, int32_T mConstrMax,
   for (i = 0; i < mConstrMax; i++) {
     obj->lambda->data[i] = 0.0;
   }
+
   obj->state = 0;
   obj->maxConstr = 0.0;
   obj->iterations = 0;

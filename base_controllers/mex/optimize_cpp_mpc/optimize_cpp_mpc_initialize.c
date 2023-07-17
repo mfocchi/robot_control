@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * optimize_cpp_mpc_initialize.c
@@ -16,28 +16,16 @@
 #include "rt_nonfinite.h"
 #include <string.h>
 
-/* Function Declarations */
-static void optimize_cpp_mpc_once(void);
-
 /* Function Definitions */
-static void optimize_cpp_mpc_once(void)
-{
-  mex_InitInfAndNan();
-}
-
 void optimize_cpp_mpc_initialize(void)
 {
+  mex_InitInfAndNan();
   mexFunctionCreateRootTLS();
-  emlrtBreakCheckR2012bFlagVar =
-      emlrtGetBreakCheckFlagAddressR2022b(emlrtRootTLSGlobal);
-  emlrtClearAllocCountR2012b(emlrtRootTLSGlobal, false, 0U, NULL);
+  emlrtBreakCheckR2012bFlagVar = emlrtGetBreakCheckFlagAddressR2012b();
+  emlrtClearAllocCountR2012b(emlrtRootTLSGlobal, false, 0U, 0);
   emlrtEnterRtStackR2012b(emlrtRootTLSGlobal);
-  emlrtLicenseCheckR2022a(emlrtRootTLSGlobal,
-                          "EMLRT:runTime:MexFunctionNeedsLicense",
-                          "optimization_toolbox", 2);
-  if (emlrtFirstTimeR2012b(emlrtRootTLSGlobal)) {
-    optimize_cpp_mpc_once();
-  }
+  emlrtLicenseCheckR2012b(emlrtRootTLSGlobal, "optimization_toolbox", 2);
+  emlrtFirstTimeR2012b(emlrtRootTLSGlobal);
 }
 
 /* End of code generation (optimize_cpp_mpc_initialize.c) */

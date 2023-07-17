@@ -34,13 +34,14 @@ import rospkg
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 from scipy.linalg import block_diag
 
+from base_controllers.utils.matlab_conversions import mat_vector2python, mat_matrix2python
 import matlab.engine
 import sys
 sys.path.insert(0,'./codegen')
 
 import  params as conf
-robotName = "climbingrobot2landing"
-#robotName = "climbingrobot2"
+#robotName = "climbingrobot2landing"
+robotName = "climbingrobot2"
 
 class ClimbingrobotController(BaseControllerFixed):
     
@@ -127,6 +128,7 @@ class ClimbingrobotController(BaseControllerFixed):
         # this is expressed in a workdframe with the origin attached to the base frame origin
         self.anchor_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor')).translation
         self.anchor_pos2 = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor_2')).translation
+        self.anchor_distance_y = (self.anchor_pos2 - self.anchor_pos)[1]
         self.base_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).translation
 
         self.w_R_b = self.robot.framePlacement(self.q, self.robot.model.getFrameId('base_link')).rotation
@@ -151,13 +153,18 @@ class ClimbingrobotController(BaseControllerFixed):
         w_R_wire2 = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire_2')).rotation
 
 
-        self.l = self.q[p.rope_index[0]]
-        self.ldot = self.qd[p.rope_index[0]]
-        self.l_2 = self.q[p.rope_index[1]]
-        self.ldot_2 = self.qd[p.rope_index[1]]
 
         # WF matlab to WF Gazebo offset
         self.mat2Gazebo = self.anchor_pos
+
+        # to get the matlab state from the gazebo prismatic joints we need to consider that the gazebo joints is in zero config
+        # when the rope is 2.5 m half of anchor distance (startup at the point in the middle of the anchors)
+        self.l_1 = self.q[p.rope_index[1]] + self.anchor_distance_y/2
+        self.l_1d = self.qd[p.rope_index[1]]
+        self.l_2 = self.q[p.rope_index[0]]+ self.anchor_distance_y/2
+        self.l_2d = self.qd[p.rope_index[0]]
+        self.base_pos_mat = self.base_pos - self.mat2Gazebo
+        self.psi = math.atan2(self.base_pos_mat[0], -self.base_pos_mat[2])
 
         # compute com variables
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
@@ -233,8 +240,9 @@ class ClimbingrobotController(BaseControllerFixed):
 
         self.wall_normal = np.array([1.,0.,0.])
 
-
-
+        self.mpc_index = 0
+        self.mpc_index_old = 0
+        self.mpc_index_control = 0
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -323,19 +331,19 @@ class ClimbingrobotController(BaseControllerFixed):
         return angle_hip_pitch, angle_hip_roll
 
 
-    # compute the passive and rope joints reference from the matlab position referred to a world frame located in between anchor
+    # compute the passive and rope joints reference from the matlab position referred to a world frame located in between anchors
     def computeJointVariables(self, p):
         # mountain_wire_pitch_l = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_x'], -p[2])
         # mountain_wire_pitch_r = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_2x'], -p[2])
         mountain_wire_pitch_l = math.atan2(p[0] , -p[2])
         mountain_wire_pitch_r = math.atan2(p[0] , -p[2])
 
-        anchor_distance_y = (self.anchor_pos2 - self.anchor_pos)[1]
-        mountain_wire_roll_l = -math.atan2(-p[2], p[1])
-        mountain_wire_roll_r = math.atan2(-p[2], anchor_distance_y-p[1])
 
-        wire_base_prismatic_l = np.linalg.norm(p) -anchor_distance_y*0.5
-        wire_base_prismatic_r = math.sqrt(p[0]*p[0] +(anchor_distance_y - p[1])*(anchor_distance_y - p[1]) + p[2] * p[2])-anchor_distance_y*0.5
+        mountain_wire_roll_l = -math.atan2(-p[2], p[1])
+        mountain_wire_roll_r = math.atan2(-p[2], self.anchor_distance_y-p[1])
+
+        wire_base_prismatic_l = np.linalg.norm(p) -self.anchor_distance_y*0.5
+        wire_base_prismatic_r = math.sqrt(p[0]*p[0] +(self.anchor_distance_y - p[1])*(self.anchor_distance_y - p[1]) + p[2] * p[2])-self.anchor_distance_y*0.5
 
         wire_base_roll_l = -mountain_wire_roll_l
         wire_base_roll_r = -mountain_wire_roll_r
@@ -485,14 +493,14 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['num_params'] = 4.
         self.optim_params['int_method'] = 'rk4'
         self.optim_params['N_dyn'] = 30.
-        self.optim_params['FRICTION_CONE'] = 5.
+        self.optim_params['FRICTION_CONE'] = 1.
         self.optim_params['int_steps'] = 5.
         self.optim_params['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
         self.optim_params['b'] = 5.
         self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
         self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
         self.optim_params['g'] = 9.81
-        self.optim_params['m'] = 5.08
+        self.optim_params['m'] = self.getRobotMass()
         self.optim_params['w1'] = 1.
         self.optim_params['w2'] = 1.
         self.optim_params['w3'] = 1.
@@ -502,21 +510,24 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['T_th'] = 0.05
 
         if self.landing:
-            self.optim_params['m'] = 15.07
             self.Fleg_max = 600.
             self.Fr_max = 300.
 
 
         self.matvars = self.eng.optimize_cpp_mex(matlab.double(p0.tolist()), matlab.double(pf.tolist()), self.Fleg_max, self.Fr_max, self.mu, self.optim_params)
+
         print(colored("offline optimization accomplished", "blue"))
         # extract variables
-        self.ref_com  = self.mat_matrix2python(self.matvars['p'])
-        self.ref_time = self.mat_vector2python(self.matvars['time'])
-        self.Fr_l0 = self.mat_vector2python(self.matvars['Fr_l'])
-        self.Fr_r0 = self.mat_vector2python(self.matvars['Fr_r'])
-        self.Fleg = self.mat_vector2python(self.matvars['Fleg'])
-        self.targetPos =self.mat_vector2python(self.matvars['achieved_target'])
+        self.ref_com  = mat_matrix2python(self.matvars['p'])
+        self.ref_time = mat_vector2python(self.matvars['time'])
+        self.Fr_l0 = mat_vector2python(self.matvars['Fr_l'])
+        self.Fr_r0 = mat_vector2python(self.matvars['Fr_r'])
+        self.Fleg = mat_vector2python(self.matvars['Fleg'])
+        self.targetPos =mat_vector2python(self.matvars['achieved_target'])
 
+        print(self.Fr_l0)
+        print(self.Fr_r0)
+        print(self.matvars["achieved_target"])
         self.jumps = [{"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
                     "targetPos": self.targetPos,  "Fleg":self.Fleg,
                     "Fr_r": self.Fr_r0, "Fr_l": self.Fr_l0,  "Tf": self.matvars['Tf'] }]
@@ -537,38 +548,53 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params_mpc['w1'] = 1.
         self.optim_params_mpc['w2'] = 1.
         self.optim_params_mpc['mpc_dt'] = matlab.double(self.matvars['Tf'] / (self.optim_params['N_dyn'] - 1))
+        self.deltaFr_l =np.zeros((int(self.mpc_N/2)))
+        self.deltaFr_r = np.zeros((int(self.mpc_N / 2)))
 
+        if self.landing:
+            self.Fr_max_mpc = 150.
 
     def computeMPC(self, delta_t):
-        self.mpc_index = self.getIndex(delta_t)
-        # eval ref
-        ref_com = matlab.double(self.matvars['p'][:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-        Fr_l0 = matlab.double(self.matvars['Fr_l'][self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-        Fr_r0 = matlab.double(self.matvars['Fr_r'][self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-        actual_t = matlab.double(self.matvars['solution'].time[self.mpc_index])
-        actual_state =matlab.double([0.0937,    6.6182,    6.5577,    0.1738,    1.1335,    1.3561]).reshape(6,1)
-        # computeStateFromCartesian(self.p, self.pd)
-        x = self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max, self.mpc_N, self.optim_params_mpc)
-        print(x)
-        deltaFr_l = x[:self.mpc_N]
-        deltaFr_r = x[self.mpc_N:]
+        # after the thrust we start MPC it will start from time 0.05 so the index should start from  2
+        if self.getIndex(delta_t) != -1:
+            self.mpc_index = self.getIndex(delta_t)
+        else:
+            print((delta_t % self.optim_params_mpc['mpc_dt']))
+            if  (delta_t % self.optim_params_mpc['mpc_dt']) < 0.001:
+                print((self.mpc_index_control))
+                self.mpc_index_control+=1
+                print("stop mpc, applying ffwd")
 
-        return deltaFr_l[0],deltaFr_r[0]
-    def mat_matrix2python(self, input):
-        np_mat = np.zeros((input.size[0], input.size[1]))
-        for i in range(input.size[0]):
-            np_mat[i,:] = input[i][:]
-        return np_mat
+        if ((self.mpc_index + self.mpc_N) <= len(self.ref_time)): # do not do anything for the last part
+            # eval ref
+            ref_com = matlab.double(self.ref_com[:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+            Fr_l0 = matlab.double(self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+            Fr_r0 = matlab.double(self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+            actual_t = matlab.double(self.ref_time[self.mpc_index])
+            print(delta_t)
+            print(self.mpc_index + self.mpc_N)
+            # print(ref_com)
+            # print(Fr_l0)
+            # print(Fr_r0)
+            # print(actual_t)
+            # unit test mpc_index = 1
+            #actual_state =matlab.double([0.0937,    6.6182,    6.5577,    0.1738,    1.1335,    1.3561]).reshape(6,1)
+            # [-50.0,-50.0,27.12904960475917,50.0,50.0,31.089642105580083,-25.788591300270078,-6.695018524972192,3.815392055625576,-0.49833826563290884,-1.637050711715774,0.0,-50.0,-50.0,-50.0,-44.43015916211622,50.0,-3.358909155658233,-7.552907781748152,8.786899336571187,5.79900977192917,-4.527511875534414,-3.806147456191822,0.0]]
+            actual_state = matlab.double([self.psi, self.l_1, self.l_2, 0. ,self.l_1d, self.l_2d]).reshape(6,1) #TODO compute psid
 
-    def mat_vector2python(self, input):
-        arr_size = max(input.size[0], input.size[1])
-        np_arr = np.zeros((arr_size)) # force to row
-        for i in range(arr_size):
-            if input.size[0] > input.size[1]:
-                np_arr[i] = (input.reshape(input.size[1], input.size[0]))[0][i]
-            else:
-                np_arr[i] = input[0][i]
-        return np_arr
+            if (self.mpc_index != self.mpc_index_old):
+                self.pause_physics_client()
+                x = self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc)
+                self.unpause_physics_client()
+                print(x)
+                self.deltaFr_l = x[0][:self.mpc_N]
+                self.deltaFr_r = x[0][self.mpc_N:]
+
+        self.mpc_index_old = self.mpc_index
+
+        return self.deltaFr_l[self.mpc_index_control],self.deltaFr_r[self.mpc_index_control]
+
+
 
 def talker(p):
     p.start()
@@ -778,7 +804,6 @@ def talker(p):
             p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
             p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
 
-
             # plot forces
             p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
             p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
@@ -794,28 +819,25 @@ def talker(p):
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
                 p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
                 p.stateMachine = 'flying'
+                # retract leg and move langing elements
+                p.q_des[p.leg_index[2]] = 0.25
 
                 # manage lander retracting leg
                 if  p.landing:
                     # retract knee joint and extend landing joints
                     p.tau_ffwd[p.landing_joints] = np.zeros(2)
-                    #retract leg and move langing elements
-                    p.q_des[p.leg_index[2]] = 0.25
                     if p.impedance_landing:
                         p.q_des[p.landing_joints] = np.array([-0.6, 0.6])
                         p.stateMachine = 'flying_and_reorient_lander'
                 print(colored("Start "+ p.stateMachine, "blue"))
 
-
-
-
-
-
         if (p.stateMachine == 'flying'):
-            # compute orientation controller TODO
-
+            # after the thrust we start MPC it will start from time 0.05 so the index should be 12
             # applying forces to ropes
             delta_t = p.time - p.end_orienting
+            deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
+
+
             p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
             p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
             #plot forces
@@ -848,7 +870,7 @@ def talker(p):
         if (p.stateMachine == 'flying_and_reorient_lander'):
             # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
             delta_t = p.time - p.end_orienting
-            #deltaFr_l0,deltaFr_r0 = p.computeMPC(delta_t)
+            deltaFr_l0,deltaFr_r0 = p.computeMPC(delta_t)
 
             if not p.optimal_control_traj_finished:
                 if p.getIndex(delta_t) == -1:
@@ -856,9 +878,8 @@ def talker(p):
                     p.resetRope()
                     p.optimal_control_traj_finished = True
                 else:
-                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] #+deltaFr_l0
-                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] #+deltaFr_r0
-            
+                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] +deltaFr_l0
+                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
                 # check for early td and in case reset rope
                 if p.detectTouchDown():
                     p.resetRope()

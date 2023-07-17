@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * factoryConstruct1.h
@@ -22,13 +22,12 @@
 #include <string.h>
 
 /* Function Declarations */
-void b_factoryConstruct(const real_T objfun_workspace_actual_state[6],
-                        const emxArray_real_T *objfun_workspace_ref_com,
-                        const emxArray_real_T *objfun_workspace_Fr_l0,
-                        const emxArray_real_T *objfun_workspace_Fr_r0,
-                        int64_T objfun_workspace_mpc_N,
-                        const param *objfun_workspace_params, int32_T nVar,
-                        const emxArray_real_T *lb, const emxArray_real_T *ub,
-                        j_struct_T *obj);
+void b_factoryConstruct(const real_T objfun_tunableEnvironment_f1[6], real_T
+  objfun_tunableEnvironment_f2, const emxArray_real_T
+  *objfun_tunableEnvironment_f3, const emxArray_real_T
+  *objfun_tunableEnvironment_f4, const emxArray_real_T
+  *objfun_tunableEnvironment_f5, int64_T objfun_tunableEnvironment_f6, const
+  param *objfun_tunableEnvironment_f7, int32_T nVar, const emxArray_real_T *lb,
+  const emxArray_real_T *ub, f_struct_T *obj);
 
 /* End of code generation (factoryConstruct1.h) */

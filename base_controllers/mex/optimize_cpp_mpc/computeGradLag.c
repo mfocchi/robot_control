@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * computeGradLag.c
@@ -16,39 +16,31 @@
 #include <string.h>
 
 /* Function Definitions */
-void computeGradLag(emxArray_real_T *workspace, int32_T nVar,
-                    const emxArray_real_T *grad,
-                    const emxArray_int32_T *finiteFixed, int32_T mFixed,
-                    const emxArray_int32_T *finiteLB, int32_T mLB,
-                    const emxArray_int32_T *finiteUB, int32_T mUB,
-                    const emxArray_real_T *lambda)
+void computeGradLag(emxArray_real_T *workspace, int32_T nVar, const
+                    emxArray_real_T *grad, const emxArray_int32_T *finiteFixed,
+                    int32_T mFixed, const emxArray_int32_T *finiteLB, int32_T
+                    mLB, const emxArray_int32_T *finiteUB, int32_T mUB, const
+                    emxArray_real_T *lambda)
 {
-  const real_T *grad_data;
-  const real_T *lambda_data;
-  real_T *workspace_data;
-  const int32_T *finiteFixed_data;
-  const int32_T *finiteLB_data;
-  const int32_T *finiteUB_data;
   int32_T iL0;
   int32_T idx;
-  lambda_data = lambda->data;
-  finiteUB_data = finiteUB->data;
-  finiteLB_data = finiteLB->data;
-  finiteFixed_data = finiteFixed->data;
-  grad_data = grad->data;
-  workspace_data = workspace->data;
   for (iL0 = 0; iL0 < nVar; iL0++) {
-    workspace_data[iL0] = grad_data[iL0];
+    workspace->data[iL0] = grad->data[iL0];
   }
+
   for (idx = 0; idx < mFixed; idx++) {
-    workspace_data[finiteFixed_data[idx] - 1] += lambda_data[idx];
+    workspace->data[finiteFixed->data[idx] - 1] += lambda->data[idx];
   }
+
+  iL0 = mFixed;
   for (idx = 0; idx < mLB; idx++) {
-    workspace_data[finiteLB_data[idx] - 1] -= lambda_data[mFixed + idx];
+    workspace->data[finiteLB->data[idx] - 1] -= lambda->data[iL0];
+    iL0++;
   }
-  iL0 = mFixed + mLB;
+
   for (idx = 0; idx < mUB; idx++) {
-    workspace_data[finiteUB_data[idx] - 1] += lambda_data[iL0 + idx];
+    workspace->data[finiteUB->data[idx] - 1] += lambda->data[iL0];
+    iL0++;
   }
 }
 

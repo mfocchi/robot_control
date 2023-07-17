@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * integrate_dynamics.h
@@ -21,9 +21,8 @@
 #include <string.h>
 
 /* Function Declarations */
-void integrate_dynamics_anonFcn1(real_T params_b, const real_T params_p_a1[3],
-                                 const real_T params_p_a2[3], real_T params_g,
-                                 real_T params_m, const real_T x[6], real_T u1,
-                                 real_T u2, real_T varargout_1[6]);
+void b_anon(real_T params_b, const real_T params_p_a1[3], const real_T
+            params_p_a2[3], real_T params_g, real_T params_m, const real_T x[6],
+            real_T u1, real_T u2, real_T varargout_1[6]);
 
 /* End of code generation (integrate_dynamics.h) */

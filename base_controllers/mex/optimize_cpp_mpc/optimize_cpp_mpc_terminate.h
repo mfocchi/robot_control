@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * optimize_cpp_mpc_terminate.h
@@ -22,7 +22,6 @@
 
 /* Function Declarations */
 void optimize_cpp_mpc_atexit(void);
-
 void optimize_cpp_mpc_terminate(void);
 
 /* End of code generation (optimize_cpp_mpc_terminate.h) */

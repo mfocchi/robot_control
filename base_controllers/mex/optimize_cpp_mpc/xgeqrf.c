@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * xgeqrf.c
@@ -22,45 +22,42 @@
 /* Function Definitions */
 void xgeqrf(emxArray_real_T *A, int32_T m, int32_T n, emxArray_real_T *tau)
 {
-  real_T *A_data;
-  real_T *tau_data;
+  ptrdiff_t info_t;
   int32_T i;
   int32_T ma;
   int32_T minmana;
   int32_T na;
-  A_data = A->data;
   ma = A->size[0];
   na = A->size[1];
   minmana = muIntScalarMin_sint32(ma, na);
   na = tau->size[0];
   tau->size[0] = minmana;
   emxEnsureCapacity_real_T(tau, na);
-  tau_data = tau->data;
   if ((m == 0) || (n == 0)) {
     na = tau->size[0];
     tau->size[0] = minmana;
     emxEnsureCapacity_real_T(tau, na);
-    tau_data = tau->data;
     for (na = 0; na < minmana; na++) {
-      tau_data[na] = 0.0;
+      tau->data[na] = 0.0;
     }
   } else {
-    ptrdiff_t info_t;
-    info_t = LAPACKE_dgeqrf(102, (ptrdiff_t)m, (ptrdiff_t)n, &A_data[0],
-                            (ptrdiff_t)A->size[0], &tau_data[0]);
+    info_t = LAPACKE_dgeqrf(102, (ptrdiff_t)m, (ptrdiff_t)n, &A->data[0],
+      (ptrdiff_t)A->size[0], &tau->data[0]);
     if ((int32_T)info_t != 0) {
       for (na = 0; na < n; na++) {
         for (i = 0; i < m; i++) {
-          A_data[na * ma + i] = rtNaN;
+          A->data[na * ma + i] = rtNaN;
         }
       }
+
       na = muIntScalarMin_sint32(m, n) - 1;
       for (i = 0; i <= na; i++) {
-        tau_data[i] = rtNaN;
+        tau->data[i] = rtNaN;
       }
+
       na += 2;
       for (i = na; i <= minmana; i++) {
-        tau_data[i - 1] = 0.0;
+        tau->data[i - 1] = 0.0;
       }
     }
   }

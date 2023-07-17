@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * factoryConstruct2.h
@@ -22,7 +22,9 @@
 #include <string.h>
 
 /* Function Declarations */
-void c_factoryConstruct(int32_T nVar, int32_T nVarMax, int32_T mConstrMax,
-                        h_struct_T *obj);
+void c_factoryConstruct(int32_T mLB, const emxArray_int32_T *indexLB, int32_T
+  mUB, const emxArray_int32_T *indexUB, int32_T mFixed, const emxArray_int32_T
+  *indexFixed, int32_T nVar, int32_T nVarMax, int32_T mConstrMax, j_struct_T
+  *obj);
 
 /* End of code generation (factoryConstruct2.h) */

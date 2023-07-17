@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * feasibleX0ForWorkingSet.h
@@ -22,9 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace,
-                                  emxArray_real_T *xCurrent,
-                                  const h_struct_T *workingset,
-                                  c_struct_T *qrmanager);
+boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace, emxArray_real_T
+  *xCurrent, const j_struct_T *workingset, g_struct_T *qrmanager);
 
 /* End of code generation (feasibleX0ForWorkingSet.h) */

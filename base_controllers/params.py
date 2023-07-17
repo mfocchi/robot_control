@@ -212,7 +212,7 @@ robot_params['climbingrobot2'] ={'dt': 0.001,
                        'kd':  np.array([20,    20,    100,   20,     20,   20,
                                         20,    20,    100,   20,     20,   20,
                                         10,   10, 10  ]),
-                       # this corresposnds to p = [0.03, 2.5, -6] from matlab WF  which is located in anchor_pos1 and correspods to
+                       # this corresposnds to p = [0.03, 2.5, -6] from matlab WF  which is located in anchor_pos1 and correspods to (rope joint starts from anchor disnace /2)
                        'q_0':  np.array([ 0.0,    1.17  ,  4.0000   ,      0. ,   -1.17 ,        0.,
                                           0.0,  -1.17,    4.0000  ,       0. ,  1.17,           0.,
                                           -1.57, 0.0, -0.2 ]),
