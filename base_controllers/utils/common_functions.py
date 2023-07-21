@@ -1111,41 +1111,70 @@ def plotJointImpedance(name, q_log, q_des_log, tau_log):
 
 def polar_chart(name, figure_id, phase_deg, mag_solid, mag_dashed, legend = None):
     import matplotlib as mpl
-    from screeninfo import get_monitors
+    mpl.use('pgf')
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
 
-    width_inches = 0.
-    height_inches = 0.
-    mm2inches = 0.0393701
-    for m in get_monitors():
-        if m.is_primary:
-            width_inches = m.width_mm * mm2inches
-            height_inches = m.height_mm * mm2inches
-            break
 
+    # size_font = 16
+    # mpl.rcdefaults()
+    # mpl.rcParams['lines.linewidth'] = 10
+    # mpl.rcParams['lines.markersize'] = 6
+    # #mpl.rcParams['patch.linewidth'] = 4
+    # mpl.rcParams['axes.grid'] = True
+    # mpl.rcParams['axes.labelsize'] = 20
+    # mpl.rcParams['font.family'] = 'sans-serif'
+    # mpl.rcParams['font.size'] = 20
+    # mpl.rcParams['font.serif'] = ['Times New Roman', 'Times', 'Bitstream Vera Serif', 'DejaVu Serif',
+    #                               'New Century Schoolbook',
+    #                               'Century Schoolbook L', 'Utopia', 'ITC Bookman', 'Bookman', 'Nimbus Roman No9 L',
+    #                               'Palatino',
+    #                               'Charter', 'serif']
+    # mpl.rcParams['text.usetex'] = False
+    # mpl.rcParams['legend.fontsize'] = 20
+    # plt.rcParams['legend.title_fontsize'] = 20
+    # mpl.rcParams['legend.loc'] = 'best'
+    # mpl.rcParams['figure.facecolor'] = 'white'
+    # mpl.rcParams['figure.figsize'] = 10,6
+    # mpl.rcParams['savefig.format'] = 'pdf'
 
     size_font = 16
     mpl.rcdefaults()
-    mpl.rcParams['lines.linewidth'] = 10
-    mpl.rcParams['lines.markersize'] = 6
-    #mpl.rcParams['patch.linewidth'] = 4
+    mpl.rcParams['lines.linewidth'] = 2
+    # mpl.rcParams['lines.markersize'] = 6
+    # mpl.rcParams['patch.linewidth'] = 4
     mpl.rcParams['axes.grid'] = True
     mpl.rcParams['axes.labelsize'] = size_font
     mpl.rcParams['font.family'] = 'sans-serif'
     mpl.rcParams['font.size'] = size_font
+    mpl.rcParams['legend.fontsize'] = size_font - 2
+    mpl.rcParams['legend.title_fontsize'] = size_font - 2
+    mpl.rcParams['legend.loc'] = 'best'
+    mpl.rcParams['figure.facecolor'] = 'white'
+    mpl.rcParams['figure.figsize'] = 6, 4
+    mpl.rcParams['savefig.format'] = 'pdf'
     mpl.rcParams['font.serif'] = ['Times New Roman', 'Times', 'Bitstream Vera Serif', 'DejaVu Serif',
                                   'New Century Schoolbook',
                                   'Century Schoolbook L', 'Utopia', 'ITC Bookman', 'Bookman', 'Nimbus Roman No9 L',
                                   'Palatino',
                                   'Charter', 'serif']
-    mpl.rcParams['text.usetex'] = False
-    mpl.rcParams['legend.fontsize'] = 16
-    plt.rcParams['legend.title_fontsize'] = 16
-    mpl.rcParams['legend.loc'] = 'best'
-    mpl.rcParams['figure.facecolor'] = 'white'
-    mpl.rcParams['figure.figsize'] = 6.5,6
-    mpl.rcParams['savefig.format'] = 'pdf'
+
+    # mpl.rcParams['mathtext.fontset'] = 'dejavuserif'
+    # mpl.rcParams['mathtext.bf'] = 'serif:bold'
+    plt.rcParams.update(
+        {
+            "text.usetex": True,
+            "pgf.texsystem": "pdflatex",
+            "text.latex.preamble": r"\usepackage{bm}",
+
+            # Enforce default LaTeX font.
+            # "font.family": "serif",
+            "font.serif": ["Computer Modern"],
+        }
+    )
+
 
     phase_rad = []
     for deg in phase_deg:
@@ -1189,7 +1218,7 @@ def polar_chart(name, figure_id, phase_deg, mag_solid, mag_dashed, legend = None
     step = np.abs(phase_deg[0]-phase_deg[1])
     phase_rad =np.arange(0,360, step)*np.pi/180
     ax.set_xticks(phase_rad)
-    ax.tick_params(axis='x', which='major', pad=8)
+    ax.tick_params(axis='x', which='major', pad=12)
 
     rticks = np.arange(0,4,0.5)
     ax.set_rticks(rticks)
@@ -1201,7 +1230,7 @@ def polar_chart(name, figure_id, phase_deg, mag_solid, mag_dashed, legend = None
 
     if legend is not None:
         legend_elements = [Line2D([0], [0], color=ecolors[i], lw=4, label=legend[i]) for i in range(len(legend))]
-        ax.legend(handles=legend_elements, loc='upper center', ncol=4, bbox_to_anchor=(0.5,1.35), title="drop height [m]")
+        ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.2, 0.5), ncol=1, title="drop height [m]")
 
     fig.suptitle(name)
 
