@@ -702,12 +702,14 @@ class Controller(BaseController):
 
     def setWBCConstraints(self, normals = [np.array([0, 0, 1])]*4, friction_coeffs= [0.8]*4, reg = 1e-4):
         # this must be called at least once
+        # uses inner piramid approx of friction cones
+        # friction coeff must be the one in xacros. it is rescaled by the function
         C_leg = [None] * 4
 
         for leg in range(4):
             ty = np.cross(normals[leg], np.array([1, 0, 0]))
             tx = np.cross(ty, normals[leg])
-            coeff_per_normal = friction_coeffs[leg] * normals[leg]
+            coeff_per_normal = friction_coeffs[leg]/np.sqrt(2.0) * normals[leg]
             C_leg[leg] = np.array([
                 tx - coeff_per_normal,
                 -tx - coeff_per_normal,
