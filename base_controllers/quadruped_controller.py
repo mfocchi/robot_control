@@ -700,7 +700,7 @@ class Controller(BaseController):
         Npinv = np.linalg.pinv(self.NEMatrix.T, tol).T# self.NEMatrix.T @ np.linalg.inv(self.NEMatrix @ self.NEMatrix.T)
         return Npinv  @ self.wrench_desW
 
-    def setWBCConstraints(self, normals = [np.array([0, 0, 1])*4], friction_coeffs= [0.8]*4, reg = 1e-4):
+    def setWBCConstraints(self, normals = [np.array([0, 0, 1])]*4, friction_coeffs= [0.8]*4, reg = 1e-4):
         # this must be called at least once
         C_leg = [None] * 4
 
