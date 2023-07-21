@@ -891,7 +891,12 @@ class Controller(BaseController):
 
         self.ros_pub.publishVisual()
 
-    def updateKinematics(self, update_legOdom=True):
+    def updateKinematics(self, update_legOdom=True, noise=None):
+        if noise is not None:
+            if 'qd' in noise:
+                self.qd += noise['qd'].draw()
+            if 'tau' in noise:
+                self.tau += noise['tau'].draw()
         self.basePoseW_legOdom, self.baseTwistW_legOdom = self.leg_odom.base_in_world(contact_state=self.contact_state,
                                                                                       B_contacts=self.B_contacts,
                                                                                       b_R_w=self.b_R_w,
