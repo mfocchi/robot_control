@@ -235,7 +235,6 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         njoints = min(plot_var_log.shape)
     elif plot_var_des_log is not None:
         njoints = min(plot_var_des_log.shape)
-    print("Nubmer of Joints", njoints)
 
     if len(plt.get_fignums()) == 0:
         figure_id = 1
