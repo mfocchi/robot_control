@@ -99,7 +99,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'ki_wbc': np.array([0., 0., 0.]*4),#np.array([0.3, 0.3, 0.3]*4),
                       # virtual impedance wrench control
                       'kp_lin': np.array([800, 500., 900.]),  # x y z
-                      'kd_lin': np.array([100, 100., 200.]),
+                      'kd_lin': np.array([100, 100., 100.]),
                       'kp_ang': np.array([100, 100., 100.]),  # R P Y
                       'kd_ang': np.array([10., 10., 10.]),
                       # real robot gains
