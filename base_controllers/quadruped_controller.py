@@ -1081,7 +1081,7 @@ class Controller(BaseController):
         if self.real_robot:
             delta_z = 0.005
         else:
-            delta_z = 0.01
+            delta_z = 0.1
         update = [True, True, True, True]
         ########################
         # FINITE STATE MACHINE #
