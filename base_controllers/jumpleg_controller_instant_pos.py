@@ -44,7 +44,7 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
-        self.no_touchdown = 100
+        self.no_touchdown = 0
         self.target = 0
 
         self.weights = np.array([0., 0., 0., 0., 0., 0., 0.])
@@ -55,7 +55,7 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
-        self.no_touchdown = 100
+        self.no_touchdown = 0
         self.target = 0
 
     def printCosts(self):
@@ -318,7 +318,7 @@ class JumpLegController(BaseControllerFixed):
         foot_pos_w = self.base_offset + self.q[:3] + self.x_ee
         # foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.017)
-        com_up = (self.com[2] > 0.26)
+        com_up = (self.com[2] > 0.27)
         if not self.detectedApexFlag  and com_up and  foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
@@ -339,7 +339,6 @@ class JumpLegController(BaseControllerFixed):
         contact_force = p.contactForceW[2]
         if contact_force > 1.0:
             print(colored("TOUCHDOWN detected", "red"))
-            self.cost.no_touchdown = 0
             return True
         else:
             return False
@@ -402,7 +401,8 @@ class JumpLegController(BaseControllerFixed):
         # smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
         # if smallest_svalue <= 0.035:
         #if np.linalg.norm(self.x_ee) > 0.32:
-        if p.q[2]<0.08:
+        if p.com[2]<0.05:
+        # if p.q[2]<0.08:
             #self.cost.singularity = 1./(1e-05 + smallest_svalue)
             self.cost.singularity = 100
             singularity = True
@@ -433,14 +433,17 @@ class JumpLegController(BaseControllerFixed):
                                                        self.cost.weights[4] * self.cost.joint_torques +
                                                        self.cost.weights[5] * self.cost.no_touchdown)
 
-        # if reward < 0:
-        #     reward = 0
+        if reward < 0:
+            reward = 0
 
         self.total_reward += reward
 
         # unil  friction sing jointrange torques target
-        msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, [np.linalg.norm([p.com-p.target_CoM])], np.linalg.norm([self.com,self.target_CoM], axis=0), self.old_q.flatten(),self.old_qd.flatten(), self.old_action.flatten()))
-        msg.reward = self.total_reward
+
+        msg.next_state = np.concatenate((self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm([p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi,self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2)))
+        # msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, np.linalg.norm([self.com,self.target_CoM], axis=0)))
+        # msg.reward = self.total_reward
+        msg.reward = reward
         # print(self.total_reward)
         msg.done = done
         msg.target_cost = target_cost
@@ -532,7 +535,7 @@ def talker(p):
         p.trustPhaseFlag = False
         p.intermediate_com_position = []
         p.comd_lo = np.zeros(3)
-        p.target_CoM = (p.target_service()).target_CoM
+        p.target_CoM = np.array(p.target_service().target_CoM)
         if p.DEBUG:  # overwrite target
             p.target_CoM = np.array([0.3, 0, 0.25])
 
@@ -544,6 +547,7 @@ def talker(p):
             print(colored("# RECIVED STOP TARGET_COM SIGNAL #", "red"))
             break
 
+        timout_occured = False
 
         # Control loop for one episode
         while not ros.is_shutdown():
@@ -553,7 +557,9 @@ def talker(p):
                 if (p.time > startTrust + max_episode_time):
                     # max episode time elapsed
                     print(colored("--Max time elapsed!--", "blue"))
-                    break
+                    # Penalize the non touchdown
+                    p.cost.no_touchdown = 100
+                    timout_occured = True
                 # release base
                 if p.firstTime:
                     p.firstTime = False
@@ -570,19 +576,15 @@ def talker(p):
                 state_index = (state_index + 1) % n_old_state
 
                 # Ask for torque value
-                state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, [np.linalg.norm([p.com-p.target_CoM])] ,np.linalg.norm([p.com,p.target_CoM], axis=0), p.old_q.flatten(), p.old_qd.flatten(), p.old_action.flatten()))
+
+                state = np.concatenate((p.q[3:]/np.pi, p.qd[3:]/20., p.target_CoM/0.65, [np.linalg.norm([p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2)))
+                # state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, np.linalg.norm([p.com,p.target_CoM], axis=0)))
                 # print(state)
 
                 if any(np.isnan(state)):
                     print(f"Agent state:\n {state}\n")
                     print(colored('NAN IN STATE!!!','red'))
                     quit()
-
-                # if not p.detectedApexFlag:
-                #     action = p.action_service(state).action
-                # else:
-                #     print('stop asking for question')
-                #     action = p.q_des_q0
 
                 p.action = np.asarray(p.action_service(state).action)
 
@@ -608,14 +610,21 @@ def talker(p):
                     if p.detectTouchDown():
                         break # END STATE
 
+                if timout_occured:
+                    
+                    break
+
                 if p.DEBUG:
                     p.logData()
 
-            # send commands to gazebo
-            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+                # send commands to gazebo
+                p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-            #send reward with done state = 0
-            p.evalTotalReward(0)
+                #send reward with done state = 0
+                p.evalTotalReward(0)
+
+                # rest cost (much easyer to learn difference between last loop, paper: heim)
+                # p.cost.reset()
 
             # plot end-effector and contact force
             if not p.use_ground_truth_contacts:
@@ -624,6 +633,7 @@ def talker(p):
             else:
                 p.ros_pub.add_arrow(
                     p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "red")
+
             #plot end-effector
             p.ros_pub.add_marker(p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
             p.ros_pub.add_cone(
@@ -634,8 +644,6 @@ def talker(p):
 
             # wait for synconization of the control loop
             rate.sleep()
-
-
 
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
