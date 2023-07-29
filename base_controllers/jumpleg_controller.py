@@ -780,7 +780,7 @@ def talker(p):
 
         p.pause_physics_client()
         for i in range(10):
-            p.setJumpPlatformPosition(com_0-[0,0,0.2])
+            p.setJumpPlatformPosition(com_0-[0,0,0.3])
         p.unpause_physics_client()
 
 

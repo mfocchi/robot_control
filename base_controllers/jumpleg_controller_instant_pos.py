@@ -45,9 +45,10 @@ class Cost():
         self.joint_range = 0
         self.joint_torques = 0
         self.no_touchdown = 0
+        self.smoothness = 0
         self.target = 0
 
-        self.weights = np.array([0., 0., 0., 0., 0., 0., 0.])
+        self.weights = np.array([0., 0., 0., 0., 0., 0., 0., 0.])
 
     def reset(self):
         self.unilateral = 0
@@ -56,6 +57,7 @@ class Cost():
         self.joint_range = 0
         self.joint_torques = 0
         self.no_touchdown = 0
+        self.smoothness = 0
         self.target = 0
 
     def printCosts(self):
@@ -65,6 +67,7 @@ class Cost():
                f"jointkin:{self.joint_range} " \
                f"torques:{self.joint_torques} " \
                f"no_touchdown:{self.no_touchdown} " \
+               f"smoothness:{self.smoothness} " \
                f"target:{self.target}"
 
     def printWeightedCosts(self):
@@ -74,7 +77,8 @@ class Cost():
                f"jointkin:{self.weights[3]*self.joint_range} " \
                f"torques:{self.weights[4]*self.joint_torques} " \
                f"no_touchdown:{self.weights[5] * self.no_touchdown} " \
-               f"target:{self.weights[6]*self.target}"
+               f"smoothness:{self.weights[6] * self.smoothness} " \
+               f"target:{self.weights[7]*self.target}"
 
 
 class JumpLegController(BaseControllerFixed):
@@ -149,9 +153,9 @@ class JumpLegController(BaseControllerFixed):
             self.robot.model, self.robot.data, self.q_fixed)
 
         # only for real robot
-        #self.com = -self.x_ee + robotComB
-        #self.comd = -self.J.dot(self.qd[3:])
-        #self.comdd = -self.J.dot(self.qdd)
+        # self.com = -self.x_ee + robotComB
+        # self.comd = -self.J.dot(self.qd[3:])
+        # self.comdd = -self.J.dot(self.qdd)
 
         # from ground truth
         self.com = self.q[:3] + robotComB
@@ -181,8 +185,8 @@ class JumpLegController(BaseControllerFixed):
         self.a = np.empty((3, 6))
         self.cost = Cost()
 
-        #  unilateral  friction   singularity   joint_range  joint_torques no_touchdown target
-        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 10, 1.])
+        #  unilateral  friction   singularity   joint_range  joint_torques no_touchdown smoothness target
+        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 10, 0.1, 1.])
 
         self.mu = 0.8
 
@@ -193,7 +197,7 @@ class JumpLegController(BaseControllerFixed):
             (3, conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.comd_log = np.empty(
             (3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        #self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        # self.comdd_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.qdd_des_log = np.empty(
             (self.robot.na, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
@@ -219,7 +223,7 @@ class JumpLegController(BaseControllerFixed):
         if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
             self.com_log[:, self.log_counter] = self.com
             self.comd_log[:, self.log_counter] = self.comd
-            #self.comdd_log[:, self.log_counter] = self.comdd
+            # self.comdd_log[:, self.log_counter] = self.comdd
             self.qdd_des_log[:, self.log_counter] = self.qdd_des
         super().logData()
 
@@ -235,13 +239,13 @@ class JumpLegController(BaseControllerFixed):
             self.reset_joints(req_reset_joints)
         return True
 
-        #self.reset_joints(req_reset_joints)
+        # self.reset_joints(req_reset_joints)
 
     def freezeBase(self, flag):
         if not self.no_gazebo:
             if (self.freezeBaseFlag):
                 self.freezeBaseFlag = flag
-                #print(colored("releasing base", "red"))
+                # print(colored("releasing base", "red"))
                 # gravity compensation
                 self.tau_ffwd[2] = 0.
                 # set base joints PD to zero
@@ -256,8 +260,8 @@ class JumpLegController(BaseControllerFixed):
                     self.pid.setPDjoint(5, 0., 0., 0.)
 
             if (not self.freezeBaseFlag) and (flag):
-                #print(colored("freezing base", "red"))
-                #print(colored(f"resetting base: {p.resetBase()}", "magenta"))
+                # print(colored("freezing base", "red"))
+                # print(colored(f"resetting base: {p.resetBase()}", "magenta"))
 
                 self.freezeBaseFlag = flag
                 self.q_des = self.q_des_q0.copy()
@@ -319,10 +323,10 @@ class JumpLegController(BaseControllerFixed):
         # foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.017)
         com_up = (self.com[2] > 0.27)
-        if not self.detectedApexFlag  and com_up and  foot_lifted_off:
+        if not self.detectedApexFlag and com_up and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
-                #for i in range(10):
+                # for i in range(10):
                 p.pause_physics_client()
                 for i in range(10):
                     p.setJumpPlatformPosition(p.target_CoM)
@@ -387,23 +391,29 @@ class JumpLegController(BaseControllerFixed):
 
         # friction constraints
         residual = np.linalg.norm(
-            p.contactForceW[:2]) - p.mu*p.contactForceW[2]
+            self.contactForceW[:2]) - p.mu*p.contactForceW[2]
         self.cost.friction += self.computeActivationFunction(
             'linear', residual, -np.inf, 0.0)
 
         # unilateral constraints
         min_uloading_force = 0.
         self.cost.unilateral += self.computeActivationFunction(
-            'linear', p.contactForceW[2], min_uloading_force, np.inf)
+            'linear', self.contactForceW[2], min_uloading_force, np.inf)
+
+        # smoothness
+        c1 = 2.5
+        c2 = 1.5
+        # self.cost.smoothness += c1*(np.linalg.norm(self.old_q[0] - self.old_q[1])**2)+c2*(
+        #     np.linalg.norm(self.old_q[0] - 2*self.old_q[1] + self.old_q[2])**2)
 
         # singularity
         # the lower singular value is also achieved when the leg squats which is not what we want
         # smallest_svalue = np.sqrt(np.min((np.linalg.eigvals(np.nan_to_num(p.J.T.dot(p.J)))))) #added nan -> 0
         # if smallest_svalue <= 0.035:
-        #if np.linalg.norm(self.x_ee) > 0.32:
-        if p.com[2]<0.05:
-        # if p.q[2]<0.08:
-            #self.cost.singularity = 1./(1e-05 + smallest_svalue)
+        # if np.linalg.norm(self.x_ee) > 0.32:
+        if self.com[2] < 0.05:
+            # if p.q[2]<0.08:
+            # self.cost.singularity = 1./(1e-05 + smallest_svalue)
             self.cost.singularity = 100
             singularity = True
             print(colored("Robot has fallen", "red"))
@@ -424,14 +434,16 @@ class JumpLegController(BaseControllerFixed):
         if done == 1:
             print(colored("EPISODE DONE", "red"))
             print(colored("Costs: " + self.cost.printCosts(), "green"))
-            print(colored("Weighted Costs: " + self.cost.printWeightedCosts(), "green"))
+            print(colored("Weighted Costs: " +
+                  self.cost.printWeightedCosts(), "green"))
 
-        reward = self.cost.weights[6] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
+        reward = self.cost.weights[7] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
                                                        self.cost.weights[1]*self.cost.friction +
                                                        self.cost.weights[2] * self.cost.singularity +
                                                        self.cost.weights[3]*self.cost.joint_range +
                                                        self.cost.weights[4] * self.cost.joint_torques +
-                                                       self.cost.weights[5] * self.cost.no_touchdown)
+                                                       self.cost.weights[5] * self.cost.no_touchdown +
+                                                       self.cost.weights[6] * self.cost.smoothness)
 
         if reward < 0:
             reward = 0
@@ -440,7 +452,8 @@ class JumpLegController(BaseControllerFixed):
 
         # unil  friction sing jointrange torques target
 
-        msg.next_state = np.concatenate((self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm([p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi,self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2)))
+        msg.next_state = np.concatenate((self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm(
+            [p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2)))
         # msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, np.linalg.norm([self.com,self.target_CoM], axis=0)))
         # msg.reward = self.total_reward
         msg.reward = reward
@@ -452,6 +465,9 @@ class JumpLegController(BaseControllerFixed):
         msg.singularity = self.cost.singularity
         msg.joint_range = self.cost.joint_range
         msg.joint_torques = self.cost.joint_torques
+        msg.no_touchdown = self.cost.no_touchdown
+        msg.smoothness = self.cost.smoothness
+        msg.apex = self.detectedApexFlag
         self.reward_service(msg)
 
     def deregister_node(self):
@@ -478,10 +494,11 @@ class JumpLegController(BaseControllerFixed):
         # send request and get response (in this case none)
         self.set_state(set_platform_position)
 
-    def loadModelAndPublishers(self,  xacro_path = None, additional_urdf_args = None):
+    def loadModelAndPublishers(self,  xacro_path=None, additional_urdf_args=None):
         super().loadModelAndPublishers()
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
+
 
 def talker(p):
 
@@ -491,13 +508,15 @@ def talker(p):
         p.ros_pub = RosPub("jumpleg")
         p.robot = getRobotModel("jumpleg")
     else:
-        additional_args=[f'gui:={p.gui}']
-        p.startSimulator("jump_platform_torque.world", additional_args=additional_args)
+        additional_args = [f'gui:={p.gui}']
+        p.startSimulator("jump_platform_torque.world",
+                         additional_args=additional_args)
         # p.startSimulator()
         p.loadModelAndPublishers()
         p.startupProcedure()
 
-    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs_joints", model_name=p.model_name, restore_train=p.restoreTrain)
+    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] +
+                  "/robot_control/jumpleg_rl/runs_joints", model_name=p.model_name, restore_train=p.restoreTrain)
 
     p.initVars()
     ros.sleep(1.0)
@@ -518,11 +537,12 @@ def talker(p):
 
     # here the RL loop...
     while True:
-        #ros.sleep(0.3)
+        # ros.sleep(0.3)
         p.time = 0.
         startTrust = 0.2
-        p.old_q = np.array([p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy(),p.q_des_q0[3:].copy()])
-        p.old_qd = np.zeros((3,3))
+        p.old_q = np.array(
+            [p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy()])
+        p.old_qd = np.zeros((3, 3))
         p.old_action = np.zeros((3, 3))
         n_old_state = 3
         state_index = 0
@@ -541,7 +561,7 @@ def talker(p):
 
         p.pause_physics_client()
         for i in range(10):
-            p.setJumpPlatformPosition(com_0-[0,0,0.2])
+            p.setJumpPlatformPosition(com_0-[0, 0, 0.3])
         p.unpause_physics_client()
         if p.target_CoM[2] == -1:
             print(colored("# RECIVED STOP TARGET_COM SIGNAL #", "red"))
@@ -565,7 +585,8 @@ def talker(p):
                     p.firstTime = False
                     p.freezeBase(False)
                     print("\n\n")
-                    print(colored(f"STARTING A NEW EPISODE--------------------------------------------# :{p.number_of_episode}", "red"))
+                    print(colored(
+                        f"STARTING A NEW EPISODE--------------------------------------------# :{p.number_of_episode}", "red"))
                     print("Target position from agent:", p.target_CoM)
                     p.trustPhaseFlag = True
 
@@ -577,22 +598,26 @@ def talker(p):
 
                 # Ask for torque value
 
-                state = np.concatenate((p.q[3:]/np.pi, p.qd[3:]/20., p.target_CoM/0.65, [np.linalg.norm([p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2)))
+                state = np.concatenate((p.q[3:]/np.pi, p.qd[3:]/20., p.target_CoM/0.65, [np.linalg.norm(
+                    [p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2)))
                 # state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, np.linalg.norm([p.com,p.target_CoM], axis=0)))
                 # print(state)
 
                 if any(np.isnan(state)):
                     print(f"Agent state:\n {state}\n")
-                    print(colored('NAN IN STATE!!!','red'))
+                    print(colored('NAN IN STATE!!!', 'red'))
                     quit()
 
                 p.action = np.asarray(p.action_service(state).action)
+                # After apex disable Agent action
+                if (p.detectedApexFlag):
+                    p.action = np.array([0., 0., 0.])
 
                 # print(f"Actor action with torques:\n {action}\n")
                 if any(np.isnan(p.action)):
                     print(f"Agent state:\n {state}\n")
                     print(f"Actor action with des positions:\n {p.action}\n")
-                    print(colored('NAN IN ACTION!!!','red'))
+                    print(colored('NAN IN ACTION!!!', 'red'))
                     quit()
 
                 # Apply action
@@ -602,16 +627,16 @@ def talker(p):
                 p.tau_ffwd = np.zeros(6)
 
                 if p.evaluateRunningCosts():
-                    break # robot has fallen
+                    break  # robot has fallen
 
-                p.detectApex() # just to set jump platform
+                p.detectApex()  # just to set jump platform
                 if (p.detectedApexFlag):
                     # set jump platform (avoid collision in jumping)
                     if p.detectTouchDown():
-                        break # END STATE
+                        break  # END STATE
 
                 if timout_occured:
-                    
+
                     break
 
                 if p.DEBUG:
@@ -620,7 +645,7 @@ def talker(p):
                 # send commands to gazebo
                 p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-                #send reward with done state = 0
+                # send reward with done state = 0
                 p.evalTotalReward(0)
 
                 # rest cost (much easyer to learn difference between last loop, paper: heim)
@@ -634,7 +659,7 @@ def talker(p):
                 p.ros_pub.add_arrow(
                     p.base_offset + p.q[:3] + p.x_ee, p.contactForceW / (10 * p.robot.robot_mass), "red")
 
-            #plot end-effector
+            # plot end-effector
             p.ros_pub.add_marker(p.base_offset + p.q[:3] + p.x_ee, radius=0.05)
             p.ros_pub.add_cone(
                 p.base_offset + p.q[:3] + p.x_ee, np.array([0, 0, 1.]), p.mu, height=0.05, color="blue")
@@ -645,7 +670,9 @@ def talker(p):
             # wait for synconization of the control loop
             rate.sleep()
 
-            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
+            # to avoid issues of dt 0.0009999
+            p.time = np.round(
+                p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)
 
         # send reward with state = 1
         p.evalTotalReward(1)
@@ -656,6 +683,7 @@ def talker(p):
             break
         else:
             plt.cla()
+
 
 if __name__ == '__main__':
     p = JumpLegController(robotName)
@@ -670,9 +698,9 @@ if __name__ == '__main__':
         p.deregister_node()
         if conf.plotting:
             print("PLOTTING")
-            #plotFrameLinear('wrench', p.time_log, Wrench_log=p.contactForceW_log)
+            # plotFrameLinear('wrench', p.time_log, Wrench_log=p.contactForceW_log)
             plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log,
                       joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            #plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log,
+            # plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log,
             #         joint_names=conf.robot_params[p.robot_name]['joint_names'])
             # plotJoint('acceleration', p.time_log, qdd_log=p.qdd_log,qdd_des_log=p.qdd_des_log,joint_names=conf.robot_params[p.robot_name]['joint_names'])
