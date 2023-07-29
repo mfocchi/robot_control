@@ -452,7 +452,7 @@ class JumpLegController(BaseControllerFixed):
 
         # unil  friction sing jointrange torques target
 
-        msg.next_state = np.concatenate((self.q[:3]/0.65, self.q[3:]/0.65, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm(
+        msg.next_state = np.concatenate((self.q[:3]/0.65, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm(
             [p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2)))
         # msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, np.linalg.norm([self.com,self.target_CoM], axis=0)))
         # msg.reward = self.total_reward
