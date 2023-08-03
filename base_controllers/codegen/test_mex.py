@@ -25,7 +25,6 @@ Fr_max = 90.
 # mass = 15.0246
 
 mu = 0.8
-
 params = {}
 params['jump_clearance'] = 1.
 params['m'] = mass
@@ -41,7 +40,6 @@ params['b'] = anchor_distance
 params['p_a1'] = matlab.double([0.,0.,0.]).reshape(3,1)
 params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
 params['g'] = 9.81
-params['m']= mass
 params['w1']= 1.
 params['w2']= 1.
 params['w3']= 1.
@@ -59,6 +57,8 @@ print(solution['achieved_target'])
 print(solution['Tf'])
 print(solution['Fr_l'])
 print(solution['Fr_r'])
+# the result of this test should not be compared with the matlab one
+
 # for i in range(10):
 #     start = time.time()
 #     x = eng.optimize_cpp_mex(p0,  pf, Fleg_max, Fr_max, mu, params)

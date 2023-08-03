@@ -672,13 +672,18 @@ real_T c_anon(const real_T p0[3], real_T params_m, real_T params_num_params,
   /*      deltaz = diff(p(3,:));    % diff(Z); */
   /*      path_length = sum(sqrt(deltax.^2 + deltay.^2 + deltaz.^2)); */
   /* minimize the final kin energy at contact */
-  /* Ekinfcost=  m/2*contact_normal'*pd(:,end)'*pd(:,end)*contact_normal; */
-  /*  minimize hoist work / energy consumption */
+  /*  minimize hoist work / energy consumption (doe */
   /* assume the motor is not regenreating */
-  /*  smoothnes: minimize jerky control action */
+  /*  smoothnes: minimize jerky control action TODO this is wrong! it goes */
+  /*  to -180 and stays there! with sum(abs(diff(Fr_r))) + */
+  /*  sum(abs(diff(Fr_l))) but does not converge at all  */
+  /*  this is nice but slower */
   /* fprintf("hoist_work %f\n ",hoist_work)     */
   /* fprintf("smooth %f\n ", smooth) */
   /* fprintf("tempo %f\n ", w6*Tf) */
+  /* cost =  0.001 * params.w1 *Ekinfcost +   params.w4 *smooth ;% converge */
+  /* super slowly */
+  /*  cost =  params.w1 *hoist_work +   params.w4 *smooth ;% 72 iter */
   i1 = b_x->size[0] * b_x->size[1];
   b_x->size[0] = 1;
   b_x->size[1] = loop_ub;
@@ -720,7 +725,8 @@ real_T c_anon(const real_T p0[3], real_T params_m, real_T params_num_params,
   emxFree_real_T(&b_t);
   varargout_1 = params_w4 * (y + b_y);
 
-  /*  + w6*Tf;% */
+  /*  27 iter */
+  /*  cost =    params.w4 *smooth_correct ;% 96 iter */
   emlrtHeapReferenceStackLeaveFcnR2012b(emlrtRootTLSGlobal);
   return varargout_1;
 }

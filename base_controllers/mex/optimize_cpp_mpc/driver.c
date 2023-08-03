@@ -275,6 +275,7 @@ void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb, const
                          FcnEvaluator->objfun.tunableEnvironment.f7.g,
                          FcnEvaluator->objfun.tunableEnvironment.f7.m,
                          FcnEvaluator->objfun.tunableEnvironment.f7.w1,
+                         FcnEvaluator->objfun.tunableEnvironment.f7.w2,
                          FcnEvaluator->objfun.tunableEnvironment.f7.mpc_dt,
                          b_TrialState, &TrialState->sqpFval, &b_mLB);
         Flags.fevalOK = (b_mLB == 1);
@@ -369,6 +370,7 @@ void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb, const
                                  FcnEvaluator->objfun.tunableEnvironment.f7.g,
                                  FcnEvaluator->objfun.tunableEnvironment.f7.m,
                                  FcnEvaluator->objfun.tunableEnvironment.f7.w1,
+                                 FcnEvaluator->objfun.tunableEnvironment.f7.w2,
                                  FcnEvaluator->objfun.tunableEnvironment.f7.mpc_dt,
                                  b_TrialState, &TrialState->sqpFval, &b_mLB);
                 TrialState->FunctionEvaluations++;

@@ -89,6 +89,7 @@ boolean_T computeForwardDifferences(f_struct_T *obj, real_T fCurrent,
                   obj->objfun.tunableEnvironment.f7.g,
                   obj->objfun.tunableEnvironment.f7.m,
                   obj->objfun.tunableEnvironment.f7.w1,
+                  obj->objfun.tunableEnvironment.f7.w2,
                   obj->objfun.tunableEnvironment.f7.mpc_dt, xk);
     evalOK = ((!muDoubleScalarIsInf(ubDiff)) && (!muDoubleScalarIsNaN(ubDiff)));
     if (evalOK) {
@@ -129,6 +130,7 @@ boolean_T computeForwardDifferences(f_struct_T *obj, real_T fCurrent,
                         obj->objfun.tunableEnvironment.f7.g,
                         obj->objfun.tunableEnvironment.f7.m,
                         obj->objfun.tunableEnvironment.f7.w1,
+                        obj->objfun.tunableEnvironment.f7.w2,
                         obj->objfun.tunableEnvironment.f7.mpc_dt, xk);
           evalOK = ((!muDoubleScalarIsInf(ubDiff)) && (!muDoubleScalarIsNaN
                      (ubDiff)));

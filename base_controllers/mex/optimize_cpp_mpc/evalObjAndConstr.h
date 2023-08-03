@@ -35,7 +35,8 @@ void evalObjAndConstr(const real_T c_obj_objfun_tunableEnvironment[6], const
                       m_obj_objfun_tunableEnvironment, real_T
                       n_obj_objfun_tunableEnvironment, real_T
                       o_obj_objfun_tunableEnvironment, real_T
-                      p_obj_objfun_tunableEnvironment, const emxArray_real_T *x,
+                      p_obj_objfun_tunableEnvironment, real_T
+                      q_obj_objfun_tunableEnvironment, const emxArray_real_T *x,
                       real_T *fval, int32_T *status);
 
 /* End of code generation (evalObjAndConstr.h) */

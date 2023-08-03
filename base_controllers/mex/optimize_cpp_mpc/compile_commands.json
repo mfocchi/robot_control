@@ -55,6 +55,18 @@
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  computePositionVelocity.c -o build/glnxa64/computePositionVelocity.o",
+    "file": "computePositionVelocity.c",
+    "output": "build/glnxa64/computePositionVelocity.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  diff.c -o build/glnxa64/diff.o",
+    "file": "diff.c",
+    "output": "build/glnxa64/diff.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
     "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  ixamax.c -o build/glnxa64/ixamax.o",
     "file": "ixamax.c",
     "output": "build/glnxa64/ixamax.o"

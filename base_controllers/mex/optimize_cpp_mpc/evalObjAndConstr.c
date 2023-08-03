@@ -31,7 +31,8 @@ void evalObjAndConstr(const real_T c_obj_objfun_tunableEnvironment[6], const
                       m_obj_objfun_tunableEnvironment, real_T
                       n_obj_objfun_tunableEnvironment, real_T
                       o_obj_objfun_tunableEnvironment, real_T
-                      p_obj_objfun_tunableEnvironment, const emxArray_real_T *x,
+                      p_obj_objfun_tunableEnvironment, real_T
+                      q_obj_objfun_tunableEnvironment, const emxArray_real_T *x,
                       real_T *fval, int32_T *status)
 {
   *fval = anon(c_obj_objfun_tunableEnvironment, d_obj_objfun_tunableEnvironment,
@@ -41,7 +42,7 @@ void evalObjAndConstr(const real_T c_obj_objfun_tunableEnvironment[6], const
                k_obj_objfun_tunableEnvironment, l_obj_objfun_tunableEnvironment,
                m_obj_objfun_tunableEnvironment, n_obj_objfun_tunableEnvironment,
                o_obj_objfun_tunableEnvironment, p_obj_objfun_tunableEnvironment,
-               x);
+               q_obj_objfun_tunableEnvironment, x);
   *status = 1;
   if (muDoubleScalarIsInf(*fval) || muDoubleScalarIsNaN(*fval)) {
     if (muDoubleScalarIsNaN(*fval)) {
