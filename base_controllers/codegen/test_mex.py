@@ -49,7 +49,8 @@ params['w6']= 1.
 params['T_th'] =  0.05
 
 #jump params
-p0 =  matlab.double([0.5, 2.5, -6]) # there is singularity for px = 0!
+p0 =  matlab.double([0.5, 2.5, -6]) #unit test ,  there is singularity for px = 0!
+#p0 =  matlab.double([0.27753 , 2.51893, -6.09989]) # actual used p0 = np.array([0.28,  2.5, -6.10104])
 pf=  matlab.double([0.5, 4,-4])
 
 solution = eng.optimize_cpp_mex(p0, pf, Fleg_max, Fr_max, mu, params)
@@ -57,6 +58,7 @@ print(solution['achieved_target'])
 print(solution['Tf'])
 print(solution['Fr_l'])
 print(solution['Fr_r'])
+print(solution['Fleg'])
 # the result of this test should not be compared with the matlab one
 
 # for i in range(10):

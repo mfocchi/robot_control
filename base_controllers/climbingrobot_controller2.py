@@ -598,9 +598,9 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if ((self.mpc_index + self.mpc_N) < len(self.ref_time)): # do not do anything for the last part
             if (self.mpc_index != self.mpc_index_old): # do optim only every dtMPC  not every dt
-
-                print(self.mpc_index)
-                print(delta_t)
+                #debug
+                # print(self.mpc_index)
+                # print(delta_t)
 
                 # eval ref
                 ref_com = matlab.double(self.ref_com[:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
@@ -632,7 +632,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.mpc_index_ffwd += 1
                 if self.mpc_index_ffwd > (self.mpc_N-1): # reference is finished keep the last computed one
                     self.mpc_index_ffwd = self.mpc_N-1
-                print("stop mpc, applying ffwd, mpc_index_ffwd: ", self.mpc_index_ffwd)
+                #debug
+                #print("stop mpc, applying ffwd, mpc_index_ffwd: ", self.mpc_index_ffwd)
 
         self.mpc_index_old = self.mpc_index
 
@@ -778,8 +779,8 @@ def talker(p):
     # single jump
     # p0 is defined wrt anchor1 pos in matlab convention
     # jump params
-    p0 = np.array([0.5, 2.5, -6])  # there is singularity for px = 0!
-    pf = np.array([0.5, 4, -4])
+    p0 = np.array([0.28,  2.5, -6.10104])  # there is singularity for px = 0!
+    pf = np.array([0.28, 4, -4])
 
 
     # old way (before doing optim online)
@@ -792,7 +793,7 @@ def talker(p):
     #             "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
 
     # jump parameters
-    p.startJump = 2.
+    p.startJump = 2.5
     p.orientTime = 0.5
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
@@ -801,6 +802,7 @@ def talker(p):
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     p.q_des[:12] = p.computeJointVariables(p0)
+
 
     #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
@@ -815,6 +817,8 @@ def talker(p):
             p.pause_physics_client()
             p.initOptim(p.base_pos - p.mat2Gazebo, pf)
             p.unpause_physics_client()
+            print(colored(f"Start orienting leg to (pitch, roll)  : {p.getImpulseAngle()}", "blue"))
+            p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint] = p.getImpulseAngle()
 
             #set the end of orienting
             p.end_orienting = p.startJump + p.orientTime
@@ -822,8 +826,7 @@ def talker(p):
             p.start_logging = p.end_orienting
             p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
 
-            print(colored(f"Start orienting leg to (pitch, roll)  : {p.getImpulseAngle()}", "blue"))
-            p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint] = p.getImpulseAngle()
+
 
         if (p.stateMachine == 'orienting_leg') and (p.time >= p.end_orienting):
             print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to target: ",
@@ -884,17 +887,14 @@ def talker(p):
             delta_t = p.time - p.end_orienting
             deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
 
-
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
+            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
             #plot forces
             p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
             p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
 
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-
-
             end_flying = p.startJump + p.orientTime +  p.jumps[p.jumpNumber]["Tf"]
 
             if (p.time >= end_flying):
@@ -990,7 +990,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     if (var_mat is not None):
         plt.plot(time_mat, var_mat[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
-    plt.legend(['sim', 'matlab'])
+    plt.legend(['act', 'ref'])
 
     plt.subplot(3,1,2)
     plt.ylabel(label[1])
@@ -998,7 +998,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     if (var_mat is not None):
         plt.plot(time_mat, var_mat[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
-    plt.legend(['sim', 'matlab'])
+    plt.legend(['act', 'ref'])
 
     plt.subplot(3,1,3)
     plt.ylabel(label[2])
@@ -1006,7 +1006,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     if (var_mat is not None):
         plt.plot(time_mat, var_mat[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     plt.grid()
-    plt.legend(['sim', 'matlab'])
+    plt.legend(['act', 'ref'])
 
 if __name__ == '__main__':
     p = ClimbingrobotController(robotName)
