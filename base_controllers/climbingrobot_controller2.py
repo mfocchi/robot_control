@@ -59,10 +59,10 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if robot_name == 'climbingrobot2landing':
             self.landing = True
-            self.force_scale = 100.
+            self.force_scale = 150.
         else:
             self.landing = False
-            self.force_scale = 20.
+            self.force_scale = 60.
         self.landing_joints = np.array([15, 17])
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
         self.r_leg = 0.3
@@ -553,9 +553,9 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored("offline optimization accomplished", "blue"))
         # extract variables
         self.ref_com  = mat_matrix2python(self.matvars['p'])
-        self.ref_psi = mat_matrix2python(self.matvars['psi'])
-        self.ref_l_1 = mat_matrix2python(self.matvars['l1'])
-        self.ref_l_2 = mat_matrix2python(self.matvars['l2'])
+        self.ref_psi = mat_vector2python(self.matvars['psi'])
+        self.ref_l_1 = mat_vector2python(self.matvars['l1'])
+        self.ref_l_2 = mat_vector2python(self.matvars['l2'])
         self.ref_time = mat_vector2python(self.matvars['time'])
         self.Fr_l0 = mat_vector2python(self.matvars['Fr_l'])
         self.Fr_r0 = mat_vector2python(self.matvars['Fr_r'])
@@ -585,11 +585,15 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params_mpc['w1'] = 1.
         self.optim_params_mpc['w2'] = 0.000001
         self.optim_params_mpc['mpc_dt'] = matlab.double(self.matvars['Tf'] / (self.optim_params['N_dyn'] - 1))
-        self.deltaFr_l =np.zeros((int(self.mpc_N/2)))
-        self.deltaFr_r = np.zeros((int(self.mpc_N / 2)))
+        self.deltaFr_l =np.zeros((int(self.mpc_N)))
+        self.deltaFr_r = np.zeros((int(self.mpc_N)))
+        self.deltaFr_r = np.zeros((int(self.mpc_N)))
 
         if self.landing:
             self.Fr_max_mpc = 150.
+
+        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1)
+        #self.ax = self.fig.add_subplot(111)
 
     def computeMPC(self, delta_t):
         # after the thrust we start MPC,  it will start from time 0.05 so the index will start from  2
@@ -620,11 +624,21 @@ class ClimbingrobotController(BaseControllerFixed):
 
                 self.pause_physics_client()
                 #perform optimization
-                x = self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc)
+                x = mat_vector2python(self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+                self.deltaFr_l = x[:self.mpc_N] # eval matlab array this way
+                self.deltaFr_r = x[self.mpc_N:]
+                #debug
+                self.ax1.clear()
+                self.ax2.clear()
+                self.ax1.set_label("delta Frl")
+                self.ax2.set_label("delta Frr")
+                self.ax1.grid()
+                self.ax2.grid()
+                self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],self.deltaFr_l,  "or-")
+                self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_l, "or-")
+                self.fig.canvas.draw()
+                self.fig.canvas.flush_events()
                 self.unpause_physics_client()
-                #print(x)
-                self.deltaFr_l = x[0][:self.mpc_N] # eval matlab array this way
-                self.deltaFr_r = x[0][self.mpc_N:]
 
         else:  # whenever the MPC should not be updated anymore use delta_t to imncrement mpc_index_ffwd
             #print("delta_t MOD dtMpc", (delta_t % self.optim_params_mpc['mpc_dt']))
@@ -636,6 +650,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 #print("stop mpc, applying ffwd, mpc_index_ffwd: ", self.mpc_index_ffwd)
 
         self.mpc_index_old = self.mpc_index
+
+
 
         return self.deltaFr_l[self.mpc_index_ffwd],self.deltaFr_r[self.mpc_index_ffwd]
 
@@ -793,8 +809,8 @@ def talker(p):
     #             "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
 
     # jump parameters
-    p.startJump = 2.5
-    p.orientTime = 0.5
+    p.startJump = 1.5
+    p.orientTime = 1.0
     p.stateMachine = 'idle'
     p.jumpNumber  = 0
     p.numberOfJumps = 1
@@ -802,7 +818,6 @@ def talker(p):
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     p.q_des[:12] = p.computeJointVariables(p0)
-
 
     #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
@@ -869,6 +884,7 @@ def talker(p):
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
                 p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
                 p.stateMachine = 'flying'
+
                 # retract leg and move langing elements
                 p.q_des[p.leg_index[2]] = 0.25
 
@@ -881,11 +897,18 @@ def talker(p):
                         p.stateMachine = 'flying_and_reorient_lander'
                 print(colored("Start "+ p.stateMachine, "blue"))
 
+                p.dist_duration = 0.2
+                p.base_dist = 0.* np.array([0., -50., 30.])
+                p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration)
+
         if (p.stateMachine == 'flying'):
             # after the thrust we start MPC it will start from time 0.05 so the index should be 12
             # applying forces to ropes
             delta_t = p.time - p.end_orienting
             deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
+
+            if delta_t < p.dist_duration and np.linalg.norm(p.base_dist)>0.:
+                p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "blue", scale=4.5)
 
             p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
             p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
