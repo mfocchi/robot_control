@@ -30,7 +30,7 @@ void squareQ_appendCol(g_struct_T *obj, const emxArray_real_T *vec, int32_T iv0)
   int32_T idx;
   idx = obj->ncols + 1;
   obj->minRowCol = muIntScalarMin_sint32(obj->mrows, idx);
-  d_xgemv(obj->mrows, obj->mrows, obj->Q, obj->ldq, vec, iv0, obj->QR, obj->ldq *
+  f_xgemv(obj->mrows, obj->mrows, obj->Q, obj->ldq, vec, iv0, obj->QR, obj->ldq *
           obj->ncols + 1);
   obj->ncols++;
   obj->jpvt->data[obj->ncols - 1] = obj->ncols;

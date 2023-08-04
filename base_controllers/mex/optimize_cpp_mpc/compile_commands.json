@@ -55,9 +55,9 @@
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
-    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  computePositionVelocity.c -o build/glnxa64/computePositionVelocity.o",
-    "file": "computePositionVelocity.c",
-    "output": "build/glnxa64/computePositionVelocity.o"
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  vecnorm.c -o build/glnxa64/vecnorm.o",
+    "file": "vecnorm.c",
+    "output": "build/glnxa64/vecnorm.o"
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
@@ -121,9 +121,21 @@
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  computeConstraints_.c -o build/glnxa64/computeConstraints_.o",
+    "file": "computeConstraints_.c",
+    "output": "build/glnxa64/computeConstraints_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
     "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  computeForwardDifferences.c -o build/glnxa64/computeForwardDifferences.o",
     "file": "computeForwardDifferences.c",
     "output": "build/glnxa64/computeForwardDifferences.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  updateWorkingSetForNewQP.c -o build/glnxa64/updateWorkingSetForNewQP.o",
+    "file": "updateWorkingSetForNewQP.c",
+    "output": "build/glnxa64/updateWorkingSetForNewQP.o"
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
@@ -190,6 +202,12 @@
     "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  sortLambdaQP.c -o build/glnxa64/sortLambdaQP.o",
     "file": "sortLambdaQP.c",
     "output": "build/glnxa64/sortLambdaQP.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  saveJacobian.c -o build/glnxa64/saveJacobian.o",
+    "file": "saveJacobian.c",
+    "output": "build/glnxa64/saveJacobian.o"
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
@@ -379,9 +397,9 @@
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",
-    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  evalObjAndConstr.c -o build/glnxa64/evalObjAndConstr.o",
-    "file": "evalObjAndConstr.c",
-    "output": "build/glnxa64/evalObjAndConstr.o"
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_mex -c  computeLinearResiduals.c -o build/glnxa64/computeLinearResiduals.o",
+    "file": "computeLinearResiduals.c",
+    "output": "build/glnxa64/computeLinearResiduals.o"
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc",

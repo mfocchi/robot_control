@@ -203,7 +203,7 @@ void PresolveWorkingSet(d_struct_T *solution, c_struct_T *memspace, j_struct_T
 
     if (guard1 && (workingset->nWConstr[0] + workingset->nWConstr[1] ==
                    workingset->nVar)) {
-      tol = b_maxConstraintViolation(workingset, solution->xstar);
+      tol = maxConstraintViolation(workingset, solution->xstar);
       if (tol > 0.001) {
         solution->state = -2;
       }

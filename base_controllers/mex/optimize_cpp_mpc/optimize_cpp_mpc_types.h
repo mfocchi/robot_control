@@ -102,6 +102,27 @@ typedef struct {
 
 #endif                                 /*typedef_anonymous_function*/
 
+#ifndef typedef_cell_7
+#define typedef_cell_7
+
+typedef struct {
+  real_T f1;
+  emxArray_real_T *f2;
+  emxArray_real_T *f3;
+  int64_T f4;
+} cell_7;
+
+#endif                                 /*typedef_cell_7*/
+
+#ifndef typedef_b_anonymous_function
+#define typedef_b_anonymous_function
+
+typedef struct {
+  cell_7 tunableEnvironment;
+} b_anonymous_function;
+
+#endif                                 /*typedef_b_anonymous_function*/
+
 #ifndef struct_emxArray_boolean_T
 #define struct_emxArray_boolean_T
 
@@ -170,6 +191,8 @@ typedef struct {
   real_T sqpFval_old;
   emxArray_real_T *xstarsqp;
   emxArray_real_T *xstarsqp_old;
+  emxArray_real_T *cIneq;
+  emxArray_real_T *cIneq_old;
   emxArray_real_T *grad;
   emxArray_real_T *grad_old;
   int32_T FunctionEvaluations;
@@ -182,6 +205,7 @@ typedef struct {
   emxArray_real_T *socDirection;
   emxArray_real_T *lambda_old;
   emxArray_int32_T *workingset_old;
+  emxArray_real_T *JacCineqTrans_old;
   emxArray_real_T *gradLag;
   emxArray_real_T *delta_gradLag;
   emxArray_real_T *xstar;
@@ -201,6 +225,7 @@ typedef struct {
 
 typedef struct {
   anonymous_function objfun;
+  b_anonymous_function nonlcon;
   int32_T nVar;
   int32_T mCineq;
   int32_T mCeq;
@@ -217,8 +242,11 @@ typedef struct {
 
 typedef struct {
   anonymous_function objfun;
+  b_anonymous_function nonlin;
   real_T f_1;
+  emxArray_real_T *cIneq_1;
   real_T f_2;
+  emxArray_real_T *cIneq_2;
   int32_T nVar;
   int32_T mIneq;
   int32_T mEq;
@@ -293,6 +321,8 @@ typedef struct {
   int32_T nVarOrig;
   int32_T nVarMax;
   int32_T ldA;
+  emxArray_real_T *Aineq;
+  emxArray_real_T *bineq;
   emxArray_real_T *lb;
   emxArray_real_T *ub;
   emxArray_int32_T *indexLB;

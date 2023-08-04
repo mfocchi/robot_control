@@ -3,9 +3,9 @@
  * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
- * feasibleX0ForWorkingSet.h
+ * computeLinearResiduals.h
  *
- * Code generation for function 'feasibleX0ForWorkingSet'
+ * Code generation for function 'computeLinearResiduals'
  *
  */
 
@@ -22,7 +22,8 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace, emxArray_real_T
-  *xCurrent, j_struct_T *workingset, g_struct_T *qrmanager);
+void computeLinearResiduals(const emxArray_real_T *x, int32_T nVar,
+  emxArray_real_T *workspaceIneq, int32_T mLinIneq, const emxArray_real_T
+  *AineqT, int32_T ldAi);
 
-/* End of code generation (feasibleX0ForWorkingSet.h) */
+/* End of code generation (computeLinearResiduals.h) */

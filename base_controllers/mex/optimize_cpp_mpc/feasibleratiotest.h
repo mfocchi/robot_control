@@ -23,7 +23,9 @@
 
 /* Function Declarations */
 void feasibleratiotest(const emxArray_real_T *solution_xstar, const
-  emxArray_real_T *solution_searchDir, int32_T workingset_nVar, const
+  emxArray_real_T *solution_searchDir, emxArray_real_T *workspace, int32_T
+  workingset_nVar, int32_T workingset_ldA, const emxArray_real_T
+  *workingset_Aineq, const emxArray_real_T *workingset_bineq, const
   emxArray_real_T *workingset_lb, const emxArray_real_T *workingset_ub, const
   emxArray_int32_T *workingset_indexLB, const emxArray_int32_T
   *workingset_indexUB, const int32_T workingset_sizes[5], const int32_T

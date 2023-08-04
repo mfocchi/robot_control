@@ -16,7 +16,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void b_anon(real_T params_b, const real_T params_p_a1[3], const real_T
+void c_anon(real_T params_b, const real_T params_p_a1[3], const real_T
             params_p_a2[3], real_T params_g, real_T params_m, const real_T x[6],
             real_T u1, real_T u2, real_T varargout_1[6])
 {

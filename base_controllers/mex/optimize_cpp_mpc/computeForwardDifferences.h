@@ -22,8 +22,9 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T computeForwardDifferences(f_struct_T *obj, real_T fCurrent,
-  emxArray_real_T *xk, emxArray_real_T *gradf, const emxArray_real_T *lb, const
-  emxArray_real_T *ub);
+boolean_T computeForwardDifferences(f_struct_T *obj, real_T fCurrent, const
+  emxArray_real_T *cIneqCurrent, int32_T ineq0, emxArray_real_T *xk,
+  emxArray_real_T *gradf, emxArray_real_T *JacCineqTrans, int32_T CineqColStart,
+  const emxArray_real_T *lb, const emxArray_real_T *ub);
 
 /* End of code generation (computeForwardDifferences.h) */

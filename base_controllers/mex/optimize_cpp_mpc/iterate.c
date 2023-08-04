@@ -249,7 +249,7 @@ void iterate(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
                   + qrmanager->Q->size[0] * (qrmanager->ncols + idx)];
               }
 
-              e_xgemv(qrmanager->mrows, i, qrmanager->Q, k, qrmanager->ldq,
+              g_xgemv(qrmanager->mrows, i, qrmanager->Q, k, qrmanager->ldq,
                       memspace->workspace_double, solution->searchDir);
               break;
 
@@ -294,10 +294,10 @@ void iterate(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
               if (cholmanager->info != 0) {
                 solution->state = -6;
               } else {
-                f_xgemv(qrmanager->mrows, i, qrmanager->Q, k, qrmanager->ldq,
+                h_xgemv(qrmanager->mrows, i, qrmanager->Q, k, qrmanager->ldq,
                         objective->grad, memspace->workspace_double);
                 b_solve(cholmanager, memspace->workspace_double);
-                e_xgemv(qrmanager->mrows, i, qrmanager->Q, k, qrmanager->ldq,
+                g_xgemv(qrmanager->mrows, i, qrmanager->Q, k, qrmanager->ldq,
                         memspace->workspace_double, solution->searchDir);
               }
               break;
@@ -314,7 +314,9 @@ void iterate(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
             guard2 = true;
           } else {
             feasibleratiotest(solution->xstar, solution->searchDir,
-                              workingset->nVar, workingset->lb, workingset->ub,
+                              memspace->workspace_double, workingset->nVar,
+                              workingset->ldA, workingset->Aineq,
+                              workingset->bineq, workingset->lb, workingset->ub,
                               workingset->indexLB, workingset->indexUB,
                               workingset->sizes, workingset->isActiveIdx,
                               workingset->isActiveConstr, workingset->nWConstr,
@@ -329,8 +331,11 @@ void iterate(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
                 workingset->Wid->data[workingset->nActiveConstr - 1] = 3;
                 workingset->Wlocalidx->data[workingset->nActiveConstr - 1] =
                   iQR0;
-
-                /* A check that is always false is detected at compile-time. Eliminating code that follows. */
+                b_xcopy(workingset->nVar, workingset->Aineq, workingset->ldA *
+                        (iQR0 - 1) + 1, workingset->ATwset, workingset->ldA *
+                        (workingset->nActiveConstr - 1) + 1);
+                workingset->bwset->data[workingset->nActiveConstr - 1] =
+                  workingset->bineq->data[iQR0 - 1];
                 break;
 
                case 4:
@@ -420,7 +425,7 @@ void iterate(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
         }
 
         if (solution->iterations - solution->iterations / 50 * 50 == 0) {
-          solution->maxConstr = b_maxConstraintViolation(workingset,
+          solution->maxConstr = maxConstraintViolation(workingset,
             solution->xstar);
           if (solution->maxConstr > 0.001) {
             xcopy(objective->nvar, solution->xstar, solution->searchDir);
@@ -432,7 +437,7 @@ void iterate(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
             }
 
             activeSetChangeID = 0;
-            normDelta = b_maxConstraintViolation(workingset, solution->searchDir);
+            normDelta = maxConstraintViolation(workingset, solution->searchDir);
             if (normDelta < solution->maxConstr) {
               for (idx = 0; idx < iQR0; idx++) {
                 solution->xstar->data[idx] = solution->searchDir->data[idx];

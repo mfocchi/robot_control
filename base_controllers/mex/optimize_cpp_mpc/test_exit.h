@@ -24,7 +24,8 @@
 
 /* Function Declarations */
 void test_exit(struct_T *Flags, c_struct_T *memspace, k_struct_T *MeritFunction,
-               const j_struct_T *WorkingSet, d_struct_T *TrialState, g_struct_T *
-               QRManager, const emxArray_real_T *lb, const emxArray_real_T *ub);
+               const emxArray_real_T *fscales_cineq_constraint, j_struct_T
+               *WorkingSet, d_struct_T *TrialState, g_struct_T *QRManager, const
+               emxArray_real_T *lb, const emxArray_real_T *ub);
 
 /* End of code generation (test_exit.h) */

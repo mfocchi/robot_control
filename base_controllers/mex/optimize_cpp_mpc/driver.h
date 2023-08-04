@@ -28,6 +28,6 @@ void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb, const
             *MeritFunction, const e_struct_T *FcnEvaluator, f_struct_T
             *FiniteDifferences, c_struct_T *memspace, j_struct_T *WorkingSet,
             g_struct_T *QRManager, h_struct_T *CholManager, i_struct_T
-            *QPObjective);
+            *QPObjective, const emxArray_real_T *fscales_cineq_constraint);
 
 /* End of code generation (driver.h) */

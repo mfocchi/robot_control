@@ -22,7 +22,11 @@
 #include <string.h>
 
 /* Function Declarations */
-void computeDeltaLag(int32_T nVar, emxArray_real_T *workspace, const
-                     emxArray_real_T *grad, const emxArray_real_T *grad_old);
+void computeDeltaLag(int32_T nVar, int32_T ldJ, int32_T mNonlinIneq,
+                     emxArray_real_T *workspace, const emxArray_real_T *grad,
+                     const emxArray_real_T *JacIneqTrans, int32_T ineqJ0, const
+                     emxArray_real_T *grad_old, const emxArray_real_T
+                     *JacIneqTrans_old, const emxArray_real_T *lambda, int32_T
+                     ineqL0);
 
 /* End of code generation (computeDeltaLag.h) */

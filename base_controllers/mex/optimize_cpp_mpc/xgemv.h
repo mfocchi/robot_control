@@ -27,11 +27,19 @@ void b_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
 void c_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
              emxArray_real_T *x, emxArray_real_T *y);
 void d_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
+             emxArray_real_T *x, int32_T ix0, emxArray_real_T *y);
+void e_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
+             emxArray_real_T *x, emxArray_real_T *y);
+void f_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
              emxArray_real_T *x, int32_T ix0, emxArray_real_T *y, int32_T iy0);
-void e_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T ia0,
+void g_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T ia0,
              int32_T lda, const emxArray_real_T *x, emxArray_real_T *y);
-void f_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T ia0,
+void h_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T ia0,
              int32_T lda, const emxArray_real_T *x, emxArray_real_T *y);
+void i_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
+             emxArray_real_T *x, emxArray_real_T *y, int32_T iy0);
+void j_xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
+             emxArray_real_T *x, emxArray_real_T *y);
 void xgemv(int32_T m, int32_T n, const emxArray_real_T *A, int32_T lda, const
            emxArray_real_T *x, emxArray_real_T *y);
 

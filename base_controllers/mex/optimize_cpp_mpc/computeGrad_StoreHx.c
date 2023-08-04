@@ -35,7 +35,7 @@ void computeGrad_StoreHx(i_struct_T *obj, const emxArray_real_T *H, const
     break;
 
    case 3:
-    c_xgemv(obj->nvar, obj->nvar, H, obj->nvar, x, obj->Hx);
+    e_xgemv(obj->nvar, obj->nvar, H, obj->nvar, x, obj->Hx);
     i = obj->nvar;
     for (iy = 0; iy < i; iy++) {
       obj->grad->data[iy] = obj->Hx->data[iy];
@@ -48,7 +48,7 @@ void computeGrad_StoreHx(i_struct_T *obj, const emxArray_real_T *H, const
 
    default:
     maxRegVar = obj->maxVar - 1;
-    c_xgemv(obj->nvar, obj->nvar, H, obj->nvar, x, obj->Hx);
+    e_xgemv(obj->nvar, obj->nvar, H, obj->nvar, x, obj->Hx);
     i = obj->nvar + 1;
     for (iy = i; iy <= maxRegVar; iy++) {
       obj->Hx->data[iy - 1] = obj->beta * x->data[iy - 1];

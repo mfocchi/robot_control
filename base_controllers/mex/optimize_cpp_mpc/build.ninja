@@ -43,7 +43,7 @@ build $builddir/factoryConstruct.o : cc $root/factoryConstruct.c
 build $builddir/factoryConstruct1.o : cc $root/factoryConstruct1.c
 build $builddir/factoryConstruct2.o : cc $root/factoryConstruct2.c
 build $builddir/integrate_dynamics.o : cc $root/integrate_dynamics.c
-build $builddir/computePositionVelocity.o : cc $root/computePositionVelocity.c
+build $builddir/vecnorm.o : cc $root/vecnorm.c
 build $builddir/diff.o : cc $root/diff.c
 build $builddir/ixamax.o : cc $root/ixamax.c
 build $builddir/computeComplError.o : cc $root/computeComplError.c
@@ -54,7 +54,9 @@ build $builddir/_coder_optimize_cpp_mpc_api.o : cc $root/interface/_coder_optimi
 build $builddir/_coder_optimize_cpp_mpc_mex.o : cc $root/interface/_coder_optimize_cpp_mpc_mex.c
 build $builddir/xcopy.o : cc $root/xcopy.c
 build $builddir/compressBounds.o : cc $root/compressBounds.c
+build $builddir/computeConstraints_.o : cc $root/computeConstraints_.c
 build $builddir/computeForwardDifferences.o : cc $root/computeForwardDifferences.c
+build $builddir/updateWorkingSetForNewQP.o : cc $root/updateWorkingSetForNewQP.c
 build $builddir/setProblemType.o : cc $root/setProblemType.c
 build $builddir/modifyOverheadPhaseOne_.o : cc $root/modifyOverheadPhaseOne_.c
 build $builddir/driver.o : cc $root/driver.c
@@ -66,6 +68,7 @@ build $builddir/xorgqr.o : cc $root/xorgqr.c
 build $builddir/xgemv.o : cc $root/xgemv.c
 build $builddir/xtrsv.o : cc $root/xtrsv.c
 build $builddir/sortLambdaQP.o : cc $root/sortLambdaQP.c
+build $builddir/saveJacobian.o : cc $root/saveJacobian.c
 build $builddir/step.o : cc $root/step.c
 build $builddir/normal.o : cc $root/normal.c
 build $builddir/driver1.o : cc $root/driver1.c
@@ -97,7 +100,7 @@ build $builddir/addBoundToActiveSetMatrix_.o : cc $root/addBoundToActiveSetMatri
 build $builddir/relaxed.o : cc $root/relaxed.c
 build $builddir/updatePenaltyParam.o : cc $root/updatePenaltyParam.c
 build $builddir/soc.o : cc $root/soc.c
-build $builddir/evalObjAndConstr.o : cc $root/evalObjAndConstr.c
+build $builddir/computeLinearResiduals.o : cc $root/computeLinearResiduals.c
 build $builddir/test_exit.o : cc $root/test_exit.c
 build $builddir/computeDeltaLag.o : cc $root/computeDeltaLag.c
 build $builddir/BFGSUpdate.o : cc $root/BFGSUpdate.c
@@ -106,4 +109,4 @@ build $builddir/_coder_optimize_cpp_mpc_info.o : cc $root/interface/_coder_optim
 build $builddir/c_mexapi_version.o : cc $matlabdir/extern/version/c_mexapi_version.c
 
 # Link
-build $root/optimize_cpp_mpc_mex.mexa64 : link $builddir/optimize_cpp_mpc_data.o $builddir/rt_nonfinite.o $builddir/optimize_cpp_mpc_initialize.o $builddir/optimize_cpp_mpc_terminate.o $builddir/optimize_cpp_mpc.o $builddir/factoryConstruct.o $builddir/factoryConstruct1.o $builddir/factoryConstruct2.o $builddir/integrate_dynamics.o $builddir/computePositionVelocity.o $builddir/diff.o $builddir/ixamax.o $builddir/computeComplError.o $builddir/xdot.o $builddir/xnrm2.o $builddir/xasum.o $builddir/_coder_optimize_cpp_mpc_api.o $builddir/_coder_optimize_cpp_mpc_mex.o $builddir/xcopy.o $builddir/compressBounds.o $builddir/computeForwardDifferences.o $builddir/setProblemType.o $builddir/modifyOverheadPhaseOne_.o $builddir/driver.o $builddir/computeGradLag.o $builddir/computeLambdaLSQ.o $builddir/factorQRE.o $builddir/xgeqp3.o $builddir/xorgqr.o $builddir/xgemv.o $builddir/xtrsv.o $builddir/sortLambdaQP.o $builddir/step.o $builddir/normal.o $builddir/driver1.o $builddir/PresolveWorkingSet.o $builddir/ComputeNumDependentEq_.o $builddir/IndexOfDependentEq_.o $builddir/countsort.o $builddir/removeConstr.o $builddir/feasibleX0ForWorkingSet.o $builddir/xgeqrf.o $builddir/xgemm.o $builddir/xtrsm.o $builddir/factorQR.o $builddir/maxConstraintViolation.o $builddir/computeFval.o $builddir/linearForm_.o $builddir/iterate.o $builddir/computeGrad_StoreHx.o $builddir/xaxpy.o $builddir/computeFval_ReuseHx.o $builddir/squareQ_appendCol.o $builddir/xrot.o $builddir/xpotrf.o $builddir/solve.o $builddir/xscal.o $builddir/compute_lambda.o $builddir/feasibleratiotest.o $builddir/addBoundToActiveSetMatrix_.o $builddir/relaxed.o $builddir/updatePenaltyParam.o $builddir/soc.o $builddir/evalObjAndConstr.o $builddir/test_exit.o $builddir/computeDeltaLag.o $builddir/BFGSUpdate.o $builddir/optimize_cpp_mpc_emxutil.o $builddir/_coder_optimize_cpp_mpc_info.o $builddir/c_mexapi_version.o 
+build $root/optimize_cpp_mpc_mex.mexa64 : link $builddir/optimize_cpp_mpc_data.o $builddir/rt_nonfinite.o $builddir/optimize_cpp_mpc_initialize.o $builddir/optimize_cpp_mpc_terminate.o $builddir/optimize_cpp_mpc.o $builddir/factoryConstruct.o $builddir/factoryConstruct1.o $builddir/factoryConstruct2.o $builddir/integrate_dynamics.o $builddir/vecnorm.o $builddir/diff.o $builddir/ixamax.o $builddir/computeComplError.o $builddir/xdot.o $builddir/xnrm2.o $builddir/xasum.o $builddir/_coder_optimize_cpp_mpc_api.o $builddir/_coder_optimize_cpp_mpc_mex.o $builddir/xcopy.o $builddir/compressBounds.o $builddir/computeConstraints_.o $builddir/computeForwardDifferences.o $builddir/updateWorkingSetForNewQP.o $builddir/setProblemType.o $builddir/modifyOverheadPhaseOne_.o $builddir/driver.o $builddir/computeGradLag.o $builddir/computeLambdaLSQ.o $builddir/factorQRE.o $builddir/xgeqp3.o $builddir/xorgqr.o $builddir/xgemv.o $builddir/xtrsv.o $builddir/sortLambdaQP.o $builddir/saveJacobian.o $builddir/step.o $builddir/normal.o $builddir/driver1.o $builddir/PresolveWorkingSet.o $builddir/ComputeNumDependentEq_.o $builddir/IndexOfDependentEq_.o $builddir/countsort.o $builddir/removeConstr.o $builddir/feasibleX0ForWorkingSet.o $builddir/xgeqrf.o $builddir/xgemm.o $builddir/xtrsm.o $builddir/factorQR.o $builddir/maxConstraintViolation.o $builddir/computeFval.o $builddir/linearForm_.o $builddir/iterate.o $builddir/computeGrad_StoreHx.o $builddir/xaxpy.o $builddir/computeFval_ReuseHx.o $builddir/squareQ_appendCol.o $builddir/xrot.o $builddir/xpotrf.o $builddir/solve.o $builddir/xscal.o $builddir/compute_lambda.o $builddir/feasibleratiotest.o $builddir/addBoundToActiveSetMatrix_.o $builddir/relaxed.o $builddir/updatePenaltyParam.o $builddir/soc.o $builddir/computeLinearResiduals.o $builddir/test_exit.o $builddir/computeDeltaLag.o $builddir/BFGSUpdate.o $builddir/optimize_cpp_mpc_emxutil.o $builddir/_coder_optimize_cpp_mpc_info.o $builddir/c_mexapi_version.o 

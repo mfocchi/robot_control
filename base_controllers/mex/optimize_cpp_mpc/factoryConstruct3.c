@@ -3,14 +3,14 @@
  * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
- * factoryConstruct2.c
+ * factoryConstruct3.c
  *
- * Code generation for function 'factoryConstruct2'
+ * Code generation for function 'factoryConstruct3'
  *
  */
 
 /* Include files */
-#include "factoryConstruct2.h"
+#include "factoryConstruct3.h"
 #include "optimize_cpp_mpc_data.h"
 #include "optimize_cpp_mpc_emxutil.h"
 #include "optimize_cpp_mpc_types.h"
@@ -18,7 +18,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void c_factoryConstruct(int32_T mIneq, int32_T mLB, const emxArray_int32_T
+void d_factoryConstruct(int32_T mIneq, int32_T mLB, const emxArray_int32_T
   *indexLB, int32_T mUB, const emxArray_int32_T *indexUB, int32_T mFixed, const
   emxArray_int32_T *indexFixed, int32_T nVar, int32_T nVarMax, int32_T
   mConstrMax, j_struct_T *obj)
@@ -193,4 +193,4 @@ void c_factoryConstruct(int32_T mIneq, int32_T mLB, const emxArray_int32_T
   emlrtHeapReferenceStackLeaveFcnR2012b(emlrtRootTLSGlobal);
 }
 
-/* End of code generation (factoryConstruct2.c) */
+/* End of code generation (factoryConstruct3.c) */

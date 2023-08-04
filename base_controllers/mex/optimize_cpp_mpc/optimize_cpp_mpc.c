@@ -12,8 +12,8 @@
 /* Include files */
 #include "optimize_cpp_mpc.h"
 #include "compressBounds.h"
+#include "computeConstraints_.h"
 #include "computeForwardDifferences.h"
-#include "computePositionVelocity.h"
 #include "diff.h"
 #include "driver.h"
 #include "factoryConstruct.h"
@@ -26,6 +26,8 @@
 #include "optimize_cpp_mpc_types.h"
 #include "rt_nonfinite.h"
 #include "setProblemType.h"
+#include "updateWorkingSetForNewQP.h"
+#include "vecnorm.h"
 #include "xcopy.h"
 #include "mwmathutil.h"
 #include <string.h>
@@ -67,12 +69,69 @@ static void disp(const mxArray *b, emlrtMCInfo *location)
                         location);
 }
 
-real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
-            emxArray_real_T *Fr_l0, const emxArray_real_T *Fr_r0, int64_T mpc_N,
-            const char_T params_int_method[3], real_T params_int_steps, real_T
-            params_b, const real_T params_p_a1[3], const real_T params_p_a2[3],
-            real_T params_g, real_T params_m, real_T params_w1, real_T params_w2,
-            real_T params_mpc_dt, const emxArray_real_T *x)
+void anon(const emxArray_real_T *Fr_l0, const emxArray_real_T *Fr_r0, int64_T
+          mpc_N, const emxArray_real_T *x, emxArray_real_T *varargout_1)
+{
+  int64_T y;
+  int32_T i;
+  int32_T i1;
+  int32_T loop_ub;
+
+  /*  size  known */
+  y = mpc_N << 1;
+  i = varargout_1->size[0] * varargout_1->size[1];
+  varargout_1->size[0] = 1;
+  varargout_1->size[1] = (int32_T)y;
+  emxEnsureCapacity_real_T(varargout_1, i);
+  loop_ub = (int32_T)y;
+  for (i = 0; i < loop_ub; i++) {
+    varargout_1->data[i] = 0.0;
+  }
+
+  /*  init for cpp   */
+  if (mpc_N + 1L > (mpc_N << 1)) {
+    i = 1;
+  } else {
+    i = (int32_T)(mpc_N + 1L);
+  }
+
+  /*  fr + delta F <=0 */
+  y = 1L;
+  while (y <= mpc_N) {
+    loop_ub = varargout_1->size[1];
+    i1 = varargout_1->size[0] * varargout_1->size[1];
+    varargout_1->size[1]++;
+    emxEnsureCapacity_real_T(varargout_1, i1);
+    varargout_1->data[loop_ub] = Fr_l0->data[(int32_T)y - 1] + x->data[(int32_T)
+      y + -1];
+    loop_ub = varargout_1->size[1];
+    i1 = varargout_1->size[0] * varargout_1->size[1];
+    varargout_1->size[1]++;
+    emxEnsureCapacity_real_T(varargout_1, i1);
+    varargout_1->data[loop_ub] = Fr_r0->data[(int32_T)y - 1] + x->data[(i +
+      (int32_T)y) - 2];
+    y++;
+    if (*emlrtBreakCheckR2012bFlagVar != 0) {
+      emlrtBreakCheckR2012b(emlrtRootTLSGlobal);
+    }
+  }
+
+  /*  this creates issues!!!! and does not make to converge */
+  /*      % -Frmax < fr + delta F  => -(fr + delta F) -Frmax < 0  */
+  /*      for i=1:mpc_N  */
+  /*          ineq = [ineq -(Fr_l0(i) + delta_Fr_l(i)) -Fr_max  ];    */
+  /*          ineq = [ineq -(Fr_r0(i) + delta_Fr_r(i)) -Fr_max  ];  */
+  /*      end */
+  /*       */
+}
+
+real_T b_anon(const real_T actual_state[6], const emxArray_real_T *ref_com,
+              const emxArray_real_T *Fr_l0, const emxArray_real_T *Fr_r0,
+              int64_T mpc_N, const char_T params_int_method[3], real_T
+              params_int_steps, real_T params_b, const real_T params_p_a1[3],
+              const real_T params_p_a2[3], real_T params_g, real_T params_m,
+              real_T params_w1, real_T params_w2, real_T params_mpc_dt, const
+              emxArray_real_T *x)
 {
   static const int32_T iv[2] = { 1, 72 };
 
@@ -100,25 +159,23 @@ real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
 
   static const char_T b[3] = { 'r', 'k', '4' };
 
-  emxArray_real_T *Fr_l;
-  emxArray_real_T *Fr_r;
   emxArray_real_T *b_p;
+  emxArray_real_T *b_ref_com;
   emxArray_real_T *b_states_rough;
-  emxArray_real_T *c_states_rough;
-  emxArray_real_T *c_y;
-  emxArray_real_T *d_states_rough;
-  emxArray_real_T *d_y;
   emxArray_real_T *delta_Fr_l;
   emxArray_real_T *delta_Fr_r;
-  emxArray_real_T *pd;
+  emxArray_real_T *pdx;
+  emxArray_real_T *pdy;
+  emxArray_real_T *px;
+  emxArray_real_T *py;
   emxArray_real_T *states_rough;
   const mxArray *b_y;
+  const mxArray *c_y;
+  const mxArray *d_y;
   const mxArray *e_y;
-  const mxArray *f_y;
-  const mxArray *g_y;
   const mxArray *m;
   const mxArray *y;
-  int64_T i;
+  int64_T b_i;
   real_T b_unusedU0[6];
   real_T dv[6];
   real_T k_1[6];
@@ -126,17 +183,18 @@ real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
   real_T k_3[6];
   real_T unusedU0[6];
   real_T a_tmp;
-  real_T absxk;
+  real_T b_px;
+  real_T b_py;
   real_T d;
+  real_T d1;
   real_T dt_step;
-  real_T scale;
   real_T varargout_1;
   real_T *pData;
   int32_T iv1[2];
-  int32_T j;
-  int32_T k;
-  int32_T kend;
-  int32_T ncols;
+  int32_T b_loop_ub;
+  int32_T i;
+  int32_T i1;
+  int32_T loop_ub;
   int32_T nx;
   boolean_T guard1 = false;
   boolean_T p;
@@ -170,81 +228,78 @@ real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
     iv1[1] = ref_com->size[1];
     m = emlrtCreateNumericArray(2, &iv1[0], mxDOUBLE_CLASS, mxREAL);
     pData = emlrtMxGetPr(m);
-    k = 0;
+    i = 0;
     for (nx = 0; nx < ref_com->size[1]; nx++) {
-      pData[k] = ref_com->data[3 * nx];
-      k++;
-      pData[k] = ref_com->data[3 * nx + 1];
-      k++;
-      pData[k] = ref_com->data[3 * nx + 2];
-      k++;
+      pData[i] = ref_com->data[3 * nx];
+      i++;
+      pData[i] = ref_com->data[3 * nx + 1];
+      i++;
+      pData[i] = ref_com->data[3 * nx + 2];
+      i++;
     }
 
     emlrtAssign(&b_y, m);
     emlrtDisplayR2012b(b_y, "ref_com", &emlrtRTEI, emlrtRootTLSGlobal);
   } else {
     if (1L > mpc_N) {
-      ncols = 0;
+      loop_ub = 0;
     } else {
-      ncols = (int32_T)mpc_N;
+      loop_ub = (int32_T)mpc_N;
     }
 
     emxInit_real_T(&delta_Fr_l, 2, true);
-    k = delta_Fr_l->size[0] * delta_Fr_l->size[1];
+    i = delta_Fr_l->size[0] * delta_Fr_l->size[1];
     delta_Fr_l->size[0] = 1;
-    delta_Fr_l->size[1] = ncols;
-    emxEnsureCapacity_real_T(delta_Fr_l, k);
-    for (k = 0; k < ncols; k++) {
-      delta_Fr_l->data[k] = x->data[k];
+    delta_Fr_l->size[1] = loop_ub;
+    emxEnsureCapacity_real_T(delta_Fr_l, i);
+    for (i = 0; i < loop_ub; i++) {
+      delta_Fr_l->data[i] = x->data[i];
     }
 
-    i = mpc_N << 1;
-    if (mpc_N + 1L > i) {
-      k = 0;
-      j = 0;
+    b_i = mpc_N << 1;
+    if (mpc_N + 1L > b_i) {
+      i = 0;
+      i1 = 0;
     } else {
-      k = (int32_T)(mpc_N + 1L) - 1;
-      j = (int32_T)i;
+      i = (int32_T)(mpc_N + 1L) - 1;
+      i1 = (int32_T)b_i;
     }
 
     emxInit_real_T(&delta_Fr_r, 2, true);
     nx = delta_Fr_r->size[0] * delta_Fr_r->size[1];
     delta_Fr_r->size[0] = 1;
-    ncols = j - k;
-    delta_Fr_r->size[1] = ncols;
+    loop_ub = i1 - i;
+    delta_Fr_r->size[1] = loop_ub;
     emxEnsureCapacity_real_T(delta_Fr_r, nx);
-    for (j = 0; j < ncols; j++) {
-      delta_Fr_r->data[j] = x->data[k + j];
+    for (i1 = 0; i1 < loop_ub; i1++) {
+      delta_Fr_r->data[i1] = x->data[i + i1];
     }
 
     /*  compute actual state */
     if (1L > mpc_N) {
-      ncols = 0;
+      loop_ub = 0;
     } else {
-      ncols = (int32_T)mpc_N;
+      loop_ub = (int32_T)mpc_N;
     }
 
     emxInit_real_T(&b_p, 2, true);
 
     /* init values for cpp */
-    k = b_p->size[0] * b_p->size[1];
+    i = b_p->size[0] * b_p->size[1];
     b_p->size[0] = 3;
     b_p->size[1] = (int32_T)mpc_N;
-    emxEnsureCapacity_real_T(b_p, k);
-    kend = 3 * (int32_T)mpc_N;
-    for (k = 0; k < kend; k++) {
-      b_p->data[k] = 0.0;
+    emxEnsureCapacity_real_T(b_p, i);
+    b_loop_ub = 3 * (int32_T)mpc_N;
+    for (i = 0; i < b_loop_ub; i++) {
+      b_p->data[i] = 0.0;
     }
 
-    emxInit_real_T(&pd, 2, true);
-    emxInit_real_T(&Fr_l, 2, true);
-    emxInit_real_T(&Fr_r, 2, true);
     emxInit_real_T(&states_rough, 2, true);
-    emxInit_real_T(&c_y, 2, true);
-    emxInit_real_T(&d_y, 2, true);
+    emxInit_real_T(&px, 2, true);
+    emxInit_real_T(&py, 2, true);
+    emxInit_real_T(&pdx, 2, true);
+    emxInit_real_T(&pdy, 2, true);
     emxInit_real_T(&b_states_rough, 2, true);
-    emxInit_real_T(&c_states_rough, 2, true);
-    emxInit_real_T(&d_states_rough, 2, true);
     nx = Fr_l0->size[1];
     p = false;
     if (mpc_N >= 4503599627370496L) {
@@ -274,46 +329,46 @@ real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
       } else {
         /*  check vectors are row and extract first mpc_N elements */
         if (1L > mpc_N) {
-          kend = 0;
+          b_loop_ub = 0;
           nx = 0;
         } else {
-          kend = (int32_T)mpc_N;
+          b_loop_ub = (int32_T)mpc_N;
           nx = (int32_T)mpc_N;
         }
 
         /*  single shooting */
-        k = Fr_l->size[0] * Fr_l->size[1];
-        Fr_l->size[0] = 1;
-        Fr_l->size[1] = kend;
-        emxEnsureCapacity_real_T(Fr_l, k);
-        for (k = 0; k < kend; k++) {
-          Fr_l->data[k] = Fr_l0->data[k] + delta_Fr_l->data[k];
+        i = px->size[0] * px->size[1];
+        px->size[0] = 1;
+        px->size[1] = b_loop_ub;
+        emxEnsureCapacity_real_T(px, i);
+        for (i = 0; i < b_loop_ub; i++) {
+          px->data[i] = Fr_l0->data[i] + delta_Fr_l->data[i];
         }
 
-        k = Fr_r->size[0] * Fr_r->size[1];
-        Fr_r->size[0] = 1;
-        Fr_r->size[1] = nx;
-        emxEnsureCapacity_real_T(Fr_r, k);
-        for (k = 0; k < nx; k++) {
-          Fr_r->data[k] = Fr_r0->data[k] + delta_Fr_r->data[k];
+        i = py->size[0] * py->size[1];
+        py->size[0] = 1;
+        py->size[1] = nx;
+        emxEnsureCapacity_real_T(py, i);
+        for (i = 0; i < nx; i++) {
+          py->data[i] = Fr_r0->data[i] + delta_Fr_r->data[i];
         }
 
         /* init */
-        k = states_rough->size[0] * states_rough->size[1];
+        i = states_rough->size[0] * states_rough->size[1];
         states_rough->size[0] = 6;
         states_rough->size[1] = (int32_T)mpc_N;
-        emxEnsureCapacity_real_T(states_rough, k);
-        kend = 6 * (int32_T)mpc_N;
-        for (k = 0; k < kend; k++) {
-          states_rough->data[k] = 0.0;
+        emxEnsureCapacity_real_T(states_rough, i);
+        b_loop_ub = 6 * (int32_T)mpc_N;
+        for (i = 0; i < b_loop_ub; i++) {
+          states_rough->data[i] = 0.0;
         }
 
         if (params_int_steps == 0.0) {
           /* verify is a column vector */
-          k = states_rough->size[0] * states_rough->size[1];
+          i = states_rough->size[0] * states_rough->size[1];
           states_rough->size[0] = 6;
           states_rough->size[1] = 1;
-          emxEnsureCapacity_real_T(states_rough, k);
+          emxEnsureCapacity_real_T(states_rough, i);
           for (nx = 0; nx < 6; nx++) {
             d = actual_state[nx];
             unusedU0[nx] = d;
@@ -323,130 +378,130 @@ real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
           if (memcmp(&params_int_method[0], &b[0], 3) == 0) {
             /* https://www.geeksforgeeks.org/runge-kutta-4th-order-method-solve-differential-equation/ */
             /*  we have  time invariant dynamics so t wont count */
-            i = 1L;
-            while (i <= mpc_N - 1L) {
-              scale = Fr_l->data[(int32_T)i - 1];
-              absxk = Fr_r->data[(int32_T)i - 1];
-              b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                     unusedU0, scale, absxk, k_1);
+            b_i = 1L;
+            while (b_i <= mpc_N - 1L) {
+              b_px = px->data[(int32_T)b_i - 1];
+              b_py = py->data[(int32_T)b_i - 1];
+              c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                     unusedU0, b_px, b_py, k_1);
               a_tmp = 0.5 * params_mpc_dt;
-              for (k = 0; k < 6; k++) {
-                b_unusedU0[k] = unusedU0[k] + a_tmp * k_1[k];
+              for (i = 0; i < 6; i++) {
+                b_unusedU0[i] = unusedU0[i] + a_tmp * k_1[i];
               }
 
-              b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                     b_unusedU0, scale, absxk, k_2);
-              for (k = 0; k < 6; k++) {
-                b_unusedU0[k] = unusedU0[k] + a_tmp * k_2[k];
+              c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                     b_unusedU0, b_px, b_py, k_2);
+              for (i = 0; i < 6; i++) {
+                b_unusedU0[i] = unusedU0[i] + a_tmp * k_2[i];
               }
 
-              b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                     b_unusedU0, scale, absxk, k_3);
-              for (k = 0; k < 6; k++) {
-                b_unusedU0[k] = unusedU0[k] + k_3[k] * params_mpc_dt;
+              c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                     b_unusedU0, b_px, b_py, k_3);
+              for (i = 0; i < 6; i++) {
+                b_unusedU0[i] = unusedU0[i] + k_3[i] * params_mpc_dt;
               }
 
-              b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                     b_unusedU0, scale, absxk, dv);
-              for (k = 0; k < 6; k++) {
-                unusedU0[k] += 0.16666666666666666 * (((k_1[k] + 2.0 * k_2[k]) +
-                  2.0 * k_3[k]) + dv[k]) * params_mpc_dt;
+              c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                     b_unusedU0, b_px, b_py, dv);
+              for (i = 0; i < 6; i++) {
+                unusedU0[i] += 0.16666666666666666 * (((k_1[i] + 2.0 * k_2[i]) +
+                  2.0 * k_3[i]) + dv[i]) * params_mpc_dt;
               }
 
-              k = d_states_rough->size[0] * d_states_rough->size[1];
-              d_states_rough->size[0] = 6;
-              d_states_rough->size[1] = states_rough->size[1] + 1;
-              emxEnsureCapacity_real_T(d_states_rough, k);
-              kend = states_rough->size[1];
-              for (k = 0; k < kend; k++) {
-                for (j = 0; j < 6; j++) {
-                  nx = j + 6 * k;
-                  d_states_rough->data[nx] = states_rough->data[nx];
+              i = b_states_rough->size[0] * b_states_rough->size[1];
+              b_states_rough->size[0] = 6;
+              b_states_rough->size[1] = states_rough->size[1] + 1;
+              emxEnsureCapacity_real_T(b_states_rough, i);
+              b_loop_ub = states_rough->size[1];
+              for (i = 0; i < b_loop_ub; i++) {
+                for (i1 = 0; i1 < 6; i1++) {
+                  nx = i1 + 6 * i;
+                  b_states_rough->data[nx] = states_rough->data[nx];
                 }
               }
 
-              for (k = 0; k < 6; k++) {
-                d_states_rough->data[k + 6 * states_rough->size[1]] = unusedU0[k];
+              for (i = 0; i < 6; i++) {
+                b_states_rough->data[i + 6 * states_rough->size[1]] = unusedU0[i];
               }
 
-              k = states_rough->size[0] * states_rough->size[1];
+              i = states_rough->size[0] * states_rough->size[1];
               states_rough->size[0] = 6;
-              states_rough->size[1] = d_states_rough->size[1];
-              emxEnsureCapacity_real_T(states_rough, k);
-              kend = d_states_rough->size[0] * d_states_rough->size[1];
-              for (k = 0; k < kend; k++) {
-                states_rough->data[k] = d_states_rough->data[k];
+              states_rough->size[1] = b_states_rough->size[1];
+              emxEnsureCapacity_real_T(states_rough, i);
+              b_loop_ub = b_states_rough->size[0] * b_states_rough->size[1];
+              for (i = 0; i < b_loop_ub; i++) {
+                states_rough->data[i] = b_states_rough->data[i];
               }
 
-              i++;
+              b_i++;
               if (*emlrtBreakCheckR2012bFlagVar != 0) {
                 emlrtBreakCheckR2012b(emlrtRootTLSGlobal);
               }
             }
           } else {
-            f_y = NULL;
+            d_y = NULL;
             m = emlrtCreateCharArray(2, &iv3[0]);
             emlrtInitCharArrayR2013a(emlrtRootTLSGlobal, 15, m, &c_u[0]);
-            emlrtAssign(&f_y, m);
-            disp(f_y, &c_emlrtMCI);
+            emlrtAssign(&d_y, m);
+            disp(d_y, &c_emlrtMCI);
           }
         } else {
           dt_step = params_mpc_dt / (params_int_steps - 1.0);
-          i = 1L;
-          while (i <= mpc_N) {
-            if (i >= 2L) {
-              k = c_y->size[0] * c_y->size[1];
-              c_y->size[0] = 1;
-              c_y->size[1] = (int32_T)params_int_steps;
-              emxEnsureCapacity_real_T(c_y, k);
-              scale = Fr_l->data[(int32_T)(i - 1L) - 1];
-              kend = (int32_T)params_int_steps;
-              k = d_y->size[0] * d_y->size[1];
-              d_y->size[0] = 1;
-              d_y->size[1] = (int32_T)params_int_steps;
-              emxEnsureCapacity_real_T(d_y, k);
-              absxk = Fr_r->data[(int32_T)(i - 1L) - 1];
-              for (k = 0; k < kend; k++) {
-                c_y->data[k] = scale;
-                d_y->data[k] = absxk;
+          b_i = 1L;
+          while (b_i <= mpc_N) {
+            if (b_i >= 2L) {
+              i = pdy->size[0] * pdy->size[1];
+              pdy->size[0] = 1;
+              pdy->size[1] = (int32_T)params_int_steps;
+              emxEnsureCapacity_real_T(pdy, i);
+              b_px = px->data[(int32_T)(b_i - 1L) - 1];
+              b_loop_ub = (int32_T)params_int_steps;
+              i = pdx->size[0] * pdx->size[1];
+              pdx->size[0] = 1;
+              pdx->size[1] = (int32_T)params_int_steps;
+              emxEnsureCapacity_real_T(pdx, i);
+              b_py = py->data[(int32_T)(b_i - 1L) - 1];
+              for (i = 0; i < b_loop_ub; i++) {
+                pdy->data[i] = b_px;
+                pdx->data[i] = b_py;
               }
 
-              for (k = 0; k < 6; k++) {
-                dv[k] = states_rough->data[k + 6 * ((int32_T)(i - 1L) - 1)];
+              for (i = 0; i < 6; i++) {
+                dv[i] = states_rough->data[i + 6 * ((int32_T)(b_i - 1L) - 1)];
               }
 
               /* verify is a column vector */
               if (memcmp(&params_int_method[0], &b[0], 3) == 0) {
                 /* https://www.geeksforgeeks.org/runge-kutta-4th-order-method-solve-differential-equation/ */
                 /*  we have  time invariant dynamics so t wont count */
-                k = (int32_T)(params_int_steps - 1.0);
-                for (nx = 0; nx < k; nx++) {
-                  d = c_y->data[nx];
-                  scale = d_y->data[nx];
-                  b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                         dv, d, scale, k_1);
+                i = (int32_T)(params_int_steps - 1.0);
+                for (nx = 0; nx < i; nx++) {
+                  d = pdy->data[nx];
+                  d1 = pdx->data[nx];
+                  c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                         dv, d, d1, k_1);
                   a_tmp = 0.5 * dt_step;
-                  for (j = 0; j < 6; j++) {
-                    b_unusedU0[j] = dv[j] + a_tmp * k_1[j];
+                  for (i1 = 0; i1 < 6; i1++) {
+                    b_unusedU0[i1] = dv[i1] + a_tmp * k_1[i1];
                   }
 
-                  b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                         b_unusedU0, d, scale, k_2);
-                  for (j = 0; j < 6; j++) {
-                    b_unusedU0[j] = dv[j] + a_tmp * k_2[j];
+                  c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                         b_unusedU0, d, d1, k_2);
+                  for (i1 = 0; i1 < 6; i1++) {
+                    b_unusedU0[i1] = dv[i1] + a_tmp * k_2[i1];
                   }
 
-                  b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                         b_unusedU0, d, scale, k_3);
-                  for (j = 0; j < 6; j++) {
-                    b_unusedU0[j] = dv[j] + k_3[j] * dt_step;
+                  c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                         b_unusedU0, d, d1, k_3);
+                  for (i1 = 0; i1 < 6; i1++) {
+                    b_unusedU0[i1] = dv[i1] + k_3[i1] * dt_step;
                   }
 
-                  b_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
-                         b_unusedU0, d, scale, unusedU0);
-                  for (j = 0; j < 6; j++) {
-                    dv[j] += 0.16666666666666666 * (((k_1[j] + 2.0 * k_2[j]) +
-                      2.0 * k_3[j]) + unusedU0[j]) * dt_step;
+                  c_anon(params_b, params_p_a1, params_p_a2, params_g, params_m,
+                         b_unusedU0, d, d1, unusedU0);
+                  for (i1 = 0; i1 < 6; i1++) {
+                    dv[i1] += 0.16666666666666666 * (((k_1[i1] + 2.0 * k_2[i1])
+                      + 2.0 * k_3[i1]) + unusedU0[i1]) * dt_step;
                   }
 
                   if (*emlrtBreakCheckR2012bFlagVar != 0) {
@@ -454,147 +509,113 @@ real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
                   }
                 }
               } else {
-                g_y = NULL;
+                e_y = NULL;
                 m = emlrtCreateCharArray(2, &iv4[0]);
                 emlrtInitCharArrayR2013a(emlrtRootTLSGlobal, 15, m, &c_u[0]);
-                emlrtAssign(&g_y, m);
-                disp(g_y, &c_emlrtMCI);
+                emlrtAssign(&e_y, m);
+                disp(e_y, &c_emlrtMCI);
               }
 
-              for (k = 0; k < 6; k++) {
-                states_rough->data[k + 6 * ((int32_T)i - 1)] = dv[k];
+              for (i = 0; i < 6; i++) {
+                states_rough->data[i + 6 * ((int32_T)b_i - 1)] = dv[i];
               }
 
               /*  keep Fr constant            */
             } else {
-              for (k = 0; k < 6; k++) {
-                states_rough->data[k + 6 * ((int32_T)i - 1)] = actual_state[k];
+              for (i = 0; i < 6; i++) {
+                states_rough->data[i + 6 * ((int32_T)b_i - 1)] = actual_state[i];
               }
             }
 
-            i++;
+            b_i++;
             if (*emlrtBreakCheckR2012bFlagVar != 0) {
               emlrtBreakCheckR2012b(emlrtRootTLSGlobal);
             }
           }
         }
 
-        kend = states_rough->size[1];
-        k = Fr_l->size[0] * Fr_l->size[1];
-        Fr_l->size[0] = 1;
-        Fr_l->size[1] = states_rough->size[1];
-        emxEnsureCapacity_real_T(Fr_l, k);
-        for (k = 0; k < kend; k++) {
-          Fr_l->data[k] = states_rough->data[6 * k];
+        b_loop_ub = states_rough->size[1];
+        i = px->size[0] * px->size[1];
+        px->size[0] = 1;
+        px->size[1] = states_rough->size[1];
+        emxEnsureCapacity_real_T(px, i);
+        for (i = 0; i < b_loop_ub; i++) {
+          px->data[i] = 0.0;
         }
 
-        kend = states_rough->size[1];
-        k = Fr_r->size[0] * Fr_r->size[1];
-        Fr_r->size[0] = 1;
-        Fr_r->size[1] = states_rough->size[1];
-        emxEnsureCapacity_real_T(Fr_r, k);
-        for (k = 0; k < kend; k++) {
-          Fr_r->data[k] = states_rough->data[6 * k + 1];
+        b_loop_ub = states_rough->size[1];
+        i = py->size[0] * py->size[1];
+        py->size[0] = 1;
+        py->size[1] = states_rough->size[1];
+        emxEnsureCapacity_real_T(py, i);
+        for (i = 0; i < b_loop_ub; i++) {
+          py->data[i] = 0.0;
         }
 
-        kend = states_rough->size[1];
-        k = c_y->size[0] * c_y->size[1];
-        c_y->size[0] = 1;
-        c_y->size[1] = states_rough->size[1];
-        emxEnsureCapacity_real_T(c_y, k);
-        for (k = 0; k < kend; k++) {
-          c_y->data[k] = states_rough->data[6 * k + 2];
+        b_loop_ub = states_rough->size[1];
+        i = pdy->size[0] * pdy->size[1];
+        pdy->size[0] = 1;
+        pdy->size[1] = states_rough->size[1];
+        emxEnsureCapacity_real_T(pdy, i);
+        for (i = 0; i < b_loop_ub; i++) {
+          pdy->data[i] = 0.0;
         }
 
-        kend = states_rough->size[1];
-        k = d_y->size[0] * d_y->size[1];
-        d_y->size[0] = 1;
-        d_y->size[1] = states_rough->size[1];
-        emxEnsureCapacity_real_T(d_y, k);
-        for (k = 0; k < kend; k++) {
-          d_y->data[k] = states_rough->data[6 * k + 3];
+        i = states_rough->size[1] - 1;
+        for (nx = 0; nx <= i; nx++) {
+          d = states_rough->data[6 * nx];
+          d1 = states_rough->data[6 * nx + 1];
+          b_px = states_rough->data[6 * nx + 2];
+          b_py = params_b * params_b;
+          dt_step = d1 * d1;
+          a_tmp = (b_py + dt_step) - b_px * b_px;
+          b_px = muDoubleScalarSqrt(1.0 - a_tmp * a_tmp / (4.0 * b_py * dt_step));
+          px->data[nx] = d1 * muDoubleScalarSin(d) * b_px;
+          py->data[nx] = a_tmp / (2.0 * params_b);
+          pdy->data[nx] = -d1 * muDoubleScalarCos(d) * b_px;
+          if (*emlrtBreakCheckR2012bFlagVar != 0) {
+            emlrtBreakCheckR2012b(emlrtRootTLSGlobal);
+          }
         }
 
-        kend = states_rough->size[1];
-        k = b_states_rough->size[0] * b_states_rough->size[1];
-        b_states_rough->size[0] = 1;
-        b_states_rough->size[1] = states_rough->size[1];
-        emxEnsureCapacity_real_T(b_states_rough, k);
-        for (k = 0; k < kend; k++) {
-          b_states_rough->data[k] = states_rough->data[6 * k + 4];
+        i = b_p->size[0] * b_p->size[1];
+        b_p->size[0] = 3;
+        b_p->size[1] = px->size[1];
+        emxEnsureCapacity_real_T(b_p, i);
+        b_loop_ub = px->size[1];
+        for (i = 0; i < b_loop_ub; i++) {
+          b_p->data[3 * i] = px->data[i];
         }
 
-        kend = states_rough->size[1];
-        k = c_states_rough->size[0] * c_states_rough->size[1];
-        c_states_rough->size[0] = 1;
-        c_states_rough->size[1] = states_rough->size[1];
-        emxEnsureCapacity_real_T(c_states_rough, k);
-        for (k = 0; k < kend; k++) {
-          c_states_rough->data[k] = states_rough->data[6 * k + 5];
+        b_loop_ub = py->size[1];
+        for (i = 0; i < b_loop_ub; i++) {
+          b_p->data[3 * i + 1] = py->data[i];
         }
 
-        computePositionVelocity(params_b, Fr_l, Fr_r, c_y, d_y, b_states_rough,
-          c_states_rough, b_p, pd);
+        b_loop_ub = pdy->size[1];
+        for (i = 0; i < b_loop_ub; i++) {
+          b_p->data[3 * i + 2] = pdy->data[i];
+        }
       }
     }
 
     if (guard1) {
-      e_y = NULL;
+      c_y = NULL;
       m = emlrtCreateCharArray(2, &iv2[0]);
       emlrtInitCharArrayR2013a(emlrtRootTLSGlobal, 66, m, &b_u[0]);
-      emlrtAssign(&e_y, m);
-      disp(e_y, &b_emlrtMCI);
+      emlrtAssign(&c_y, m);
+      disp(c_y, &b_emlrtMCI);
     }
 
-    emxFree_real_T(&d_states_rough);
-    emxFree_real_T(&c_states_rough);
     emxFree_real_T(&b_states_rough);
+    emxFree_real_T(&pdx);
+    emxFree_real_T(&py);
     emxFree_real_T(&states_rough);
-    emxFree_real_T(&Fr_r);
+    emxInit_real_T(&b_ref_com, 2, true);
 
     /* p has mpc_N +1 elements  */
     /*  cartesian track */
     /* 1 column /2 row wise */
-    k = pd->size[0] * pd->size[1];
-    pd->size[0] = 3;
-    pd->size[1] = ncols;
-    emxEnsureCapacity_real_T(pd, k);
-    for (nx = 0; nx < ncols; nx++) {
-      pd->data[3 * nx] = ref_com->data[3 * nx] - b_p->data[3 * nx];
-      k = 3 * nx + 1;
-      pd->data[k] = ref_com->data[3 * nx + 1] - b_p->data[k];
-      k = 3 * nx + 2;
-      pd->data[k] = ref_com->data[3 * nx + 2] - b_p->data[k];
-    }
-
-    emxFree_real_T(&b_p);
-    ncols = pd->size[1];
-    k = c_y->size[0] * c_y->size[1];
-    c_y->size[0] = 1;
-    c_y->size[1] = pd->size[1];
-    emxEnsureCapacity_real_T(c_y, k);
-    for (j = 0; j < ncols; j++) {
-      nx = j * 3;
-      a_tmp = 0.0;
-      scale = 3.3121686421112381E-170;
-      kend = nx + 3;
-      for (k = nx + 1; k <= kend; k++) {
-        absxk = muDoubleScalarAbs(pd->data[k - 1]);
-        if (absxk > scale) {
-          dt_step = scale / absxk;
-          a_tmp = a_tmp * dt_step * dt_step + 1.0;
-          scale = absxk;
-        } else {
-          dt_step = absxk / scale;
-          a_tmp += dt_step * dt_step;
-        }
-      }
-
-      c_y->data[j] = scale * muDoubleScalarSqrt(a_tmp);
-    }
-
-    emxFree_real_T(&pd);
-
     /*  %state tracking (is worse than cart tracking) */
     /*  tracking_state = 0.; */
     /*  for i=1:mpc_N */
@@ -604,74 +625,90 @@ real_T anon(const real_T actual_state[6], const emxArray_real_T *ref_com, const
     /*  end */
     /*  smoothnes: minimize jerky control action */
     /*  this creates tracking errors sum(delta_Fr_l.^2) + sum(delta_Fr_r.^2); */
-    k = d_y->size[0] * d_y->size[1];
-    d_y->size[0] = 1;
-    d_y->size[1] = c_y->size[1];
-    emxEnsureCapacity_real_T(d_y, k);
-    nx = c_y->size[1];
-    for (k = 0; k < nx; k++) {
-      d = c_y->data[k];
-      d_y->data[k] = d * d;
+    i = b_ref_com->size[0] * b_ref_com->size[1];
+    b_ref_com->size[0] = 3;
+    b_ref_com->size[1] = loop_ub;
+    emxEnsureCapacity_real_T(b_ref_com, i);
+    for (nx = 0; nx < loop_ub; nx++) {
+      b_ref_com->data[3 * nx] = ref_com->data[3 * nx] - b_p->data[3 * nx];
+      i = 3 * nx + 1;
+      b_ref_com->data[i] = ref_com->data[3 * nx + 1] - b_p->data[i];
+      i = 3 * nx + 2;
+      b_ref_com->data[i] = ref_com->data[3 * nx + 2] - b_p->data[i];
     }
 
-    nx = d_y->size[1];
-    if (d_y->size[1] == 0) {
-      a_tmp = 0.0;
+    emxFree_real_T(&b_p);
+    vecnorm(b_ref_com, px);
+    i = pdy->size[0] * pdy->size[1];
+    pdy->size[0] = 1;
+    pdy->size[1] = px->size[1];
+    emxEnsureCapacity_real_T(pdy, i);
+    nx = px->size[1];
+    emxFree_real_T(&b_ref_com);
+    for (b_loop_ub = 0; b_loop_ub < nx; b_loop_ub++) {
+      d = px->data[b_loop_ub];
+      pdy->data[b_loop_ub] = d * d;
+    }
+
+    nx = pdy->size[1];
+    if (pdy->size[1] == 0) {
+      b_py = 0.0;
     } else {
-      a_tmp = d_y->data[0];
-      for (k = 2; k <= nx; k++) {
-        a_tmp += d_y->data[k - 1];
+      b_py = pdy->data[0];
+      for (b_loop_ub = 2; b_loop_ub <= nx; b_loop_ub++) {
+        b_py += pdy->data[b_loop_ub - 1];
       }
     }
 
-    emxFree_real_T(&d_y);
-    diff(delta_Fr_l, Fr_l);
-    k = c_y->size[0] * c_y->size[1];
-    c_y->size[0] = 1;
-    c_y->size[1] = Fr_l->size[1];
-    emxEnsureCapacity_real_T(c_y, k);
-    nx = Fr_l->size[1];
+    diff(delta_Fr_l, px);
+    i = pdy->size[0] * pdy->size[1];
+    pdy->size[0] = 1;
+    pdy->size[1] = px->size[1];
+    emxEnsureCapacity_real_T(pdy, i);
+    nx = px->size[1];
     emxFree_real_T(&delta_Fr_l);
-    for (k = 0; k < nx; k++) {
-      d = Fr_l->data[k];
-      c_y->data[k] = d * d;
+    for (b_loop_ub = 0; b_loop_ub < nx; b_loop_ub++) {
+      d = px->data[b_loop_ub];
+      pdy->data[b_loop_ub] = d * d;
     }
 
-    nx = c_y->size[1];
-    if (c_y->size[1] == 0) {
-      absxk = 0.0;
+    nx = pdy->size[1];
+    if (pdy->size[1] == 0) {
+      dt_step = 0.0;
     } else {
-      absxk = c_y->data[0];
-      for (k = 2; k <= nx; k++) {
-        absxk += c_y->data[k - 1];
+      dt_step = pdy->data[0];
+      for (b_loop_ub = 2; b_loop_ub <= nx; b_loop_ub++) {
+        dt_step += pdy->data[b_loop_ub - 1];
       }
     }
 
-    diff(delta_Fr_r, Fr_l);
-    k = c_y->size[0] * c_y->size[1];
-    c_y->size[0] = 1;
-    c_y->size[1] = Fr_l->size[1];
-    emxEnsureCapacity_real_T(c_y, k);
-    nx = Fr_l->size[1];
+    diff(delta_Fr_r, px);
+    i = pdy->size[0] * pdy->size[1];
+    pdy->size[0] = 1;
+    pdy->size[1] = px->size[1];
+    emxEnsureCapacity_real_T(pdy, i);
+    nx = px->size[1];
     emxFree_real_T(&delta_Fr_r);
-    for (k = 0; k < nx; k++) {
-      d = Fr_l->data[k];
-      c_y->data[k] = d * d;
+    for (b_loop_ub = 0; b_loop_ub < nx; b_loop_ub++) {
+      d = px->data[b_loop_ub];
+      pdy->data[b_loop_ub] = d * d;
     }
 
-    emxFree_real_T(&Fr_l);
-    nx = c_y->size[1];
-    if (c_y->size[1] == 0) {
-      scale = 0.0;
+    emxFree_real_T(&px);
+    nx = pdy->size[1];
+    if (pdy->size[1] == 0) {
+      b_px = 0.0;
     } else {
-      scale = c_y->data[0];
-      for (k = 2; k <= nx; k++) {
-        scale += c_y->data[k - 1];
+      b_px = pdy->data[0];
+      for (b_loop_ub = 2; b_loop_ub <= nx; b_loop_ub++) {
+        b_px += pdy->data[b_loop_ub - 1];
       }
     }
 
-    emxFree_real_T(&c_y);
-    varargout_1 = params_w1 * a_tmp + params_w2 * (absxk + scale);
+    emxFree_real_T(&pdy);
+    varargout_1 = params_w1 * b_py + params_w2 * (dt_step + b_px);
+
+    /*  + params.w3* terminal_cost; % creates issues in gazebo */
   }
 
   emlrtHeapReferenceStackLeaveFcnR2012b(emlrtRootTLSGlobal);
@@ -691,7 +728,9 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   emxArray_int32_T *indexLB;
   emxArray_int32_T *indexUB;
   emxArray_real_T *Hessian;
+  emxArray_real_T *fscales_cineq_constraint;
   emxArray_real_T *lb;
+  emxArray_real_T *r;
   emxArray_real_T *ub;
   emxArray_real_T *x0;
   f_struct_T FiniteDifferences;
@@ -700,32 +739,37 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   i_struct_T QPObjective;
   j_struct_T WorkingSet;
   k_struct_T MeritFunction;
-  real_T d;
   real_T fval;
+  int32_T Cineq_size_idx_1;
   int32_T b_i;
   int32_T i;
+  int32_T idxFillStart;
   int32_T mConstrMax;
   int32_T mLB;
   int32_T mUB;
   int32_T maxDims;
   int32_T nVar;
   int32_T nVarMax;
-  boolean_T hasLB;
-  boolean_T hasUB;
   emlrtHeapReferenceStackEnterFcnR2012b(emlrtRootTLSGlobal);
   emxInit_real_T(&x0, 2, true);
+
+  /*  , delta_Fr_l0, delta_Fr_r0)   */
+  /*          if nargin <9 */
+  /*              delta_Fr_l0 = 0*ones(1,mpc_N); */
+  /*              delta_Fr_r0 = 0*ones(1,mpc_N); */
+  /*          end */
   i = x0->size[0] * x0->size[1];
   x0->size[0] = 1;
   nVar = (int32_T)mpc_N + (int32_T)mpc_N;
   x0->size[1] = nVar;
   emxEnsureCapacity_real_T(x0, i);
-  nVarMax = (int32_T)mpc_N;
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = (int32_T)mpc_N;
+  for (i = 0; i < idxFillStart; i++) {
     x0->data[i] = 0.0;
   }
 
-  nVarMax = (int32_T)mpc_N;
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = (int32_T)mpc_N;
+  for (i = 0; i < idxFillStart; i++) {
     x0->data[i + (int32_T)mpc_N] = 0.0;
   }
 
@@ -736,13 +780,13 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   lb->size[0] = 1;
   lb->size[1] = nVar;
   emxEnsureCapacity_real_T(lb, i);
-  nVarMax = (int32_T)mpc_N;
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = (int32_T)mpc_N;
+  for (i = 0; i < idxFillStart; i++) {
     lb->data[i] = -Fr_max;
   }
 
-  nVarMax = (int32_T)mpc_N;
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = (int32_T)mpc_N;
+  for (i = 0; i < idxFillStart; i++) {
     lb->data[i + (int32_T)mpc_N] = -Fr_max;
   }
 
@@ -751,46 +795,50 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   ub->size[0] = 1;
   ub->size[1] = nVar;
   emxEnsureCapacity_real_T(ub, i);
-  nVarMax = (int32_T)mpc_N;
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = (int32_T)mpc_N;
+  for (i = 0; i < idxFillStart; i++) {
     ub->data[i] = Fr_max;
   }
 
-  nVarMax = (int32_T)mpc_N;
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = (int32_T)mpc_N;
+  for (i = 0; i < idxFillStart; i++) {
     ub->data[i + (int32_T)mpc_N] = Fr_max;
   }
 
   emxInit_real_T(&Hessian, 2, true);
+  emxInit_real_T(&r, 2, true);
 
   /*  % does not always satisfy bounds */
-  /* optim (comment this for sanity check test)  */
+  /*  use constraint on force */
+  anon(Fr_l0, Fr_r0, mpc_N, x0, r);
+  Cineq_size_idx_1 = r->size[1];
   mLB = lb->size[1];
   mUB = ub->size[1];
   nVar = x0->size[1];
-  mConstrMax = (lb->size[1] + ub->size[1]) + 1;
-  nVarMax = x0->size[1] + 1;
+  mConstrMax = (((r->size[1] + lb->size[1]) + ub->size[1]) + r->size[1]) + 1;
+  nVarMax = (x0->size[1] + r->size[1]) + 1;
   maxDims = muIntScalarMax_sint32(nVarMax, mConstrMax);
   i = Hessian->size[0] * Hessian->size[1];
   Hessian->size[0] = x0->size[1];
   Hessian->size[1] = x0->size[1];
   emxEnsureCapacity_real_T(Hessian, i);
-  nVarMax = x0->size[1] * x0->size[1];
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = x0->size[1] * x0->size[1];
+  for (i = 0; i < idxFillStart; i++) {
     Hessian->data[i] = 0.0;
   }
 
   if (x0->size[1] > 0) {
-    for (nVarMax = 0; nVarMax < nVar; nVarMax++) {
-      Hessian->data[nVarMax + Hessian->size[0] * nVarMax] = 1.0;
+    for (idxFillStart = 0; idxFillStart < nVar; idxFillStart++) {
+      Hessian->data[idxFillStart + Hessian->size[0] * idxFillStart] = 1.0;
     }
   }
 
   emxInitStruct_struct_T(&TrialState, true);
   emxInitStruct_struct_T1(&FcnEvaluator, true);
-  factoryConstruct(x0->size[1] + 1, mConstrMax, x0, &TrialState);
+  factoryConstruct(nVarMax, mConstrMax, r->size[1], x0, r->size[1], &TrialState);
   xcopy(x0->size[1], x0, TrialState.xstarsqp);
   FcnEvaluator.nVar = x0->size[1];
+  FcnEvaluator.mCineq = r->size[1];
   for (b_i = 0; b_i < 6; b_i++) {
     FcnEvaluator.objfun.tunableEnvironment.f1[b_i] = actual_state[b_i];
   }
@@ -801,8 +849,8 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   FcnEvaluator.objfun.tunableEnvironment.f3->size[0] = 3;
   FcnEvaluator.objfun.tunableEnvironment.f3->size[1] = ref_com->size[1];
   emxEnsureCapacity_real_T(FcnEvaluator.objfun.tunableEnvironment.f3, i);
-  nVarMax = ref_com->size[0] * ref_com->size[1];
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = ref_com->size[0] * ref_com->size[1];
+  for (i = 0; i < idxFillStart; i++) {
     FcnEvaluator.objfun.tunableEnvironment.f3->data[i] = ref_com->data[i];
   }
 
@@ -811,8 +859,8 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   FcnEvaluator.objfun.tunableEnvironment.f4->size[0] = 1;
   FcnEvaluator.objfun.tunableEnvironment.f4->size[1] = Fr_l0->size[1];
   emxEnsureCapacity_real_T(FcnEvaluator.objfun.tunableEnvironment.f4, i);
-  nVarMax = Fr_l0->size[0] * Fr_l0->size[1];
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = Fr_l0->size[0] * Fr_l0->size[1];
+  for (i = 0; i < idxFillStart; i++) {
     FcnEvaluator.objfun.tunableEnvironment.f4->data[i] = Fr_l0->data[i];
   }
 
@@ -821,23 +869,45 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   FcnEvaluator.objfun.tunableEnvironment.f5->size[0] = 1;
   FcnEvaluator.objfun.tunableEnvironment.f5->size[1] = Fr_r0->size[1];
   emxEnsureCapacity_real_T(FcnEvaluator.objfun.tunableEnvironment.f5, i);
-  nVarMax = Fr_r0->size[0] * Fr_r0->size[1];
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = Fr_r0->size[0] * Fr_r0->size[1];
+  for (i = 0; i < idxFillStart; i++) {
     FcnEvaluator.objfun.tunableEnvironment.f5->data[i] = Fr_r0->data[i];
+  }
+
+  FcnEvaluator.objfun.tunableEnvironment.f6 = mpc_N;
+  FcnEvaluator.objfun.tunableEnvironment.f7 = *params;
+  FcnEvaluator.nonlcon.tunableEnvironment.f1 = Fr_max;
+  i = FcnEvaluator.nonlcon.tunableEnvironment.f2->size[0] *
+    FcnEvaluator.nonlcon.tunableEnvironment.f2->size[1];
+  FcnEvaluator.nonlcon.tunableEnvironment.f2->size[0] = 1;
+  FcnEvaluator.nonlcon.tunableEnvironment.f2->size[1] = Fr_l0->size[1];
+  emxEnsureCapacity_real_T(FcnEvaluator.nonlcon.tunableEnvironment.f2, i);
+  idxFillStart = Fr_l0->size[0] * Fr_l0->size[1];
+  for (i = 0; i < idxFillStart; i++) {
+    FcnEvaluator.nonlcon.tunableEnvironment.f2->data[i] = Fr_l0->data[i];
+  }
+
+  i = FcnEvaluator.nonlcon.tunableEnvironment.f3->size[0] *
+    FcnEvaluator.nonlcon.tunableEnvironment.f3->size[1];
+  FcnEvaluator.nonlcon.tunableEnvironment.f3->size[0] = 1;
+  FcnEvaluator.nonlcon.tunableEnvironment.f3->size[1] = Fr_r0->size[1];
+  emxEnsureCapacity_real_T(FcnEvaluator.nonlcon.tunableEnvironment.f3, i);
+  idxFillStart = Fr_r0->size[0] * Fr_r0->size[1];
+  for (i = 0; i < idxFillStart; i++) {
+    FcnEvaluator.nonlcon.tunableEnvironment.f3->data[i] = Fr_r0->data[i];
   }
 
   emxInitStruct_struct_T2(&FiniteDifferences, true);
   emxInitStruct_struct_T3(&QRManager, true);
-  FcnEvaluator.objfun.tunableEnvironment.f6 = mpc_N;
-  FcnEvaluator.objfun.tunableEnvironment.f7 = *params;
-  FcnEvaluator.mCineq = 0;
+  FcnEvaluator.nonlcon.tunableEnvironment.f4 = mpc_N;
   FcnEvaluator.mCeq = 0;
   FcnEvaluator.NonFiniteSupport = true;
   FcnEvaluator.SpecifyObjectiveGradient = false;
   FcnEvaluator.SpecifyConstraintGradient = false;
   FcnEvaluator.ScaleProblem = false;
   b_factoryConstruct(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, mpc_N,
-                     params, x0->size[1], lb, ub, &FiniteDifferences);
+                     params, Fr_max, Fr_l0, Fr_r0, mpc_N, x0->size[1], r->size[1],
+                     lb, ub, &FiniteDifferences);
   QRManager.ldq = maxDims;
   i = QRManager.QR->size[0] * QRManager.QR->size[1];
   QRManager.QR->size[0] = maxDims;
@@ -847,8 +917,8 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   QRManager.Q->size[0] = maxDims;
   QRManager.Q->size[1] = maxDims;
   emxEnsureCapacity_real_T(QRManager.Q, i);
-  nVarMax = maxDims * maxDims;
-  for (i = 0; i < nVarMax; i++) {
+  idxFillStart = maxDims * maxDims;
+  for (i = 0; i < idxFillStart; i++) {
     QRManager.Q->data[i] = 0.0;
   }
 
@@ -862,10 +932,7 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   emxInitStruct_struct_T4(&CholManager, true);
   emxInitStruct_struct_T5(&QPObjective, true);
   emxInitStruct_struct_T6(&memspace, true);
-  emxInit_int32_T(&indexLB, 1, true);
-  emxInit_int32_T(&indexUB, 1, true);
-  emxInit_int32_T(&indexFixed, 1, true);
-  emxInitStruct_struct_T7(&WorkingSet, true);
+  emxInit_real_T(&fscales_cineq_constraint, 1, true);
   QRManager.mrows = 0;
   QRManager.ncols = 0;
   i = QRManager.tau->size[0];
@@ -881,12 +948,12 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   CholManager.ndims = 0;
   CholManager.info = 0;
   i = QPObjective.grad->size[0];
-  QPObjective.grad->size[0] = x0->size[1] + 1;
+  QPObjective.grad->size[0] = nVarMax;
   emxEnsureCapacity_real_T(QPObjective.grad, i);
   i = QPObjective.Hx->size[0];
-  QPObjective.Hx->size[0] = x0->size[1];
+  QPObjective.Hx->size[0] = nVarMax - 1;
   emxEnsureCapacity_real_T(QPObjective.Hx, i);
-  QPObjective.maxVar = x0->size[1] + 1;
+  QPObjective.maxVar = nVarMax;
   QPObjective.beta = 0.0;
   QPObjective.rho = 0.0;
   QPObjective.prev_objtype = 3;
@@ -898,8 +965,8 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   QPObjective.objtype = 3;
   i = memspace.workspace_double->size[0] * memspace.workspace_double->size[1];
   memspace.workspace_double->size[0] = maxDims;
-  if (2 < x0->size[1] + 1) {
-    memspace.workspace_double->size[1] = x0->size[1] + 1;
+  if (2 < nVarMax) {
+    memspace.workspace_double->size[1] = nVarMax;
   } else {
     memspace.workspace_double->size[1] = 2;
   }
@@ -911,6 +978,17 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   i = memspace.workspace_sort->size[0];
   memspace.workspace_sort->size[0] = maxDims;
   emxEnsureCapacity_int32_T(memspace.workspace_sort, i);
+  i = fscales_cineq_constraint->size[0];
+  fscales_cineq_constraint->size[0] = r->size[1];
+  emxEnsureCapacity_real_T(fscales_cineq_constraint, i);
+  for (i = 0; i < Cineq_size_idx_1; i++) {
+    fscales_cineq_constraint->data[i] = 1.0;
+  }
+
+  emxInit_int32_T(&indexLB, 1, true);
+  emxInit_int32_T(&indexUB, 1, true);
+  emxInit_int32_T(&indexFixed, 1, true);
+  emxInitStruct_struct_T7(&WorkingSet, true);
   i = indexLB->size[0];
   indexLB->size[0] = lb->size[1];
   emxEnsureCapacity_int32_T(indexLB, i);
@@ -921,73 +999,71 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   indexFixed->size[0] = muIntScalarMin_sint32(mLB, mUB);
   emxEnsureCapacity_int32_T(indexFixed, i);
   compressBounds(x0->size[1], indexLB, indexUB, indexFixed, lb, ub, &mLB, &mUB,
-                 &nVarMax);
-  c_factoryConstruct(mLB, indexLB, mUB, indexUB, nVarMax, indexFixed, x0->size[1],
-                     x0->size[1] + 1, mConstrMax, &WorkingSet);
+                 &nVar);
+  c_factoryConstruct(r->size[1], mLB, indexLB, mUB, indexUB, nVar, indexFixed,
+                     x0->size[1], nVarMax, mConstrMax, &WorkingSet);
   emxFree_int32_T(&indexFixed);
   emxFree_int32_T(&indexUB);
   emxFree_int32_T(&indexLB);
   emxFree_real_T(&x0);
   if (lb->size[1] != 0) {
-    for (nVar = 0; nVar < mLB; nVar++) {
-      TrialState.xstarsqp->data[WorkingSet.indexLB->data[nVar] - 1] =
+    for (maxDims = 0; maxDims < mLB; maxDims++) {
+      TrialState.xstarsqp->data[WorkingSet.indexLB->data[maxDims] - 1] =
         muDoubleScalarMax(TrialState.xstarsqp->data[WorkingSet.indexLB->
-                          data[nVar] - 1], lb->data[WorkingSet.indexLB->
-                          data[nVar] - 1]);
+                          data[maxDims] - 1], lb->data[WorkingSet.indexLB->
+                          data[maxDims] - 1]);
     }
   }
 
   if (ub->size[1] != 0) {
-    for (nVar = 0; nVar < mUB; nVar++) {
-      TrialState.xstarsqp->data[WorkingSet.indexUB->data[nVar] - 1] =
+    for (maxDims = 0; maxDims < mUB; maxDims++) {
+      TrialState.xstarsqp->data[WorkingSet.indexUB->data[maxDims] - 1] =
         muDoubleScalarMin(TrialState.xstarsqp->data[WorkingSet.indexUB->
-                          data[nVar] - 1], ub->data[WorkingSet.indexUB->
-                          data[nVar] - 1]);
+                          data[maxDims] - 1], ub->data[WorkingSet.indexUB->
+                          data[maxDims] - 1]);
     }
 
-    for (nVar = 0; nVar < nVarMax; nVar++) {
-      TrialState.xstarsqp->data[WorkingSet.indexFixed->data[nVar] - 1] =
-        ub->data[WorkingSet.indexFixed->data[nVar] - 1];
+    for (maxDims = 0; maxDims < nVar; maxDims++) {
+      TrialState.xstarsqp->data[WorkingSet.indexFixed->data[maxDims] - 1] =
+        ub->data[WorkingSet.indexFixed->data[maxDims] - 1];
     }
   }
 
-  fval = anon(actual_state, ref_com, Fr_l0, Fr_r0, mpc_N, params->int_method,
-              params->int_steps, params->b, params->p_a1, params->p_a2,
-              params->g, params->m, params->w1, params->w2, params->mpc_dt,
-              TrialState.xstarsqp);
+  fval = b_anon(actual_state, ref_com, Fr_l0, Fr_r0, mpc_N, params->int_method,
+                params->int_steps, params->b, params->p_a1, params->p_a2,
+                params->g, params->m, params->w1, params->w2, params->mpc_dt,
+                TrialState.xstarsqp);
+  idxFillStart = 1;
+  if (muDoubleScalarIsInf(fval) || muDoubleScalarIsNaN(fval)) {
+    if (muDoubleScalarIsNaN(fval)) {
+      idxFillStart = -6;
+    } else if (fval < 0.0) {
+      idxFillStart = -4;
+    } else {
+      idxFillStart = -5;
+    }
+  }
+
   TrialState.sqpFval = fval;
-  computeForwardDifferences(&FiniteDifferences, fval, TrialState.xstarsqp,
-    TrialState.grad, lb, ub);
+  if (idxFillStart == 1) {
+    computeConstraints_(FcnEvaluator.nonlcon.tunableEnvironment.f2,
+                        FcnEvaluator.nonlcon.tunableEnvironment.f3, mpc_N,
+                        r->size[1], TrialState.xstarsqp, TrialState.cIneq,
+                        TrialState.iNonIneq0);
+  }
+
+  computeForwardDifferences(&FiniteDifferences, fval, TrialState.cIneq,
+    TrialState.iNonIneq0, TrialState.xstarsqp, TrialState.grad, WorkingSet.Aineq,
+    TrialState.iNonIneq0, lb, ub);
   TrialState.FunctionEvaluations = FiniteDifferences.numEvals + 1;
-  hasLB = (lb->size[1] != 0);
-  hasUB = (ub->size[1] != 0);
-  if (hasLB) {
-    for (nVar = 0; nVar < mLB; nVar++) {
-      WorkingSet.lb->data[WorkingSet.indexLB->data[nVar] - 1] = -lb->
-        data[WorkingSet.indexLB->data[nVar] - 1];
-    }
-  }
-
-  if (hasUB) {
-    for (nVar = 0; nVar < mUB; nVar++) {
-      WorkingSet.ub->data[WorkingSet.indexUB->data[nVar] - 1] = ub->
-        data[WorkingSet.indexUB->data[nVar] - 1];
-    }
-  }
-
-  if (hasLB && hasUB) {
-    for (nVar = 0; nVar < nVarMax; nVar++) {
-      d = ub->data[WorkingSet.indexFixed->data[nVar] - 1];
-      WorkingSet.ub->data[WorkingSet.indexFixed->data[nVar] - 1] = d;
-      WorkingSet.bwset->data[nVar] = d;
-    }
-  }
-
+  updateWorkingSetForNewQP(&WorkingSet, r->size[1], TrialState.cIneq, mLB, lb,
+    mUB, ub, nVar);
   setProblemType(&WorkingSet, 3);
-  nVarMax = WorkingSet.isActiveIdx[2];
+  idxFillStart = WorkingSet.isActiveIdx[2];
   i = WorkingSet.mConstrMax;
-  for (nVar = nVarMax; nVar <= i; nVar++) {
-    WorkingSet.isActiveConstr->data[nVar - 1] = false;
+  emxFree_real_T(&r);
+  for (maxDims = idxFillStart; maxDims <= i; maxDims++) {
+    WorkingSet.isActiveConstr->data[maxDims - 1] = false;
   }
 
   WorkingSet.nWConstr[0] = WorkingSet.sizes[0];
@@ -996,8 +1072,8 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   WorkingSet.nWConstr[3] = 0;
   WorkingSet.nWConstr[4] = 0;
   WorkingSet.nActiveConstr = WorkingSet.nWConstr[0];
-  nVarMax = WorkingSet.sizes[0];
-  for (maxDims = 0; maxDims < nVarMax; maxDims++) {
+  idxFillStart = WorkingSet.sizes[0];
+  for (maxDims = 0; maxDims < idxFillStart; maxDims++) {
     WorkingSet.Wid->data[maxDims] = 1;
     WorkingSet.Wlocalidx->data[maxDims] = maxDims + 1;
     WorkingSet.isActiveConstr->data[maxDims] = true;
@@ -1025,7 +1101,14 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   MeritFunction.nPenaltyDecreases = 0;
   MeritFunction.linearizedConstrViol = 0.0;
   MeritFunction.initConstrViolationEq = 0.0;
-  MeritFunction.initConstrViolationIneq = 0.0;
+  fval = 0.0;
+  for (maxDims = 0; maxDims < Cineq_size_idx_1; maxDims++) {
+    if (TrialState.cIneq->data[maxDims] > 0.0) {
+      fval += TrialState.cIneq->data[maxDims];
+    }
+  }
+
+  MeritFunction.initConstrViolationIneq = fval;
   MeritFunction.phi = 0.0;
   MeritFunction.phiPrimePlus = 0.0;
   MeritFunction.phiFullStep = 0.0;
@@ -1037,14 +1120,15 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   MeritFunction.hasObjective = true;
   driver(Hessian, lb, ub, &TrialState, &MeritFunction, &FcnEvaluator,
          &FiniteDifferences, &memspace, &WorkingSet, &QRManager, &CholManager,
-         &QPObjective);
+         &QPObjective, fscales_cineq_constraint);
   i = x->size[0] * x->size[1];
   x->size[0] = 1;
   x->size[1] = TrialState.xstarsqp->size[1];
   emxEnsureCapacity_real_T(x, i);
-  nVarMax = TrialState.xstarsqp->size[0] * TrialState.xstarsqp->size[1];
+  idxFillStart = TrialState.xstarsqp->size[0] * TrialState.xstarsqp->size[1];
   emxFree_real_T(&Hessian);
   emxFreeStruct_struct_T7(&WorkingSet);
+  emxFree_real_T(&fscales_cineq_constraint);
   emxFreeStruct_struct_T6(&memspace);
   emxFreeStruct_struct_T5(&QPObjective);
   emxFreeStruct_struct_T4(&CholManager);
@@ -1053,11 +1137,11 @@ void optimize_cpp_mpc(const real_T actual_state[6], real_T actual_t, const
   emxFreeStruct_struct_T1(&FcnEvaluator);
   emxFree_real_T(&ub);
   emxFree_real_T(&lb);
-  for (i = 0; i < nVarMax; i++) {
+  for (i = 0; i < idxFillStart; i++) {
     x->data[i] = TrialState.xstarsqp->data[i];
   }
 
-  /* ,  @(x) constraints_mpc(x, actual_com, ref_com, Fr_l0, Fr_r0 ) , options); */
+  /* [x, final_cost, EXITFLAG, output] = fmincon(@(x) cost_mpc(x, actual_state, actual_t, ref_com, Fr_l0, Fr_r0, mpc_N,params),  x0,[],[],[],[],lb,ub, [], options);%,  @(x) constraints_mpc(x, actual_com, ref_com, Fr_l0, Fr_r0 ) , options); */
   *EXITFLAG = TrialState.sqpExitFlag;
   *final_cost = TrialState.sqpFval;
   emxFreeStruct_struct_T(&TrialState);

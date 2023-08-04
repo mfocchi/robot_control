@@ -3,16 +3,15 @@
  * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
- * feasibleX0ForWorkingSet.h
+ * norm.h
  *
- * Code generation for function 'feasibleX0ForWorkingSet'
+ * Code generation for function 'norm'
  *
  */
 
 #pragma once
 
 /* Include files */
-#include "optimize_cpp_mpc_types.h"
 #include "rtwtypes.h"
 #include "emlrt.h"
 #include "mex.h"
@@ -22,7 +21,6 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace, emxArray_real_T
-  *xCurrent, j_struct_T *workingset, g_struct_T *qrmanager);
+real_T b_norm(const real_T x[3]);
 
-/* End of code generation (feasibleX0ForWorkingSet.h) */
+/* End of code generation (norm.h) */

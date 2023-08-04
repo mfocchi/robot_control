@@ -17,16 +17,16 @@
 #include <string.h>
 
 /* Function Definitions */
-void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, const emxArray_real_T
-                      *x0, d_struct_T *obj)
+void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, int32_T mIneq, const
+                      emxArray_real_T *x0, int32_T mNonlinIneq, d_struct_T *obj)
 {
   int32_T i;
   obj->nVarMax = nVarMax;
-  obj->mNonlinIneq = 0;
+  obj->mNonlinIneq = mNonlinIneq;
   obj->mNonlinEq = 0;
-  obj->mIneq = 0;
+  obj->mIneq = mIneq;
   obj->mEq = 0;
-  obj->iNonIneq0 = 1;
+  obj->iNonIneq0 = (mIneq - mNonlinIneq) + 1;
   obj->iNonEq0 = 1;
   obj->sqpFval = 0.0;
   obj->sqpFval_old = 0.0;
@@ -38,6 +38,12 @@ void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, const emxArray_real_T
   obj->xstarsqp_old->size[0] = 1;
   obj->xstarsqp_old->size[1] = x0->size[1];
   emxEnsureCapacity_real_T(obj->xstarsqp_old, i);
+  i = obj->cIneq->size[0];
+  obj->cIneq->size[0] = mIneq;
+  emxEnsureCapacity_real_T(obj->cIneq, i);
+  i = obj->cIneq_old->size[0];
+  obj->cIneq_old->size[0] = mIneq;
+  emxEnsureCapacity_real_T(obj->cIneq_old, i);
   i = obj->grad->size[0];
   obj->grad->size[0] = nVarMax;
   emxEnsureCapacity_real_T(obj->grad, i);
@@ -74,6 +80,16 @@ void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, const emxArray_real_T
   i = obj->workingset_old->size[0];
   obj->workingset_old->size[0] = mConstrMax;
   emxEnsureCapacity_int32_T(obj->workingset_old, i);
+  if (mNonlinIneq > 0) {
+    i = obj->JacCineqTrans_old->size[0] * obj->JacCineqTrans_old->size[1];
+    obj->JacCineqTrans_old->size[0] = nVarMax;
+    obj->JacCineqTrans_old->size[1] = mNonlinIneq;
+    emxEnsureCapacity_real_T(obj->JacCineqTrans_old, i);
+  } else {
+    obj->JacCineqTrans_old->size[0] = 0;
+    obj->JacCineqTrans_old->size[1] = 0;
+  }
+
   i = obj->gradLag->size[0];
   obj->gradLag->size[0] = nVarMax;
   emxEnsureCapacity_real_T(obj->gradLag, i);

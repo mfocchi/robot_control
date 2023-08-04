@@ -80,7 +80,7 @@ void b_driver(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
 
   if (guard1) {
     solution->iterations = 0;
-    solution->maxConstr = b_maxConstraintViolation(workingset, solution->xstar);
+    solution->maxConstr = maxConstraintViolation(workingset, solution->xstar);
     if (solution->maxConstr > 0.001) {
       PROBTYPE_ORIG = workingset->probType;
       b_nVar = workingset->nVar;
@@ -150,8 +150,7 @@ void b_driver(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
       options->ObjectiveLimit = rtMinusInf;
       options->StepTolerance = 1.0E-6;
       if (solution->state != 0) {
-        solution->maxConstr = b_maxConstraintViolation(workingset,
-          solution->xstar);
+        solution->maxConstr = maxConstraintViolation(workingset, solution->xstar);
         if (solution->maxConstr > 0.001) {
           PHASEONE = workingset->mConstrMax;
           for (idxStartIneq = 0; idxStartIneq < PHASEONE; idxStartIneq++) {
@@ -165,7 +164,7 @@ void b_driver(const emxArray_real_T *H, const emxArray_real_T *f, d_struct_T
           if (solution->maxConstr > 0.0) {
             xcopy(nVar, solution->xstar, solution->searchDir);
             PresolveWorkingSet(solution, memspace, workingset, qrmanager);
-            maxConstr_new = b_maxConstraintViolation(workingset, solution->xstar);
+            maxConstr_new = maxConstraintViolation(workingset, solution->xstar);
             if (maxConstr_new >= solution->maxConstr) {
               solution->maxConstr = maxConstr_new;
               xcopy(nVar, solution->searchDir, solution->xstar);

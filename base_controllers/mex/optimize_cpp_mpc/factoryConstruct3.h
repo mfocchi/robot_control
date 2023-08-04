@@ -3,9 +3,9 @@
  * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
- * feasibleX0ForWorkingSet.h
+ * factoryConstruct3.h
  *
- * Code generation for function 'feasibleX0ForWorkingSet'
+ * Code generation for function 'factoryConstruct3'
  *
  */
 
@@ -22,7 +22,9 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace, emxArray_real_T
-  *xCurrent, j_struct_T *workingset, g_struct_T *qrmanager);
+void d_factoryConstruct(int32_T mIneq, int32_T mLB, const emxArray_int32_T
+  *indexLB, int32_T mUB, const emxArray_int32_T *indexUB, int32_T mFixed, const
+  emxArray_int32_T *indexFixed, int32_T nVar, int32_T nVarMax, int32_T
+  mConstrMax, j_struct_T *obj);
 
-/* End of code generation (feasibleX0ForWorkingSet.h) */
+/* End of code generation (factoryConstruct3.h) */

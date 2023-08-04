@@ -23,7 +23,8 @@
 #include <string.h>
 
 /* Function Declarations */
-void updatePenaltyParam(k_struct_T *obj, real_T fval, int32_T sqpiter, real_T
-  qpval, const emxArray_real_T *x, int32_T iReg0, int32_T nRegularized);
+void updatePenaltyParam(k_struct_T *obj, real_T fval, const emxArray_real_T
+  *ineq_workspace, int32_T mIneq, int32_T sqpiter, real_T qpval, const
+  emxArray_real_T *x, int32_T iReg0, int32_T nRegularized);
 
 /* End of code generation (updatePenaltyParam.h) */

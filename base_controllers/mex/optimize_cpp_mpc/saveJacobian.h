@@ -3,9 +3,9 @@
  * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
- * feasibleX0ForWorkingSet.h
+ * saveJacobian.h
  *
- * Code generation for function 'feasibleX0ForWorkingSet'
+ * Code generation for function 'saveJacobian'
  *
  */
 
@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace, emxArray_real_T
-  *xCurrent, j_struct_T *workingset, g_struct_T *qrmanager);
+void saveJacobian(d_struct_T *obj, int32_T nVar, int32_T mIneq, const
+                  emxArray_real_T *JacCineqTrans, int32_T ineqCol0, int32_T ldJ);
 
-/* End of code generation (feasibleX0ForWorkingSet.h) */
+/* End of code generation (saveJacobian.h) */

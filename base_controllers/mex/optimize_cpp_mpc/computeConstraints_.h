@@ -3,9 +3,9 @@
  * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
- * feasibleX0ForWorkingSet.h
+ * computeConstraints_.h
  *
- * Code generation for function 'feasibleX0ForWorkingSet'
+ * Code generation for function 'computeConstraints_'
  *
  */
 
@@ -22,7 +22,10 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace, emxArray_real_T
-  *xCurrent, j_struct_T *workingset, g_struct_T *qrmanager);
+int32_T computeConstraints_(const emxArray_real_T
+  *c_obj_nonlcon_tunableEnvironmen, const emxArray_real_T
+  *d_obj_nonlcon_tunableEnvironmen, int64_T e_obj_nonlcon_tunableEnvironmen,
+  int32_T obj_mCineq, const emxArray_real_T *x, emxArray_real_T *Cineq_workspace,
+  int32_T ineq0);
 
-/* End of code generation (feasibleX0ForWorkingSet.h) */
+/* End of code generation (computeConstraints_.h) */

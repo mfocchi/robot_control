@@ -17,23 +17,34 @@
 #include <string.h>
 
 /* Function Definitions */
-real_T computeComplError(const emxArray_real_T *xCurrent, const emxArray_int32_T
-  *finiteLB, int32_T mLB, const emxArray_real_T *lb, const emxArray_int32_T
-  *finiteUB, int32_T mUB, const emxArray_real_T *ub, const emxArray_real_T
-  *lambda, int32_T iL0)
+real_T computeComplError(const emxArray_real_T *fscales_cineq_constraint, const
+  emxArray_real_T *xCurrent, int32_T mIneq, const emxArray_real_T *cIneq, const
+  emxArray_int32_T *finiteLB, int32_T mLB, const emxArray_real_T *lb, const
+  emxArray_int32_T *finiteUB, int32_T mUB, const emxArray_real_T *ub, const
+  emxArray_real_T *lambda, int32_T iL0)
 {
   real_T lbDelta;
   real_T lbLambda;
   real_T nlpComplError;
   int32_T idx;
+  int32_T mNonlinIneq;
   int32_T ubOffset;
   nlpComplError = 0.0;
-  if (mLB + mUB > 0) {
-    ubOffset = (iL0 + mLB) - 1;
+  mNonlinIneq = fscales_cineq_constraint->size[0];
+  if ((mIneq + mLB) + mUB > 0) {
+    for (idx = 0; idx < mNonlinIneq; idx++) {
+      lbDelta = lambda->data[(iL0 + idx) - 1];
+      nlpComplError = muDoubleScalarMax(nlpComplError, muDoubleScalarMin
+        (muDoubleScalarAbs(cIneq->data[idx] * lbDelta), muDoubleScalarMin
+         (muDoubleScalarAbs(cIneq->data[idx]), lbDelta)));
+    }
+
+    mNonlinIneq = (iL0 + mIneq) - 1;
+    ubOffset = mNonlinIneq + mLB;
     for (idx = 0; idx < mLB; idx++) {
       lbDelta = xCurrent->data[finiteLB->data[idx] - 1] - lb->data
         [finiteLB->data[idx] - 1];
-      lbLambda = lambda->data[(iL0 + idx) - 1];
+      lbLambda = lambda->data[mNonlinIneq + idx];
       nlpComplError = muDoubleScalarMax(nlpComplError, muDoubleScalarMin
         (muDoubleScalarAbs(lbDelta * lbLambda), muDoubleScalarMin
          (muDoubleScalarAbs(lbDelta), lbLambda)));

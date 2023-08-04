@@ -20,12 +20,12 @@
 void setProblemType(j_struct_T *obj, int32_T PROBLEM_TYPE)
 {
   int32_T colOffsetATw;
+  int32_T colOffsetAineq;
   int32_T i;
   int32_T i1;
-  int32_T idxStartIneq;
   int32_T idx_col;
-  int32_T idx_lb;
   int32_T idx_row;
+  int32_T mIneq;
   int32_T offsetIneq;
   switch (PROBLEM_TYPE) {
    case 3:
@@ -33,9 +33,9 @@ void setProblemType(j_struct_T *obj, int32_T PROBLEM_TYPE)
     obj->mConstr = obj->mConstrOrig;
     if (obj->nWConstr[4] > 0) {
       i = obj->sizesNormal[4];
-      for (colOffsetATw = 0; colOffsetATw < i; colOffsetATw++) {
-        obj->isActiveConstr->data[(obj->isActiveIdxNormal[4] + colOffsetATw) - 1]
-          = obj->isActiveConstr->data[(obj->isActiveIdx[4] + colOffsetATw) - 1];
+      for (mIneq = 0; mIneq < i; mIneq++) {
+        obj->isActiveConstr->data[(obj->isActiveIdxNormal[4] + mIneq) - 1] =
+          obj->isActiveConstr->data[(obj->isActiveIdx[4] + mIneq) - 1];
       }
     }
 
@@ -70,62 +70,78 @@ void setProblemType(j_struct_T *obj, int32_T PROBLEM_TYPE)
     }
 
     if (obj->probType != 4) {
+      mIneq = obj->sizes[2];
       offsetIneq = obj->nVarOrig + 1;
       i = obj->sizes[0];
       for (idx_col = 0; idx_col < i; idx_col++) {
         colOffsetATw = obj->ldA * idx_col;
         i1 = obj->nVarOrig + 1;
-        idx_lb = obj->nVar;
-        for (idx_row = i1; idx_row <= idx_lb; idx_row++) {
+        colOffsetAineq = obj->nVar;
+        for (idx_row = i1; idx_row <= colOffsetAineq; idx_row++) {
           obj->ATwset->data[(idx_row + colOffsetATw) - 1] = 0.0;
         }
       }
 
-      idx_lb = obj->nVarOrig;
+      for (idx_col = 0; idx_col < mIneq; idx_col++) {
+        colOffsetAineq = obj->ldA * idx_col - 1;
+        i = offsetIneq + idx_col;
+        i1 = i - 1;
+        for (idx_row = offsetIneq; idx_row <= i1; idx_row++) {
+          obj->Aineq->data[idx_row + colOffsetAineq] = 0.0;
+        }
+
+        obj->Aineq->data[i + colOffsetAineq] = -1.0;
+        i++;
+        i1 = obj->nVar;
+        for (idx_row = i; idx_row <= i1; idx_row++) {
+          obj->Aineq->data[idx_row + colOffsetAineq] = 0.0;
+        }
+      }
+
+      colOffsetAineq = obj->nVarOrig;
       i = obj->sizesNormal[3] + 1;
       i1 = obj->sizesRegularized[3];
-      for (colOffsetATw = i; colOffsetATw <= i1; colOffsetATw++) {
-        idx_lb++;
-        obj->indexLB->data[colOffsetATw - 1] = idx_lb;
+      for (mIneq = i; mIneq <= i1; mIneq++) {
+        colOffsetAineq++;
+        obj->indexLB->data[mIneq - 1] = colOffsetAineq;
       }
 
       if (obj->nWConstr[4] > 0) {
         i = obj->sizesRegularized[4];
-        for (colOffsetATw = 0; colOffsetATw < i; colOffsetATw++) {
-          obj->isActiveConstr->data[obj->isActiveIdxRegularized[4] +
-            colOffsetATw] = obj->isActiveConstr->data[(obj->isActiveIdx[4] +
-            colOffsetATw) - 1];
+        for (mIneq = 0; mIneq < i; mIneq++) {
+          obj->isActiveConstr->data[obj->isActiveIdxRegularized[4] + mIneq] =
+            obj->isActiveConstr->data[(obj->isActiveIdx[4] + mIneq) - 1];
         }
       }
 
       i = obj->isActiveIdx[4];
       i1 = obj->isActiveIdxRegularized[4] - 1;
-      for (colOffsetATw = i; colOffsetATw <= i1; colOffsetATw++) {
-        obj->isActiveConstr->data[colOffsetATw - 1] = false;
+      for (mIneq = i; mIneq <= i1; mIneq++) {
+        obj->isActiveConstr->data[mIneq - 1] = false;
       }
 
       i = obj->nVarOrig + 1;
-      i1 = obj->nVarOrig;
-      for (colOffsetATw = i; colOffsetATw <= i1; colOffsetATw++) {
-        obj->lb->data[colOffsetATw - 1] = 0.0;
+      i1 = obj->nVarOrig + obj->sizes[2];
+      for (mIneq = i; mIneq <= i1; mIneq++) {
+        obj->lb->data[mIneq - 1] = 0.0;
       }
 
-      idxStartIneq = obj->isActiveIdx[2];
+      mIneq = obj->isActiveIdx[2];
       i = obj->nActiveConstr;
-      for (idx_col = idxStartIneq; idx_col <= i; idx_col++) {
+      for (idx_col = mIneq; idx_col <= i; idx_col++) {
         colOffsetATw = obj->ldA * (idx_col - 1) - 1;
         switch (obj->Wid->data[idx_col - 1]) {
          case 3:
-          idx_lb = obj->Wlocalidx->data[idx_col - 1];
-          i1 = offsetIneq + idx_lb;
-          idx_lb = i1 - 2;
-          for (idx_row = offsetIneq; idx_row <= idx_lb; idx_row++) {
+          colOffsetAineq = obj->Wlocalidx->data[idx_col - 1];
+          i1 = offsetIneq + colOffsetAineq;
+          colOffsetAineq = i1 - 2;
+          for (idx_row = offsetIneq; idx_row <= colOffsetAineq; idx_row++) {
             obj->ATwset->data[idx_row + colOffsetATw] = 0.0;
           }
 
           obj->ATwset->data[(i1 + colOffsetATw) - 1] = -1.0;
-          idx_lb = obj->nVar;
-          for (idx_row = i1; idx_row <= idx_lb; idx_row++) {
+          colOffsetAineq = obj->nVar;
+          for (idx_row = i1; idx_row <= colOffsetAineq; idx_row++) {
             obj->ATwset->data[idx_row + colOffsetATw] = 0.0;
           }
           break;

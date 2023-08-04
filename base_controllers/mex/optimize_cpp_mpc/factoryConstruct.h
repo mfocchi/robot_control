@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, const emxArray_real_T
-                      *x0, d_struct_T *obj);
+void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, int32_T mIneq, const
+                      emxArray_real_T *x0, int32_T mNonlinIneq, d_struct_T *obj);
 
 /* End of code generation (factoryConstruct.h) */

@@ -27,6 +27,11 @@ void modifyOverheadPhaseOne_(j_struct_T *obj)
     obj->ATwset->data[(obj->nVar + obj->ldA * idx) - 1] = 0.0;
   }
 
+  i = obj->sizes[2];
+  for (idx = 0; idx < i; idx++) {
+    obj->Aineq->data[(obj->nVar + obj->ldA * idx) - 1] = -1.0;
+  }
+
   obj->indexLB->data[obj->sizes[3] - 1] = obj->nVar;
   obj->lb->data[obj->nVar - 1] = 1.0E-5;
   idxStartIneq = obj->isActiveIdx[2];

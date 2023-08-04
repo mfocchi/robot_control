@@ -23,8 +23,11 @@ void b_factoryConstruct(const real_T objfun_tunableEnvironment_f1[6], real_T
   *objfun_tunableEnvironment_f3, const emxArray_real_T
   *objfun_tunableEnvironment_f4, const emxArray_real_T
   *objfun_tunableEnvironment_f5, int64_T objfun_tunableEnvironment_f6, const
-  param *objfun_tunableEnvironment_f7, int32_T nVar, const emxArray_real_T *lb,
-  const emxArray_real_T *ub, f_struct_T *obj)
+  param *objfun_tunableEnvironment_f7, real_T nonlin_tunableEnvironment_f1,
+  const emxArray_real_T *nonlin_tunableEnvironment_f2, const emxArray_real_T
+  *nonlin_tunableEnvironment_f3, int64_T nonlin_tunableEnvironment_f4, int32_T
+  nVar, int32_T mCineq, const emxArray_real_T *lb, const emxArray_real_T *ub,
+  f_struct_T *obj)
 {
   int32_T b_i;
   int32_T i;
@@ -75,10 +78,44 @@ void b_factoryConstruct(const real_T objfun_tunableEnvironment_f1[6], real_T
 
   obj->objfun.tunableEnvironment.f6 = objfun_tunableEnvironment_f6;
   obj->objfun.tunableEnvironment.f7 = *objfun_tunableEnvironment_f7;
+  obj->nonlin.tunableEnvironment.f1 = nonlin_tunableEnvironment_f1;
+  b_i = obj->nonlin.tunableEnvironment.f2->size[0] *
+    obj->nonlin.tunableEnvironment.f2->size[1];
+  obj->nonlin.tunableEnvironment.f2->size[0] = 1;
+  obj->nonlin.tunableEnvironment.f2->size[1] =
+    nonlin_tunableEnvironment_f2->size[1];
+  emxEnsureCapacity_real_T(obj->nonlin.tunableEnvironment.f2, b_i);
+  i = nonlin_tunableEnvironment_f2->size[0] * nonlin_tunableEnvironment_f2->
+    size[1];
+  for (b_i = 0; b_i < i; b_i++) {
+    obj->nonlin.tunableEnvironment.f2->data[b_i] =
+      nonlin_tunableEnvironment_f2->data[b_i];
+  }
+
+  b_i = obj->nonlin.tunableEnvironment.f3->size[0] *
+    obj->nonlin.tunableEnvironment.f3->size[1];
+  obj->nonlin.tunableEnvironment.f3->size[0] = 1;
+  obj->nonlin.tunableEnvironment.f3->size[1] =
+    nonlin_tunableEnvironment_f3->size[1];
+  emxEnsureCapacity_real_T(obj->nonlin.tunableEnvironment.f3, b_i);
+  i = nonlin_tunableEnvironment_f3->size[0] * nonlin_tunableEnvironment_f3->
+    size[1];
+  for (b_i = 0; b_i < i; b_i++) {
+    obj->nonlin.tunableEnvironment.f3->data[b_i] =
+      nonlin_tunableEnvironment_f3->data[b_i];
+  }
+
+  obj->nonlin.tunableEnvironment.f4 = nonlin_tunableEnvironment_f4;
   obj->f_1 = 0.0;
+  b_i = obj->cIneq_1->size[0];
+  obj->cIneq_1->size[0] = mCineq;
+  emxEnsureCapacity_real_T(obj->cIneq_1, b_i);
   obj->f_2 = 0.0;
+  b_i = obj->cIneq_2->size[0];
+  obj->cIneq_2->size[0] = mCineq;
+  emxEnsureCapacity_real_T(obj->cIneq_2, b_i);
   obj->nVar = nVar;
-  obj->mIneq = 0;
+  obj->mIneq = mCineq;
   obj->mEq = 0;
   obj->numEvals = 0;
   obj->SpecifyObjectiveGradient = false;

@@ -25,11 +25,15 @@
 void c_emxFreeStruct_anonymous_funct(anonymous_function *pStruct);
 void c_emxInitStruct_anonymous_funct(anonymous_function *pStruct, boolean_T
   doPush);
+void d_emxFreeStruct_anonymous_funct(b_anonymous_function *pStruct);
+void d_emxInitStruct_anonymous_funct(b_anonymous_function *pStruct, boolean_T
+  doPush);
 void emxEnsureCapacity_boolean_T(emxArray_boolean_T *emxArray, int32_T oldNumel);
 void emxEnsureCapacity_int32_T(emxArray_int32_T *emxArray, int32_T oldNumel);
 void emxEnsureCapacity_ptrdiff_t(emxArray_ptrdiff_t *emxArray, int32_T oldNumel);
 void emxEnsureCapacity_real_T(emxArray_real_T *emxArray, int32_T oldNumel);
 void emxFreeStruct_cell_6(cell_6 *pStruct);
+void emxFreeStruct_cell_7(cell_7 *pStruct);
 void emxFreeStruct_struct_T(d_struct_T *pStruct);
 void emxFreeStruct_struct_T1(e_struct_T *pStruct);
 void emxFreeStruct_struct_T2(f_struct_T *pStruct);
@@ -43,6 +47,7 @@ void emxFree_int32_T(emxArray_int32_T **pEmxArray);
 void emxFree_ptrdiff_t(emxArray_ptrdiff_t **pEmxArray);
 void emxFree_real_T(emxArray_real_T **pEmxArray);
 void emxInitStruct_cell_6(cell_6 *pStruct, boolean_T doPush);
+void emxInitStruct_cell_7(cell_7 *pStruct, boolean_T doPush);
 void emxInitStruct_struct_T(d_struct_T *pStruct, boolean_T doPush);
 void emxInitStruct_struct_T1(e_struct_T *pStruct, boolean_T doPush);
 void emxInitStruct_struct_T2(f_struct_T *pStruct, boolean_T doPush);

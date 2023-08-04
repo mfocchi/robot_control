@@ -26,15 +26,27 @@ void normal(const emxArray_real_T *Hessian, const emxArray_real_T *grad,
             *CholManager, i_struct_T *QPObjective, const b_struct_T *qpoptions)
 {
   b_struct_T b_qpoptions;
+  real_T constrViolationIneq;
   real_T linearizedConstrViolPrev;
   real_T penaltyParamTrial;
+  int32_T idx;
+  int32_T mIneq;
   b_qpoptions = *qpoptions;
   b_driver(Hessian, grad, TrialState, memspace, WorkingSet, QRManager,
            CholManager, QPObjective, &b_qpoptions, qpoptions->MaxIterations);
   if (TrialState->state > 0) {
+    mIneq = WorkingSet->sizes[2];
     penaltyParamTrial = MeritFunction->penaltyParam;
+    constrViolationIneq = 0.0;
+    for (idx = 0; idx < mIneq; idx++) {
+      if (TrialState->cIneq->data[idx] > 0.0) {
+        constrViolationIneq += TrialState->cIneq->data[idx];
+      }
+    }
+
     linearizedConstrViolPrev = MeritFunction->linearizedConstrViol;
     MeritFunction->linearizedConstrViol = 0.0;
+    linearizedConstrViolPrev += constrViolationIneq;
     if ((linearizedConstrViolPrev > 2.2204460492503131E-16) &&
         (TrialState->fstar > 0.0)) {
       if (TrialState->sqpFval == 0.0) {
@@ -48,9 +60,11 @@ void normal(const emxArray_real_T *Hessian, const emxArray_real_T *grad,
     }
 
     if (penaltyParamTrial < MeritFunction->penaltyParam) {
-      MeritFunction->phi = TrialState->sqpFval;
-      if (MeritFunction->initFval - TrialState->sqpFval > (real_T)
-          MeritFunction->nPenaltyDecreases * MeritFunction->threshold) {
+      MeritFunction->phi = TrialState->sqpFval + penaltyParamTrial *
+        constrViolationIneq;
+      if ((MeritFunction->initFval + penaltyParamTrial *
+           MeritFunction->initConstrViolationIneq) - MeritFunction->phi >
+          (real_T)MeritFunction->nPenaltyDecreases * MeritFunction->threshold) {
         MeritFunction->nPenaltyDecreases++;
         if ((MeritFunction->nPenaltyDecreases << 1) > TrialState->sqpIterations)
         {
@@ -61,16 +75,16 @@ void normal(const emxArray_real_T *Hessian, const emxArray_real_T *grad,
           1.0E-10);
       } else {
         MeritFunction->phi = TrialState->sqpFval + MeritFunction->penaltyParam *
-          0.0;
+          constrViolationIneq;
       }
     } else {
       MeritFunction->penaltyParam = muDoubleScalarMax(penaltyParamTrial, 1.0E-10);
       MeritFunction->phi = TrialState->sqpFval + MeritFunction->penaltyParam *
-        0.0;
+        constrViolationIneq;
     }
 
     MeritFunction->phiPrimePlus = muDoubleScalarMin(TrialState->fstar -
-      MeritFunction->penaltyParam * 0.0, 0.0);
+      MeritFunction->penaltyParam * constrViolationIneq, 0.0);
   }
 
   sortLambdaQP(TrialState->lambda, WorkingSet->nActiveConstr, WorkingSet->sizes,

@@ -49,6 +49,8 @@ class ClimbingrobotController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         self.EXTERNAL_FORCE = False
         self.impedance_landing = True
+        self.MPC_control = True
+        self.type_of_disturbance = 'none' # 'none', 'impulse'
 
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -329,14 +331,20 @@ class ClimbingrobotController(BaseControllerFixed):
             print("PLOTTING")
             # plotFrameLinear('com position', 1, p.time_log, None, p.com_log)
             # plotFrameLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-            traj_gazebo= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame which is WF in matlab
+            actual_com= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame which is WF in matlab
             time_gazebo = p.time_log - p.start_logging
             #plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, traj_gazebo, p.ref_time, p.ref_com)
+            plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
             plot3D('states', 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
-            # mio.savemat('test_gazebo2.mat', {'solution': p.matvars['solution'], 'mu': p.matvars['mu'],
-            #                                 'Fleg':p.matvars['solution'].Fleg, 'Fr_max':p.matvars['Fr_max'], 'p0':p.matvars['p0'],'pf': p.matvars['pf'],
-            #                                 'time_gazebo': time_gazebo, 'traj_gazebo': traj_gazebo})
+            if p.MPC_control:
+                filename = 'test_gazeboMPC.mat'
+            else:
+                filename = 'test_gazeboNOMPC.mat'
+            #filename = 'test_gazeboNOMPCconst_dist'
+            # mio.savemat(filename, {'ref_time': p.ref_time, 'ref_com': p.ref_com,
+            #                                  'time_gazebo': time_gazebo, 'traj_gazebo': actual_com,
+            #                                  'mu': p.mu , 'Fleg': p.Fleg,
+            #                                  'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_l0   })
 
 
     def getIndex(self,t):
@@ -635,7 +643,10 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.ax1.grid()
                 self.ax2.grid()
                 self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],self.deltaFr_l,  "or-")
-                self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_l, "or-")
+                self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_r, "or-")
+                self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N] +self.deltaFr_l, "ok-")
+                self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N] +self.deltaFr_r, "ok-")
+
                 self.fig.canvas.draw()
                 self.fig.canvas.flush_events()
                 self.unpause_physics_client()
@@ -897,18 +908,32 @@ def talker(p):
                         p.stateMachine = 'flying_and_reorient_lander'
                 print(colored("Start "+ p.stateMachine, "blue"))
 
-                p.dist_duration = 0.2
-                p.base_dist = 0.* np.array([0., -50., 30.])
-                p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration)
+                #impulsive disturbance
+                if p.type_of_disturbance == 'impulse':
+                    p.dist_duration = 0.2
+                    p.base_dist = 0.*np.array([0., -50., 30.])
+
+                #constant disturbance
+                if p.type_of_disturbance == 'constant':
+                    p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
+                    p.base_dist = np.array([0., -7., 0.])
+
+                if p.type_of_disturbance != 'none':
+                    p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration)
 
         if (p.stateMachine == 'flying'):
             # after the thrust we start MPC it will start from time 0.05 so the index should be 12
             # applying forces to ropes
             delta_t = p.time - p.end_orienting
-            deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
+            if p.MPC_control:
+                deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
+            else:
+                deltaFr_l0 = 0.
+                deltaFr_r0 = 0.
 
-            if delta_t < p.dist_duration and np.linalg.norm(p.base_dist)>0.:
-                p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "blue", scale=4.5)
+            if p.type_of_disturbance != 'none':
+                if delta_t < p.dist_duration:
+                    p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 5., "blue", scale=4.5)
 
             p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
             p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
@@ -933,14 +958,20 @@ def talker(p):
                     p.startJump = p.time
                 else:
                     #p.pause_physics_client()
-                    print(colored(f"target achieved (in matlab convention) is: {p.base_pos-p.mat2Gazebo}", "blue"))
+                    landing_location = p.base_pos-p.mat2Gazebo
+                    print(colored(f"target achieved (in matlab convention) is: {landing_location}", "blue"))
                     print(colored(f" while it should be  {matlab_target}", "blue"))
+                    print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
                     break
 
         if (p.stateMachine == 'flying_and_reorient_lander'):
             # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
             delta_t = p.time - p.end_orienting
-            deltaFr_l0,deltaFr_r0 = p.computeMPC(delta_t)
+            if p.MPC_control:
+                deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
+            else:
+                deltaFr_l0 = 0.
+                deltaFr_r0 = 0.
 
             if not p.optimal_control_traj_finished:
                 if p.getIndex(delta_t) == -1:

@@ -29,6 +29,17 @@ void c_emxInitStruct_anonymous_funct(anonymous_function *pStruct, boolean_T
   emxInitStruct_cell_6(&pStruct->tunableEnvironment, doPush);
 }
 
+void d_emxFreeStruct_anonymous_funct(b_anonymous_function *pStruct)
+{
+  emxFreeStruct_cell_7(&pStruct->tunableEnvironment);
+}
+
+void d_emxInitStruct_anonymous_funct(b_anonymous_function *pStruct, boolean_T
+  doPush)
+{
+  emxInitStruct_cell_7(&pStruct->tunableEnvironment, doPush);
+}
+
 void emxEnsureCapacity_boolean_T(emxArray_boolean_T *emxArray, int32_T oldNumel)
 {
   int32_T i;
@@ -204,10 +215,18 @@ void emxFreeStruct_cell_6(cell_6 *pStruct)
   emxFree_real_T(&pStruct->f5);
 }
 
+void emxFreeStruct_cell_7(cell_7 *pStruct)
+{
+  emxFree_real_T(&pStruct->f2);
+  emxFree_real_T(&pStruct->f3);
+}
+
 void emxFreeStruct_struct_T(d_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->xstarsqp);
   emxFree_real_T(&pStruct->xstarsqp_old);
+  emxFree_real_T(&pStruct->cIneq);
+  emxFree_real_T(&pStruct->cIneq_old);
   emxFree_real_T(&pStruct->grad);
   emxFree_real_T(&pStruct->grad_old);
   emxFree_real_T(&pStruct->lambdasqp);
@@ -216,6 +235,7 @@ void emxFreeStruct_struct_T(d_struct_T *pStruct)
   emxFree_real_T(&pStruct->socDirection);
   emxFree_real_T(&pStruct->lambda_old);
   emxFree_int32_T(&pStruct->workingset_old);
+  emxFree_real_T(&pStruct->JacCineqTrans_old);
   emxFree_real_T(&pStruct->gradLag);
   emxFree_real_T(&pStruct->delta_gradLag);
   emxFree_real_T(&pStruct->xstar);
@@ -226,11 +246,15 @@ void emxFreeStruct_struct_T(d_struct_T *pStruct)
 void emxFreeStruct_struct_T1(e_struct_T *pStruct)
 {
   c_emxFreeStruct_anonymous_funct(&pStruct->objfun);
+  d_emxFreeStruct_anonymous_funct(&pStruct->nonlcon);
 }
 
 void emxFreeStruct_struct_T2(f_struct_T *pStruct)
 {
   c_emxFreeStruct_anonymous_funct(&pStruct->objfun);
+  d_emxFreeStruct_anonymous_funct(&pStruct->nonlin);
+  emxFree_real_T(&pStruct->cIneq_1);
+  emxFree_real_T(&pStruct->cIneq_2);
   emxFree_boolean_T(&pStruct->hasLB);
   emxFree_boolean_T(&pStruct->hasUB);
 }
@@ -263,6 +287,8 @@ void emxFreeStruct_struct_T6(c_struct_T *pStruct)
 
 void emxFreeStruct_struct_T7(j_struct_T *pStruct)
 {
+  emxFree_real_T(&pStruct->Aineq);
+  emxFree_real_T(&pStruct->bineq);
   emxFree_real_T(&pStruct->lb);
   emxFree_real_T(&pStruct->ub);
   emxFree_int32_T(&pStruct->indexLB);
@@ -337,10 +363,18 @@ void emxInitStruct_cell_6(cell_6 *pStruct, boolean_T doPush)
   emxInit_real_T(&pStruct->f5, 2, doPush);
 }
 
+void emxInitStruct_cell_7(cell_7 *pStruct, boolean_T doPush)
+{
+  emxInit_real_T(&pStruct->f2, 2, doPush);
+  emxInit_real_T(&pStruct->f3, 2, doPush);
+}
+
 void emxInitStruct_struct_T(d_struct_T *pStruct, boolean_T doPush)
 {
   emxInit_real_T(&pStruct->xstarsqp, 2, doPush);
   emxInit_real_T(&pStruct->xstarsqp_old, 2, doPush);
+  emxInit_real_T(&pStruct->cIneq, 1, doPush);
+  emxInit_real_T(&pStruct->cIneq_old, 1, doPush);
   emxInit_real_T(&pStruct->grad, 1, doPush);
   emxInit_real_T(&pStruct->grad_old, 1, doPush);
   emxInit_real_T(&pStruct->lambdasqp, 1, doPush);
@@ -349,6 +383,7 @@ void emxInitStruct_struct_T(d_struct_T *pStruct, boolean_T doPush)
   emxInit_real_T(&pStruct->socDirection, 1, doPush);
   emxInit_real_T(&pStruct->lambda_old, 1, doPush);
   emxInit_int32_T(&pStruct->workingset_old, 1, doPush);
+  emxInit_real_T(&pStruct->JacCineqTrans_old, 2, doPush);
   emxInit_real_T(&pStruct->gradLag, 1, doPush);
   emxInit_real_T(&pStruct->delta_gradLag, 1, doPush);
   emxInit_real_T(&pStruct->xstar, 1, doPush);
@@ -359,11 +394,15 @@ void emxInitStruct_struct_T(d_struct_T *pStruct, boolean_T doPush)
 void emxInitStruct_struct_T1(e_struct_T *pStruct, boolean_T doPush)
 {
   c_emxInitStruct_anonymous_funct(&pStruct->objfun, doPush);
+  d_emxInitStruct_anonymous_funct(&pStruct->nonlcon, doPush);
 }
 
 void emxInitStruct_struct_T2(f_struct_T *pStruct, boolean_T doPush)
 {
   c_emxInitStruct_anonymous_funct(&pStruct->objfun, doPush);
+  d_emxInitStruct_anonymous_funct(&pStruct->nonlin, doPush);
+  emxInit_real_T(&pStruct->cIneq_1, 1, doPush);
+  emxInit_real_T(&pStruct->cIneq_2, 1, doPush);
   emxInit_boolean_T(&pStruct->hasLB, 1, doPush);
   emxInit_boolean_T(&pStruct->hasUB, 1, doPush);
 }
@@ -396,6 +435,8 @@ void emxInitStruct_struct_T6(c_struct_T *pStruct, boolean_T doPush)
 
 void emxInitStruct_struct_T7(j_struct_T *pStruct, boolean_T doPush)
 {
+  emxInit_real_T(&pStruct->Aineq, 2, doPush);
+  emxInit_real_T(&pStruct->bineq, 2, doPush);
   emxInit_real_T(&pStruct->lb, 1, doPush);
   emxInit_real_T(&pStruct->ub, 1, doPush);
   emxInit_int32_T(&pStruct->indexLB, 1, doPush);

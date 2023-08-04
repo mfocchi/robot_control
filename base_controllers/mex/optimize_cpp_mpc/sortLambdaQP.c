@@ -31,7 +31,8 @@ void sortLambdaQP(emxArray_real_T *lambda, int32_T WorkingSet_nActiveConstr,
   int32_T idxOffset;
   int32_T mAll;
   if (WorkingSet_nActiveConstr != 0) {
-    mAll = (WorkingSet_sizes[0] + WorkingSet_sizes[3]) + WorkingSet_sizes[4];
+    mAll = ((WorkingSet_sizes[0] + WorkingSet_sizes[3]) + WorkingSet_sizes[4]) +
+      WorkingSet_sizes[2];
     if (mAll >= 1) {
       n_t = (ptrdiff_t)mAll;
       incx_t = (ptrdiff_t)1;
