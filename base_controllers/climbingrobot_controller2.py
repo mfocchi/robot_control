@@ -50,7 +50,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.EXTERNAL_FORCE = False
         self.impedance_landing = True
         self.MPC_control = True
-        self.type_of_disturbance = 'none' # 'none', 'impulse'
+        self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
+        self.MPC_uses_constraints = True
+        self.PAPER = False # use this for taking videos
 
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -337,14 +339,15 @@ class ClimbingrobotController(BaseControllerFixed):
             plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
             plot3D('states', 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
             if p.MPC_control:
-                filename = 'test_gazeboMPC.mat'
+                filename = f'test_gazebo_MPC_{p.MPC_control}_constraints_{p.MPC_uses_constraints}_dist_{p.type_of_disturbance}.mat'
             else:
-                filename = 'test_gazeboNOMPC.mat'
-            #filename = 'test_gazeboNOMPCconst_dist'
-            # mio.savemat(filename, {'ref_time': p.ref_time, 'ref_com': p.ref_com,
-            #                                  'time_gazebo': time_gazebo, 'traj_gazebo': actual_com,
-            #                                  'mu': p.mu , 'Fleg': p.Fleg,
-            #                                  'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_l0   })
+                filename = f'test_gazebo_MPC_{p.MPC_control}_dist_{p.type_of_disturbance}.mat'
+            mio.savemat(filename, {'ref_time': p.ref_time, 'ref_com': p.ref_com,
+                                    'time_gazebo': time_gazebo, 'actual_com': actual_com,
+                                    'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
+                                    'psi': p.simp_model_state_log[0,:], 'l_1': p.simp_model_state_log[1,:], 'l_2': p.simp_model_state_log[2,:],
+                                    'mu': p.mu , 'Fleg': p.Fleg,
+                                    'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_l0   })
 
 
     def getIndex(self,t):
@@ -608,64 +611,99 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.getIndex(delta_t) != -1:
             self.mpc_index = self.getIndex(delta_t)
 
-        if ((self.mpc_index + self.mpc_N) < len(self.ref_time)): # do not do anything for the last part
-            if (self.mpc_index != self.mpc_index_old): # do optim only every dtMPC  not every dt
-                #debug
-                # print(self.mpc_index)
-                # print(delta_t)
+        # # This stops the MPC when self.mpc_index + self.mpc_N = N
+        # if ((self.mpc_index + self.mpc_N) < len(self.ref_time)): # do not do anything for the last part
+        #     if (self.mpc_index != self.mpc_index_old): # do optim only every dtMPC  not every dt
+        #         #debug
+        #         # print(self.mpc_index)
+        #         # print(delta_t)
+        #
+        #         # eval ref
+        #         ref_com = matlab.double(self.ref_com[:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        #         Fr_l0 = matlab.double(self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        #         Fr_r0 = matlab.double(self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+        #         actual_t = matlab.double(self.ref_time[self.mpc_index])
+        #
+        #         # print(ref_com)
+        #         # print(Fr_l0)
+        #         # print(Fr_r0)
+        #         # print(actual_t)
+        #         # unit test  normal (no landing)  mpc_index = 1 horizon 0.4 N
+        #         #actual_state = matlab.double([0.0937, 6.6182, 6.5577, 0.1738, 1.1335, 1.3561]).reshape(6, 1)
+        #         # x= [-63.17725056815982,-18.593042192877622,20.415257331471878,37.003764502121626,34.24067171177194,22.039578469101244,9.443858579323292,0.712971781109941,-3.7611337837956627,-4.9814348273387,-4.734640420584856,-4.402709304195949,-81.26537242370831,-48.586231490584375,-17.39599228319515,-0.3487135265221699,3.9620273273582467,1.8924880643624182,-1.0812319792261356,-2.676715350748216,-3.1404020861190594,-3.200333076663731,-3.3249973760318268,-3.5154072845296485]]
+        #         actual_state = matlab.double([ self.psi, self.l_1, self.l_2, self.psid, self.l_1d, self.l_2d]).reshape(6,1)
+        #         #print(actual_state)
+        #
+        #         self.pause_physics_client()
+        #         #perform optimization
+        #         if self.MPC_uses_constraints:
+        #             x = mat_vector2python(self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+        #         else:
+        #             x = mat_vector2python(self.eng.optimize_cpp_mpc_no_constraints_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+        #
+        #         # online plot MPC
+        #         p.onlinePlotMPC(x)
+        #         self.unpause_physics_client()
+        #
+        # else:  # whenever the MPC should not be updated anymore use delta_t to imncrement mpc_index_ffwd
+        #     #print("delta_t MOD dtMpc", (delta_t % self.optim_params_mpc['mpc_dt']))
+        #     if (delta_t % self.optim_params_mpc['mpc_dt']) < 0.001:  # increment mpc_index_ffwd every mpc_dt
+        #         self.mpc_index_ffwd += 1
+        #         if self.mpc_index_ffwd > (self.mpc_N-1): # reference is finished keep the last computed one
+        #             self.mpc_index_ffwd = self.mpc_N-1
+        #         #debug
+        #         #print("stop mpc, applying ffwd, mpc_index_ffwd: ", self.mpc_index_ffwd)
 
-                # eval ref
-                ref_com = matlab.double(self.ref_com[:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-                Fr_l0 = matlab.double(self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-                Fr_r0 = matlab.double(self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
-                actual_t = matlab.double(self.ref_time[self.mpc_index])
+        # This is better for const dist cause it keeps optimizing till the end
+        if (self.mpc_index != self.mpc_index_old): # do optim only every dtMPC  not every dt
+            # reduce MPC horizon gradually at the end
+            if ((self.mpc_index + self.mpc_N) >=len(self.ref_time)):
+                self.mpc_N -=1
+            # eval ref
+            ref_com = matlab.double(self.ref_com[:, self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+            Fr_l0 = matlab.double(self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+            Fr_r0 = matlab.double(self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
+            actual_t = matlab.double(self.ref_time[self.mpc_index])
 
-                # print(ref_com)
-                # print(Fr_l0)
-                # print(Fr_r0)
-                # print(actual_t)
-                # unit test  normal (no landing)  mpc_index = 1 horizon 0.4 N
-                #actual_state = matlab.double([0.0937, 6.6182, 6.5577, 0.1738, 1.1335, 1.3561]).reshape(6, 1)
-                # x= [-63.17725056815982,-18.593042192877622,20.415257331471878,37.003764502121626,34.24067171177194,22.039578469101244,9.443858579323292,0.712971781109941,-3.7611337837956627,-4.9814348273387,-4.734640420584856,-4.402709304195949,-81.26537242370831,-48.586231490584375,-17.39599228319515,-0.3487135265221699,3.9620273273582467,1.8924880643624182,-1.0812319792261356,-2.676715350748216,-3.1404020861190594,-3.200333076663731,-3.3249973760318268,-3.5154072845296485]]
-                actual_state = matlab.double([ self.psi, self.l_1, self.l_2, self.psid, self.l_1d, self.l_2d]).reshape(6,1)
-                #print(actual_state)
+            # unit test  normal (no landing)  mpc_index = 1 horizon 0.4 N
+            #actual_state = matlab.double([0.0937, 6.6182, 6.5577, 0.1738, 1.1335, 1.3561]).reshape(6, 1)
+            # x= [-63.17725056815982,-18.593042192877622,20.415257331471878,37.003764502121626,34.24067171177194,22.039578469101244,9.443858579323292,0.712971781109941,-3.7611337837956627,-4.9814348273387,-4.734640420584856,-4.402709304195949,-81.26537242370831,-48.586231490584375,-17.39599228319515,-0.3487135265221699,3.9620273273582467,1.8924880643624182,-1.0812319792261356,-2.676715350748216,-3.1404020861190594,-3.200333076663731,-3.3249973760318268,-3.5154072845296485]]
+            actual_state = matlab.double([ self.psi, self.l_1, self.l_2, self.psid, self.l_1d, self.l_2d]).reshape(6,1)
+            #print(actual_state)
 
-                self.pause_physics_client()
-                #perform optimization
+            self.pause_physics_client()
+            #perform optimization
+            if self.MPC_uses_constraints:
                 x = mat_vector2python(self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
-                self.deltaFr_l = x[:self.mpc_N] # eval matlab array this way
-                self.deltaFr_r = x[self.mpc_N:]
-                #debug
-                self.ax1.clear()
-                self.ax2.clear()
-                self.ax1.set_label("delta Frl")
-                self.ax2.set_label("delta Frr")
-                self.ax1.grid()
-                self.ax2.grid()
-                self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],self.deltaFr_l,  "or-")
-                self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_r, "or-")
-                self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N] +self.deltaFr_l, "ok-")
-                self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N] +self.deltaFr_r, "ok-")
+            else:
+                x = mat_vector2python(self.eng.optimize_cpp_mpc_no_constraints_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
 
-                self.fig.canvas.draw()
-                self.fig.canvas.flush_events()
-                self.unpause_physics_client()
-
-        else:  # whenever the MPC should not be updated anymore use delta_t to imncrement mpc_index_ffwd
-            #print("delta_t MOD dtMpc", (delta_t % self.optim_params_mpc['mpc_dt']))
-            if (delta_t % self.optim_params_mpc['mpc_dt']) < 0.001:  # increment mpc_index_ffwd every mpc_dt
-                self.mpc_index_ffwd += 1
-                if self.mpc_index_ffwd > (self.mpc_N-1): # reference is finished keep the last computed one
-                    self.mpc_index_ffwd = self.mpc_N-1
-                #debug
-                #print("stop mpc, applying ffwd, mpc_index_ffwd: ", self.mpc_index_ffwd)
+            #online plot MPC
+            p.onlinePlotMPC(x)
+            self.unpause_physics_client()
 
         self.mpc_index_old = self.mpc_index
 
-
-
         return self.deltaFr_l[self.mpc_index_ffwd],self.deltaFr_r[self.mpc_index_ffwd]
 
+    def onlinePlotMPC(self,x):
+        self.deltaFr_l = x[:self.mpc_N]  # eval matlab array this way
+        self.deltaFr_r = x[self.mpc_N:]
+        # debug
+        self.ax1.clear()
+        self.ax2.clear()
+        self.ax1.set_label("delta Frl")
+        self.ax2.set_label("delta Frr")
+        self.ax1.grid()
+        self.ax2.grid()
+        self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_l, "or-")
+        self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_r, "or-")
+        self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
+                      self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N] + self.deltaFr_l, "ok-")
+        self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
+                      self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N] + self.deltaFr_r, "ok-")
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
 
 
 def talker(p):
@@ -896,25 +934,26 @@ def talker(p):
                 p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
                 p.stateMachine = 'flying'
 
-                # retract leg and move langing elements
-                p.q_des[p.leg_index[2]] = 0.25
+                if not p.PAPER:
+                    # retract leg and move langing elements
+                    p.q_des[p.leg_index[2]] = 0.25
 
                 # manage lander retracting leg
                 if  p.landing:
-                    # retract knee joint and extend landing joints
+                    # extend landing joints
                     p.tau_ffwd[p.landing_joints] = np.zeros(2)
                     if p.impedance_landing:
                         p.q_des[p.landing_joints] = np.array([-0.6, 0.6])
                         p.stateMachine = 'flying_and_reorient_lander'
                 print(colored("Start "+ p.stateMachine, "blue"))
 
-                #impulsive disturbance
+                #add impulsive disturbance
                 if p.type_of_disturbance == 'impulse':
                     p.dist_duration = 0.2
-                    p.base_dist = 0.*np.array([0., -50., 30.])
+                    p.base_dist = np.array([0., -50., 30.])
 
-                #constant disturbance
-                if p.type_of_disturbance == 'constant':
+                #add constant disturbance
+                if p.type_of_disturbance == 'const':
                     p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
                     p.base_dist = np.array([0., -7., 0.])
 
@@ -933,13 +972,14 @@ def talker(p):
 
             if p.type_of_disturbance != 'none':
                 if delta_t < p.dist_duration:
-                    p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 5., "blue", scale=4.5)
+                    p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "blue", scale=4.5)
 
             p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
             p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
-            #plot forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
+            if not p.PAPER:
+                #plot rope forces
+                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
+                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
 
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
@@ -972,6 +1012,10 @@ def talker(p):
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
+
+            if p.type_of_disturbance != 'none':
+                if delta_t < p.dist_duration:
+                    p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "blue", scale=4.5)
 
             if not p.optimal_control_traj_finished:
                 if p.getIndex(delta_t) == -1:
@@ -1040,25 +1084,25 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
 
     plt.subplot(3,1,1)
     plt.ylabel(label[0])
-    plt.plot(time_log, var[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.plot(time_log, var[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     if (var_mat is not None):
-        plt.plot(time_mat, var_mat[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
+        plt.plot(time_mat, var_mat[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
     plt.grid()
     plt.legend(['act', 'ref'])
 
     plt.subplot(3,1,2)
     plt.ylabel(label[1])
-    plt.plot(time_log, var[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.plot(time_log, var[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     if (var_mat is not None):
-        plt.plot(time_mat, var_mat[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
+        plt.plot(time_mat, var_mat[1, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
     plt.grid()
     plt.legend(['act', 'ref'])
 
     plt.subplot(3,1,3)
     plt.ylabel(label[2])
-    plt.plot(time_log, var[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
+    plt.plot(time_log, var[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     if (var_mat is not None):
-        plt.plot(time_mat, var_mat[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
+        plt.plot(time_mat, var_mat[2, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
     plt.grid()
     plt.legend(['act', 'ref'])
 
