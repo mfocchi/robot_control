@@ -36,6 +36,9 @@ from scipy.linalg import block_diag
 
 from base_controllers.utils.matlab_conversions import mat_vector2python, mat_matrix2python
 import matlab.engine
+import numpy.matlib
+from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
+
 import sys
 sys.path.insert(0,'./codegen')
 
@@ -271,6 +274,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mpc_index = 0
         self.mpc_index_old = 0
         self.mpc_index_ffwd = 0 # updated only when we stop recomputing mpc
+        if self.PAPER:
+            self.recorder = RosbagControlledRecorder('rosbag record -a', False)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -731,21 +736,29 @@ class ClimbingrobotController(BaseControllerFixed):
                       self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N] + deltaFr_l, "ok-")
         self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
                       self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N] + deltaFr_r, "ok-")
+        # plot Fr limits Does not work
+        # self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
+        #               -self.Fr_max * np.ones((1, self.mpc_N)), "r-")
+        # self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
+        #               -self.Fr_max * np.ones((1, self.mpc_N)), "r-")
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
-    def generateTargetPoints(self):
+    def generateTargetPoints(self, p0):
         # generate points in an ellipse of axis a b = 2.5 around p0
         alpha = np.deg2rad(45)
         theta = np.linspace(0, 2 * np.pi, 9)
         # main axes ellipse
-        a = (self.anchor_distance_y-0.02) / np.cos(alpha)
-        b = 4
-        y = a * np.cos(theta)
-        z = b * np.sin(theta)
+        a =  (self.anchor_distance_y-1.5) /2 / np.cos(alpha)
+        b = 2
+        y = a * np.cos(theta[:-1])
+        z = b * np.sin(theta[:-1])
 
         Rx = np.array([[np.cos(-alpha), -np.sin(-alpha)], [np.sin(-alpha), np.cos(-alpha)]])
-        return Rx.dot(np.vstack((y, z)))
+        # sets 0 coord equal to p0
+        cw = numpy.matlib.repmat(p0.reshape(3,1).copy(), 1, 8)
+        cw[1:, :] += Rx.dot(np.vstack((y, z)))
+        return cw
 
 def talker(p):
     p.start()
@@ -887,258 +900,263 @@ def talker(p):
     # jump params
     p0 = np.array([0.28,  2.5, -6.10104])  # there is singularity for px = 0!
 
-    #landingW = p.generateTargetPoints()
-    # for test in range(landingW.shape[1]):
-    #     pf = p0.copy()
-    #     #pf[1:] = landingW[:,test]
-    pf = np.array([0.28, 4, -4])
+    if p.PAPER:
+        landingW = p.generateTargetPoints(p0)
+    else:
+        landingW = np.array([0.28, 4, -4]).reshape(3,1)
+
+    for n_test in range(landingW.shape[1]):
+        pf = landingW[:,n_test]
+        print(colored(f"---------------Ideal Reference landing test # {n_test}: {pf}", "green"))
+        # old way (before doing optim online)
+        # if p.landing:
+        #     p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
+        # else:
+        #     p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
+        # p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['solution'].T_th, "p0": p.matvars['p0'],
+        #             "targetPos": p.matvars['solution'].achieved_target,  "Fleg": p.matvars['solution'].Fleg,
+        #             "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
+
+        # jump parameters
+        p.startJump = 1.5
+        p.orientTime = 1.0
+        p.stateMachine = 'idle'
+        p.jumpNumber  = 0
+        p.numberOfJumps = 1
+        p.start_logging = np.inf
+
+        # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
+        p.q_des[:12] = p.computeJointVariables(p0)
+
+        #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+
+        while not ros.is_shutdown():
+
+            # update the kinematics
+            p.updateKinematicsDynamics()
+
+            #multiple jumps state machine
+            if ( p.stateMachine == 'idle') and (p.time >= p.startJump) and (p.jumpNumber<p.numberOfJumps):
+                # first run optim and fill in jump variable
+                p.pause_physics_client()
+                p.initOptim(p.base_pos - p.mat2Gazebo, pf)
+                p.unpause_physics_client()
+                print(colored(f"Start orienting leg to (pitch, roll)  : {p.getImpulseAngle()}", "blue"))
+                p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint] = p.getImpulseAngle()
+
+                #set the end of orienting
+                p.end_orienting = p.startJump + p.orientTime
+                p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
+                p.start_logging = p.end_orienting
+                p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
+                if p.PAPER:
+                    p.recorder.start_recording_srv()
 
 
-    # old way (before doing optim online)
-    # if p.landing:
-    #     p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
-    # else:
-    #     p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
-    # p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['solution'].T_th, "p0": p.matvars['p0'],
-    #             "targetPos": p.matvars['solution'].achieved_target,  "Fleg": p.matvars['solution'].Fleg,
-    #             "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
-
-    # jump parameters
-    p.startJump = 1.5
-    p.orientTime = 1.0
-    p.stateMachine = 'idle'
-    p.jumpNumber  = 0
-    p.numberOfJumps = 1
-    p.start_logging = np.inf
-
-    # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
-    p.q_des[:12] = p.computeJointVariables(p0)
-
-    #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
-
-    while not ros.is_shutdown():
-
-        # update the kinematics
-        p.updateKinematicsDynamics()
-
-        #multiple jumps state machine
-        if ( p.stateMachine == 'idle') and (p.time >= p.startJump) and (p.jumpNumber<p.numberOfJumps):
-            # first run optim and fill in jump variable
-            p.pause_physics_client()
-            p.initOptim(p.base_pos - p.mat2Gazebo, pf)
-            p.unpause_physics_client()
-            print(colored(f"Start orienting leg to (pitch, roll)  : {p.getImpulseAngle()}", "blue"))
-            p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint] = p.getImpulseAngle()
-
-            #set the end of orienting
-            p.end_orienting = p.startJump + p.orientTime
-            p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
-            p.start_logging = p.end_orienting
-            p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
+            if (p.stateMachine == 'orienting_leg') and (p.time >= p.end_orienting):
+                print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to optimized target: ",
+                      p.jumps[p.jumpNumber]["targetPos"], " from actual p0 : ", p.base_pos - p.mat2Gazebo)
 
 
+                print(colored(f"Start trusting", "blue"))
+                p.tau_ffwd = np.zeros(p.robot.na)
+                p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
+                p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
+                p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
+                print(colored(f"ZERO LEG AND ROPE PD", "red"))
+                p.stateMachine = 'thrusting'
+                p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+                p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
 
-        if (p.stateMachine == 'orienting_leg') and (p.time >= p.end_orienting):
-            print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to target: ",
-                  p.jumps[p.jumpNumber]["targetPos"], " from actual p0 : ", p.base_pos - p.mat2Gazebo)
+            if (p.stateMachine == 'thrusting'):
+                # apply leg inpulse for thust duration
+                p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
+                # plot Fleg
+                p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / p.force_scale, "red", scale=4.5)
 
+                # start also applying forces to ropes
+                delta_t = p.time - p.end_orienting
+                p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
+                p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
 
-            print(colored(f"Start trusting", "blue"))
-            p.tau_ffwd = np.zeros(p.robot.na)
-            p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
-            p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
-            p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
-            print(colored(f"ZERO LEG AND ROPE PD", "red"))
-            p.stateMachine = 'thrusting'
-            p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
-            p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
+                # plot rope forces
+                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
+                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
+                p.tau_ffwd[p.rope_index[0]] = p.Fr_r
+                p.tau_ffwd[p.rope_index[1]] = p.Fr_l
 
-        if (p.stateMachine == 'thrusting'):
-            # apply leg inpulse for thust duration
-            p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
-            # plot Fleg
-            p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / p.force_scale, "red", scale=4.5)
+                if (p.time > p.end_thrusting):
+                    print(colored("Stop Trhusting", "blue"))
+                    print(colored(f"RESTORING LEG PD", "red"))
+                    # reenable  the PDs of default values for landing and reset the torque on the leg (stop applyng inpulse)
+                    p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
+                    # reenable leg pd
+                    p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
+                    p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
+                    p.stateMachine = 'flying'
 
-            # start also applying forces to ropes
-            delta_t = p.time - p.end_orienting
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
-
-            # plot forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
-            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
-            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-
-            if (p.time > p.end_thrusting):
-                print(colored("Stop Trhusting", "blue"))
-                print(colored(f"RESTORING LEG PD", "red"))
-                # reenable  the PDs of default values for landing and reset the torque on the leg (stop applyng inpulse)
-                p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
-                # reenable leg pd
-                p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
-                p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
-                p.stateMachine = 'flying'
-
-                if not p.PAPER:
                     # retract leg and move langing elements
                     p.q_des[p.leg_index[2]] = 0.25
 
-                # manage lander retracting leg
-                if  p.landing:
-                    # extend landing joints
-                    p.tau_ffwd[p.landing_joints] = np.zeros(2)
-                    if p.impedance_landing:
-                        p.q_des[p.landing_joints] = np.array([-0.6, 0.6])
-                        p.stateMachine = 'flying_and_reorient_lander'
-                print(colored("Start "+ p.stateMachine, "blue"))
+                    # manage lander retracting leg
+                    if  p.landing:
+                        # extend landing joints
+                        p.tau_ffwd[p.landing_joints] = np.zeros(2)
+                        if p.impedance_landing:
+                            p.q_des[p.landing_joints] = np.array([-0.6, 0.6])
+                            p.stateMachine = 'flying_and_reorient_lander'
+                    print(colored("Start "+ p.stateMachine, "blue"))
 
-                #add impulsive disturbance
-                if p.type_of_disturbance == 'impulse':
-                    p.dist_duration = 0.2
-                    p.base_dist = np.array([0., -50., 30.])
-                    if p.PROPELLERS:
-                        p.base_dist = np.array([50., -50., 30.])
+                    #add impulsive disturbance
+                    if p.type_of_disturbance == 'impulse':
+                        p.dist_duration = 0.2
+                        p.base_dist = np.array([0., -50., 30.])
+                        if p.PROPELLERS:
+                            p.base_dist = np.array([50., -50., 30.])
 
-                #add constant disturbance
-                if p.type_of_disturbance == 'const':
-                    p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
-                    p.base_dist = np.array([0., -7., 0.])
+                    #add constant disturbance
+                    if p.type_of_disturbance == 'const':
+                        p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
+                        p.base_dist = np.array([0., -7., 0.])
+                        if p.PROPELLERS:
+                            p.base_dist = np.array([7., -7., 0.])
+
+                    if p.type_of_disturbance != 'none':
+                        p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration)
+
+            if (p.stateMachine == 'flying'):
+                # after the thrust we start MPC it will start from time 0.05 so the index should be 12
+                # applying forces to ropes
+                delta_t = p.time - p.end_orienting
+                if p.MPC_control:
+                    deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
                     if p.PROPELLERS:
-                        p.base_dist = np.array([7., -7., 0.])
+                        p.apply_propeller_force(prop_force)
+                else:
+                    deltaFr_l0 = 0.
+                    deltaFr_r0 = 0.
 
                 if p.type_of_disturbance != 'none':
-                    p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration)
+                    if delta_t < p.dist_duration:
+                        p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "blue", scale=4.5)
 
-        if (p.stateMachine == 'flying'):
-            # after the thrust we start MPC it will start from time 0.05 so the index should be 12
-            # applying forces to ropes
-            delta_t = p.time - p.end_orienting
-            if p.MPC_control:
-                deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
-                if p.PROPELLERS:
-                    p.apply_propeller_force(prop_force)
-            else:
-                deltaFr_l0 = 0.
-                deltaFr_r0 = 0.
+                p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
+                p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
 
-            if p.type_of_disturbance != 'none':
-                if delta_t < p.dist_duration:
-                    p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "blue", scale=4.5)
-
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
-            if not p.PAPER:
                 #plot rope forces
                 p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
                 p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
 
-            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
-            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-            end_flying = p.startJump + p.orientTime +  p.jumps[p.jumpNumber]["Tf"]
+                p.tau_ffwd[p.rope_index[0]] = p.Fr_r
+                p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+                end_flying = p.startJump + p.orientTime +  p.jumps[p.jumpNumber]["Tf"]
 
-            if (p.time >= end_flying):
-                print(colored("Stop Flying", "blue"))
-                # reset the qdes
-                # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
-                p.resetRope()
-                matlab_target = p.jumps[p.jumpNumber]["targetPos"]
-                p.jumpNumber += 1
-                if (p.jumpNumber < p.numberOfJumps):
-                    p.stateMachine = 'idle'
-                    # reset for multiple jumps
-                    p.startJump = p.time
-                else:
-                    #p.pause_physics_client()
-
-                    landing_location = p.base_pos-p.mat2Gazebo
-                    print(colored(f"target achieved (in matlab convention) is: {landing_location}", "blue"))
-                    print(colored(f" while it should be  {matlab_target}", "blue"))
-                    print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
-                    #reset for the next jump
-                    p.plotStuff()
-                    p.startupProcedure()
-                    p.initVars()
-                    p.q_des = np.copy(p.q_des_q0)
-
-                    break
-
-        if (p.stateMachine == 'flying_and_reorient_lander'):
-            # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
-            delta_t = p.time - p.end_orienting
-            if p.MPC_control:
-                deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
-            else:
-                deltaFr_l0 = 0.
-                deltaFr_r0 = 0.
-
-            if p.type_of_disturbance != 'none':
-                if delta_t < p.dist_duration:
-                    p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "blue", scale=4.5)
-
-            if not p.optimal_control_traj_finished:
-                if p.getIndex(delta_t) == -1:
-                    # start again pid gains and reset qdes
+                if (p.time >= end_flying):
+                    print(colored("Stop Flying", "blue"))
+                    # reset the qdes
+                    # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
                     p.resetRope()
-                    p.optimal_control_traj_finished = True
+                    matlab_target = p.jumps[p.jumpNumber]["targetPos"]
+                    p.jumpNumber += 1
+                    if (p.jumpNumber < p.numberOfJumps):
+                        p.stateMachine = 'idle'
+                        # reset for multiple jumps
+                        p.startJump = p.time
+                    else:
+                        #p.pause_physics_client()
+                        landing_location = p.base_pos-p.mat2Gazebo
+                        print(colored(f"target achieved (in matlab convention) is: {landing_location}", "blue"))
+                        print(colored(f" while it should be  {matlab_target}", "blue"))
+                        print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
+
+                        # fundamental: same everything before initVars!
+                        p.plotStuff()
+
+                        #reset for the next jump
+                        p.startupProcedure()
+                        p.initVars()
+                        p.q_des = np.copy(p.q_des_q0)
+                        if p.PAPER:
+                            p.recorder.stop_recording_srv()
+                        break
+
+            if (p.stateMachine == 'flying_and_reorient_lander'):
+                # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
+                delta_t = p.time - p.end_orienting
+                if p.MPC_control:
+                    deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
                 else:
-                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] +deltaFr_l0
-                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
-                # check for early td and in case reset rope
-                if p.detectTouchDown():
-                    p.resetRope()
-                    print(colored("Early TD detected, Start landing", "blue"))
-                    p.stateMachine = 'landing'
-            else: # you are checking for delayed TD you have already reset rope
-                if p.detectTouchDown():
-                    print(colored("Start landing", "blue"))
-                    p.stateMachine = 'landing'
+                    deltaFr_l0 = 0.
+                    deltaFr_r0 = 0.
 
-            # plot forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
-            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
-            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-            end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
+                if p.type_of_disturbance != 'none':
+                    if delta_t < p.dist_duration:
+                        p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "blue", scale=4.5)
 
-            # reorient legs to land parallel to the wall
-            rpy = p.math_utils.rot2eul(p.w_R_b)
-            p.q_des[p.landing_joints] = np.array([-0.8, 0.8]) - np.array([rpy[2], rpy[2]])
+                if not p.optimal_control_traj_finished:
+                    if p.getIndex(delta_t) == -1:
+                        # start again pid gains and reset qdes
+                        p.resetRope()
+                        p.optimal_control_traj_finished = True
+                    else:
+                        p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] +deltaFr_l0
+                        p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
+                    # check for early td and in case reset rope
+                    if p.detectTouchDown():
+                        p.resetRope()
+                        print(colored("Early TD detected, Start landing", "blue"))
+                        p.stateMachine = 'landing'
+                else: # you are checking for delayed TD you have already reset rope
+                    if p.detectTouchDown():
+                        print(colored("Start landing", "blue"))
+                        p.stateMachine = 'landing'
+
+                # plot rope forces
+                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
+                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
+                p.tau_ffwd[p.rope_index[0]] = p.Fr_r
+                p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+                end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
+
+                # reorient legs to land parallel to the wall
+                rpy = p.math_utils.rot2eul(p.w_R_b)
+                p.q_des[p.landing_joints] = np.array([-0.8, 0.8]) - np.array([rpy[2], rpy[2]])
 
 
-        if (p.stateMachine == 'landing'):
-            p.tau_ffwd[p.landing_joints] = p.computeLandingControl()
+            if (p.stateMachine == 'landing'):
+                p.tau_ffwd[p.landing_joints] = p.computeLandingControl()
 
-        # plot ropes
-        p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
-        p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
-        # plot contact forces on landing legs
-        if p.landing:
-            p.ros_pub.add_arrow(p.x_landing_l, p.contactForceW_l / p.force_scale, "blue", scale=4.5)
-            p.ros_pub.add_arrow(p.x_landing_r, p.contactForceW_r / p.force_scale, "blue", scale=4.5)
-        # plot contact force on retractable leg
-        p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=4.5)
+            # plot ropes
+            if not p.PAPER:
+                p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
+                p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+            # plot contact forces on landing legs
+            if p.landing:
+                p.ros_pub.add_arrow(p.x_landing_l, p.contactForceW_l / p.force_scale, "blue", scale=4.5)
+                p.ros_pub.add_arrow(p.x_landing_r, p.contactForceW_r / p.force_scale, "blue", scale=4.5)
+            # plot contact force on retractable leg
+            p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=4.5)
 
-        #plot target position (whenever is available)
-        try:
-            p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3)
-        except:
-            pass
-        p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.publishVisual()
+            #plot target position (whenever is available)
+            try:
+                p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3)
+            except:
+                pass
+            p.ros_pub.add_marker(p.x_ee, radius=0.05)
+            p.ros_pub.publishVisual()
 
-        # send commands to gazebo
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),3)  # to avoid issues of dt 0.0009999
-        if (p.time > p.start_logging):
-            p.logData()
-        # wait for synconization of the control loop
-        rate.sleep()
+            # send commands to gazebo
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),3)  # to avoid issues of dt 0.0009999
+            if (p.time > p.start_logging):
+                p.logData()
+            # wait for synconization of the control loop
+            rate.sleep()
 
 
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
-    fig = plt.figure(figure_id)
+    fig = plt.figure()
     fig.suptitle(name, fontsize=20)
 
     plt.subplot(3,1,1)

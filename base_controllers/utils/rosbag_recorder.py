@@ -50,7 +50,7 @@ import signal
 import time
 import rospy
 from std_srvs.srv import Empty, EmptyResponse
-
+from base_controllers.utils.common_functions import checkRosMaster
 
 def signal_process_and_children(pid, signal_to_send, wait=False):
     process = psutil.Process(pid)
@@ -87,14 +87,11 @@ class RosbagControlledRecorder(object):
             self.start_recording_srv()
 
     def start_recording_srv(self, service_message=None):
-        if self.recording_started:
-            rospy.logwarn("Recording has already started - nothing to be done")
-        else:
-            process = subprocess.Popen(self.rosbag_command)
-            self.process_pid = process.pid
-            self.recording_started = True
-            rospy.loginfo("Started recording rosbag")
-            return EmptyResponse()
+        process = subprocess.Popen(self.rosbag_command)
+        self.process_pid = process.pid
+        self.recording_started = True
+        rospy.loginfo("Started recording rosbag")
+        return EmptyResponse()
 
     def pause_resume_recording_srv(self, service_message=None):
         if self.recording_started:
@@ -127,12 +124,13 @@ class RosbagControlledRecorder(object):
 
 
 if __name__ == '__main__':
+    checkRosMaster()
     rospy.init_node('rosbag_controlled_recording')
 
     # Get parameters
 
     # Start recorder object
-    recorder = RosbagControlledRecorder('rosbag record -a',  True)
+    recorder = RosbagControlledRecorder('rosbag record -a',  False)
 
     # Services
     start_service = rospy.Service('~start', Empty, recorder.start_recording_srv)
@@ -141,11 +139,17 @@ if __name__ == '__main__':
 
     # Recording is also stopped on node shutdown. This allows stopping to be done via service call or regular Ctrl-C
     rospy.on_shutdown(recorder.stop_recording_srv)
-
+    print("start 1st bag")
     time.sleep(4)
     recorder.start_recording_srv()
     time.sleep(5)
     recorder.stop_recording_srv()
+    print("start 2nd bag")
+    time.sleep(10)
+    recorder.start_recording_srv()
+    time.sleep(5)
+    recorder.stop_recording_srv()
+
 
     while not rospy.is_shutdown():
         if recorder.recording_stopped:  # stop main node if recording has finished
