@@ -57,6 +57,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
         self.PAPER = False # use this for taking videos cause it does not show some things
+        self.SAVE_BAG = False
+        self.OBSTACLE_AVOIDANCE = False
 
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -127,7 +129,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.eng.addpath('./codegen', nargout=0)
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
-        if self.PAPER:
+        if self.SAVE_BAG:
             self.recorder = RosbagControlledRecorder('rosbag record -a', False)
 
     def getRobotMass(self):
@@ -544,14 +546,19 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def initOptim(self, p0, pf):
         ##offline optim vars
-        self.Fleg_max = 300.
-        self.Fr_max = 90.
+        if self.OBSTACLE_AVOIDANCE:
+            self.Fleg_max = 600.
+            self.Fr_max = 120.
+        else:
+            self.Fleg_max = 300.
+            self.Fr_max = 90.
         self.mu = 0.8
 
         self.optim_params = {}
         self.optim_params['jump_clearance'] = 1.
         self.optim_params['m'] = self.getRobotMass()
-        self.optim_params['obstacle_avoidance'] = False
+
+        self.optim_params['obstacle_avoidance'] = self.OBSTACLE_AVOIDANCE
         self.optim_params['num_params'] = 4.
         self.optim_params['int_method'] = 'rk4'
         self.optim_params['N_dyn'] = 30.
@@ -765,7 +772,8 @@ def talker(p):
     p.start()
     additional_args = ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
                        'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
-                       'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z'])]
+                       'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z']),
+                       'obstacle:='+str(p.OBSTACLE_AVOIDANCE)]
     if p.landing:
         additional_args.append('wall_inclination:='+ str(conf.robot_params[p.robot_name]['wall_inclination']))
     p.startSimulator(world_name="climbingrobot2.world",additional_args=additional_args)
@@ -904,7 +912,10 @@ def talker(p):
     if p.PAPER:
         landingW = p.generateTargetPoints(p0)
     else:
-        landingW = np.array([0.28, 4, -4]).reshape(3,1)
+        if p.OBSTACLE_AVOIDANCE:
+            landingW = np.array([0.28, 4, -10]).reshape(3,1)
+        else:
+            landingW = np.array([0.28, 4, -4]).reshape(3, 1)
 
     for n_test in range(landingW.shape[1]):
         pf = landingW[:,n_test]
@@ -950,7 +961,7 @@ def talker(p):
                 p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
                 p.start_logging = p.end_orienting
                 p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
-                if p.PAPER:
+                if p.SAVE_BAG:
                     p.recorder.start_recording_srv()
 
 
@@ -1072,7 +1083,7 @@ def talker(p):
 
                         # fundamental: same everything before initVars!
                         p.plotStuff()
-                        if p.PAPER:
+                        if p.SAVE_BAG:
                             p.recorder.stop_recording_srv()
                         #reset for the next jump
                         p.startupProcedure()

@@ -140,14 +140,14 @@ if __name__ == '__main__':
     # Recording is also stopped on node shutdown. This allows stopping to be done via service call or regular Ctrl-C
     rospy.on_shutdown(recorder.stop_recording_srv)
     print("start 1st bag")
-    time.sleep(4)
+    time.sleep(2)
     recorder.start_recording_srv()
     time.sleep(5)
     recorder.stop_recording_srv()
     print("start 2nd bag")
     time.sleep(10)
     recorder.start_recording_srv()
-    time.sleep(5)
+    time.sleep(10)
     recorder.stop_recording_srv()
 
 
