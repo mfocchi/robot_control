@@ -52,7 +52,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.MPC_control = True
         self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
         self.MPC_uses_constraints = True
-        self.PAPER = False # use this for taking videos
+        self.PROPELLERS = True
+        self.PAPER = False # use this for taking videos cause it does not show some things
 
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -71,6 +72,19 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
         self.r_leg = 0.3
         print("Initialized climbingrobot controller---------------------------------------------------------------")
+
+    def apply_propeller_force(self, ext_force):
+        # create force per to ropes plane
+        self.prop_forceW  = self.n_bar * ext_force
+        self.ros_pub.add_arrow(self.base_pos, self.prop_forceW/p.force_scale , "blue", scale=3.5)
+        wrench = Wrench()
+        wrench.force.x = self.prop_forceW [0]
+        wrench.force.y = self.prop_forceW [1]
+        wrench.force.z = self.prop_forceW [2]
+        wrench.torque.x = 0.
+        wrench.torque.y = 0.
+        wrench.torque.z = 0.
+        self.pub_prop_force.publish(wrench)
 
     def applyWrench(self, Fx=0, Fy=0, Fz=0, Mx=0, My=0, Mz=0,  time_interval=0):
         wrench = Wrench()
@@ -108,6 +122,8 @@ class ClimbingrobotController(BaseControllerFixed):
         # this is for the matlab optim
         self.eng = matlab.engine.start_matlab()
         self.eng.addpath('./codegen', nargout=0)
+        if self.PROPELLERS:
+            self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -121,13 +137,13 @@ class ClimbingrobotController(BaseControllerFixed):
     def updateKinematicsDynamics(self):
         # q is continuously updated
         self.robot.computeAllTerms(self.q, self.qd )
-        # joint space inertia matrix                
+        # joint space inertia matrix
         self.M = self.robot.mass(self.q )
-        # bias terms                
+        # bias terms
         self.h = self.robot.nle(self.q  , self.qd )
-        #gravity terms                
+        #gravity terms
         self.g = self.robot.gravity(self.q )
-        #compute ee position  in the world frame  
+        #compute ee position  in the world frame
         frame_name = conf.robot_params[self.robot_name]['ee_frame']
         # this is expressed in a workdframe with the origin attached to the base frame origin
         self.anchor_pos = self.robot.framePlacement(self.q, self.robot.model.getFrameId('anchor')).translation
@@ -175,8 +191,8 @@ class ClimbingrobotController(BaseControllerFixed):
         # use geometric intuition for psid
         n_par = (self.anchor_pos - self.anchor_pos2) / np.linalg.norm(self.anchor_pos - self.anchor_pos2)
         rope2_axis = (self.base_pos - self.anchor_pos2) / np.linalg.norm(self.base_pos - self.anchor_pos2)
-        n_bar = np.cross(n_par, rope2_axis) / np.linalg.norm(np.cross(n_par, rope2_axis))
-        self.psid = (n_bar.dot(self.base_vel)) / np.linalg.norm(np.cross(n_par, self.base_pos-self.anchor_pos2) )
+        self.n_bar = np.cross(n_par, rope2_axis) / np.linalg.norm(np.cross(n_par, rope2_axis))
+        self.psid = (self.n_bar.dot(self.base_vel)) / np.linalg.norm(np.cross(n_par, self.base_pos-self.anchor_pos2) )
 
         # compute com variables
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
@@ -598,7 +614,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params_mpc['mpc_dt'] = matlab.double(self.matvars['Tf'] / (self.optim_params['N_dyn'] - 1))
         self.deltaFr_l =np.zeros((int(self.mpc_N)))
         self.deltaFr_r = np.zeros((int(self.mpc_N)))
-        self.deltaFr_r = np.zeros((int(self.mpc_N)))
+        self.propeller_force = np.zeros((int(self.mpc_N)))
 
         if self.landing:
             self.Fr_max_mpc = 150.
@@ -641,18 +657,21 @@ class ClimbingrobotController(BaseControllerFixed):
         #         else:
         #             x = mat_vector2python(self.eng.optimize_cpp_mpc_no_constraints_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
         #
+        #         # extract optim vars
+        #         self.deltaFr_l = x[:self.mpc_N]
+        #         self.deltaFr_r = x[self.mpc_N:]
         #         # online plot MPC
-        #         p.onlinePlotMPC(x)
+        #         p.onlinePlotMPC(self.deltaFr_l, self.deltaFr_r)
         #         self.unpause_physics_client()
-        #
-        # else:  # whenever the MPC should not be updated anymore use delta_t to imncrement mpc_index_ffwd
-        #     #print("delta_t MOD dtMpc", (delta_t % self.optim_params_mpc['mpc_dt']))
-        #     if (delta_t % self.optim_params_mpc['mpc_dt']) < 0.001:  # increment mpc_index_ffwd every mpc_dt
-        #         self.mpc_index_ffwd += 1
-        #         if self.mpc_index_ffwd > (self.mpc_N-1): # reference is finished keep the last computed one
-        #             self.mpc_index_ffwd = self.mpc_N-1
-        #         #debug
-        #         #print("stop mpc, applying ffwd, mpc_index_ffwd: ", self.mpc_index_ffwd)
+
+        else:  # whenever the MPC should not be updated anymore use delta_t to imncrement mpc_index_ffwd
+            #print("delta_t MOD dtMpc", (delta_t % self.optim_params_mpc['mpc_dt']))
+            if (delta_t % self.optim_params_mpc['mpc_dt']) < 0.001:  # increment mpc_index_ffwd every mpc_dt
+                self.mpc_index_ffwd += 1
+                if self.mpc_index_ffwd > (self.mpc_N-1): # reference is finished keep the last computed one
+                    self.mpc_index_ffwd = self.mpc_N-1
+                #debug
+                #print("stop mpc, applying ffwd, mpc_index_ffwd: ", self.mpc_index_ffwd)
 
         # This is better for const dist cause it keeps optimizing till the end
         if (self.mpc_index != self.mpc_index_old): # do optim only every dtMPC  not every dt
@@ -673,22 +692,30 @@ class ClimbingrobotController(BaseControllerFixed):
 
             self.pause_physics_client()
             #perform optimization
-            if self.MPC_uses_constraints:
-                x = mat_vector2python(self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+            if p.PROPELLERS:
+                x = mat_vector2python(self.eng.optimize_cpp_mpc_propellers_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+                # extract optim vars
+                self.deltaFr_l = x[:self.mpc_N]
+                self.deltaFr_r = x[self.mpc_N:2*self.mpc_N]
+                self.propeller_force = x[2*self.mpc_N:3*self.mpc_N]
             else:
-                x = mat_vector2python(self.eng.optimize_cpp_mpc_no_constraints_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+                if self.MPC_uses_constraints:
+                    x = mat_vector2python(self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0,self.Fr_max_mpc, self.mpc_N,self.optim_params_mpc))
+                else:
+                    x = mat_vector2python(self.eng.optimize_cpp_mpc_no_constraints_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+                # extract optim vars
+                self.deltaFr_l = x[:self.mpc_N]
+                self.deltaFr_r = x[self.mpc_N:]
 
             #online plot MPC
-            p.onlinePlotMPC(x)
+            p.onlinePlotMPC(self.deltaFr_l, self.deltaFr_r)
             self.unpause_physics_client()
 
         self.mpc_index_old = self.mpc_index
 
-        return self.deltaFr_l[self.mpc_index_ffwd],self.deltaFr_r[self.mpc_index_ffwd]
+        return self.deltaFr_l[self.mpc_index_ffwd],self.deltaFr_r[self.mpc_index_ffwd], self.propeller_force[self.mpc_index_ffwd]
 
-    def onlinePlotMPC(self,x):
-        self.deltaFr_l = x[:self.mpc_N]  # eval matlab array this way
-        self.deltaFr_r = x[self.mpc_N:]
+    def onlinePlotMPC(self,deltaFr_l, deltaFr_r):
         # debug
         self.ax1.clear()
         self.ax2.clear()
@@ -696,15 +723,29 @@ class ClimbingrobotController(BaseControllerFixed):
         self.ax2.set_label("delta Frr")
         self.ax1.grid()
         self.ax2.grid()
-        self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_l, "or-")
-        self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], self.deltaFr_r, "or-")
+        #MPC action
+        self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], deltaFr_l, "or-")
+        self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], deltaFr_r, "or-")
+        # full action
         self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
-                      self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N] + self.deltaFr_l, "ok-")
+                      self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N] + deltaFr_l, "ok-")
         self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
-                      self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N] + self.deltaFr_r, "ok-")
+                      self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N] + deltaFr_r, "ok-")
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
+    def generateTargetPoints(self):
+        # generate points in an ellipse of axis a b = 2.5 around p0
+        alpha = np.deg2rad(45)
+        theta = np.linspace(0, 2 * np.pi, 9)
+        # main axes ellipse
+        a = (self.anchor_distance_y-0.02) / np.cos(alpha)
+        b = 4
+        y = a * np.cos(theta)
+        z = b * np.sin(theta)
+
+        Rx = np.array([[np.cos(-alpha), -np.sin(-alpha)], [np.sin(-alpha), np.cos(-alpha)]])
+        return Rx.dot(np.vstack((y, z)))
 
 def talker(p):
     p.start()
@@ -845,6 +886,11 @@ def talker(p):
     # p0 is defined wrt anchor1 pos in matlab convention
     # jump params
     p0 = np.array([0.28,  2.5, -6.10104])  # there is singularity for px = 0!
+
+    #landingW = p.generateTargetPoints()
+    # for test in range(landingW.shape[1]):
+    #     pf = p0.copy()
+    #     #pf[1:] = landingW[:,test]
     pf = np.array([0.28, 4, -4])
 
 
@@ -951,11 +997,15 @@ def talker(p):
                 if p.type_of_disturbance == 'impulse':
                     p.dist_duration = 0.2
                     p.base_dist = np.array([0., -50., 30.])
+                    if p.PROPELLERS:
+                        p.base_dist = np.array([50., -50., 30.])
 
                 #add constant disturbance
                 if p.type_of_disturbance == 'const':
                     p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
                     p.base_dist = np.array([0., -7., 0.])
+                    if p.PROPELLERS:
+                        p.base_dist = np.array([7., -7., 0.])
 
                 if p.type_of_disturbance != 'none':
                     p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration)
@@ -965,7 +1015,9 @@ def talker(p):
             # applying forces to ropes
             delta_t = p.time - p.end_orienting
             if p.MPC_control:
-                deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
+                deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
+                if p.PROPELLERS:
+                    p.apply_propeller_force(prop_force)
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
@@ -998,10 +1050,17 @@ def talker(p):
                     p.startJump = p.time
                 else:
                     #p.pause_physics_client()
+
                     landing_location = p.base_pos-p.mat2Gazebo
                     print(colored(f"target achieved (in matlab convention) is: {landing_location}", "blue"))
                     print(colored(f" while it should be  {matlab_target}", "blue"))
                     print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
+                    #reset for the next jump
+                    p.plotStuff()
+                    p.startupProcedure()
+                    p.initVars()
+                    p.q_des = np.copy(p.q_des_q0)
+
                     break
 
         if (p.stateMachine == 'flying_and_reorient_lander'):
@@ -1060,7 +1119,7 @@ def talker(p):
         # plot contact force on retractable leg
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=4.5)
 
-        #plot target position (whene
+        #plot target position (whenever is available)
         try:
             p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3)
         except:
@@ -1087,7 +1146,7 @@ def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = Non
     plt.plot(time_log, var[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='blue')
     if (var_mat is not None):
         plt.plot(time_mat, var_mat[0, :], linestyle='-', marker="o", markersize=0,  lw=5, color='red')
-    plt.grid()
+    plt.grid(True)
     plt.legend(['act', 'ref'])
 
     plt.subplot(3,1,2)
@@ -1118,8 +1177,8 @@ if __name__ == '__main__':
     finally:
         ros.signal_shutdown("killed")
         p.deregister_node()
-        if conf.plotting:
-            p.plotStuff()
+        # if conf.plotting:
+        #     p.plotStuff()
 
 
         

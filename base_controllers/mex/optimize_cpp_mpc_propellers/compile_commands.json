@@ -1,0 +1,440 @@
+[
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  optimize_cpp_mpc_propellers_data.c -o build/glnxa64/optimize_cpp_mpc_propellers_data.o",
+    "file": "optimize_cpp_mpc_propellers_data.c",
+    "output": "build/glnxa64/optimize_cpp_mpc_propellers_data.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  rt_nonfinite.c -o build/glnxa64/rt_nonfinite.o",
+    "file": "rt_nonfinite.c",
+    "output": "build/glnxa64/rt_nonfinite.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  optimize_cpp_mpc_propellers_initialize.c -o build/glnxa64/optimize_cpp_mpc_propellers_initialize.o",
+    "file": "optimize_cpp_mpc_propellers_initialize.c",
+    "output": "build/glnxa64/optimize_cpp_mpc_propellers_initialize.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  optimize_cpp_mpc_propellers_terminate.c -o build/glnxa64/optimize_cpp_mpc_propellers_terminate.o",
+    "file": "optimize_cpp_mpc_propellers_terminate.c",
+    "output": "build/glnxa64/optimize_cpp_mpc_propellers_terminate.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  optimize_cpp_mpc_propellers.c -o build/glnxa64/optimize_cpp_mpc_propellers.o",
+    "file": "optimize_cpp_mpc_propellers.c",
+    "output": "build/glnxa64/optimize_cpp_mpc_propellers.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  factoryConstruct.c -o build/glnxa64/factoryConstruct.o",
+    "file": "factoryConstruct.c",
+    "output": "build/glnxa64/factoryConstruct.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  factoryConstruct1.c -o build/glnxa64/factoryConstruct1.o",
+    "file": "factoryConstruct1.c",
+    "output": "build/glnxa64/factoryConstruct1.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  factoryConstruct2.c -o build/glnxa64/factoryConstruct2.o",
+    "file": "factoryConstruct2.c",
+    "output": "build/glnxa64/factoryConstruct2.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  integrate_dynamics.c -o build/glnxa64/integrate_dynamics.o",
+    "file": "integrate_dynamics.c",
+    "output": "build/glnxa64/integrate_dynamics.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  vecnorm.c -o build/glnxa64/vecnorm.o",
+    "file": "vecnorm.c",
+    "output": "build/glnxa64/vecnorm.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  diff.c -o build/glnxa64/diff.o",
+    "file": "diff.c",
+    "output": "build/glnxa64/diff.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  ixamax.c -o build/glnxa64/ixamax.o",
+    "file": "ixamax.c",
+    "output": "build/glnxa64/ixamax.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeComplError.c -o build/glnxa64/computeComplError.o",
+    "file": "computeComplError.c",
+    "output": "build/glnxa64/computeComplError.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xdot.c -o build/glnxa64/xdot.o",
+    "file": "xdot.c",
+    "output": "build/glnxa64/xdot.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xnrm2.c -o build/glnxa64/xnrm2.o",
+    "file": "xnrm2.c",
+    "output": "build/glnxa64/xnrm2.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xasum.c -o build/glnxa64/xasum.o",
+    "file": "xasum.c",
+    "output": "build/glnxa64/xasum.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  interface/_coder_optimize_cpp_mpc_propellers_api.c -o build/glnxa64/_coder_optimize_cpp_mpc_propellers_api.o",
+    "file": "interface/_coder_optimize_cpp_mpc_propellers_api.c",
+    "output": "build/glnxa64/_coder_optimize_cpp_mpc_propellers_api.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  interface/_coder_optimize_cpp_mpc_propellers_mex.c -o build/glnxa64/_coder_optimize_cpp_mpc_propellers_mex.o",
+    "file": "interface/_coder_optimize_cpp_mpc_propellers_mex.c",
+    "output": "build/glnxa64/_coder_optimize_cpp_mpc_propellers_mex.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xcopy.c -o build/glnxa64/xcopy.o",
+    "file": "xcopy.c",
+    "output": "build/glnxa64/xcopy.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  compressBounds.c -o build/glnxa64/compressBounds.o",
+    "file": "compressBounds.c",
+    "output": "build/glnxa64/compressBounds.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeConstraints_.c -o build/glnxa64/computeConstraints_.o",
+    "file": "computeConstraints_.c",
+    "output": "build/glnxa64/computeConstraints_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeForwardDifferences.c -o build/glnxa64/computeForwardDifferences.o",
+    "file": "computeForwardDifferences.c",
+    "output": "build/glnxa64/computeForwardDifferences.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  updateWorkingSetForNewQP.c -o build/glnxa64/updateWorkingSetForNewQP.o",
+    "file": "updateWorkingSetForNewQP.c",
+    "output": "build/glnxa64/updateWorkingSetForNewQP.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  setProblemType.c -o build/glnxa64/setProblemType.o",
+    "file": "setProblemType.c",
+    "output": "build/glnxa64/setProblemType.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  modifyOverheadPhaseOne_.c -o build/glnxa64/modifyOverheadPhaseOne_.o",
+    "file": "modifyOverheadPhaseOne_.c",
+    "output": "build/glnxa64/modifyOverheadPhaseOne_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  driver.c -o build/glnxa64/driver.o",
+    "file": "driver.c",
+    "output": "build/glnxa64/driver.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeGradLag.c -o build/glnxa64/computeGradLag.o",
+    "file": "computeGradLag.c",
+    "output": "build/glnxa64/computeGradLag.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeLambdaLSQ.c -o build/glnxa64/computeLambdaLSQ.o",
+    "file": "computeLambdaLSQ.c",
+    "output": "build/glnxa64/computeLambdaLSQ.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  factorQRE.c -o build/glnxa64/factorQRE.o",
+    "file": "factorQRE.c",
+    "output": "build/glnxa64/factorQRE.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xgeqp3.c -o build/glnxa64/xgeqp3.o",
+    "file": "xgeqp3.c",
+    "output": "build/glnxa64/xgeqp3.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xorgqr.c -o build/glnxa64/xorgqr.o",
+    "file": "xorgqr.c",
+    "output": "build/glnxa64/xorgqr.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xgemv.c -o build/glnxa64/xgemv.o",
+    "file": "xgemv.c",
+    "output": "build/glnxa64/xgemv.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xtrsv.c -o build/glnxa64/xtrsv.o",
+    "file": "xtrsv.c",
+    "output": "build/glnxa64/xtrsv.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  sortLambdaQP.c -o build/glnxa64/sortLambdaQP.o",
+    "file": "sortLambdaQP.c",
+    "output": "build/glnxa64/sortLambdaQP.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  saveJacobian.c -o build/glnxa64/saveJacobian.o",
+    "file": "saveJacobian.c",
+    "output": "build/glnxa64/saveJacobian.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  step.c -o build/glnxa64/step.o",
+    "file": "step.c",
+    "output": "build/glnxa64/step.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  normal.c -o build/glnxa64/normal.o",
+    "file": "normal.c",
+    "output": "build/glnxa64/normal.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  driver1.c -o build/glnxa64/driver1.o",
+    "file": "driver1.c",
+    "output": "build/glnxa64/driver1.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  PresolveWorkingSet.c -o build/glnxa64/PresolveWorkingSet.o",
+    "file": "PresolveWorkingSet.c",
+    "output": "build/glnxa64/PresolveWorkingSet.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  ComputeNumDependentEq_.c -o build/glnxa64/ComputeNumDependentEq_.o",
+    "file": "ComputeNumDependentEq_.c",
+    "output": "build/glnxa64/ComputeNumDependentEq_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  IndexOfDependentEq_.c -o build/glnxa64/IndexOfDependentEq_.o",
+    "file": "IndexOfDependentEq_.c",
+    "output": "build/glnxa64/IndexOfDependentEq_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  countsort.c -o build/glnxa64/countsort.o",
+    "file": "countsort.c",
+    "output": "build/glnxa64/countsort.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  removeConstr.c -o build/glnxa64/removeConstr.o",
+    "file": "removeConstr.c",
+    "output": "build/glnxa64/removeConstr.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  feasibleX0ForWorkingSet.c -o build/glnxa64/feasibleX0ForWorkingSet.o",
+    "file": "feasibleX0ForWorkingSet.c",
+    "output": "build/glnxa64/feasibleX0ForWorkingSet.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xgeqrf.c -o build/glnxa64/xgeqrf.o",
+    "file": "xgeqrf.c",
+    "output": "build/glnxa64/xgeqrf.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xgemm.c -o build/glnxa64/xgemm.o",
+    "file": "xgemm.c",
+    "output": "build/glnxa64/xgemm.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xtrsm.c -o build/glnxa64/xtrsm.o",
+    "file": "xtrsm.c",
+    "output": "build/glnxa64/xtrsm.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  factorQR.c -o build/glnxa64/factorQR.o",
+    "file": "factorQR.c",
+    "output": "build/glnxa64/factorQR.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  maxConstraintViolation.c -o build/glnxa64/maxConstraintViolation.o",
+    "file": "maxConstraintViolation.c",
+    "output": "build/glnxa64/maxConstraintViolation.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeFval.c -o build/glnxa64/computeFval.o",
+    "file": "computeFval.c",
+    "output": "build/glnxa64/computeFval.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  linearForm_.c -o build/glnxa64/linearForm_.o",
+    "file": "linearForm_.c",
+    "output": "build/glnxa64/linearForm_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  iterate.c -o build/glnxa64/iterate.o",
+    "file": "iterate.c",
+    "output": "build/glnxa64/iterate.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeGrad_StoreHx.c -o build/glnxa64/computeGrad_StoreHx.o",
+    "file": "computeGrad_StoreHx.c",
+    "output": "build/glnxa64/computeGrad_StoreHx.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xaxpy.c -o build/glnxa64/xaxpy.o",
+    "file": "xaxpy.c",
+    "output": "build/glnxa64/xaxpy.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeFval_ReuseHx.c -o build/glnxa64/computeFval_ReuseHx.o",
+    "file": "computeFval_ReuseHx.c",
+    "output": "build/glnxa64/computeFval_ReuseHx.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  squareQ_appendCol.c -o build/glnxa64/squareQ_appendCol.o",
+    "file": "squareQ_appendCol.c",
+    "output": "build/glnxa64/squareQ_appendCol.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xrot.c -o build/glnxa64/xrot.o",
+    "file": "xrot.c",
+    "output": "build/glnxa64/xrot.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xpotrf.c -o build/glnxa64/xpotrf.o",
+    "file": "xpotrf.c",
+    "output": "build/glnxa64/xpotrf.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  solve.c -o build/glnxa64/solve.o",
+    "file": "solve.c",
+    "output": "build/glnxa64/solve.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  xscal.c -o build/glnxa64/xscal.o",
+    "file": "xscal.c",
+    "output": "build/glnxa64/xscal.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  compute_lambda.c -o build/glnxa64/compute_lambda.o",
+    "file": "compute_lambda.c",
+    "output": "build/glnxa64/compute_lambda.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  feasibleratiotest.c -o build/glnxa64/feasibleratiotest.o",
+    "file": "feasibleratiotest.c",
+    "output": "build/glnxa64/feasibleratiotest.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  addBoundToActiveSetMatrix_.c -o build/glnxa64/addBoundToActiveSetMatrix_.o",
+    "file": "addBoundToActiveSetMatrix_.c",
+    "output": "build/glnxa64/addBoundToActiveSetMatrix_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  relaxed.c -o build/glnxa64/relaxed.o",
+    "file": "relaxed.c",
+    "output": "build/glnxa64/relaxed.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  updatePenaltyParam.c -o build/glnxa64/updatePenaltyParam.o",
+    "file": "updatePenaltyParam.c",
+    "output": "build/glnxa64/updatePenaltyParam.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  soc.c -o build/glnxa64/soc.o",
+    "file": "soc.c",
+    "output": "build/glnxa64/soc.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeLinearResiduals.c -o build/glnxa64/computeLinearResiduals.o",
+    "file": "computeLinearResiduals.c",
+    "output": "build/glnxa64/computeLinearResiduals.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  test_exit.c -o build/glnxa64/test_exit.o",
+    "file": "test_exit.c",
+    "output": "build/glnxa64/test_exit.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  computeDeltaLag.c -o build/glnxa64/computeDeltaLag.o",
+    "file": "computeDeltaLag.c",
+    "output": "build/glnxa64/computeDeltaLag.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  BFGSUpdate.c -o build/glnxa64/BFGSUpdate.o",
+    "file": "BFGSUpdate.c",
+    "output": "build/glnxa64/BFGSUpdate.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  optimize_cpp_mpc_propellers_emxutil.c -o build/glnxa64/optimize_cpp_mpc_propellers_emxutil.o",
+    "file": "optimize_cpp_mpc_propellers_emxutil.c",
+    "output": "build/glnxa64/optimize_cpp_mpc_propellers_emxutil.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  interface/_coder_optimize_cpp_mpc_propellers_info.c -o build/glnxa64/_coder_optimize_cpp_mpc_propellers_info.o",
+    "file": "interface/_coder_optimize_cpp_mpc_propellers_info.c",
+    "output": "build/glnxa64/_coder_optimize_cpp_mpc_propellers_info.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/codegen/mex/optimize_cpp_mpc_propellers",
+    "command": "/usr/lib/ccache/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c  /usr/local/MATLAB/R2020b/extern/version/c_mexapi_version.c -o build/glnxa64/c_mexapi_version.o",
+    "file": "/usr/local/MATLAB/R2020b/extern/version/c_mexapi_version.c",
+    "output": "build/glnxa64/c_mexapi_version.o"
+  }
+]

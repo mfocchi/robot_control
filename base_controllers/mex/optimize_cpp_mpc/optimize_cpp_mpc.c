@@ -45,13 +45,13 @@ static emlrtMCInfo emlrtMCI = { 10,    /* lineNo */
   "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/cost_mpc.m"/* pName */
 };
 
-static emlrtMCInfo b_emlrtMCI = { 9,   /* lineNo */
+static emlrtMCInfo b_emlrtMCI = { 8,   /* lineNo */
   9,                                   /* colNo */
   "eval_pos_vel_mpc",                  /* fName */
   "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc/eval_pos_vel_mpc.m"/* pName */
 };
 
-static emlrtMCInfo c_emlrtMCI = { 33,  /* lineNo */
+static emlrtMCInfo c_emlrtMCI = { 37,  /* lineNo */
   13,                                  /* colNo */
   "integrate_dynamics",                /* fName */
   "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/integrate_dynamics.m"/* pName */
@@ -135,11 +135,11 @@ real_T b_anon(const real_T actual_state[6], const emxArray_real_T *ref_com,
 {
   static const int32_T iv[2] = { 1, 72 };
 
-  static const int32_T iv2[2] = { 1, 66 };
+  static const int32_T iv1[2] = { 1, 66 };
+
+  static const int32_T iv2[2] = { 1, 15 };
 
   static const int32_T iv3[2] = { 1, 15 };
-
-  static const int32_T iv4[2] = { 1, 15 };
 
   static const char_T u[72] = { 'c', 'o', 's', 't', '_', 'm', 'p', 'c', ':', 'w',
     'r', 'o', 'n', 'g', ' ', 'r', 'e', 'f', '_', 'c', 'o', 'm', ' ', 'i', 'n',
@@ -190,7 +190,7 @@ real_T b_anon(const real_T actual_state[6], const emxArray_real_T *ref_com,
   real_T dt_step;
   real_T varargout_1;
   real_T *pData;
-  int32_T iv1[2];
+  int32_T extra_forces_size[2];
   int32_T b_loop_ub;
   int32_T i;
   int32_T i1;
@@ -224,9 +224,9 @@ real_T b_anon(const real_T actual_state[6], const emxArray_real_T *ref_com,
     emlrtAssign(&y, m);
     disp(y, &emlrtMCI);
     b_y = NULL;
-    iv1[0] = ref_com->size[0];
-    iv1[1] = ref_com->size[1];
-    m = emlrtCreateNumericArray(2, &iv1[0], mxDOUBLE_CLASS, mxREAL);
+    extra_forces_size[0] = ref_com->size[0];
+    extra_forces_size[1] = ref_com->size[1];
+    m = emlrtCreateNumericArray(2, &extra_forces_size[0], mxDOUBLE_CLASS, mxREAL);
     pData = emlrtMxGetPr(m);
     i = 0;
     for (nx = 0; nx < ref_com->size[1]; nx++) {
@@ -440,7 +440,7 @@ real_T b_anon(const real_T actual_state[6], const emxArray_real_T *ref_com,
             }
           } else {
             d_y = NULL;
-            m = emlrtCreateCharArray(2, &iv3[0]);
+            m = emlrtCreateCharArray(2, &iv2[0]);
             emlrtInitCharArrayR2013a(emlrtRootTLSGlobal, 15, m, &c_u[0]);
             emlrtAssign(&d_y, m);
             disp(d_y, &c_emlrtMCI);
@@ -510,7 +510,7 @@ real_T b_anon(const real_T actual_state[6], const emxArray_real_T *ref_com,
                 }
               } else {
                 e_y = NULL;
-                m = emlrtCreateCharArray(2, &iv4[0]);
+                m = emlrtCreateCharArray(2, &iv3[0]);
                 emlrtInitCharArrayR2013a(emlrtRootTLSGlobal, 15, m, &c_u[0]);
                 emlrtAssign(&e_y, m);
                 disp(e_y, &c_emlrtMCI);
@@ -601,7 +601,7 @@ real_T b_anon(const real_T actual_state[6], const emxArray_real_T *ref_com,
 
     if (guard1) {
       c_y = NULL;
-      m = emlrtCreateCharArray(2, &iv2[0]);
+      m = emlrtCreateCharArray(2, &iv1[0]);
       emlrtInitCharArrayR2013a(emlrtRootTLSGlobal, 66, m, &b_u[0]);
       emlrtAssign(&c_y, m);
       disp(c_y, &b_emlrtMCI);

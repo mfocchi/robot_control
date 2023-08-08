@@ -1,0 +1,112 @@
+# CompilerName=gcc
+# Mode=optim
+ninja_required_version = 1.3
+
+# Basic folders
+root = .
+builddir = $root/build/glnxa64
+matlabdir = /usr/local/MATLAB/R2020b
+startdir = /home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes/mpc
+
+# Toolchain information
+cc = /usr/lib/ccache/gcc
+cxx = g++
+linker = /usr/lib/ccache/gcc
+linkerxx = g++
+
+cflags =  -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I "$root" -I "$startdir" -I "$root/interface" -I "$matlabdir/extern/include" -I "." -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c 
+
+cxxflags =  -fexceptions -fPIC -fno-omit-frame-pointer -pthread -std=c++11 -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c++11 -I "$root" -I "$startdir" -I "$root/interface" -I "$matlabdir/extern/include" -I "." -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mpc_propellers_mex -c 
+
+ldflags =  -pthread -Wl,--no-undefined -Wl,-rpath-link,$matlabdir/bin/glnxa64 -shared  -L"$matlabdir/bin/glnxa64" -lmx -lmex -lmat -lm -lstdc++  -o optimize_cpp_mpc_propellers_mex.mexa64 -L"$matlabdir/bin/glnxa64" -lmwblas -lmwlapack -lemlrt -lcovrt -lut -lmwmathutil  -Wl,--version-script,optimize_cpp_mpc_propellers_mex.map
+
+# Build Rules
+rule cc
+    command = $cc $cflags $in -o $out
+
+rule cxx
+    command = $cxx $cxxflags $in -o $out
+
+rule link
+    command = $linker $in $ldflags
+
+rule linkxx
+    command = $linkerxx $in $ldflags
+
+# Build
+build $builddir/optimize_cpp_mpc_propellers_data.o : cc $root/optimize_cpp_mpc_propellers_data.c
+build $builddir/rt_nonfinite.o : cc $root/rt_nonfinite.c
+build $builddir/optimize_cpp_mpc_propellers_initialize.o : cc $root/optimize_cpp_mpc_propellers_initialize.c
+build $builddir/optimize_cpp_mpc_propellers_terminate.o : cc $root/optimize_cpp_mpc_propellers_terminate.c
+build $builddir/optimize_cpp_mpc_propellers.o : cc $root/optimize_cpp_mpc_propellers.c
+build $builddir/factoryConstruct.o : cc $root/factoryConstruct.c
+build $builddir/factoryConstruct1.o : cc $root/factoryConstruct1.c
+build $builddir/factoryConstruct2.o : cc $root/factoryConstruct2.c
+build $builddir/integrate_dynamics.o : cc $root/integrate_dynamics.c
+build $builddir/vecnorm.o : cc $root/vecnorm.c
+build $builddir/diff.o : cc $root/diff.c
+build $builddir/ixamax.o : cc $root/ixamax.c
+build $builddir/computeComplError.o : cc $root/computeComplError.c
+build $builddir/xdot.o : cc $root/xdot.c
+build $builddir/xnrm2.o : cc $root/xnrm2.c
+build $builddir/xasum.o : cc $root/xasum.c
+build $builddir/_coder_optimize_cpp_mpc_propellers_api.o : cc $root/interface/_coder_optimize_cpp_mpc_propellers_api.c
+build $builddir/_coder_optimize_cpp_mpc_propellers_mex.o : cc $root/interface/_coder_optimize_cpp_mpc_propellers_mex.c
+build $builddir/xcopy.o : cc $root/xcopy.c
+build $builddir/compressBounds.o : cc $root/compressBounds.c
+build $builddir/computeConstraints_.o : cc $root/computeConstraints_.c
+build $builddir/computeForwardDifferences.o : cc $root/computeForwardDifferences.c
+build $builddir/updateWorkingSetForNewQP.o : cc $root/updateWorkingSetForNewQP.c
+build $builddir/setProblemType.o : cc $root/setProblemType.c
+build $builddir/modifyOverheadPhaseOne_.o : cc $root/modifyOverheadPhaseOne_.c
+build $builddir/driver.o : cc $root/driver.c
+build $builddir/computeGradLag.o : cc $root/computeGradLag.c
+build $builddir/computeLambdaLSQ.o : cc $root/computeLambdaLSQ.c
+build $builddir/factorQRE.o : cc $root/factorQRE.c
+build $builddir/xgeqp3.o : cc $root/xgeqp3.c
+build $builddir/xorgqr.o : cc $root/xorgqr.c
+build $builddir/xgemv.o : cc $root/xgemv.c
+build $builddir/xtrsv.o : cc $root/xtrsv.c
+build $builddir/sortLambdaQP.o : cc $root/sortLambdaQP.c
+build $builddir/saveJacobian.o : cc $root/saveJacobian.c
+build $builddir/step.o : cc $root/step.c
+build $builddir/normal.o : cc $root/normal.c
+build $builddir/driver1.o : cc $root/driver1.c
+build $builddir/PresolveWorkingSet.o : cc $root/PresolveWorkingSet.c
+build $builddir/ComputeNumDependentEq_.o : cc $root/ComputeNumDependentEq_.c
+build $builddir/IndexOfDependentEq_.o : cc $root/IndexOfDependentEq_.c
+build $builddir/countsort.o : cc $root/countsort.c
+build $builddir/removeConstr.o : cc $root/removeConstr.c
+build $builddir/feasibleX0ForWorkingSet.o : cc $root/feasibleX0ForWorkingSet.c
+build $builddir/xgeqrf.o : cc $root/xgeqrf.c
+build $builddir/xgemm.o : cc $root/xgemm.c
+build $builddir/xtrsm.o : cc $root/xtrsm.c
+build $builddir/factorQR.o : cc $root/factorQR.c
+build $builddir/maxConstraintViolation.o : cc $root/maxConstraintViolation.c
+build $builddir/computeFval.o : cc $root/computeFval.c
+build $builddir/linearForm_.o : cc $root/linearForm_.c
+build $builddir/iterate.o : cc $root/iterate.c
+build $builddir/computeGrad_StoreHx.o : cc $root/computeGrad_StoreHx.c
+build $builddir/xaxpy.o : cc $root/xaxpy.c
+build $builddir/computeFval_ReuseHx.o : cc $root/computeFval_ReuseHx.c
+build $builddir/squareQ_appendCol.o : cc $root/squareQ_appendCol.c
+build $builddir/xrot.o : cc $root/xrot.c
+build $builddir/xpotrf.o : cc $root/xpotrf.c
+build $builddir/solve.o : cc $root/solve.c
+build $builddir/xscal.o : cc $root/xscal.c
+build $builddir/compute_lambda.o : cc $root/compute_lambda.c
+build $builddir/feasibleratiotest.o : cc $root/feasibleratiotest.c
+build $builddir/addBoundToActiveSetMatrix_.o : cc $root/addBoundToActiveSetMatrix_.c
+build $builddir/relaxed.o : cc $root/relaxed.c
+build $builddir/updatePenaltyParam.o : cc $root/updatePenaltyParam.c
+build $builddir/soc.o : cc $root/soc.c
+build $builddir/computeLinearResiduals.o : cc $root/computeLinearResiduals.c
+build $builddir/test_exit.o : cc $root/test_exit.c
+build $builddir/computeDeltaLag.o : cc $root/computeDeltaLag.c
+build $builddir/BFGSUpdate.o : cc $root/BFGSUpdate.c
+build $builddir/optimize_cpp_mpc_propellers_emxutil.o : cc $root/optimize_cpp_mpc_propellers_emxutil.c
+build $builddir/_coder_optimize_cpp_mpc_propellers_info.o : cc $root/interface/_coder_optimize_cpp_mpc_propellers_info.c
+build $builddir/c_mexapi_version.o : cc $matlabdir/extern/version/c_mexapi_version.c
+
+# Link
+build $root/optimize_cpp_mpc_propellers_mex.mexa64 : link $builddir/optimize_cpp_mpc_propellers_data.o $builddir/rt_nonfinite.o $builddir/optimize_cpp_mpc_propellers_initialize.o $builddir/optimize_cpp_mpc_propellers_terminate.o $builddir/optimize_cpp_mpc_propellers.o $builddir/factoryConstruct.o $builddir/factoryConstruct1.o $builddir/factoryConstruct2.o $builddir/integrate_dynamics.o $builddir/vecnorm.o $builddir/diff.o $builddir/ixamax.o $builddir/computeComplError.o $builddir/xdot.o $builddir/xnrm2.o $builddir/xasum.o $builddir/_coder_optimize_cpp_mpc_propellers_api.o $builddir/_coder_optimize_cpp_mpc_propellers_mex.o $builddir/xcopy.o $builddir/compressBounds.o $builddir/computeConstraints_.o $builddir/computeForwardDifferences.o $builddir/updateWorkingSetForNewQP.o $builddir/setProblemType.o $builddir/modifyOverheadPhaseOne_.o $builddir/driver.o $builddir/computeGradLag.o $builddir/computeLambdaLSQ.o $builddir/factorQRE.o $builddir/xgeqp3.o $builddir/xorgqr.o $builddir/xgemv.o $builddir/xtrsv.o $builddir/sortLambdaQP.o $builddir/saveJacobian.o $builddir/step.o $builddir/normal.o $builddir/driver1.o $builddir/PresolveWorkingSet.o $builddir/ComputeNumDependentEq_.o $builddir/IndexOfDependentEq_.o $builddir/countsort.o $builddir/removeConstr.o $builddir/feasibleX0ForWorkingSet.o $builddir/xgeqrf.o $builddir/xgemm.o $builddir/xtrsm.o $builddir/factorQR.o $builddir/maxConstraintViolation.o $builddir/computeFval.o $builddir/linearForm_.o $builddir/iterate.o $builddir/computeGrad_StoreHx.o $builddir/xaxpy.o $builddir/computeFval_ReuseHx.o $builddir/squareQ_appendCol.o $builddir/xrot.o $builddir/xpotrf.o $builddir/solve.o $builddir/xscal.o $builddir/compute_lambda.o $builddir/feasibleratiotest.o $builddir/addBoundToActiveSetMatrix_.o $builddir/relaxed.o $builddir/updatePenaltyParam.o $builddir/soc.o $builddir/computeLinearResiduals.o $builddir/test_exit.o $builddir/computeDeltaLag.o $builddir/BFGSUpdate.o $builddir/optimize_cpp_mpc_propellers_emxutil.o $builddir/_coder_optimize_cpp_mpc_propellers_info.o $builddir/c_mexapi_version.o 
