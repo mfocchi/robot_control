@@ -127,6 +127,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.eng.addpath('./codegen', nargout=0)
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
+        if self.PAPER:
+            self.recorder = RosbagControlledRecorder('rosbag record -a', False)
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -274,8 +276,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mpc_index = 0
         self.mpc_index_old = 0
         self.mpc_index_ffwd = 0 # updated only when we stop recomputing mpc
-        if self.PAPER:
-            self.recorder = RosbagControlledRecorder('rosbag record -a', False)
+
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -1071,13 +1072,13 @@ def talker(p):
 
                         # fundamental: same everything before initVars!
                         p.plotStuff()
-
+                        if p.PAPER:
+                            p.recorder.stop_recording_srv()
                         #reset for the next jump
                         p.startupProcedure()
                         p.initVars()
                         p.q_des = np.copy(p.q_des_q0)
-                        if p.PAPER:
-                            p.recorder.stop_recording_srv()
+
                         break
 
             if (p.stateMachine == 'flying_and_reorient_lander'):
