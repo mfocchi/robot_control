@@ -56,7 +56,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
-        self.PAPER = False # use this for taking videos cause it does not show some things
+        self.MULTIPLE_JUMPS = False # use this does not show some things
         self.SAVE_BAG = False
         self.OBSTACLE_AVOIDANCE = False
 
@@ -210,8 +210,9 @@ class ClimbingrobotController(BaseControllerFixed):
         # the mountain is always wrt to world
         mountain_pos = np.array([- self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
-        # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
-        # self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar2', '/world')
+        if self.OBSTACLE_AVOIDANCE:
+            self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/pillar', '/world')
+
         if p.landing:
             self.x_landing_l = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wheel_l')).translation
             self.x_landing_r = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wheel_r')).translation
@@ -546,23 +547,31 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def initOptim(self, p0, pf):
         ##offline optim vars
-        if self.OBSTACLE_AVOIDANCE:
-            self.Fleg_max = 600.
-            self.Fr_max = 120.
-        else:
-            self.Fleg_max = 300.
-            self.Fr_max = 90.
+        self.Fleg_max = 300.
+        self.Fr_max = 90.
         self.mu = 0.8
 
         self.optim_params = {}
         self.optim_params['jump_clearance'] = 1.
+
+        if self.OBSTACLE_AVOIDANCE:
+            self.Fleg_max = 600.
+            self.Fr_max = 120.
+            self.optim_params['jump_clearance'] = 0.3
+            # I hard code it otherwise does not converge cause it is very sensitive
+            p0 = np.array([0.28, 2.5, -6])
+
         self.optim_params['m'] = self.getRobotMass()
 
         self.optim_params['obstacle_avoidance'] = self.OBSTACLE_AVOIDANCE
+        self.optim_params['obstacle_location'] = matlab.double([-0.5, 3., -7.5]).reshape(3, 1)
         self.optim_params['num_params'] = 4.
         self.optim_params['int_method'] = 'rk4'
         self.optim_params['N_dyn'] = 30.
-        self.optim_params['FRICTION_CONE'] = 1.
+        if self.OBSTACLE_AVOIDANCE:
+            self.optim_params['FRICTION_CONE'] = 0.
+        else:
+            self.optim_params['FRICTION_CONE'] = 1.
         self.optim_params['int_steps'] = 5.
         self.optim_params['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
         self.optim_params['b'] = 5.
@@ -909,7 +918,7 @@ def talker(p):
     # jump params
     p0 = np.array([0.28,  2.5, -6.10104])  # there is singularity for px = 0!
 
-    if p.PAPER:
+    if p.MULTIPLE_JUMPS:
         landingW = p.generateTargetPoints(p0)
     else:
         if p.OBSTACLE_AVOIDANCE:
@@ -1139,7 +1148,7 @@ def talker(p):
                 p.tau_ffwd[p.landing_joints] = p.computeLandingControl()
 
             # plot ropes
-            if not p.PAPER:
+            if not p.SAVE_BAG:
                 p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
                 p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
             # plot contact forces on landing legs
