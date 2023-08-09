@@ -561,8 +561,15 @@ class ClimbingrobotController(BaseControllerFixed):
             # I hard code it otherwise does not converge cause it is very sensitive
             p0 = np.array([0.28, 2.5, -6])
 
-        self.optim_params['m'] = self.getRobotMass()
-
+        if p.landing:
+            self.optim_params['m'] = 15.07 # I need to hardcode it otherwise it does not converge
+            # I hardcode this because wall inclination is non 0 so we start from 0.5
+            p0 = np.array([0.5, 2.5, -6])
+            pf = np.array([0.5, 4, -4])
+            self.Fleg_max = 600.
+            self.Fr_max = 300.
+        else:
+            self.optim_params['m'] = self.getRobotMass()
         self.optim_params['obstacle_avoidance'] = self.OBSTACLE_AVOIDANCE
         self.optim_params['obstacle_location'] = matlab.double([-0.5, 3., -7.5]).reshape(3, 1)
         self.optim_params['num_params'] = 4.
@@ -586,9 +593,6 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['w6'] = 1.
         self.optim_params['T_th'] = 0.05
 
-        if self.landing:
-            self.Fleg_max = 600.
-            self.Fr_max = 300.
 
         # for unit test use
         #p0 = np.array([0.5, 2.5, -6])  # there is singularity for px = 0!
@@ -599,7 +603,7 @@ class ClimbingrobotController(BaseControllerFixed):
         # print(self.matvars["Tf"])
 
 
-        print(colored("offline optimization accomplished", "blue"))
+
         # extract variables
         self.ref_com  = mat_matrix2python(self.matvars['p'])
         self.ref_psi = mat_vector2python(self.matvars['psi'])
@@ -610,6 +614,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r0 = mat_vector2python(self.matvars['Fr_r'])
         self.Fleg = mat_vector2python(self.matvars['Fleg'])
         self.targetPos =mat_vector2python(self.matvars['achieved_target'])
+        print(colored(f"offline optimization accomplished, p0:{p0}, target:{self.targetPos}", "blue"))
 
         # print(self.Fr_l0)
         # print(self.Fr_r0)
@@ -1105,7 +1110,9 @@ def talker(p):
                 # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
                 delta_t = p.time - p.end_orienting
                 if p.MPC_control:
-                    deltaFr_l0, deltaFr_r0 = p.computeMPC(delta_t)
+                    deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
+                    if p.PROPELLERS:
+                        p.apply_propeller_force(prop_force)
                 else:
                     deltaFr_l0 = 0.
                     deltaFr_r0 = 0.
@@ -1127,7 +1134,7 @@ def talker(p):
                         p.resetRope()
                         print(colored("Early TD detected, Start landing", "blue"))
                         p.stateMachine = 'landing'
-                else: # you are checking for delayed TD you have already reset rope
+                else: # you are checking for delayed TD you have already reset rope and restored PD
                     if p.detectTouchDown():
                         print(colored("Start landing", "blue"))
                         p.stateMachine = 'landing'
@@ -1147,7 +1154,7 @@ def talker(p):
             if (p.stateMachine == 'landing'):
                 p.tau_ffwd[p.landing_joints] = p.computeLandingControl()
 
-            # plot ropes
+            # plot ropes as green arrows
             if not p.SAVE_BAG:
                 p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
                 p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
@@ -1216,8 +1223,10 @@ if __name__ == '__main__':
     finally:
         ros.signal_shutdown("killed")
         p.deregister_node()
-        # if conf.plotting:
-        #     p.plotStuff()
+        if p.landing: # for the landing test you should press Ctrl C to stop everything
+            p.plotStuff()
+            if p.SAVE_BAG:
+                p.recorder.stop_recording_srv()
 
 
         

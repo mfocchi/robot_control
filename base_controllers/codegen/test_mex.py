@@ -22,7 +22,7 @@ Fr_max = 90.
 #landing
 # Fleg_max = 600.
 # Fr_max = 300.
-# mass = 15.0246
+# mass = 15.07
 
 mu = 0.8
 params = {}
