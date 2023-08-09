@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * computeDualFeasError.h
@@ -22,7 +22,9 @@
 #include <string.h>
 
 /* Function Declarations */
-boolean_T computeDualFeasError(int32_T nVar, const emxArray_real_T *gradLag,
-                               real_T *val);
+void b_computeDualFeasError(const emlrtStack *sp, int32_T nVar, const
+  emxArray_real_T *gradLag, boolean_T *gradOK, real_T *val);
+void computeDualFeasError(const emlrtStack *sp, int32_T nVar, const
+  emxArray_real_T *gradLag, boolean_T *gradOK, real_T *val);
 
 /* End of code generation (computeDualFeasError.h) */

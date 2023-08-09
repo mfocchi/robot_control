@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * diff.c
@@ -20,37 +20,39 @@
 /* Function Definitions */
 void diff(const emxArray_real_T *x, emxArray_real_T *y)
 {
-  const real_T *x_data;
-  real_T *y_data;
+  real_T d;
+  real_T tmp1;
+  real_T work_data_idx_0;
   int32_T dimSize;
+  int32_T ixLead;
+  int32_T iyLead;
   int32_T m;
-  x_data = x->data;
   dimSize = x->size[1];
   if (x->size[1] == 0) {
     y->size[0] = 1;
     y->size[1] = 0;
   } else {
-    m = x->size[1] - 1;
-    if (muIntScalarMin_sint32(m, 1) < 1) {
+    ixLead = x->size[1] - 1;
+    if (muIntScalarMin_sint32(ixLead, 1) < 1) {
       y->size[0] = 1;
       y->size[1] = 0;
     } else {
-      m = y->size[0] * y->size[1];
+      ixLead = y->size[0] * y->size[1];
       y->size[0] = 1;
       y->size[1] = x->size[1] - 1;
-      emxEnsureCapacity_real_T(y, m);
-      y_data = y->data;
+      emxEnsureCapacity_real_T(y, ixLead);
       if (x->size[1] - 1 != 0) {
-        real_T work_data;
-        work_data = x_data[0];
+        ixLead = 1;
+        iyLead = 0;
+        work_data_idx_0 = x->data[0];
         for (m = 2; m <= dimSize; m++) {
-          real_T d;
-          real_T tmp1;
-          tmp1 = x_data[m - 1];
+          tmp1 = x->data[ixLead];
           d = tmp1;
-          tmp1 -= work_data;
-          work_data = d;
-          y_data[m - 2] = tmp1;
+          tmp1 -= work_data_idx_0;
+          work_data_idx_0 = d;
+          ixLead++;
+          y->data[iyLead] = tmp1;
+          iyLead++;
         }
       }
     }

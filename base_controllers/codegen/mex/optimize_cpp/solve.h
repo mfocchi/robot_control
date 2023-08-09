@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * solve.h
@@ -22,6 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-void solve(const d_struct_T *obj, emxArray_real_T *rhs);
+void b_solve(const h_struct_T *obj, emxArray_real_T *rhs);
+void solve(const h_struct_T *obj, emxArray_real_T *rhs);
 
 /* End of code generation (solve.h) */

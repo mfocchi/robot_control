@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * maxConstraintViolation.h
@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-real_T maxConstraintViolation(h_struct_T *obj, const emxArray_real_T *x);
+real_T maxConstraintViolation(j_struct_T *obj, const emxArray_real_T *x);
 
 /* End of code generation (maxConstraintViolation.h) */

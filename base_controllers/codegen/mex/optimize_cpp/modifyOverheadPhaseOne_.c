@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * modifyOverheadPhaseOne_.c
@@ -16,19 +16,22 @@
 #include <string.h>
 
 /* Function Definitions */
-void modifyOverheadPhaseOne_(h_struct_T *obj)
+void modifyOverheadPhaseOne_(j_struct_T *obj)
 {
   int32_T i;
+  int32_T i1;
   int32_T idx;
   int32_T idxStartIneq;
   i = obj->sizes[0];
   for (idx = 0; idx < i; idx++) {
     obj->ATwset->data[(obj->nVar + obj->ldA * idx) - 1] = 0.0;
   }
+
   i = obj->sizes[2];
   for (idx = 0; idx < i; idx++) {
     obj->Aineq->data[(obj->nVar + obj->ldA * idx) - 1] = -1.0;
   }
+
   obj->indexLB->data[obj->sizes[3] - 1] = obj->nVar;
   obj->lb->data[obj->nVar - 1] = 1.0E-5;
   idxStartIneq = obj->isActiveIdx[2];
@@ -36,12 +39,16 @@ void modifyOverheadPhaseOne_(h_struct_T *obj)
   for (idx = idxStartIneq; idx <= i; idx++) {
     obj->ATwset->data[(obj->nVar + obj->ldA * (idx - 1)) - 1] = -1.0;
   }
+
+  idxStartIneq = obj->isActiveIdx[4];
   if (obj->nWConstr[4] > 0) {
     i = obj->sizesNormal[4];
-    for (idx = 0; idx <= i; idx++) {
-      obj->isActiveConstr->data[(obj->isActiveIdx[4] + idx) - 1] = false;
+    for (idx = 0; idx < i; idx++) {
+      i1 = idxStartIneq + idx;
+      obj->isActiveConstr->data[i1] = obj->isActiveConstr->data[i1 - 1];
     }
   }
+
   obj->isActiveConstr->data[obj->isActiveIdx[4] - 2] = false;
 }
 

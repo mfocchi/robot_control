@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * updateWorkingSetForNewQP.h
@@ -22,10 +22,9 @@
 #include <string.h>
 
 /* Function Declarations */
-void updateWorkingSetForNewQP(const emxArray_real_T *xk, h_struct_T *WorkingSet,
-                              int32_T mIneq, int32_T mNonlinIneq,
-                              const emxArray_real_T *cIneq, int32_T mLB,
-                              const emxArray_real_T *lb, int32_T mUB,
-                              const emxArray_real_T *ub, int32_T mFixed);
+void updateWorkingSetForNewQP(const emxArray_real_T *xk, j_struct_T *WorkingSet,
+  int32_T mIneq, int32_T mNonlinIneq, const emxArray_real_T *cIneq, int32_T mLB,
+  const emxArray_real_T *lb, int32_T mUB, const emxArray_real_T *ub, int32_T
+  mFixed);
 
 /* End of code generation (updateWorkingSetForNewQP.h) */

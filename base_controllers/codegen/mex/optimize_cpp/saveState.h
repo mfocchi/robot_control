@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * saveState.h
@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void saveState(g_struct_T *obj);
+void saveState(const emlrtStack *sp, d_struct_T *obj);
 
 /* End of code generation (saveState.h) */

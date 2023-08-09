@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * driver.h
@@ -23,13 +23,11 @@
 #include <string.h>
 
 /* Function Declarations */
-void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb,
-            const emxArray_real_T *ub, g_struct_T *TrialState,
-            struct_T *MeritFunction,
-            const i_coder_internal_stickyStruct *FcnEvaluator,
-            k_struct_T *FiniteDifferences, f_struct_T *memspace,
-            h_struct_T *WorkingSet, c_struct_T *QRManager,
-            d_struct_T *CholManager, e_struct_T *QPObjective,
-            const emxArray_real_T *fscales_cineq_constraint);
+void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb, const
+            emxArray_real_T *ub, d_struct_T *TrialState, k_struct_T
+            *MeritFunction, const g_struct_T *FcnEvaluator, e_struct_T
+            *FiniteDifferences, c_struct_T *memspace, j_struct_T *WorkingSet,
+            f_struct_T *QRManager, h_struct_T *CholManager, i_struct_T
+            *QPObjective, const emxArray_real_T *fscales_cineq_constraint);
 
 /* End of code generation (driver.h) */

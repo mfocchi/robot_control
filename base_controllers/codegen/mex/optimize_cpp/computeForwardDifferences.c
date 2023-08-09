@@ -94,6 +94,7 @@ boolean_T computeForwardDifferences(e_struct_T *obj, real_T fCurrent, const
     xk->data[idx] += deltaX;
     ubDiff = c_anon(obj->objfun.tunableEnvironment.f1,
                     obj->objfun.tunableEnvironment.f3.m,
+                    obj->objfun.tunableEnvironment.f3.num_params,
                     obj->objfun.tunableEnvironment.f3.int_method,
                     obj->objfun.tunableEnvironment.f3.N_dyn,
                     obj->objfun.tunableEnvironment.f3.int_steps,
@@ -163,6 +164,7 @@ boolean_T computeForwardDifferences(e_struct_T *obj, real_T fCurrent, const
           xk->data[idx] += deltaX;
           ubDiff = c_anon(obj->objfun.tunableEnvironment.f1,
                           obj->objfun.tunableEnvironment.f3.m,
+                          obj->objfun.tunableEnvironment.f3.num_params,
                           obj->objfun.tunableEnvironment.f3.int_method,
                           obj->objfun.tunableEnvironment.f3.N_dyn,
                           obj->objfun.tunableEnvironment.f3.int_steps,

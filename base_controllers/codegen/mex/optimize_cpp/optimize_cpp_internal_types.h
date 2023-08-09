@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * optimize_cpp_internal_types.h
@@ -19,6 +19,57 @@
 /* Type Definitions */
 #ifndef typedef_struct_T
 #define typedef_struct_T
+
+typedef struct {
+  boolean_T gradOK;
+  boolean_T fevalOK;
+  boolean_T done;
+  boolean_T stepAccepted;
+  boolean_T failedLineSearch;
+  int32_T stepType;
+} struct_T;
+
+#endif                                 /*typedef_struct_T*/
+
+#ifndef typedef_b_struct_T
+#define typedef_b_struct_T
+
+typedef struct {
+  char_T SolverName[7];
+  int32_T MaxIterations;
+  real_T StepTolerance;
+  real_T OptimalityTolerance;
+  real_T ConstraintTolerance;
+  real_T ObjectiveLimit;
+  real_T PricingTolerance;
+  real_T ConstrRelTolFactor;
+  real_T ProbRelTolFactor;
+  boolean_T RemainFeasible;
+  boolean_T IterDisplayQP;
+} b_struct_T;
+
+#endif                                 /*typedef_b_struct_T*/
+
+#ifndef typedef_g_struct_T
+#define typedef_g_struct_T
+
+typedef struct {
+  anonymous_function objfun;
+  b_anonymous_function nonlcon;
+  int32_T nVar;
+  int32_T mCineq;
+  int32_T mCeq;
+  boolean_T NonFiniteSupport;
+  boolean_T SpecifyObjectiveGradient;
+  boolean_T SpecifyConstraintGradient;
+  boolean_T ScaleProblem;
+} g_struct_T;
+
+#endif                                 /*typedef_g_struct_T*/
+
+#ifndef typedef_k_struct_T
+#define typedef_k_struct_T
+
 typedef struct {
   real_T penaltyParam;
   real_T threshold;
@@ -36,150 +87,8 @@ typedef struct {
   real_T nlpComplError;
   real_T firstOrderOpt;
   boolean_T hasObjective;
-} struct_T;
-#endif /* typedef_struct_T */
+} k_struct_T;
 
-#ifndef typedef_b_struct_T
-#define typedef_b_struct_T
-typedef struct {
-  boolean_T gradOK;
-  boolean_T fevalOK;
-  boolean_T done;
-  boolean_T stepAccepted;
-  boolean_T failedLineSearch;
-  int32_T stepType;
-} b_struct_T;
-#endif /* typedef_b_struct_T */
-
-#ifndef typedef_coder_internal_stickyStruct
-#define typedef_coder_internal_stickyStruct
-typedef struct {
-  b_anonymous_function value;
-} coder_internal_stickyStruct;
-#endif /* typedef_coder_internal_stickyStruct */
-
-#ifndef typedef_b_coder_internal_stickyStruct
-#define typedef_b_coder_internal_stickyStruct
-typedef struct {
-  anonymous_function value;
-  coder_internal_stickyStruct next;
-} b_coder_internal_stickyStruct;
-#endif /* typedef_b_coder_internal_stickyStruct */
-
-#ifndef typedef_c_coder_internal_stickyStruct
-#define typedef_c_coder_internal_stickyStruct
-typedef struct {
-  b_coder_internal_stickyStruct next;
-} c_coder_internal_stickyStruct;
-#endif /* typedef_c_coder_internal_stickyStruct */
-
-#ifndef typedef_d_coder_internal_stickyStruct
-#define typedef_d_coder_internal_stickyStruct
-typedef struct {
-  int32_T value;
-  c_coder_internal_stickyStruct next;
-} d_coder_internal_stickyStruct;
-#endif /* typedef_d_coder_internal_stickyStruct */
-
-#ifndef typedef_e_coder_internal_stickyStruct
-#define typedef_e_coder_internal_stickyStruct
-typedef struct {
-  d_coder_internal_stickyStruct next;
-} e_coder_internal_stickyStruct;
-#endif /* typedef_e_coder_internal_stickyStruct */
-
-#ifndef typedef_f_coder_internal_stickyStruct
-#define typedef_f_coder_internal_stickyStruct
-typedef struct {
-  e_coder_internal_stickyStruct next;
-} f_coder_internal_stickyStruct;
-#endif /* typedef_f_coder_internal_stickyStruct */
-
-#ifndef typedef_g_coder_internal_stickyStruct
-#define typedef_g_coder_internal_stickyStruct
-typedef struct {
-  f_coder_internal_stickyStruct next;
-} g_coder_internal_stickyStruct;
-#endif /* typedef_g_coder_internal_stickyStruct */
-
-#ifndef typedef_h_coder_internal_stickyStruct
-#define typedef_h_coder_internal_stickyStruct
-typedef struct {
-  g_coder_internal_stickyStruct next;
-} h_coder_internal_stickyStruct;
-#endif /* typedef_h_coder_internal_stickyStruct */
-
-#ifndef typedef_i_coder_internal_stickyStruct
-#define typedef_i_coder_internal_stickyStruct
-typedef struct {
-  h_coder_internal_stickyStruct next;
-} i_coder_internal_stickyStruct;
-#endif /* typedef_i_coder_internal_stickyStruct */
-
-#ifndef typedef_l_struct_T
-#define typedef_l_struct_T
-typedef struct {
-  char_T SolverName[7];
-  int32_T MaxIterations;
-  real_T StepTolerance;
-  real_T ObjectiveLimit;
-} l_struct_T;
-#endif /* typedef_l_struct_T */
-
-#ifndef typedef_rtBoundsCheckInfo
-#define typedef_rtBoundsCheckInfo
-typedef struct {
-  int32_T iFirst;
-  int32_T iLast;
-  int32_T lineNo;
-  int32_T colNo;
-  const char_T *aName;
-  const char_T *fName;
-  const char_T *pName;
-  int32_T checkKind;
-} rtBoundsCheckInfo;
-#endif /* typedef_rtBoundsCheckInfo */
-
-#ifndef typedef_rtDesignRangeCheckInfo
-#define typedef_rtDesignRangeCheckInfo
-typedef struct {
-  int32_T lineNo;
-  int32_T colNo;
-  const char_T *fName;
-  const char_T *pName;
-} rtDesignRangeCheckInfo;
-#endif /* typedef_rtDesignRangeCheckInfo */
-
-#ifndef typedef_rtDoubleCheckInfo
-#define typedef_rtDoubleCheckInfo
-typedef struct {
-  int32_T lineNo;
-  int32_T colNo;
-  const char_T *fName;
-  const char_T *pName;
-  int32_T checkKind;
-} rtDoubleCheckInfo;
-#endif /* typedef_rtDoubleCheckInfo */
-
-#ifndef typedef_rtEqualityCheckInfo
-#define typedef_rtEqualityCheckInfo
-typedef struct {
-  int32_T nDims;
-  int32_T lineNo;
-  int32_T colNo;
-  const char_T *fName;
-  const char_T *pName;
-} rtEqualityCheckInfo;
-#endif /* typedef_rtEqualityCheckInfo */
-
-#ifndef typedef_rtRunTimeErrorInfo
-#define typedef_rtRunTimeErrorInfo
-typedef struct {
-  int32_T lineNo;
-  int32_T colNo;
-  const char_T *fName;
-  const char_T *pName;
-} rtRunTimeErrorInfo;
-#endif /* typedef_rtRunTimeErrorInfo */
+#endif                                 /*typedef_k_struct_T*/
 
 /* End of code generation (optimize_cpp_internal_types.h) */

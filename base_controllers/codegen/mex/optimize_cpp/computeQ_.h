@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * computeQ_.h
@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void computeQ_(c_struct_T *obj, int32_T nrows);
+void computeQ_(const emlrtStack *sp, f_struct_T *obj, int32_T nrows);
 
 /* End of code generation (computeQ_.h) */

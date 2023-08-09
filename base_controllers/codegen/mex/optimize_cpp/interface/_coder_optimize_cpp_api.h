@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * _coder_optimize_cpp_api.h
@@ -21,7 +21,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void optimize_cpp_api(const mxArray *const prhs[6], int32_T nlhs,
-                      const mxArray *plhs[2]);
+void optimize_cpp_api(const mxArray * const prhs[6], const mxArray *plhs[1]);
 
 /* End of code generation (_coder_optimize_cpp_api.h) */

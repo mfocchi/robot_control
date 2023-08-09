@@ -1,6 +1,6 @@
 /*
- * Academic License - for use in teaching, academic research, and meeting
- * course requirements at degree granting institutions only.  Not for
+ * Non-Degree Granting Education License -- for use at non-degree
+ * granting, nonprofit, educational organizations only. Not for
  * government, commercial, or other organizational use.
  *
  * computeConstraints_.c
@@ -20,71 +20,56 @@
 #include <string.h>
 
 /* Function Definitions */
-int32_T computeConstraints_(int32_T c_obj_next_next_next_next_next_,
-                            const real_T d_obj_next_next_next_next_next_[3],
-                            const real_T e_obj_next_next_next_next_next_[3],
-                            real_T f_obj_next_next_next_next_next_,
-                            real_T g_obj_next_next_next_next_next_,
-                            const param *h_obj_next_next_next_next_next_,
-                            const emxArray_real_T *x,
-                            emxArray_real_T *Cineq_workspace, int32_T ineq0)
+int32_T computeConstraints_(const real_T c_obj_nonlcon_tunableEnvironmen[3],
+  const real_T d_obj_nonlcon_tunableEnvironmen[3], real_T
+  e_obj_nonlcon_tunableEnvironmen, real_T f_obj_nonlcon_tunableEnvironmen, const
+  param *g_obj_nonlcon_tunableEnvironmen, int32_T obj_mCineq, const
+  emxArray_real_T *x, emxArray_real_T *Cineq_workspace, int32_T ineq0)
 {
-  emxArray_int32_T *y;
-  emxArray_real_T *r;
-  real_T *Cineq_workspace_data;
-  real_T *r1;
+  emxArray_real_T *varargout_1;
+  int32_T i;
+  int32_T idx_current;
   int32_T idx_end;
   int32_T status;
-  int32_T yk;
-  int32_T *y_data;
   boolean_T allFinite;
-  Cineq_workspace_data = Cineq_workspace->data;
   emlrtHeapReferenceStackEnterFcnR2012b(emlrtRootTLSGlobal);
-  emxInit_int32_T(&y, 2);
-  idx_end = y->size[0] * y->size[1];
-  y->size[0] = 1;
-  y->size[1] = c_obj_next_next_next_next_next_;
-  emxEnsureCapacity_int32_T(y, idx_end);
-  y_data = y->data;
-  y_data[0] = 0;
-  yk = 0;
-  for (idx_end = 2; idx_end <= c_obj_next_next_next_next_next_; idx_end++) {
-    yk++;
-    y_data[idx_end - 1] = yk;
+  emxInit_real_T(&varargout_1, 2, true);
+  anon(c_obj_nonlcon_tunableEnvironmen, d_obj_nonlcon_tunableEnvironmen,
+       e_obj_nonlcon_tunableEnvironmen, f_obj_nonlcon_tunableEnvironmen,
+       g_obj_nonlcon_tunableEnvironmen, x, varargout_1);
+  if (ineq0 > (ineq0 + obj_mCineq) - 1) {
+    idx_current = 1;
+  } else {
+    idx_current = ineq0;
   }
-  emxInit_real_T(&r, 2);
-  optimize_cpp_anonFcn2(
-      d_obj_next_next_next_next_next_, e_obj_next_next_next_next_next_,
-      f_obj_next_next_next_next_next_, g_obj_next_next_next_next_next_,
-      h_obj_next_next_next_next_next_, x, r);
-  r1 = r->data;
-  yk = r->size[1];
-  for (idx_end = 0; idx_end < yk; idx_end++) {
-    Cineq_workspace_data[(y_data[idx_end] + ineq0) - 1] = r1[idx_end];
+
+  idx_end = varargout_1->size[1];
+  for (i = 0; i < idx_end; i++) {
+    Cineq_workspace->data[(idx_current + i) - 1] = varargout_1->data[i];
   }
-  emxFree_real_T(&r);
-  emxFree_int32_T(&y);
+
+  emxFree_real_T(&varargout_1);
   status = 1;
   allFinite = true;
-  yk = ineq0;
-  idx_end = (ineq0 + c_obj_next_next_next_next_next_) - 1;
-  while (allFinite && (yk <= idx_end)) {
-    real_T allFinite_tmp;
-    allFinite_tmp = Cineq_workspace_data[yk - 1];
-    allFinite = ((!muDoubleScalarIsInf(allFinite_tmp)) &&
-                 (!muDoubleScalarIsNaN(allFinite_tmp)));
-    yk++;
+  idx_current = ineq0;
+  idx_end = (ineq0 + obj_mCineq) - 1;
+  while (allFinite && (idx_current <= idx_end)) {
+    allFinite = ((!muDoubleScalarIsInf(Cineq_workspace->data[idx_current - 1])) &&
+                 (!muDoubleScalarIsNaN(Cineq_workspace->data[idx_current - 1])));
+    idx_current++;
   }
+
   if (!allFinite) {
-    yk -= 2;
-    if (muDoubleScalarIsNaN(Cineq_workspace_data[yk])) {
+    idx_current -= 2;
+    if (muDoubleScalarIsNaN(Cineq_workspace->data[idx_current])) {
       status = -3;
-    } else if (Cineq_workspace_data[yk] < 0.0) {
+    } else if (Cineq_workspace->data[idx_current] < 0.0) {
       status = -1;
     } else {
       status = -2;
     }
   }
+
   emlrtHeapReferenceStackLeaveFcnR2012b(emlrtRootTLSGlobal);
   return status;
 }
