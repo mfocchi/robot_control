@@ -453,8 +453,7 @@ class JumpLegController(BaseControllerFixed):
         # unil  friction sing jointrange torques target
 
         msg.next_state = np.concatenate((self.com/0.65, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm(
-            [p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2)))
-        # msg.next_state = np.concatenate((self.q[3:], self.qd[3:],  self.target_CoM, np.linalg.norm([self.com,self.target_CoM], axis=0)))
+            [p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()/0.65))
         # msg.reward = self.total_reward
         msg.reward = reward
         # print(self.total_reward)
@@ -530,36 +529,40 @@ def talker(p):
 
     # initial com posiiton
     com_0 = np.array([-0.01303,  0.00229,  0.25252])
-    if not p.DEBUG:
-        plt.ion()
-    figure = plt.figure(figsize=(15, 10))
     p.number_of_episode = 0
 
     # here the RL loop...
     while True:
+
+        # Rest variables
+        p.initVars()
+        p.q_des = np.copy(p.q_des_q0)
+        figure = plt.figure(figsize=(15, 10))
+
         # ros.sleep(0.3)
         p.time = 0.
-        startTrust = 0.2
+        startTrust = 0
         p.old_q = np.array(
             [p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy()])
         p.old_qd = np.zeros((3, 3))
         p.old_action = np.zeros((3, 3))
+        p.old_com = np.array([com_0,com_0,com_0])
         n_old_state = 3
         state_index = 0
         max_episode_time = 2
         p.total_reward = 0
         p.number_of_episode += 1
         p.freezeBase(True)
+
         p.firstTime = True
         p.detectedApexFlag = False
         p.trustPhaseFlag = False
-        p.intermediate_com_position = []
         p.comd_lo = np.zeros(3)
-        p.target_CoM = np.array(p.target_service().target_CoM)
-        if p.DEBUG:  # overwrite target
-            # p.target_CoM = np.array([0.3, 0, 0.25])
-            p.target_CoM = np.array([0, 0, 0.37])
+        # p.target_CoM = np.array(p.target_service().target_CoM)
+        p.target_CoM = np.array([0.32756, -0.35236, 0.27955])
 
+        if p.DEBUG:  # overwrite target
+            p.target_CoM = np.array([0.3, 0, 0.25])
 
         p.pause_physics_client()
         for i in range(10):
@@ -596,13 +599,12 @@ def talker(p):
                 p.old_q[state_index] = p.q[3:].copy()
                 p.old_qd[state_index] = p.qd[3:].copy()
                 p.old_action[state_index] = p.action.copy()
+                p.old_com[state_index] = p.com.copy()
                 state_index = (state_index + 1) % n_old_state
 
                 # Ask for torque value
-
                 state = np.concatenate((p.com/0.65, p.q[3:]/np.pi, p.qd[3:]/20., p.target_CoM/0.65, [np.linalg.norm(
-                    [p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2)))
-                # state = np.concatenate((p.q[3:], p.qd[3:], p.target_CoM, np.linalg.norm([p.com,p.target_CoM], axis=0)))
+                    [p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()/0.65))
                 # print(state)
 
                 if any(np.isnan(state)):
@@ -626,13 +628,15 @@ def talker(p):
                 p.q_des[3:] = p.q_des_q0[3:] + p.action
 
                 p.qd_des = np.zeros(6)
-                p.tau_ffwd = np.zeros(6)
+                # add gravity compensation
+                p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3])  # +p.robot.robot_mass*p.comdd)
 
                 if p.evaluateRunningCosts():
                     break  # robot has fallen
 
                 p.detectApex()  # just to set jump platform
                 if (p.detectedApexFlag):
+                    p.tau_ffwd[3:] = np.zeros(3)
                     # set jump platform (avoid collision in jumping)
                     if p.detectTouchDown():
                         break  # END STATE
@@ -651,7 +655,7 @@ def talker(p):
                 p.evalTotalReward(0)
 
                 # rest cost (much easyer to learn difference between last loop, paper: heim)
-                # p.cost.reset()
+                p.cost.reset()
 
             # plot end-effector and contact force
             if not p.use_ground_truth_contacts:
@@ -682,9 +686,10 @@ def talker(p):
         p.cost.reset()
 
         if p.DEBUG:
-            break
-        else:
-            plt.cla()
+            plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plt.savefig(f'{p.number_of_episode}.png')
+            # break
 
 
 if __name__ == '__main__':
