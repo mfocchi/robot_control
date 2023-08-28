@@ -46,9 +46,10 @@ class Cost():
         self.joint_torques = 0
         self.no_touchdown = 0
         self.smoothness = 0
+        self.straight = 0
         self.target = 0
 
-        self.weights = np.array([0., 0., 0., 0., 0., 0., 0., 0.])
+        self.weights = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0.])
 
     def reset(self):
         self.unilateral = 0
@@ -58,6 +59,7 @@ class Cost():
         self.joint_torques = 0
         self.no_touchdown = 0
         self.smoothness = 0
+        self.straight = 0
         self.target = 0
 
     def printCosts(self):
@@ -68,6 +70,7 @@ class Cost():
                f"torques:{self.joint_torques} " \
                f"no_touchdown:{self.no_touchdown} " \
                f"smoothness:{self.smoothness} " \
+               f"straight:{self.straight} " \
                f"target:{self.target}"
 
     def printWeightedCosts(self):
@@ -78,7 +81,8 @@ class Cost():
                f"torques:{self.weights[4]*self.joint_torques} " \
                f"no_touchdown:{self.weights[5] * self.no_touchdown} " \
                f"smoothness:{self.weights[6] * self.smoothness} " \
-               f"target:{self.weights[7]*self.target}"
+               f"straight:{self.weights[7] * self.straight} " \
+               f"target:{self.weights[8]*self.target}"
 
 
 class JumpLegController(BaseControllerFixed):
@@ -185,8 +189,9 @@ class JumpLegController(BaseControllerFixed):
         self.a = np.empty((3, 6))
         self.cost = Cost()
 
-        #  unilateral  friction   singularity   joint_range  joint_torques no_touchdown smoothness target
-        self.cost.weights = np.array([1000., 0.1, 10., 0.01, 1000., 10, 0.1, 1.])
+        #  unilateral  friction   singularity   joint_range  joint_torques no_touchdown smoothness straight target
+        self.cost.weights = np.array(
+            [1000., 0.1, 10., 0.01, 1000., 10, 0.1, 10, 1.])
 
         self.mu = 0.8
 
@@ -322,7 +327,7 @@ class JumpLegController(BaseControllerFixed):
         foot_pos_w = self.base_offset + self.q[:3] + self.x_ee
         # foot tradius is 0.015
         foot_lifted_off = (foot_pos_w[2] > 0.017)
-        com_up = (self.com[2] > 0.27)
+        com_up = (self.com[2] > 0.26)
         if not self.detectedApexFlag and com_up and foot_lifted_off:
             if (self.qd[2] < 0.0):
                 self.detectedApexFlag = True
@@ -403,8 +408,14 @@ class JumpLegController(BaseControllerFixed):
         # smoothness
         c1 = 2.5
         c2 = 1.5
-        # self.cost.smoothness += c1*(np.linalg.norm(self.old_q[0] - self.old_q[1])**2)+c2*(
-        #     np.linalg.norm(self.old_q[0] - 2*self.old_q[1] + self.old_q[2])**2)
+        self.cost.smoothness += c1*(np.linalg.norm(self.old_q[0] - self.old_q[1])**2)+c2*(
+            np.linalg.norm(self.old_q[0] - 2*self.old_q[1] + self.old_q[2])**2)
+        
+        # straight
+        x0, y0, _ = self.com
+        x1, y1, _ = self.com_0
+        x2, y2, _ = self.target_CoM
+        self.cost.straight = np.linalg.norm((x2 - x1)*(y1-y0)-(x1-x0)*(y2-y1))/np.sqrt(((x2-x1)**2)*((y2-y1)**2))
 
         # singularity
         # the lower singular value is also achieved when the leg squats which is not what we want
@@ -437,13 +448,14 @@ class JumpLegController(BaseControllerFixed):
             print(colored("Weighted Costs: " +
                   self.cost.printWeightedCosts(), "green"))
 
-        reward = self.cost.weights[7] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
+        reward = self.cost.weights[8] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
                                                        self.cost.weights[1]*self.cost.friction +
                                                        self.cost.weights[2] * self.cost.singularity +
                                                        self.cost.weights[3]*self.cost.joint_range +
                                                        self.cost.weights[4] * self.cost.joint_torques +
                                                        self.cost.weights[5] * self.cost.no_touchdown +
-                                                       self.cost.weights[6] * self.cost.smoothness)
+                                                       self.cost.weights[6] * self.cost.smoothness +
+                                                       self.cost.weights[7] * self.cost.straight)
 
         if reward < 0:
             reward = 0
@@ -452,8 +464,10 @@ class JumpLegController(BaseControllerFixed):
 
         # unil  friction sing jointrange torques target
 
-        msg.next_state = np.concatenate((self.com/0.65, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm(
-            [p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()/0.65))
+        # msg.next_state = np.concatenate((self.com/0.65, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm(
+        #     [p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()/0.65))
+        msg.next_state = np.concatenate((self.com, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM, [np.linalg.norm(
+            [p.com-p.target_CoM])], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()))
         # msg.reward = self.total_reward
         msg.reward = reward
         # print(self.total_reward)
@@ -466,6 +480,7 @@ class JumpLegController(BaseControllerFixed):
         msg.joint_torques = self.cost.joint_torques
         msg.no_touchdown = self.cost.no_touchdown
         msg.smoothness = self.cost.smoothness
+        msg.straight = self.cost.straight
         msg.apex = self.detectedApexFlag
         self.reward_service(msg)
 
@@ -528,7 +543,7 @@ def talker(p):
     p.updateKinematicsDynamics()
 
     # initial com posiiton
-    com_0 = np.array([-0.01303,  0.00229,  0.25252])
+    p.com_0 = np.array([-0.01303,  0.00229,  0.25252])
     p.number_of_episode = 0
 
     # here the RL loop...
@@ -537,7 +552,8 @@ def talker(p):
         # Rest variables
         p.initVars()
         p.q_des = np.copy(p.q_des_q0)
-        figure = plt.figure(figsize=(15, 10))
+        if p.DEBUG:
+            figure = plt.figure(figsize=(15, 10))
 
         # ros.sleep(0.3)
         p.time = 0.
@@ -546,7 +562,7 @@ def talker(p):
             [p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy()])
         p.old_qd = np.zeros((3, 3))
         p.old_action = np.zeros((3, 3))
-        p.old_com = np.array([com_0,com_0,com_0])
+        p.old_com = np.array([p.com_0, p.com_0, p.com_0])
         n_old_state = 3
         state_index = 0
         max_episode_time = 2
@@ -558,15 +574,14 @@ def talker(p):
         p.detectedApexFlag = False
         p.trustPhaseFlag = False
         p.comd_lo = np.zeros(3)
-        # p.target_CoM = np.array(p.target_service().target_CoM)
-        p.target_CoM = np.array([0.32756, -0.35236, 0.27955])
+        p.target_CoM = np.array(p.target_service().target_CoM)
 
-        if p.DEBUG:  # overwrite target
-            p.target_CoM = np.array([0.3, 0, 0.25])
+        # if p.DEBUG:  # overwrite target
+        #     p.target_CoM = np.array([0.3, 0, 0.25])
 
         p.pause_physics_client()
         for i in range(10):
-            p.setJumpPlatformPosition(com_0-[0, 0, 0.3])
+            p.setJumpPlatformPosition(p.com_0-[0, 0, 0.3])
         p.unpause_physics_client()
         if p.target_CoM[2] == -1:
             print(colored("# RECIVED STOP TARGET_COM SIGNAL #", "red"))
@@ -603,9 +618,11 @@ def talker(p):
                 state_index = (state_index + 1) % n_old_state
 
                 # Ask for torque value
-                state = np.concatenate((p.com/0.65, p.q[3:]/np.pi, p.qd[3:]/20., p.target_CoM/0.65, [np.linalg.norm(
-                    [p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()/0.65))
-                # print(state)
+                # state = np.concatenate((p.com/0.65, p.q[3:]/np.pi, p.qd[3:]/20., p.target_CoM/0.65, [np.linalg.norm(
+                #     [p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()/0.65))
+                state = np.concatenate((p.com, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM, [np.linalg.norm(
+                    [p.com-p.target_CoM])], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()))
+                # state = [-0.00999, 0.00619,  0.20033 , 0.17681,  0.1061  ,-0.56959 , 0.95318 , 0.23901 , 3.25957 , 0.3    ,  0.    ,   0.25  ,   0.31401 , 0.17681 , 0.1061 , -0.56959 , 0.16532 , 0.10272 ,-0.60569 , 0.17074 , 0.10458 ,-0.59033 , 0.95318  ,0.23901 , 3.25957 , 0.9744  , 0.03137 , 3.25175 , 0.85147 , 0.29063 , 2.41216  ,1.    ,   0.99996  ,0.99978 , 1.   ,    1.   ,    0.98476  ,1.   ,    1.   ,   -0.36382 ,-0.00999 , 0.00619 , 0.20033 ,-0.01024  ,0.00617 , 0.20202 ,-0.01014 , 0.00618 , 0.20118]
 
                 if any(np.isnan(state)):
                     print(f"Agent state:\n {state}\n")
@@ -629,7 +646,8 @@ def talker(p):
 
                 p.qd_des = np.zeros(6)
                 # add gravity compensation
-                p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3])  # +p.robot.robot_mass*p.comdd)
+                # +p.robot.robot_mass*p.comdd)
+                p.tau_ffwd[3:] = - p.J.T.dot(p.g[:3])
 
                 if p.evaluateRunningCosts():
                     break  # robot has fallen
