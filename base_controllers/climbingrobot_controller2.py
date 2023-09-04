@@ -56,8 +56,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
-        self.MULTIPLE_JUMPS = False # use this does not show some things
-        self.SAVE_BAG = False
+        self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
+        self.SAVE_BAG = False # does not show rope vectors
         self.OBSTACLE_AVOIDANCE = False
 
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
@@ -367,6 +367,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 filename = f'test_gazebo_MPC_{p.MPC_control}_constraints_{p.MPC_uses_constraints}_dist_{p.type_of_disturbance}.mat'
             else:
                 filename = f'test_gazebo_MPC_{p.MPC_control}_dist_{p.type_of_disturbance}.mat'
+            #IRIM
+            #filename = 'test_irim_gazebo.mat'
             mio.savemat(filename, {'ref_time': p.ref_time, 'ref_com': p.ref_com,
                                     'time_gazebo': time_gazebo, 'actual_com': actual_com,
                                     'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
@@ -602,8 +604,6 @@ class ClimbingrobotController(BaseControllerFixed):
         #print(self.matvars["achieved_target"])
         # print(self.matvars["Tf"])
 
-
-
         # extract variables
         self.ref_com  = mat_matrix2python(self.matvars['p'])
         self.ref_psi = mat_vector2python(self.matvars['psi'])
@@ -615,6 +615,25 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fleg = mat_vector2python(self.matvars['Fleg'])
         self.targetPos =mat_vector2python(self.matvars['achieved_target'])
         print(colored(f"offline optimization accomplished, p0:{p0}, target:{self.targetPos}", "blue"))
+
+        # paper IRIM uncomment this
+        # self.MPC_control = False
+        # self.matvars = mio.loadmat('test_irim.mat', squeeze_me=True, struct_as_record=False)
+        # self.ref_com = self.matvars['p']
+        # self.ref_psi = np.zeros((len(self.matvars['l1'])))
+        # self.ref_l_1 = self.matvars['l1']
+        # self.ref_l_2 =  self.matvars['l2']
+        # self.ref_time =  self.matvars['time']
+        # self.Fr_l0 = self.matvars['Fr_l']
+        # self.Fr_r0 = self.matvars['Fr_r']
+        # self.Fleg = self.matvars['Fleg']
+        # self.targetPos = self.matvars['achieved_target']
+
+        # old way (not working I changed the way I defined matvars there is no longer a solution variable)
+        # if p.landing:
+        #     p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
+        # else:
+        #     p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
 
         # print(self.Fr_l0)
         # print(self.Fr_r0)
@@ -790,6 +809,9 @@ def talker(p):
                        'obstacle:='+str(p.OBSTACLE_AVOIDANCE)]
     if p.landing:
         additional_args.append('wall_inclination:='+ str(conf.robot_params[p.robot_name]['wall_inclination']))
+    if p.SAVE_BAG:
+        additional_args.append('rviz_conf:='+rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf_paper_tro.rviz')
+
     p.startSimulator(world_name="climbingrobot2.world",additional_args=additional_args)
     p.loadModelAndPublishers()
 
@@ -934,14 +956,6 @@ def talker(p):
     for n_test in range(landingW.shape[1]):
         pf = landingW[:,n_test]
         print(colored(f"---------------Ideal Reference landing test # {n_test}: {pf}", "green"))
-        # old way (before doing optim online)
-        # if p.landing:
-        #     p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
-        # else:
-        #     p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
-        # p.jumps = [{"time": p.matvars['solution'].time, "thrustDuration" : p.matvars['solution'].T_th, "p0": p.matvars['p0'],
-        #             "targetPos": p.matvars['solution'].achieved_target,  "Fleg": p.matvars['solution'].Fleg,
-        #             "Fr_r": p.matvars['solution'].Fr_r, "Fr_l": p.matvars['solution'].Fr_l,  "Tf": p.matvars['solution'].Tf }]
 
         # jump parameters
         p.startJump = 1.5
