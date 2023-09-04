@@ -372,7 +372,7 @@ class ClimbingrobotController(BaseControllerFixed):
                                     'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
                                     'psi': p.simp_model_state_log[0,:], 'l_1': p.simp_model_state_log[1,:], 'l_2': p.simp_model_state_log[2,:],
                                     'mu': p.mu , 'Fleg': p.Fleg,
-                                    'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_l0   })
+                                    'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_r0   })
 
 
     def getIndex(self,t):
