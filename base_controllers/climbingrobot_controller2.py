@@ -334,7 +334,6 @@ class ClimbingrobotController(BaseControllerFixed):
         super().startupProcedure()
 
     def plotStuff(self):
-        # plotFrameLinear('position', p.time_log, Pose_log=p.base_rpy_log, title='Roll Pitch Yaw')
         # plot rope forces
         # plt.figure()
         # plt.subplot(2, 1, 1)
@@ -864,10 +863,14 @@ def talker(p):
     #     p.ros_pub.publishVisual()
     #     rate.sleep()
 
-    # 2 ---validation test matlab  (do a jump with constant fr and fleg_x)
+    # # 2 ---validation test matlab  (do a jump with constant fr and fleg_x, to test also the )
     # jump_state = 'start'
     # # the jump will start after 2 seconds where the robot will have settled down to the init config
-    # p.startJump = 2.5
+    # p.startJump = 2.
+    # p.numberOfJumps = 1
+    # p0 = np.array([0.28, 2.5, -10.10104])  # there is singularity for px = 0!
+    # # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
+    # p.q_des[:12] = p.computeJointVariables(p0)
     # while not ros.is_shutdown():
     #     p.updateKinematicsDynamics()
     #     if (jump_state == 'start') and (p.time >p.startJump): #set the  impulse
@@ -893,7 +896,8 @@ def talker(p):
     #             p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
     #             p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / 20., "red", scale=4.5)
     #         else:
-    #             #p.applyWrench(Mz=200, time_interval=0.1)
+    #             # apply disturbance to see self stabiliyizing effect
+    #             p.applyWrench(Mx=400, time_interval=0.1)
     #             p.tau_ffwd[p.leg_index] = np.zeros(3)
     #             if  p.landing:
     #                 # retract knee joint and extend landing joints
@@ -935,9 +939,8 @@ def talker(p):
     #         p.logData()
     #     rate.sleep()
     #
+    # plotFrameLinear('position', p.time_log, Pose_log=p.base_rpy_log, title='Roll Pitch Yaw')
     # p.deregister_node()
-    #
-    #
 
     #3 --- whole pipeline with variable Fr_l Fr_r and the Fleg x,y,z
     # single jump
