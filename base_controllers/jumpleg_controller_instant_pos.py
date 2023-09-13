@@ -415,7 +415,8 @@ class JumpLegController(BaseControllerFixed):
         x0, y0, _ = self.com
         x1, y1, _ = self.com_0
         x2, y2, _ = self.target_CoM
-        self.cost.straight = np.linalg.norm((x2 - x1)*(y1-y0)-(x1-x0)*(y2-y1))/np.sqrt(((x2-x1)**2)*((y2-y1)**2))
+        # self.cost.straight = np.linalg.norm((x2 - x1)*(y1-y0)-(x1-x0)*(y2-y1))/np.sqrt(((x2-x1)**2)*((y2-y1)**2))
+        self.cost.straight = 0
 
         # singularity
         # the lower singular value is also achieved when the leg squats which is not what we want
@@ -462,27 +463,27 @@ class JumpLegController(BaseControllerFixed):
 
         self.total_reward += reward
 
-        # unil  friction sing jointrange torques target
+        if done != -1:
 
-        # msg.next_state = np.concatenate((self.com/0.65, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM/0.65, [np.linalg.norm(
-        #     [p.com-p.target_CoM])/0.65], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()/0.65))
-        msg.next_state = np.concatenate((self.com, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM, [np.linalg.norm(
-            [p.com-p.target_CoM])], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()))
-        # msg.reward = self.total_reward
-        msg.reward = reward
-        # print(self.total_reward)
-        msg.done = done
-        msg.target_cost = target_cost
-        msg.unilateral = self.cost.unilateral
-        msg.friction = self.cost.friction
-        msg.singularity = self.cost.singularity
-        msg.joint_range = self.cost.joint_range
-        msg.joint_torques = self.cost.joint_torques
-        msg.no_touchdown = self.cost.no_touchdown
-        msg.smoothness = self.cost.smoothness
-        msg.straight = self.cost.straight
-        msg.apex = self.detectedApexFlag
-        self.reward_service(msg)
+            msg.next_state = np.concatenate((self.com, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM, [np.linalg.norm(
+                [p.com-p.target_CoM])], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()))
+            
+            # print(self.total_reward)
+            msg.reward = self.total_reward
+            # msg.reward = reward
+            msg.state = self.state
+            msg.action = self.action
+            msg.done = done
+            msg.target_cost = target_cost
+            msg.unilateral = self.cost.unilateral
+            msg.friction = self.cost.friction
+            msg.singularity = self.cost.singularity
+            msg.joint_range = self.cost.joint_range
+            msg.joint_torques = self.cost.joint_torques
+            msg.no_touchdown = self.cost.no_touchdown
+            msg.smoothness = self.cost.smoothness
+            msg.straight = self.cost.straight
+            self.reward_service(msg)
 
     def deregister_node(self):
         super().deregister_node()
@@ -544,6 +545,7 @@ def talker(p):
 
     # initial com posiiton
     p.com_0 = np.array([-0.01303,  0.00229,  0.25252])
+    p.sampling_freq = 5
     p.number_of_episode = 0
 
     # here the RL loop...
@@ -569,12 +571,14 @@ def talker(p):
         p.total_reward = 0
         p.number_of_episode += 1
         p.freezeBase(True)
+        p.freq_counter = 0
 
         p.firstTime = True
         p.detectedApexFlag = False
         p.trustPhaseFlag = False
         p.comd_lo = np.zeros(3)
         p.target_CoM = np.array(p.target_service().target_CoM)
+        
 
         # if p.DEBUG:  # overwrite target
         #     p.target_CoM = np.array([0.3, 0, 0.25])
@@ -610,36 +614,37 @@ def talker(p):
                     print("Target position from agent:", p.target_CoM)
                     p.trustPhaseFlag = True
 
-                # update old state
-                p.old_q[state_index] = p.q[3:].copy()
-                p.old_qd[state_index] = p.qd[3:].copy()
-                p.old_action[state_index] = p.action.copy()
-                p.old_com[state_index] = p.com.copy()
-                state_index = (state_index + 1) % n_old_state
+                # check freq
 
-                # Ask for torque value
-                # state = np.concatenate((p.com/0.65, p.q[3:]/np.pi, p.qd[3:]/20., p.target_CoM/0.65, [np.linalg.norm(
-                #     [p.com-p.target_CoM])/0.65], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()/0.65))
-                state = np.concatenate((p.com, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM, [np.linalg.norm(
-                    [p.com-p.target_CoM])], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()))
-                # state = [-0.00999, 0.00619,  0.20033 , 0.17681,  0.1061  ,-0.56959 , 0.95318 , 0.23901 , 3.25957 , 0.3    ,  0.    ,   0.25  ,   0.31401 , 0.17681 , 0.1061 , -0.56959 , 0.16532 , 0.10272 ,-0.60569 , 0.17074 , 0.10458 ,-0.59033 , 0.95318  ,0.23901 , 3.25957 , 0.9744  , 0.03137 , 3.25175 , 0.85147 , 0.29063 , 2.41216  ,1.    ,   0.99996  ,0.99978 , 1.   ,    1.   ,    0.98476  ,1.   ,    1.   ,   -0.36382 ,-0.00999 , 0.00619 , 0.20033 ,-0.01024  ,0.00617 , 0.20202 ,-0.01014 , 0.00618 , 0.20118]
+                if p.freq_counter == 0:
+                    
+                    # update old state
+                    p.old_q[state_index] = p.q[3:].copy()
+                    p.old_qd[state_index] = p.qd[3:].copy()
+                    p.old_action[state_index] = p.action.copy()
+                    p.old_com[state_index] = p.com.copy()
+                    state_index = (state_index + 1) % n_old_state
 
-                if any(np.isnan(state)):
-                    print(f"Agent state:\n {state}\n")
-                    print(colored('NAN IN STATE!!!', 'red'))
-                    quit()
+                    # Ask for torque value
+                    p.state = np.concatenate((p.com, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM, [np.linalg.norm(
+                        [p.com-p.target_CoM])], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()))
+                    
+                    if any(np.isnan(p.state)):
+                        print(f"Agent state:\n {p.state}\n")
+                        print(colored('NAN IN STATE!!!', 'red'))
+                        quit()
 
-                p.action = np.asarray(p.action_service(state).action)
-                # After apex disable Agent action
-                if (p.detectedApexFlag):
-                    p.action = np.array([0., 0., 0.])
+                    p.action = np.asarray(p.action_service(p.state).action)
+                    # After apex disable Agent action
+                    if (p.detectedApexFlag):
+                        p.action = np.array([0., 0., 0.])
 
-                # print(f"Actor action with torques:\n {action}\n")
-                if any(np.isnan(p.action)):
-                    print(f"Agent state:\n {state}\n")
-                    print(f"Actor action with des positions:\n {p.action}\n")
-                    print(colored('NAN IN ACTION!!!', 'red'))
-                    quit()
+                    # print(f"Actor action with torques:\n {action}\n")
+                    if any(np.isnan(p.action)):
+                        print(f"Agent state:\n {p.state}\n")
+                        print(f"Actor action with des positions:\n {p.action}\n")
+                        print(colored('NAN IN ACTION!!!', 'red'))
+                        quit()
 
                 # Apply action
                 p.q_des[3:] = p.q_des_q0[3:] + p.action
@@ -669,11 +674,19 @@ def talker(p):
                 # send commands to gazebo
                 p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-                # send reward with done state = 0
-                p.evalTotalReward(0)
+                if p.freq_counter == 0:
+                    # send reward with done state = 0
+                    p.evalTotalReward(0)
+                    # reset partial cumulative reward
+                    p.total_reward = 0
+
+                else:
+                    # evaluate reward without sending it
+                    p.evalTotalReward(-1)
 
                 # rest cost (much easyer to learn difference between last loop, paper: heim)
                 p.cost.reset()
+                p.freq_counter = (p.freq_counter + 1) % p.sampling_freq
 
             # plot end-effector and contact force
             if not p.use_ground_truth_contacts:
