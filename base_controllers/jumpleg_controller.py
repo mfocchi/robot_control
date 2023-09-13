@@ -97,12 +97,10 @@ class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="ur5"):
         super().__init__(robot_name=robot_name)
-        self.agentMode = 'train'
+        self.agentMode = 'inference'
         self.restoreTrain = False
         self.gui = False
         self.model_name = 'latest'
-
-
         self.EXTERNAL_FORCE = False
         self.DEBUG = False
         self.freezeBaseFlag = False
@@ -756,13 +754,14 @@ def talker(p):
 
     # initial com posiiton
     com_0 = np.array([-0.01303,  0.00229,  0.25252])
-
-    plt.ion()
-    figure = plt.figure(figsize=(15, 10))
     p.number_of_episode = 0
 
     # here the RL loop...
     while True:
+        # Reset variables
+        p.initVars()
+        p.q_des = np.copy(p.q_des_q0)
+
         p.time = 0.
         startTrust = 0.2
         max_episode_time = 2.0
@@ -788,8 +787,7 @@ def talker(p):
             print(colored("# RECIVED STOP TARGET_COM SIGNAL #", "red"))
             break
 
-        if p.DEBUG: # overwrite target
-            p.target_CoM = np.array([0.3,0,0.25])
+
         state = np.concatenate((com_0, p.target_CoM))
         action = p.action_service(state).action
         #print("Action from agent:", action)
@@ -894,7 +892,6 @@ def talker(p):
                 p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
             # log variables
-
             if p.DEBUG:
                 p.logData()
 
@@ -951,9 +948,13 @@ def talker(p):
         # eval rewards
         p.evalTotalReward(com_lo, comd_lo)
         p.cost.reset()
-        plt.cla()
+
         if p.DEBUG:
-            break
+            plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log,
+                      joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plt.savefig(f'{p.number_of_episode}.png')
+            plt.close('all')
+            #break
 
 
 if __name__ == '__main__':
@@ -967,7 +968,7 @@ if __name__ == '__main__':
     finally:
         ros.signal_shutdown("killed")
         p.deregister_node()
-        if conf.plotting:
+        if p.DEBUG:
             print("PLOTTING")
             plotFrameLinear('velocity', p.time_log, des_Twist_log=p.comd_des_log)
             plotFrameLinear('wrench', p.time_log,  Wrench_log=p.contactForceW_log)

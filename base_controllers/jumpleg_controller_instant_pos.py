@@ -553,7 +553,7 @@ def talker(p):
     # here the RL loop...
     while True:
 
-        # Rest variables
+        # Reset variables
         p.initVars()
         p.q_des = np.copy(p.q_des_q0)
         if p.DEBUG:
