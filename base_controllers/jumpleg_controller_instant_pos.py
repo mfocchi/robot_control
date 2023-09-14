@@ -25,6 +25,8 @@ from termcolor import colored
 from base_controllers.utils.common_functions import plotJoint, plotFrameLinear
 from numpy import nan
 import matplotlib.pyplot as plt
+from collections import deque
+import numpy.matlib
 
 import rospkg
 import rospy as ros
@@ -560,13 +562,13 @@ def talker(p):
         # ros.sleep(0.3)
         p.time = 0.
         startTrust = 0
-        p.old_q = np.array(
-            [p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy(), p.q_des_q0[3:].copy()])
-        p.old_qd = np.zeros((3, 3))
-        p.old_action = np.zeros((3, 3))
-        p.old_com = np.array([p.com_0, p.com_0, p.com_0])
         n_old_state = 3
-        state_index = 0
+        # p.old_q = deque(np.matlib.repmat(
+        # p.q_des_q0[3:].copy(), n_old_state, 1))
+        # p.old_qd = deque(np.zeros((n_old_state, 3)))
+        p.old_action = deque(np.zeros((n_old_state, 3)))
+        # p.old_com = deque(np.matlib.repmat(p.com_0, n_old_state, 1))
+
         max_episode_time = 2
         p.total_reward = 0
         p.number_of_episode += 1
@@ -617,18 +619,8 @@ def talker(p):
                 # check freq
 
                 if p.freq_counter == 0:
-                    
-                    # update old state
-                    p.old_q[state_index] = p.q[3:].copy()
-                    p.old_qd[state_index] = p.qd[3:].copy()
-                    p.old_action[state_index] = p.action.copy()
-                    p.old_com[state_index] = p.com.copy()
-                    state_index = (state_index + 1) % n_old_state
 
                     # Ask for torque value
-                    p.state = np.concatenate((p.com, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM, [np.linalg.norm(
-                        [p.com-p.target_CoM])], p.old_q.flatten()/np.pi, p.old_qd.flatten()/20., p.old_action.flatten()/(np.pi/2), p.old_com.flatten()))
-                    
                     if any(np.isnan(p.state)):
                         print(f"Agent state:\n {p.state}\n")
                         print(colored('NAN IN STATE!!!', 'red'))
@@ -642,9 +634,20 @@ def talker(p):
                     # print(f"Actor action with torques:\n {action}\n")
                     if any(np.isnan(p.action)):
                         print(f"Agent state:\n {p.state}\n")
-                        print(f"Actor action with des positions:\n {p.action}\n")
+                        print(
+                            f"Actor action with des positions:\n {p.action}\n")
                         print(colored('NAN IN ACTION!!!', 'red'))
                         quit()
+
+                    # update queue
+                    # p.old_q.pop()
+                    # p.old_q.appendleft(p.q[3:].copy())
+                    # p.old_qd.pop()
+                    # p.old_qd.appendleft(p.qd[3:].copy())
+                    p.old_action.pop()
+                    p.old_action.appendleft(p.action.copy())
+                    # p.old_com.pop()
+                    # p.old_com.appendleft(p.com.copy())
 
                 # Apply action
                 p.q_des[3:] = p.q_des_q0[3:] + p.action
