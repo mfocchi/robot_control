@@ -467,9 +467,9 @@ class JumpLegController(BaseControllerFixed):
 
         if done != -1:
 
-            msg.next_state = np.concatenate((self.com, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM, [np.linalg.norm(
-                [p.com-p.target_CoM])], self.old_q.flatten()/np.pi, self.old_qd.flatten()/20., self.old_action.flatten()/(np.pi/2), self.old_com.flatten()))
-            
+            msg.next_state = np.concatenate((self.com, self.comd, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM,
+                                            [np.linalg.norm([self.com-self.target_CoM])], np.array(self.old_action).flatten()/(np.pi/2)))
+
             # print(self.total_reward)
             msg.reward = self.total_reward
             # msg.reward = reward
@@ -621,6 +621,10 @@ def talker(p):
                 if p.freq_counter == 0:
 
                     # Ask for torque value
+                    p.state = np.concatenate((p.com, p.comd, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM,
+                                              [np.linalg.norm([p.com-p.target_CoM])], np.array(p.old_action).flatten()/(np.pi/2)))
+
+                    # print(p.state)
                     if any(np.isnan(p.state)):
                         print(f"Agent state:\n {p.state}\n")
                         print(colored('NAN IN STATE!!!', 'red'))
