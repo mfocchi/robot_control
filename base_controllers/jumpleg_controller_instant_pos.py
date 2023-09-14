@@ -216,13 +216,13 @@ class JumpLegController(BaseControllerFixed):
 
         self.set_state = ros.ServiceProxy(
             '/gazebo/set_model_state', SetModelState)
-        print("JumplegAgentTorque services ready")
+        print("JumplegAgentInstantPos services ready")
         self.action_service = ros.ServiceProxy(
-            'JumplegAgentTorque/get_action', get_action)
+            'JumplegAgentInstantPos/get_action', get_action)
         self.target_service = ros.ServiceProxy(
-            'JumplegAgentTorque/get_target', get_target)
+            'JumplegAgentInstantPos/get_target', get_target)
         self.reward_service = ros.ServiceProxy(
-            'JumplegAgentTorque/set_reward', set_reward_original)
+            'JumplegAgentInstantPos/set_reward', set_reward_original)
 
     def logData(self):
         if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
@@ -355,7 +355,7 @@ class JumpLegController(BaseControllerFixed):
     def loadRLAgent(self, mode='train', data_path=None, model_name='latest', restore_train=False):
         print(colored(f"Starting RLagent in  {mode} mode", "red"))
         package = 'jumpleg_rl'
-        executable = 'JumplegAgentTorque.py'
+        executable = 'JumplegAgentInstantPos.py'
         name = 'rlagent'
         namespace = '/'
         args = f'--mode {mode} --data_path {data_path} --model_name {model_name} --restore_train {restore_train}'
@@ -366,10 +366,10 @@ class JumpLegController(BaseControllerFixed):
         process = self.launch.launch(node)
 
         # wait for agent service to start
-        print("Waiting for JumplegAgentTorque services")
-        ros.wait_for_service('JumplegAgentTorque/get_action')
-        ros.wait_for_service('JumplegAgentTorque/get_target')
-        ros.wait_for_service('JumplegAgentTorque/set_reward')
+        print("Waiting for JumplegAgentInstantPos services")
+        ros.wait_for_service('JumplegAgentInstantPos/get_action')
+        ros.wait_for_service('JumplegAgentInstantPos/get_target')
+        ros.wait_for_service('JumplegAgentInstantPos/set_reward')
 
     def computeActivationFunction(self, activationType, value, lower, upper):
 
