@@ -193,7 +193,7 @@ class JumpLegController(BaseControllerFixed):
 
         #  unilateral  friction   singularity   joint_range  joint_torques no_touchdown smoothness straight target
         self.cost.weights = np.array(
-            [1000., 0.1, 10., 0.01, 1000., 10, 0.1, 10, 1.])
+            [1000., 0.1, 10., 0.01, 1000., 10, 0.5, 10, 1.])
 
         self.mu = 0.8
 
@@ -410,9 +410,9 @@ class JumpLegController(BaseControllerFixed):
         # smoothness
         c1 = 2.5
         c2 = 1.5
-        self.cost.smoothness += c1*(np.linalg.norm(self.old_q[0] - self.old_q[1])**2)+c2*(
-            np.linalg.norm(self.old_q[0] - 2*self.old_q[1] + self.old_q[2])**2)
-        
+        self.cost.smoothness += c1*(np.linalg.norm(self.old_action[0] - self.old_action[1])**2)+c2*(
+            np.linalg.norm(self.old_action[0] - 2*self.old_action[1] + self.old_action[2])**2)
+
         # straight
         x0, y0, _ = self.com
         x1, y1, _ = self.com_0
@@ -580,7 +580,6 @@ def talker(p):
         p.trustPhaseFlag = False
         p.comd_lo = np.zeros(3)
         p.target_CoM = np.array(p.target_service().target_CoM)
-        
 
         # if p.DEBUG:  # overwrite target
         #     p.target_CoM = np.array([0.3, 0, 0.25])
@@ -625,6 +624,7 @@ def talker(p):
                                               [np.linalg.norm([p.com-p.target_CoM])], np.array(p.old_action).flatten()/(np.pi/2)))
 
                     # print(p.state)
+
                     if any(np.isnan(p.state)):
                         print(f"Agent state:\n {p.state}\n")
                         print(colored('NAN IN STATE!!!', 'red'))
