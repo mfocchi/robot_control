@@ -741,7 +741,7 @@ if __name__ == '__main__':
     finally:
         ros.signal_shutdown("killed")
         p.deregister_node()
-        if conf.plotting:
+        if p.DEBUG:
             print("PLOTTING")
             # plotFrameLinear('wrench', p.time_log, Wrench_log=p.contactForceW_log)
             plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log,

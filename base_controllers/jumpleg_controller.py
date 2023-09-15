@@ -913,14 +913,14 @@ def talker(p):
                 p.base_offset + p.q[:3] + p.x_ee, np.array([0, 0, 1.]), p.mu, height=0.05, color="blue")
             # p.contactForceW = np.zeros(3) # to be sure it does not retain any "memory" when message are not arriving, so avoid to compute wrong rewards
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
-            # com at LIFT OFF
-            p.ros_pub.add_marker(com_lo, color="red", radius=0.1)
 
-            p.ros_pub.add_marker(p.ideal_landing, color="red", radius=0.1)
+            if (np.linalg.norm(p.ideal_landing) > 0.):
+                p.ros_pub.add_marker(p.ideal_landing, color="purple", radius=0.1)
             #reachable space
             #p.ros_pub.add_marker([0, 0, 0], color="green", radius=0.64)
+            if p.DEBUG:
+                p.ros_pub.add_arrow(com_lo, comd_lo, "red")
 
-            p.ros_pub.add_arrow(com_lo, comd_lo, "red")
             # plot com intermediate positions
             for blob in range(len(p.intermediate_com_position)):
                 p.ros_pub.add_marker(p.intermediate_com_position[blob], color=[
@@ -929,13 +929,20 @@ def talker(p):
             for blob in range(len(p.intermediate_flight_com_position)):
                 p.ros_pub.add_marker(p.intermediate_flight_com_position[blob], color=[blob * 1. / p.number_of_blobs, blob * 1. / p.number_of_blobs,
                                                 blob * 1. / p.number_of_blobs], radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 0], color="red",  radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 1], color="red", radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 2], color="red", radius=0.02)
-            p.ros_pub.add_marker(p.bezier_weights[:, 3], color="red", radius=0.02)
+            if p.DEBUG:
+                p.ros_pub.add_marker(p.bezier_weights[:, 0], color="red",  radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 1], color="red", radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 2], color="red", radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights[:, 3], color="red", radius=0.02)
+
+            # com at LIFT OFF given by the N network
+            if p.DEBUG:
+                p.ros_pub.add_marker(com_lo, color="red", radius=0.1)
+
             if (not p.trustPhaseFlag):
-                p.ros_pub.add_arrow(p.actual_com_lo, p.actual_comd_lo, "green")
-                p.ros_pub.add_marker(p.actual_com_lo, color="green", radius=0.1)
+                if p.DEBUG:
+                    p.ros_pub.add_arrow(p.actual_com_lo, p.actual_comd_lo, "green")
+                    p.ros_pub.add_marker(p.actual_com_lo, color="green", radius=0.1)
 
             p.ros_pub.publishVisual()
 
