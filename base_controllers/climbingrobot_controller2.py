@@ -59,6 +59,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
         self.OBSTACLE_AVOIDANCE = False
+        self.obstacle_location = np.array([-0.5, 2.5, -6])
 
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -556,15 +557,13 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_max = 90.
         self.mu = 0.8
 
+
         self.optim_params = {}
         self.optim_params['jump_clearance'] = 1.
 
         if self.OBSTACLE_AVOIDANCE:
-            self.Fleg_max = 600.
-            self.Fr_max = 120.
-            self.optim_params['jump_clearance'] = 0.3
             # I hard code it otherwise does not converge cause it is very sensitive
-            p0 = np.array([0.28, 2.5, -6])
+            p0 = np.array([0.5, 0.5, -6])
 
         if p.landing:
             self.optim_params['m'] = 15.07 # I need to hardcode it otherwise it does not converge
@@ -576,14 +575,11 @@ class ClimbingrobotController(BaseControllerFixed):
         else:
             self.optim_params['m'] = self.getRobotMass()
         self.optim_params['obstacle_avoidance'] = self.OBSTACLE_AVOIDANCE
-        self.optim_params['obstacle_location'] = matlab.double([-0.5, 3., -7.5]).reshape(3, 1)
+        self.optim_params['obstacle_location'] = matlab.double(self.obstacle_location).reshape(3, 1)
         self.optim_params['num_params'] = 4.
         self.optim_params['int_method'] = 'rk4'
         self.optim_params['N_dyn'] = 30.
-        if self.OBSTACLE_AVOIDANCE:
-            self.optim_params['FRICTION_CONE'] = 0.
-        else:
-            self.optim_params['FRICTION_CONE'] = 1.
+        self.optim_params['FRICTION_CONE'] = 1.
         self.optim_params['int_steps'] = 5.
         self.optim_params['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
         self.optim_params['b'] = 5.
@@ -822,7 +818,11 @@ def talker(p):
     additional_args = ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
                        'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
                        'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z']),
-                       'obstacle:='+str(p.OBSTACLE_AVOIDANCE)]
+                       'obstacle:='+str(p.OBSTACLE_AVOIDANCE),
+                       'obstacle_x:=' + str(p.obstacle_location[0]),
+                       'obstacle_y:=' + str(p.obstacle_location[1]),
+                       'obstacle_z:=' + str(p.obstacle_location[2])
+                       ]
     if p.landing:
         additional_args.append('wall_inclination:='+ str(conf.robot_params[p.robot_name]['wall_inclination']))
     if p.SAVE_BAG:
@@ -969,7 +969,11 @@ def talker(p):
         landingW = p.generateTargetPoints(p0)
     else:
         if p.OBSTACLE_AVOIDANCE:
-            landingW = np.array([0.28, 4, -10]).reshape(3,1)
+            # old one vertical
+            #landingW = np.array([0.28, 4, -10]).reshape(3,1)
+            # new one horizontal
+            landingW = np.array([0.5, 4.5, -6]).reshape(3, 1)
+            p0 = np.array([0.5, 0.5, -6])
         else:
             landingW = np.array([0.28, 4, -4]).reshape(3, 1)
 

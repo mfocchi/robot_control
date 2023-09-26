@@ -7,6 +7,7 @@ Refer to the MATLAB Compiler SDK documentation for more information.
 """
 import matlab.engine
 import numpy as np
+import time
 from base_controllers.utils.matlab_conversions import mat_vector2python, mat_matrix2python
 
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
@@ -98,13 +99,13 @@ solution_mpc = mat_vector2python(x)
 # x = eng.optimize_cpp_mpc_propellers_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, Fr_max_mpc, mpc_N, params_mpc)
 # print("x", x)
 
-# for i in range(10):
-#
-#     start = time.time()
-#     x = eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, Fr_max, mpc_N, params)
-#     #print("x", x)
-#     duration = time.time() - start
-#     print("duration", duration)
+for i in range(10):
+
+    start = time.time()
+    x = eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, Fr_max_mpc, mpc_N, params_mpc)
+    #print("x", x)
+    duration = time.time() - start
+    print("duration", duration)
 
 eng.exit
 eng.quit()
