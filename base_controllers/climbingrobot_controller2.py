@@ -273,6 +273,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.Fr_l_fbk_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.Fr_r_fbk_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.l_1d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.l_2d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.wall_normal = np.array([1.,0.,0.])
 
@@ -291,9 +294,10 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.Fr_r_log[self.log_counter] = self.Fr_r
                 self.Fr_l_fbk_log[self.log_counter] = self.Fr_l_fbk
                 self.Fr_r_fbk_log[self.log_counter] = self.Fr_r_fbk
-
+                self.l_1d_log[self.log_counter] =  self.l_1d
+                self.l_2d_log[self.log_counter] =  self.l_2d
+                self.base_vel_log[:,self.log_counter] = self.base_vel
                 #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
-                pass
 
             super().logData()
 
@@ -799,6 +803,19 @@ class ClimbingrobotController(BaseControllerFixed):
         cw = numpy.matlib.repmat(p0.reshape(3,1).copy(), 1, 8)
         cw[1:, :] += Rx.dot(np.vstack((y, z)))
         return cw
+    def computeJumpEnergyConsumption(self):
+        # get index
+        #a_bool = self.jumps[self.jumpNumber]["time"] > self.jumps[self.jumpNumber]["thrustDuration"]
+        #lift_off_idx = min([i for (i, val) in enumerate(a_bool) if val]) - 1
+        lift_off_idx = np.max(np.where((self.time_log - self.start_logging) <=self.jumps[self.jumpNumber]["thrustDuration"]))
+        impulse_work= 0.5 * self.optim_params['m'] *self.base_vel_log[:, lift_off_idx].dot(self.base_vel_log[:, lift_off_idx]) # ekin at liftoff
+        # this integral is done on a rough discretization dt
+        touch_down_idx = np.max(np.where( (self.time_log - self.start_logging)  < p.jumps[p.jumpNumber]["Tf"]))
+        hoist_work = 0.
+        for i in range(touch_down_idx):
+            hoist_work = hoist_work + (
+                        abs(self.Fr_r_log[i] * self.l_2d_log[i]) + abs(self.Fr_l_log[i] * self.l_1d_log[i])) * conf.robot_params[p.robot_name]['dt']
+        return impulse_work + hoist_work
 
 def talker(p):
     p.start()
@@ -897,7 +914,7 @@ def talker(p):
     #             p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / 20., "red", scale=4.5)
     #         else:
     #             # apply disturbance to see self stabiliyizing effect
-    #             p.applyWrench(Mx=400, time_interval=0.1)
+    #             p.applyWrench(Mz=400, time_interval=0.1)
     #             p.tau_ffwd[p.leg_index] = np.zeros(3)
     #             if  p.landing:
     #                 # retract knee joint and extend landing joints
@@ -1040,6 +1057,8 @@ def talker(p):
 
                     # retract leg and move langing elements
                     p.q_des[p.leg_index[2]] = 0.25
+                    # apply diusturbance to show max leg reorientation
+                    #p.applyWrench(Mz=400, time_interval=0.1)
 
                     # manage lander retracting leg
                     if  p.landing:
@@ -1100,6 +1119,7 @@ def talker(p):
                     # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
                     p.resetRope()
                     matlab_target = p.jumps[p.jumpNumber]["targetPos"]
+                    energy = p.computeJumpEnergyConsumption()
                     p.jumpNumber += 1
                     if (p.jumpNumber < p.numberOfJumps):
                         p.stateMachine = 'idle'
@@ -1108,18 +1128,20 @@ def talker(p):
                     else:
                         #p.pause_physics_client()
                         landing_location = p.base_pos-p.mat2Gazebo
-                        print(colored(f"target achieved (in matlab convention) is: {landing_location}", "blue"))
-                        print(colored(f" while it should be  {matlab_target}", "blue"))
+                        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
+                        print(colored(f" while from optim it should be  {matlab_target}", "blue"))
                         print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
+                        print(colored(f" the energy consumption is  {energy}", "blue"))
 
-                        # fundamental: same everything before initVars!
+                        # fundamental: save everything before initVars! cause it will be deleted
                         p.plotStuff()
                         if p.SAVE_BAG:
                             p.recorder.stop_recording_srv()
                         #reset for the next jump
-                        p.startupProcedure()
-                        p.initVars()
-                        p.q_des = np.copy(p.q_des_q0)
+                        if p.MULTIPLE_JUMPS:
+                            p.startupProcedure()
+                            p.initVars()
+                            p.q_des = np.copy(p.q_des_q0)
 
                         break
 
