@@ -53,6 +53,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.EXTERNAL_FORCE = False
         self.impedance_landing = True
         self.MPC_control = True
+        self.PLOT_MPC = False
         self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
@@ -663,9 +664,9 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if self.landing:
             self.Fr_max_mpc = 150.
-
-        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1)
-        #self.ax = self.fig.add_subplot(111)
+        if self.PLOT_MPC:
+            self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1)
+            #self.ax = self.fig.add_subplot(111)
 
     def computeMPC(self, delta_t):
         # after the thrust we start MPC,  it will start from time 0.05 so the index will start from  2
@@ -753,7 +754,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.deltaFr_r = x[self.mpc_N:]
 
             #online plot MPC
-            p.onlinePlotMPC(self.deltaFr_l, self.deltaFr_r)
+            if self.PLOT_MPC:
+                self.onlinePlotMPC(self.deltaFr_l, self.deltaFr_r)
             self.unpause_physics_client()
 
         self.mpc_index_old = self.mpc_index
