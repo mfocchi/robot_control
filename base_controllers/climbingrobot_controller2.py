@@ -366,7 +366,8 @@ class ClimbingrobotController(BaseControllerFixed):
             actual_com= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame which is WF in matlab
             time_gazebo = p.time_log - p.start_logging
             #plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            #plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
+            if not p.MULTIPLE_JUMPS:
+                plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
             plot3D('states_test_'+str(p.n_test), 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
             if p.MPC_control:
                 filename = f'test_gazebo_MPC_{p.MPC_control}_constraints_{p.MPC_uses_constraints}_dist_{p.type_of_disturbance}.mat'
@@ -587,8 +588,11 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
         self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
         self.optim_params['g'] = 9.81
-        self.optim_params['w1'] = 1.
-        self.optim_params['w2'] = 100.
+        self.optim_params['w1'] = 1. # smooth
+        if not p.MULTIPLE_JUMPS:
+            self.optim_params['w2'] = 0. # hoist work
+        else:
+            self.optim_params['w2'] = 100.  # hoist work use this for multiple jumps for energetic comparison
         self.optim_params['w3'] = 0.
         self.optim_params['w4'] = 0.
         self.optim_params['w5'] = 0.
@@ -1143,6 +1147,10 @@ def talker(p):
                         print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
                         print(colored(f" while from optim it should be  {matlab_target}", "blue"))
                         print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
+                        jump_length = np.linalg.norm(p0[:2] - matlab_target[:2])
+                        print(colored(
+                            f" the relative error is {np.linalg.norm(landing_location - matlab_target) / jump_length}",
+                            "blue"))
                         print(colored(f" the energy consumption is  {energy}", "blue"))
 
                         # fundamental: save everything before initVars! cause it will be deleted
@@ -1156,7 +1164,7 @@ def talker(p):
                             p.q_des = np.copy(p.q_des_q0)
 
                         break
-
+            # this is the same as flying but with the lander
             if (p.stateMachine == 'flying_and_reorient_lander'):
                 # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
                 delta_t = p.time - p.end_orienting
