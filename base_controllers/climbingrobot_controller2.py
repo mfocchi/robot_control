@@ -366,8 +366,8 @@ class ClimbingrobotController(BaseControllerFixed):
             actual_com= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame which is WF in matlab
             time_gazebo = p.time_log - p.start_logging
             #plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-            plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
-            plot3D('states', 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
+            #plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
+            plot3D('states_test_'+str(p.n_test), 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
             if p.MPC_control:
                 filename = f'test_gazebo_MPC_{p.MPC_control}_constraints_{p.MPC_uses_constraints}_dist_{p.type_of_disturbance}.mat'
             else:
@@ -588,11 +588,11 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
         self.optim_params['g'] = 9.81
         self.optim_params['w1'] = 1.
-        self.optim_params['w2'] = 1.
-        self.optim_params['w3'] = 1.
-        self.optim_params['w4'] = 1.
-        self.optim_params['w5'] = 1.
-        self.optim_params['w6'] = 1.
+        self.optim_params['w2'] = 100.
+        self.optim_params['w3'] = 0.
+        self.optim_params['w4'] = 0.
+        self.optim_params['w5'] = 0.
+        self.optim_params['w6'] = 0.
         self.optim_params['T_th'] = 0.05
 
 
@@ -789,7 +789,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def generateTargetPoints(self, p0):
         # generate points in an ellipse of axis a b = 2.5 around p0
         alpha = np.deg2rad(45)
-        theta = np.linspace(0, 2 * np.pi, 9)
+        theta = np.linspace(alpha, alpha + 2 * np.pi, 9)
         # main axes ellipse
         a =  (self.anchor_distance_y-1.5) /2 / np.cos(alpha)
         b = 2
@@ -979,12 +979,15 @@ def talker(p):
         else:
             landingW = np.array([0.28, 4, -4]).reshape(3, 1)
 
-    for n_test in range(landingW.shape[1]):
-        pf = landingW[:,n_test]
-        print(colored(f"---------------Ideal Reference landing test # {n_test}: {pf}", "green"))
+    for p.n_test in range(landingW.shape[1]):
+        pf = landingW[:,p.n_test]
+        print(colored(f"---------------Ideal Reference landing test # {p.n_test}: {pf}", "green"))
 
         # jump parameters
-        p.startJump = 1.5
+        if p.MULTIPLE_JUMPS:
+            p.startJump = 2.5 # wait more for longer jumps to initialize
+        else:
+            p.startJump = 1.5
         p.orientTime = 1.0
         p.stateMachine = 'idle'
         p.jumpNumber  = 0
