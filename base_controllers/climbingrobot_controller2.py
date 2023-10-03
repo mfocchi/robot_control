@@ -613,7 +613,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_l0 = mat_vector2python(self.matvars['Fr_l'])
         self.Fr_r0 = mat_vector2python(self.matvars['Fr_r'])
         self.Fleg = mat_vector2python(self.matvars['Fleg'])
-        self.targetPos =mat_vector2python(self.matvars['achieved_target'])
+        #this is computed integrating the dynamics with dt and can be different from the reference, we should use the reference at the end of the horizon
+        #self.targetPos = mat_vector2python(self.matvars['achieved_target'])
+        self.targetPos = self.ref_com[:,-1]
+
         print(colored(f"offline optimization accomplished, p0:{p0}, target:{self.targetPos}", "blue"))
 
         # paper IRIM uncomment this
