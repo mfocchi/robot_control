@@ -1080,7 +1080,7 @@ def talker(p):
                     # retract leg and move langing elements
                     p.q_des[p.leg_index[2]] = 0.25
                     # apply diusturbance to show max leg reorientation
-                    #p.applyWrench(Mz=400, time_interval=0.1)
+                    #p.applyWrench(Mz=100, time_interval=0.2)
 
                     # manage lander retracting leg
                     if  p.landing:
