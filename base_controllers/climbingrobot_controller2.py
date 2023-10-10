@@ -621,6 +621,17 @@ class ClimbingrobotController(BaseControllerFixed):
         #self.targetPos = mat_vector2python(self.matvars['achieved_target'])
         self.targetPos = self.ref_com[:,-1]
 
+        # matlab validation test (set qkeee = -0.5)
+        # self.matvars = mio.loadmat('validation.mat', squeeze_me=True, struct_as_record=False)
+        # self.ref_com  =self.matvars['p']
+        # self.ref_psi = self.matvars['psi']
+        # self.ref_l_1 = self.matvars['l1']
+        # self.ref_l_2 = self.matvars['l2']
+        # self.ref_time = self.matvars['time']
+        # self.Fr_l0 = self.matvars['Fr_l']
+        # self.Fr_r0 = self.matvars['Fr_r']
+        # self.Fleg = self.matvars['Fleg']
+
         print(colored(f"offline optimization accomplished, p0:{p0}, target:{self.targetPos}", "blue"))
 
         # paper IRIM uncomment this
@@ -636,11 +647,6 @@ class ClimbingrobotController(BaseControllerFixed):
         # self.Fleg = self.matvars['Fleg']
         # self.targetPos = self.matvars['achieved_target']
 
-        # old way (not working I changed the way I defined matvars there is no longer a solution variable)
-        # if p.landing:
-        #     p.matvars = mio.loadmat('test_matlab2landingClearance.mat', squeeze_me=True,struct_as_record=False)
-        # else:
-        #     p.matvars = mio.loadmat('test_matlab2.mat', squeeze_me=True, struct_as_record=False)
 
         # print(self.Fr_l0)
         # print(self.Fr_r0)
