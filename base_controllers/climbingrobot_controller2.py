@@ -340,18 +340,17 @@ class ClimbingrobotController(BaseControllerFixed):
         super().startupProcedure()
 
     def plotStuff(self):
-        # plot rope forces
-        # plt.figure()
-        # plt.subplot(2, 1, 1)
-        # plt.ylabel("Fr_l")
-        # plt.plot(p.time_log, p.Fr_l_log, color='red')
-        # plt.plot(p.time_log,p.Fr_l_fbk_log, color='blue')
-        # plt.grid()
-        # plt.subplot(2, 1, 2)
-        # plt.ylabel("Fr_r")
-        # plt.plot(p.time_log, p.Fr_r_log,color='red')
-        # plt.plot(p.time_log,p.Fr_r_fbk_log, color='blue')
-        # plt.grid()
+        #plot rope forces
+        plt.figure()
+        plt.subplot(2, 1, 1)
+        plt.ylabel("Fr_l")
+        plt.plot(p.ref_time, p.Fr_l0, color='red')
+
+        plt.grid()
+        plt.subplot(2, 1, 2)
+        plt.ylabel("Fr_r")
+        plt.plot(p.ref_time, p.Fr_r0, color='red')
+        plt.grid()
 
         # from operator import itemgetter
         # # plot rope joints
@@ -412,7 +411,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         mountain_wire_roll_l = -math.atan2(-p[2], p[1])
         mountain_wire_roll_r = math.atan2(-p[2], self.anchor_distance_y-p[1])
-
+        # this is an approximation cause I shuould compute the real rope lenght considering the hoist distance so this function is only useful for init but it is inaccurate!
         wire_base_prismatic_l = np.linalg.norm(p) -self.anchor_distance_y*0.5
         wire_base_prismatic_r = math.sqrt(p[0]*p[0] +(self.anchor_distance_y - p[1])*(self.anchor_distance_y - p[1]) + p[2] * p[2])-self.anchor_distance_y*0.5
 
@@ -584,13 +583,13 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['FRICTION_CONE'] = 1.
         self.optim_params['int_steps'] = 5.
         self.optim_params['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
-        self.optim_params['b'] = 5.
+        self.optim_params['b'] = self.anchor_distance_y
         self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
         self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
         self.optim_params['g'] = 9.81
         self.optim_params['w1'] = 1. # smooth
         if not p.MULTIPLE_JUMPS:
-            self.optim_params['w2'] = 0. # hoist work
+            self.optim_params['w2'] = 100. # hoist work
         else:
             self.optim_params['w2'] = 100.  # hoist work use this for multiple jumps for energetic comparison
         self.optim_params['w3'] = 0.
@@ -663,7 +662,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params_mpc['int_method'] = 'rk4'
         self.optim_params_mpc['int_steps'] = 5.
         self.optim_params_mpc['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
-        self.optim_params_mpc['b'] = 5.
+        self.optim_params_mpc['b'] = self.anchor_distance_y
         self.optim_params_mpc['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
         self.optim_params_mpc['p_a2'] = matlab.double([0., self.optim_params_mpc['b'], 0.]).reshape(3, 1)
         self.optim_params_mpc['g'] = 9.81
