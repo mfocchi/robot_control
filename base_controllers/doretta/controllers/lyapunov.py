@@ -6,6 +6,7 @@ from ..utils.constants import DT
 from ..environment.trajectory import Trajectory, ModelsList
 from ..utils.tools import normalize_angle
 import math
+from base_controllers.doretta.utils.tools import unwrap_angle
 # ------------------------------------ #
 # CONTROLLER'S PARAMETERS
 # K_P = 8.0
@@ -32,6 +33,8 @@ class LyapunovController:
         self.draw_e_y = []
         self.draw_e_theta = []
         self.goal_reached = False
+        self.theta_old = 0.
+        self.des_theta_old = 0.
 
     def config(self, start_time, trajectory):
         self.trajectory = trajectory
@@ -69,12 +72,12 @@ class LyapunovController:
         ex = robot.x - self.trajectory.x[current_index]
         ey = robot.y - self.trajectory.y[current_index]
 
-        etheta = robot.theta - self.trajectory.theta[current_index]
+        theta = unwrap_angle(robot.theta, self.theta_old)
+        des_theta = unwrap_angle(self.trajectory.theta[current_index], self.des_theta_old)
+        etheta = theta- des_theta
 
 
-        etheta = normalize_angle(etheta)
-        theta = robot.theta
-        alpha = theta + self.trajectory.theta[current_index]
+        alpha = theta + des_theta
         v_ref = self.trajectory.v[current_index]
         o_ref = self.trajectory.omega[current_index]
 
@@ -90,7 +93,7 @@ class LyapunovController:
 
 
         V = 1 / 2 * (ex ** 2 + ey ** 2+ etheta**2)
-        V_dot = -self.K_THETA * etheta**2 -self.K_P * exy * math.pow(math.cos(psi - theta),2)
+        V_dot = -self.K_THETA * etheta**2  - self.K_P * exy * math.pow(math.cos(psi - theta),2)
 
 
         #domega = - self.K_THETA * etheta - 2/etheta * v_ref * np.sin(0.5 * etheta)* np.sin(psi - 0.5 * alpha)

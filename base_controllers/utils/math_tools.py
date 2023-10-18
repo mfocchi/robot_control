@@ -23,6 +23,62 @@ class Math:
         self._Tomega_dot_mat = np.zeros([3,3])
         self._Tomega_inv_mat = np.zeros([3,3])
 
+    # def rotm2quat(self,R):
+    #     qw = math.sqrt(1 + R[0, 0] + R[1, 1] + R[2, 2]) / 2
+    #     qx = (R[2, 1] - R[1, 2]) / (4 * qw)
+    #     qy = (R[0, 2] - R[2, 0]) / (4 * qw)
+    #     qz = (R[1, 0] - R[0, 1]) / (4 * qw)
+    #     # returning normalized quaternion
+    #     norm = math.sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
+    #     return np.array([qw/norm, qx/norm, qy/norm, qz/norm])
+
+    def sgn(self,x):
+        if x >= 0:
+            return 1
+        else:
+            return -1
+    def rotm2quat2(self,R):
+
+        qw = math.sqrt(1 + R[0, 0] + R[1, 1] + R[2, 2]) / 2
+        qx = self.sgn(R[2, 1] - R[1, 2]) * math.sqrt(R[0,0] - R[1,1] - R[2,2] +1)
+        qy = self.sgn(R[0, 2] - R[2, 0]) * math.sqrt(R[1,1] - R[2,2] - R[0,0] +1)
+        qz = self.sgn(R[1, 0] - R[0, 1]) * math.sqrt(R[2,2] - R[0,0] - R[1,1] +1)
+        norm = math.sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
+        return np.array([qw/norm, qx/norm, qy/norm, qz/norm])
+
+    def rotm_to_quaternion(self,rotm):
+        trace = np.trace(rotm)
+        if trace > 0:
+            S = np.sqrt(trace + 1.0) * 2
+            qw = 0.25 * S
+            qx = (rotm[2, 1] - rotm[1, 2]) / S
+            qy = (rotm[0, 2] - rotm[2, 0]) / S
+            qz = (rotm[1, 0] - rotm[0, 1]) / S
+        elif rotm[0, 0] > rotm[1, 1] and rotm[0, 0] > rotm[2, 2]:
+            S = np.sqrt(1.0 + rotm[0, 0] - rotm[1, 1] - rotm[2, 2]) * 2
+            qw = (rotm[2, 1] - rotm[1, 2]) / S
+            qx = 0.25 * S
+            qy = (rotm[0, 1] + rotm[1, 0]) / S
+            qz = (rotm[0, 2] + rotm[2, 0]) / S
+        elif rotm[1, 1] > rotm[2, 2]:
+            S = np.sqrt(1.0 + rotm[1, 1] - rotm[0, 0] - rotm[2, 2]) * 2
+            qw = (rotm[0, 2] - rotm[2, 0]) / S
+            qx = (rotm[0, 1] + rotm[1, 0]) / S
+            qy = 0.25 * S
+            qz = (rotm[1, 2] + rotm[2, 1]) / S
+        else:
+            S = np.sqrt(1.0 + rotm[2, 2] - rotm[0, 0] - rotm[1, 1]) * 2
+            qw = (rotm[1, 0] - rotm[0, 1]) / S
+            qx = (rotm[0, 2] + rotm[2, 0]) / S
+            qy = (rotm[1, 2] + rotm[2, 1]) / S
+            qz = 0.25 * S
+
+        quaternion = np.array([qw, qx, qy, qz])
+        return quaternion
+
+    def rot_error_for_quat(self,q_e,q_des):
+        return np.dot(q_e[0],q_des[1:]) - np.dot(q_des[0],q_e[1:]) - np.cross(q_e[1:],q_des[1:])
+
     def normalize(self, n):
         norm1 = np.linalg.norm(n)
         n = np.true_divide(n, norm1)
@@ -45,7 +101,7 @@ class Math:
         math = Math()
         G = block([[np.eye(3), np.zeros((3, 3))],
                        [math.skew(r), np.eye(3)]])
-        return G    
+        return G
 
     def plane_z_intercept(self, point_on_plane, plane_normal):
         return point_on_plane[2] + \
@@ -83,26 +139,26 @@ class Math:
 
         R = Rx.dot(Ry.dot(Rz))
         return R
-                                
+
     # the dual of rpyToRot()
      # set of Euler angles (according to ZYX convention) representing the orientation of frame represented by b_R_w
     def rotTorpy(self, b_R_w):
-        rpy = np.array([0.0,0.0,0.0])                    
+        rpy = np.array([0.0,0.0,0.0])
         rpy[0] = np.arctan2(b_R_w[1,2], b_R_w[2,2])
         rpy[1] = -np.arcsin( b_R_w[0,2])
         rpy[2] = np.arctan2(b_R_w[0,1], b_R_w[0,0])
-    
+
         return rpy;
-                
+
     # dual of eul2Rot from w_R_b returns the rpy angles into ZYX configuration
     def rot2eul(self, R):
         phi = np.arctan2(R[1,0], R[0,0])
         theta = np.arctan2(-R[2,0], np.sqrt(pow(R[2,1],2) + pow(R[2,2],2) ))
         psi = np.arctan2(R[2,1], R[2,2])
-       
+
         #unit test should return roll = 0.5 pitch = 0.2  yaw = 0.3
-        # rot2eul(np.array([ [0.9363,   -0.1684,    0.3082], [0.2896 ,   0.8665  , -0.4065], [-0.1987 ,   0.4699  ,  0.8601]]))    
-        
+        # rot2eul(np.array([ [0.9363,   -0.1684,    0.3082], [0.2896 ,   0.8665  , -0.4065], [-0.1987 ,   0.4699  ,  0.8601]]))
+
         # returns roll = psi, pitch = theta,  yaw = phi
         return np.array((psi, theta, phi))
 
@@ -118,17 +174,17 @@ class Math:
 
         # returns roll = psi, pitch = theta,  yaw = phi
         return np.array((psi, theta, phi))
-            
-    # from the rpy angles into ZYX configuration returns w_R_b                            
+
+    # from the rpy angles into ZYX configuration returns w_R_b
     def eul2Rot(self, rpy):
-        c_roll =  np.cos(rpy[0])
+        c_roll = np.cos(rpy[0])
         s_roll = np.sin(rpy[0])
-        c_pitch =      np.cos(rpy[1])        
+        c_pitch = np.cos(rpy[1])
         s_pitch = np.sin(rpy[1])
         c_yaw = np.cos(rpy[2])
         s_yaw = np.sin(rpy[2])
-                                
-        Rx =  np.array([ [   1   ,         0           ,        0], 
+
+        Rx =  np.array([ [   1   ,         0           ,        0],
                          [   0   ,        c_roll  ,  -s_roll],
                          [   0   ,      s_roll,      c_roll ]]);
 
@@ -136,12 +192,12 @@ class Math:
         Ry = np.array([[c_pitch     ,     0  ,   s_pitch],
                        [      0       ,    1  ,   0],
                        [ -s_pitch     ,    0   ,  c_pitch]]);
-          
-        
+
+
         Rz = np.array([[ c_yaw  ,  -s_yaw ,        0],
                       [  s_yaw ,  c_yaw ,          0],
                       [0      ,     0     ,       1]]);
-        
+
 
 
         R =  Rz.dot(Ry.dot(Rx));
@@ -165,14 +221,14 @@ class Math:
 
 
     def Tomega_dot(self, rpy, rpyd):
-    
+
         roll = rpy[0]
         pitch = rpy[1]
         yaw = rpy[2]
         rolld = rpyd[0]
         pitchd = rpyd[1]
         yawd = rpyd[2]
-    
+
         # Tomega_dot = np.array([[ -np.cos(yaw)*np.sin(pitch)*pitchd - np.cos(pitch)*np.sin(yaw)*yawd,  -np.cos(yaw)*yawd, 0],
         #                       [ np.cos(yaw)*np.cos(pitch)*yawd - np.sin(yaw)*np.sin(pitch)*pitchd,    -np.sin(yaw)*yawd, 0  ],
         #                       [ -np.cos(pitch)*pitchd,  0, 0 ]])
@@ -191,7 +247,7 @@ class Math:
 
         self._Tomega_dot_mat[0, 1] = -cy * yawd
         self._Tomega_dot_mat[1, 1] = -sy * yawd
-        
+
         return self._Tomega_dot_mat
 
     """
@@ -208,13 +264,13 @@ class Math:
         3x3 matrix T_omega
     """
     def Tomega(self, rpy):
-    
+
         #convention yaw pitch roll
-    
+
         roll = rpy[0]
         pitch = rpy[1]
         yaw = rpy[2]
-        
+
 
         # Tomega = np.array([[np.cos(pitch)*np.cos(yaw),       -np.sin(yaw),                    0],
         #                    [ np.cos(pitch)*np.sin(yaw),       np.cos(yaw),                    0],
@@ -428,10 +484,10 @@ class Math:
     def is_point_inside_segment(self, first_input_point, second_input_point, point_to_check):
         epsilon = 0.001
 
-        if (np.abs(first_input_point[0] - second_input_point[0]) < 1e-02):                     
-            alpha = (point_to_check[1] - second_input_point[1]) / (first_input_point[1] - second_input_point[1]) 
+        if (np.abs(first_input_point[0] - second_input_point[0]) < 1e-02):
+            alpha = (point_to_check[1] - second_input_point[1]) / (first_input_point[1] - second_input_point[1])
         else:
-            alpha = (point_to_check[0] - second_input_point[0]) / (first_input_point[0] - second_input_point[0])                 
+            alpha = (point_to_check[0] - second_input_point[0]) / (first_input_point[0] - second_input_point[0])
 
         if(alpha>=-epsilon)&(alpha<=1.0+epsilon):
             new_point = point_to_check
@@ -441,8 +497,8 @@ class Math:
         return new_point, alpha
 
     def find_point_to_line_signed_distance(self, segment_point1, segment_point2, point_to_check):
-        # this function returns a positive distance if the point is on the right side of the segment. This will return 
-        # a positive distance for a polygon queried in clockwise order and with a point_to_check which lies inside the polygon itself 
+        # this function returns a positive distance if the point is on the right side of the segment. This will return
+        # a positive distance for a polygon queried in clockwise order and with a point_to_check which lies inside the polygon itself
         num = (segment_point2[0] - segment_point1[0])*(segment_point1[1] - point_to_check[1]) - (segment_point1[0] - point_to_check[0])*(segment_point2[1] - segment_point1[1])
         denum_sq = (segment_point2[0] - segment_point1[0])*(segment_point2[0] - segment_point1[0]) + (segment_point2[1] - segment_point1[1])*(segment_point2[1] - segment_point1[1])
         dist = num/np.sqrt(denum_sq)
@@ -450,8 +506,8 @@ class Math:
         return dist
 
     def find_residual_radius(self, polygon, point_to_check):
-        # this function returns a positive distance if the point is on the right side of the segment. This will return 
-        # a positive distance for a polygon queried in clockwise order and with a point_to_check which lies inside the polygon itself 
+        # this function returns a positive distance if the point is on the right side of the segment. This will return
+        # a positive distance for a polygon queried in clockwise order and with a point_to_check which lies inside the polygon itself
         # print 'poly',polygon
         numberOfVertices = np.size(polygon,0)
         # print 'polygon in residual radius computation', polygon
@@ -469,7 +525,7 @@ class Math:
                 residual_radius = d_temp
 
         # we dont need to compute for the last edge cause we added an extra point to close the polytop (last point equal to the first)
-        
+
 #        print polygon[numberOfVertices-1,:], polygon[0,:], d_temp
         return residual_radius
 
@@ -512,7 +568,7 @@ class Math:
         final_point = points_along_direction[idx,:]
         #print points_along_direction, point_to_com_distance, idx
         return final_point, intersection_points
-        
+
 
 def cross_mx(v):
     mx =np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
@@ -807,6 +863,7 @@ def polynomialRef(x0, xf, v0, vf, a0, af, T):
                      a_coeffs[5] * t ** 5) if 0 <= t <= T else a0 if t <0 else af
 
     return pos, vel, acc
+
 
 
 

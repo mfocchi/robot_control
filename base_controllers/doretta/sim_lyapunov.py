@@ -10,6 +10,7 @@ from base_controllers.doretta.environment.trajectory import Trajectory, ModelsLi
 from base_controllers.doretta.models.unicycle import Unicycle
 from base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams
 from base_controllers.doretta.controllers.lyapunov_zou import LyapunovControllerZou, LyapunovParamsZou
+from base_controllers.doretta.controllers.stanley import StanleyController, StanleyParams
 
 import base_controllers.doretta.velocity_tests as vt
 import sys
@@ -19,24 +20,20 @@ save = False
 SIMULATION = True
 simulation_max = 100.0
 
-# Lyapunov controller parameters
-K_P = 10.0
-K_THETA = 10.0
-
-
-
-
 def main():
 
     type_of_controller='luigi'
+    #type_of_controller='stanley'
     #type_of_controller = 'zou' # much more aggressive on omega
-    initial_des_x = 2.
-    initial_des_y = 2.
+    initial_des_x = 4.
+    initial_des_y = 4.
     initial_des_theta = 0.5
 
     initial_x = 0.
     initial_y = 0.
-    initial_theta = -0.1
+    initial_theta = -1.
+
+    #if difference between initial_des_theta and initial_theta > 1.57 you can have issues (a little glitch in direction at the beginning )
 
     vel_gen = vt.velocity_luigi
     _, _, s_test = vel_gen()
@@ -45,17 +42,32 @@ def main():
     robot = Unicycle(x=initial_x, y=initial_y, theta=initial_theta)
 
     traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen)
+    start_time = 0.0
 
     if type_of_controller=='zou':
+        K_P = 10.0
+        K_THETA = 10.0
         params = LyapunovParamsZou(K_P=K_P, K_THETA=K_THETA)
         controller = LyapunovControllerZou(params=params)
+        controller.config(start_time=start_time, trajectory=traj)
 
     if type_of_controller=='luigi':
+        K_P = 10.0
+        K_THETA = 10.0
         params = LyapunovParams(K_P=K_P, K_THETA=K_THETA)
         controller = LyapunovController(params=params)
+        controller.config(start_time=start_time, trajectory=traj)
 
-    start_time = 0.0
-    controller.config(start_time=start_time, trajectory=traj)
+    if type_of_controller=='stanley':
+        K_THETA = 1.0
+        K_E = 6.0
+        EPSILON_V = 0.01
+        K_DELTA = 12
+        params = StanleyParams(K_THETA=K_THETA, K_E=K_E, EPSILON_V=EPSILON_V, K_DELTA=K_DELTA)
+        controller = StanleyController(path=traj, params=params)
+
+
+
 
     # plot results
     time_ = [start_time]
@@ -64,12 +76,19 @@ def main():
     draw_theta = [robot.theta]
     draw_control_vel = [robot.v]
     draw_control_omega = [robot.omega]
-
+    draw_V = [0.]
+    draw_V_dot = [0.]
     current_time = constants.DT
 
     while not controller.goal_reached:  # if target is not reached yet
         # controllers
-        v, o,_,_,_,_ = controller.control(robot, current_time)
+        if  type_of_controller=='stanley':
+            o, index = controller.control(robot=robot)
+            v = controller.longitudinal_velocity_controller(index)
+        if type_of_controller == 'luigi':
+            v, o, _, _, V, V_dot = controller.control(robot, current_time)
+        if type_of_controller == 'zou':
+            v, o = controller.control(robot, current_time)
 
         # SAFE CHECK -> clipping velocities
         # v = np.clip(v, -constants.MAX_LINEAR_VELOCITY, constants.MAX_LINEAR_VELOCITY)
@@ -84,6 +103,9 @@ def main():
 
         draw_control_vel.append(v)
         draw_control_omega.append(o)
+        draw_V.append(V)
+        draw_V_dot.append(V_dot)
+
         time_.append(current_time )
 
         current_time += constants.DT
@@ -166,6 +188,27 @@ def main():
     plt.legend()
     plt.xlabel("time[sec]")
     plt.ylabel("angular velocity[rad/s]")
+    # plt.axis("equal")
+    plt.grid(True)
+
+    # # liapunov
+    plt.figure(4)
+    plt.subplot(2, 1, 1)
+    plt.cla()
+    plt.plot(time_, draw_V, "-b", label="REAL")
+    plt.legend()
+    plt.xlabel("time[sec]")
+    plt.ylabel("V liapunov")
+    # plt.axis("equal")
+    plt.grid(True)
+
+    plt.subplot(2, 1, 2)
+    plt.cla()
+    plt.plot(time_, draw_V_dot, "-b", label="REAL")
+
+    plt.legend()
+    plt.xlabel("time[sec]")
+    plt.ylabel("Vdot liapunov")
     # plt.axis("equal")
     plt.grid(True)
 

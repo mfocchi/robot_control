@@ -2,7 +2,7 @@ import numpy as np
 
 from ..utils import constants as const
 from ..utils.tools import normalize_angle
-
+from base_controllers.doretta.utils.tools import unwrap_angle
 
 class Unicycle:
     """
@@ -21,6 +21,7 @@ class Unicycle:
         self.theta = theta
         self.v = v
         self.omega = omega
+        self.theta_old = theta
 
     def update(self, vel, omega):
         """
@@ -42,7 +43,8 @@ class Unicycle:
         self.x += vel * const.DT  * np.sinc(omega*const.DT/2) * np.cos(self.theta + omega* const.DT/2)
         self.y += vel * const.DT  * np.sinc(omega*const.DT/2) * np.sin(self.theta + omega* const.DT/2)
         self.theta += omega * const.DT
-        self.theta = normalize_angle(self.theta)
+        # this is not needed here
+        # self.theta = unwrap_angle(self.theta, self.theta_old)
 
     def state(self):
         return self.x, self.y, self.theta

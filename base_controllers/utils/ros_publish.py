@@ -130,6 +130,10 @@ class RosPub():
            marker.color.r = 0.0
            marker.color.g = 1.0
            marker.color.b = 0.0
+        if (color == "purple"):
+            marker.color.r = 0.7
+            marker.color.g = 0.0
+            marker.color.b = 1.0
         marker.pose.orientation.x = 0.
         marker.pose.orientation.y = 0.
         marker.pose.orientation.z = 0.
