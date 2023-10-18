@@ -378,9 +378,9 @@ class ClimbingrobotController(BaseControllerFixed):
                                     'time_gazebo': time_gazebo, 'actual_com': actual_com,
                                     'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
                                     'psi': p.simp_model_state_log[0,:], 'l_1': p.simp_model_state_log[1,:], 'l_2': p.simp_model_state_log[2,:],
-                                    'mu': p.mu , 'Fleg': p.Fleg,
-                                    'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_r0   })
-
+                                    'mu': p.mu , 'Fleg': p.Fleg,'Fr_max': p.Fr_max,
+                                    'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_r0,
+                                    'Fr_l': p.Fr_l_log, 'Fr_r': p.Fr_r_log })
 
     def getIndex(self,t):
         try:
@@ -566,7 +566,7 @@ class ClimbingrobotController(BaseControllerFixed):
             # I hard code it otherwise does not converge cause it is very sensitive
             p0 = np.array([0.5, 0.5, -6])
 
-        if p.landing:
+        if self.landing:
             self.optim_params['m'] = 15.07 # I need to hardcode it otherwise it does not converge
             # I hardcode this because wall inclination is non 0 so we start from 0.5
             p0 = np.array([0.5, 2.5, -6])
@@ -675,7 +675,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.propeller_force = np.zeros((int(self.mpc_N)))
 
         if self.landing:
-            self.Fr_max_mpc = 150.
+            self.Fr_max_mpc = 150. # this is not used in the mpc it creates issues
         if self.PLOT_MPC:
             self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1)
             #self.ax = self.fig.add_subplot(111)

@@ -28,7 +28,7 @@ mu = 0.8
 params = {}
 params['jump_clearance'] = 1.
 params['m'] = mass
-params['obstacle_avoidance'] = True
+params['obstacle_avoidance'] = False
 params['obstacle_location'] = matlab.double([-0.5, 2.5,-6]).reshape(3,1)
 anchor_distance = 5.
 params['num_params'] = 4.
@@ -41,12 +41,12 @@ params['b'] = anchor_distance
 params['p_a1'] = matlab.double([0.,0.,0.]).reshape(3,1)
 params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
 params['g'] = 9.81
-params['w1']= 1.
-params['w2']= 1.
-params['w3']= 1.
-params['w4']= 1.
-params['w5']= 1.
-params['w6']= 1.
+params['w1']= 1. # smooth
+params['w2']= 0. # hoist work
+params['w3']= 0.
+params['w4']= 0.
+params['w5']= 0.
+params['w6']= 0.
 params['T_th'] =  0.05
 
 #jump params
