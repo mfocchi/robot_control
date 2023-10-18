@@ -38,6 +38,7 @@ from base_controllers.utils.matlab_conversions import mat_vector2python, mat_mat
 import matlab.engine
 import numpy.matlib
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
+import pandas as pd
 
 import sys
 sys.path.insert(0,'./codegen')
@@ -57,8 +58,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
-        self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
+        self.MULTIPLE_JUMPS = True # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
+        self.ADD_NOISE = True #in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
         self.OBSTACLE_AVOIDANCE = False
         self.obstacle_location = np.array([-0.5, 2.5, -6])
 
@@ -93,7 +95,9 @@ class ClimbingrobotController(BaseControllerFixed):
         wrench.torque.z = 0.
         self.pub_prop_force.publish(wrench)
 
-    def applyWrench(self, Fx=0, Fy=0, Fz=0, Mx=0, My=0, Mz=0,  time_interval=0):
+    def applyWrench(self, Fx=0, Fy=0, Fz=0, Mx=0, My=0, Mz=0,  time_interval=0, start_time=None):
+        if start_time is None:
+            start_time = ros.Time.now()
         wrench = Wrench()
         wrench.force.x = Fx
         wrench.force.y = Fy
@@ -103,7 +107,7 @@ class ClimbingrobotController(BaseControllerFixed):
         wrench.torque.z = Mz
         reference_frame = "world" # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
         reference_point = Point(x = 0., y = 0., z = 0.)
-        self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point, wrench=wrench, start_time=ros.Time(),  duration=ros.Duration(time_interval))
+        self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame, reference_point=reference_point, wrench=wrench, start_time=start_time,  duration=ros.Duration(time_interval))
 
     def loadModelAndPublishers(self, xacro_path=None):
         xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -133,6 +137,14 @@ class ClimbingrobotController(BaseControllerFixed):
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
             self.recorder = RosbagControlledRecorder('rosbag record -a', False)
+        if self.ADD_NOISE:
+            # remove any previous instance
+            try:
+                os.system('rm noise_test.csv')
+            except:
+                pass
+            print(colored('CREATING NEW CSV TO STORE NOISE TESTS', 'blue'))
+            self.df = pd.DataFrame(columns=['test_nr', 'ideal_target', 'target', 'landing_error', 'relative_error'])
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -143,7 +155,24 @@ class ClimbingrobotController(BaseControllerFixed):
         total_robot_mass = sum(robot_link_masses[self.robot.model.getJointId('wire_base_yaw_l'):])
         return total_robot_mass
 
+    def generateDisturbanceOnSphere(self, min, max):
+        # sample_spherical(npoints, ndim=3):
+        direction = np.random.randn(3)
+        direction /= np.linalg.norm(direction, axis=0)
+        #sample magnitude
+        amp = min + max*np.random.randn()
+        return amp*direction
+
     def updateKinematicsDynamics(self):
+
+        if self.ADD_NOISE:# add white gaussian noise
+            # it is better to scale the 5% i.e, the variance after sampling with a higher variance value
+            self.state_der_noise = np.array([0.01, 0.2, 0.2]) * numpy.random.normal(0., 1)
+            #plt.hist(samples, num_bins)
+            #plt.show()
+        else:
+            self.state_der_noise = np.zeros(3)
+
         # q is continuously updated
         self.robot.computeAllTerms(self.q, self.qd )
         # joint space inertia matrix
@@ -184,24 +213,28 @@ class ClimbingrobotController(BaseControllerFixed):
         w_R_wire = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire')).rotation
         w_R_wire2 = self.robot.framePlacement(self.q, self.robot.model.getFrameId('wire_2')).rotation
 
-        # WF matlab to WF Gazebo offset
         self.mat2Gazebo = self.anchor_pos
-        hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
-        # to get the matlab state from the gazebo prismatic joints we need to consider that the gazebo joints is in zero config
-        # when the rope is 2.5 m half of anchor distance (startup at the point in the middle of the anchors)
-        self.l_1 = self.q[p.rope_index[1]] - hoist_distance/2 + self.anchor_distance_y/2
-        #print("sanitycheck", self.l_1 - np.linalg.norm((self.hoist_l_pos - self.anchor_pos)))
-        self.l_1d = self.qd[p.rope_index[1]]
-        self.l_2 = self.q[p.rope_index[0]] - hoist_distance/2 + self.anchor_distance_y/2
-        #print("sanitycheck", self.l_2 - np.linalg.norm((self.hoist_r_pos - self.anchor_pos2)))
-        self.l_2d = self.qd[p.rope_index[0]]
         self.base_pos_mat = self.base_pos - self.mat2Gazebo
         self.psi = math.atan2(self.base_pos_mat[0], -self.base_pos_mat[2])
         # use geometric intuition for psid
         n_par = (self.anchor_pos - self.anchor_pos2) / np.linalg.norm(self.anchor_pos - self.anchor_pos2)
         rope2_axis = (self.base_pos - self.anchor_pos2) / np.linalg.norm(self.base_pos - self.anchor_pos2)
         self.n_bar = np.cross(n_par, rope2_axis) / np.linalg.norm(np.cross(n_par, rope2_axis))
-        self.psid = (self.n_bar.dot(self.base_vel)) / np.linalg.norm(np.cross(n_par, self.base_pos-self.anchor_pos2) )
+        self.psid = (self.n_bar.dot(self.base_vel)) / np.linalg.norm(
+            np.cross(n_par, self.base_pos - self.anchor_pos2)) + self.state_der_noise[0]
+
+        # WF matlab to WF Gazebo offset
+        hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
+        # to get the matlab state from the gazebo prismatic joints we need to consider that the gazebo joints is in zero config
+        # when the rope is 2.5 m half of anchor distance (startup at the point in the middle of the anchors)
+        self.l_1 = self.q[p.rope_index[1]] - hoist_distance/2 + self.anchor_distance_y/2
+        #print("sanitycheck", self.l_1 - np.linalg.norm((self.hoist_l_pos - self.anchor_pos)))
+        self.l_1d = self.qd[p.rope_index[1]] + self.state_der_noise[1]
+        self.l_2 = self.q[p.rope_index[0]] - hoist_distance/2 + self.anchor_distance_y/2
+        #print("sanitycheck", self.l_2 - np.linalg.norm((self.hoist_r_pos - self.anchor_pos2)))
+        self.l_2d = self.qd[p.rope_index[0]]+ self.state_der_noise[2]
+
+
 
         # compute com variables
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
@@ -259,9 +292,11 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r_fbk = 0
         self.Fr_l = 0
         self.Fr_r = 0
+        self.prop_force = 0
         self.touch_down_detected_l = False
         self.touch_down_detected_r = False
         self.optimal_control_traj_finished = False
+        self.impulse_start_count  = 0
 
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
@@ -277,14 +312,15 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r_fbk_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.l_1d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.l_2d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.psid_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.wall_normal = np.array([1.,0.,0.])
 
         self.mpc_index = 0
         self.mpc_index_old = 0
         self.mpc_index_ffwd = 0 # updated only when we stop recomputing mpc
-
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -298,7 +334,10 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.Fr_r_fbk_log[self.log_counter] = self.Fr_r_fbk
                 self.l_1d_log[self.log_counter] =  self.l_1d
                 self.l_2d_log[self.log_counter] =  self.l_2d
+                self.psid_log[self.log_counter] = self.psid
                 self.base_vel_log[:,self.log_counter] = self.base_vel
+                if self.PROPELLERS:
+                    self.prop_force_log[self.log_counter] = self.prop_force
                 #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
 
             super().logData()
@@ -341,16 +380,16 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def plotStuff(self):
         #plot rope forces
-        plt.figure()
-        plt.subplot(2, 1, 1)
-        plt.ylabel("Fr_l")
-        plt.plot(p.ref_time, p.Fr_l0, color='red')
-
-        plt.grid()
-        plt.subplot(2, 1, 2)
-        plt.ylabel("Fr_r")
-        plt.plot(p.ref_time, p.Fr_r0, color='red')
-        plt.grid()
+        # plt.figure()
+        # plt.subplot(2, 1, 1)
+        # plt.ylabel("Fr_l")
+        # plt.plot(p.ref_time, p.Fr_l0, color='red')
+        #
+        # plt.grid()
+        # plt.subplot(2, 1, 2)
+        # plt.ylabel("Fr_r")
+        # plt.plot(p.ref_time, p.Fr_r0, color='red')
+        # plt.grid()
 
         # from operator import itemgetter
         # # plot rope joints
@@ -378,6 +417,7 @@ class ClimbingrobotController(BaseControllerFixed):
                                     'time_gazebo': time_gazebo, 'actual_com': actual_com,
                                     'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
                                     'psi': p.simp_model_state_log[0,:], 'l_1': p.simp_model_state_log[1,:], 'l_2': p.simp_model_state_log[2,:],
+                                    'psid': p.psid_log, 'l_1d': p.l_1d_log,'l_2d': p.l_2d_log,
                                     'mu': p.mu , 'Fleg': p.Fleg,'Fr_max': p.Fr_max,
                                     'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_r0,
                                     'Fr_l': p.Fr_l_log, 'Fr_r': p.Fr_r_log })
@@ -589,7 +629,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['g'] = 9.81
         self.optim_params['w1'] = 1. # smooth
         if not p.MULTIPLE_JUMPS:
-            self.optim_params['w2'] = 100. # hoist work
+            self.optim_params['w2'] = 0. # hoist work
         else:
             self.optim_params['w2'] = 100.  # hoist work use this for multiple jumps for energetic comparison
         self.optim_params['w3'] = 0.
@@ -981,6 +1021,9 @@ def talker(p):
 
     if p.MULTIPLE_JUMPS:
         landingW = p.generateTargetPoints(p0)
+        if p.ADD_NOISE:
+            landingW = np.repeat(landingW, repeats=50, axis=1)
+            #print(landingW)
     else:
         if p.OBSTACLE_AVOIDANCE:
             # old one vertical
@@ -990,6 +1033,9 @@ def talker(p):
             p0 = np.array([0.5, 0.5, -6])
         else:
             landingW = np.array([0.28, 4, -4]).reshape(3, 1)
+
+        if p.ADD_NOISE:
+            landingW = np.matlib.repmat(landingW, 1, 100)
 
     for p.n_test in range(landingW.shape[1]):
         pf = landingW[:,p.n_test]
@@ -1092,20 +1138,28 @@ def talker(p):
 
                     #add impulsive disturbance
                     if p.type_of_disturbance == 'impulse':
-                        p.dist_duration = 0.2
+                        p.dist_duration = 0.1
                         p.base_dist = np.array([0., -50., 30.])
                         if p.PROPELLERS:
                             p.base_dist = np.array([50., -50., 30.])
+                        if p.ADD_NOISE:
+                            if (p.n_test % 10) == 0:
+                                p.impulse_start_count+=1
+                                p.delayed_start = p.impulse_start_count * (p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"])/10
+                            p.base_dist = p.generateDisturbanceOnSphere(50, 100)
 
                     #add constant disturbance
                     if p.type_of_disturbance == 'const':
                         p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
+                        p.delayed_start = 0.
                         p.base_dist = np.array([0., -7., 0.])
                         if p.PROPELLERS:
                             p.base_dist = np.array([7., -7., 0.])
+                        if p.ADD_NOISE:
+                            p.base_dist = p.generateDisturbanceOnSphere(5, 10)
 
                     if p.type_of_disturbance != 'none':
-                        p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration)
+                        p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration, start_time=ros.Time.now()+ros.Duration(p.delayed_start))
 
             if (p.stateMachine == 'flying'):
                 # after the thrust we start MPC it will start from time 0.05 so the index should be 12
@@ -1158,12 +1212,20 @@ def talker(p):
                             "blue"))
                         print(colored(f" the energy consumption is  {energy}", "blue"))
 
+                        if p.ADD_NOISE:
+                            dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'target': p.targetPos, 'landing_error': np.linalg.norm(landing_location - matlab_target),
+                                    'relative_error': np.linalg.norm(landing_location - matlab_target) / jump_length}
+                            df_dict = pd.DataFrame([dict])
+                            p.df = pd.concat([p.df, df_dict], ignore_index=True)
+                            #print(p.df.head())
+                            p.df.to_csv('noise_test.csv', index=None)
                         # fundamental: save everything before initVars! cause it will be deleted
-                        p.plotStuff()
+                        else:
+                            p.plotStuff()
                         if p.SAVE_BAG:
                             p.recorder.stop_recording_srv()
                         #reset for the next jump
-                        if p.MULTIPLE_JUMPS:
+                        if p.MULTIPLE_JUMPS or p.ADD_NOISE:
                             p.startupProcedure()
                             p.initVars()
                             p.q_des = np.copy(p.q_des_q0)
@@ -1174,9 +1236,11 @@ def talker(p):
                 # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
                 delta_t = p.time - p.end_orienting
                 if p.MPC_control:
-                    deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
+                    deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
                     if p.PROPELLERS:
-                        p.apply_propeller_force(prop_force)
+                        #if p.ADD_NOISE:
+                            #prop_force += 0.1*np.sin(2*np.pi*3000/60)
+                        p.apply_propeller_force(p.prop_force)
                 else:
                     deltaFr_l0 = 0.
                     deltaFr_r0 = 0.
