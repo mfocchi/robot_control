@@ -16,6 +16,7 @@ class ControllerManager():
         self.conf = conf
         self.control_type = conf['control_type']
         self.gripper_sim = conf['gripper_sim']
+        self.gripper_type = conf['gripper_type']
         self.real_robot = conf['real_robot']
         self.number_of_joints = len(conf['joint_names'])
 
@@ -31,7 +32,7 @@ class ControllerManager():
         self.pub_reduced_des_jstate = ros.Publisher("/" + robot_name + "/joint_group_pos_controller/command",
                                                     Float64MultiArray, queue_size=10)
         # instantiate the gripper manager that will read soft gripper param from param server
-        self.gm = GripperManager(self.real_robot, self.conf['dt'])
+        self.gm = GripperManager(self.gripper_type, self.real_robot, self.conf['dt'])
 
 
 
@@ -40,8 +41,8 @@ class ControllerManager():
          msg = JointState()
          if self.gripper_sim:
              msg.position = np.append(q_des, self.gm.getDesGripperJoints())
-             msg.velocity = np.append(qd_des, np.array([0., 0., 0.]))
-             msg.effort = np.append(tau_ffwd, np.array([0., 0., 0.]))
+             msg.velocity = np.append(qd_des, np.zeros(self.gm.number_of_fingers))
+             msg.effort = np.append(tau_ffwd,  np.zeros(self.gm.number_of_fingers))
          else:
              msg.position = q_des
              msg.velocity = qd_des

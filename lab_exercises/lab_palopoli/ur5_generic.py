@@ -265,7 +265,7 @@ class Ur5Generic(BaseControllerFixed):
                 self.homing_flag = False
                 print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
                 if self.gripper:
-                    p.controller_manager.gm.move_gripper(100)
+                    p.controller_manager.gm.move_gripper(80)
                 break
 
     def receive_pointcloud(self, msg):
@@ -285,7 +285,12 @@ def talker(p):
     if p.real_robot:
         p.startRealRobot()
     else:
-        additional_args = ['gripper:=' + str(p.gripper), 'soft_gripper:='+ str(conf.robot_params[p.robot_name]['soft_gripper'])]#, 'gui:=false']
+        additional_args = ['gripper:=' + str(p.gripper)]#, 'gui:=false']
+        if str(conf.robot_params[p.robot_name]['gripper_type']) == 'soft_2':
+            print("setting soft gripper")
+            additional_args.append('soft_gripper:=true')
+        elif str(conf.robot_params[p.robot_name]['gripper_type']) == 'robotiq_2':
+            additional_args.append('robotiq_gripper:=true')
         p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control, additional_args =additional_args)
 
     # specify xacro location
@@ -340,11 +345,12 @@ def talker(p):
         #     p.controller_manager.gm.move_gripper(10)
         #     gripper_on = 1
         # if (gripper_on == 1) and p.time>10.0:
-        #     print("gripper 100")
-        #     p.controller_manager.gm.move_gripper(100)
+        #     print("gripper 80")
+        #     p.controller_manager.gm.move_gripper(80)
         #     gripper_on = 2
-        #need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
-        #p.controller_manager.sendReference(p.q_des, p.qd_des, p.h)
+        # ##need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
+        # p.controller_manager.sendReference(p.q_des, p.qd_des, p.h)
+        # print(p.controller_manager.gm.getDesGripperJoints())
 
         if p.real_robot:
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
