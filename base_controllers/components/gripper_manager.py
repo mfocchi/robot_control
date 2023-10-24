@@ -14,17 +14,23 @@ from  termcolor import  colored
 from ros_impedance_controller.srv import generic_float
 
 class GripperManager():
-    def __init__(self, real_robot_flag = False, dt = 0.001, gripping_duration = 5.):
+    def __init__(self, gripper_type, real_robot_flag = False, dt = 0.001, gripping_duration = 5.):
         self.gripping_duration = gripping_duration
         self.real_robot = real_robot_flag
-        self.soft_gripper = ros.get_param("soft_gripper")
-        if self.soft_gripper:
-            print(colored("Using soft gripper!", "blue"))
+        self.gripper_type = gripper_type
+        if self.gripper_type == 'soft_2':
+            print(colored("Using soft 2 finger gripper!", "blue"))
             self.q_des_gripper = np.array([0., 0.])
             self.number_of_fingers = 2
+        elif self.gripper_type == 'robotiq_2':
+            print(colored("Using robotiq gripper!", "blue"))
+            self.q_des_gripper = np.array([0.])
+            self.number_of_fingers = 1
         else:
+            print(colored("Using hard 3 finger gripper!", "blue"))
             self.q_des_gripper = np.array([1.8, 1.8, 1.8])
             self.number_of_fingers = 3
+
         self.SO_filter = SecondOrderFilter(self.number_of_fingers)
         self.SO_filter.initFilter(self.q_des_gripper,dt)
         ros.Service('move_gripper', generic_float, self.move_gripper_callback)
@@ -44,11 +50,13 @@ class GripperManager():
         ros.sleep(0.1)
 
     def mapToGripperJoints(self, diameter):
-        if self.soft_gripper:
+        if self.gripper_type == 'soft_2':
             D0 = 40
             L = 60
             delta =0.5*(diameter - D0)
             return math.atan2(delta, L)
+        elif self.gripper_type == 'robotiq_2':
+            return 0.8 -(diameter) * 0.8/80.  # D = 0.1  => 0, D = 0 => 0.8
         else:
             return (diameter - 22) / (130 - 22) * (-np.pi) + np.pi  # D = 130-> q = 0, D = 22 -> q = 3.14
 
