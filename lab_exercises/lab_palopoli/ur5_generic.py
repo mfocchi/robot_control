@@ -26,7 +26,7 @@ import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from termcolor import colored
 from base_controllers.utils.common_functions import plotJoint, plotEndeff
-import  params as conf
+import  lab_exercises.lab_palopoli.params as conf
 robotName = "ur5"
 
 from base_controllers.base_controller_fixed import BaseControllerFixed
@@ -218,7 +218,7 @@ class Ur5Generic(BaseControllerFixed):
                 self.homing_flag = False
                 print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
                 if self.gripper:
-                    p.controller_manager.gm.move_gripper(80)
+                    self.controller_manager.gm.move_gripper(80)
                 break
 
     def receive_pointcloud(self, msg):

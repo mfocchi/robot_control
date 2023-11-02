@@ -42,10 +42,11 @@ robot_params['ur5'] ={'dt': 0.001,
                        'real_robot': False,
                        'control_type': 'position', # 'position', 'torque'
                        'gripper_sim': True, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
-                       'gripper_type': 'soft_2', # 3 finger rigid gripper: 'hard',  2 finger soft gripper: 'soft_2', robotiq gripper: 'robotiq_2'
+                       'gripper_type': 'robotiq_2', # 3 finger rigid gripper: 'hard',  2 finger soft gripper: 'soft_2', robotiq gripper: 'robotiq_2'
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
-                       'spawn_z' : 1.75}
+                       'spawn_z' : 1.75,
+                       'buffer_size': 1000}
 
 plotting = True
 
