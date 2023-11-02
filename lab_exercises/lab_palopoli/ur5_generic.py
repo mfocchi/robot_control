@@ -10,7 +10,7 @@ from __future__ import print_function
 import os
 import rospy as ros
 import sys
-# messages for topic subscribers
+# messages for ft topic subscribers
 from geometry_msgs.msg import WrenchStamped
 from std_srvs.srv import Trigger, TriggerRequest
 
@@ -29,10 +29,6 @@ from base_controllers.utils.common_functions import plotJoint, plotEndeff
 import  params as conf
 robotName = "ur5"
 
-# controller manager management
-from controller_manager_msgs.srv import SwitchControllerRequest, SwitchController
-from controller_manager_msgs.srv import LoadControllerRequest, LoadController
-from std_msgs.msg import Float64MultiArray
 from base_controllers.base_controller_fixed import BaseControllerFixed
 import tf
 from rospy import Time
@@ -70,7 +66,7 @@ class Ur5Generic(BaseControllerFixed):
         else:
             self.gripper = False
 
-        self.controller_manager = ControllerManager(conf.robot_params[self.robot_name])
+        self.controller_manager = ControllerManager(self.robot_name, conf.robot_params[self.robot_name])
 
         self.world_name = None # only the workbench
         #self.world_name = 'empty.world'
@@ -112,38 +108,15 @@ class Ur5Generic(BaseControllerFixed):
 
     def loadModelAndPublishers(self, xacro_path):
         super().loadModelAndPublishers(xacro_path)
-
         self.sub_ftsensor = ros.Subscriber("/" + self.robot_name + "/wrench", WrenchStamped,
                                            callback=self._receive_ftsensor, queue_size=1, tcp_nodelay=True)
-        self.switch_controller_srv = ros.ServiceProxy(
-            "/" + self.robot_name + "/controller_manager/switch_controller", SwitchController)
-        self.load_controller_srv = ros.ServiceProxy("/" + self.robot_name + "/controller_manager/load_controller",
-                                                    LoadController)
-        # specific publisher for joint_group_pos_controller that publishes only position
-        self.pub_reduced_des_jstate = ros.Publisher("/" + self.robot_name + "/joint_group_pos_controller/command",
-                                                    Float64MultiArray, queue_size=10)
-
         self.zero_sensor = ros.ServiceProxy("/" + self.robot_name + "/ur_hardware_interface/zero_ftsensor", Trigger)
         self.controller_manager.initPublishers(self.robot_name)
-        #  different controllers are available from the real robot and in simulation
-        if self.real_robot:
-            # specific publisher for joint_group_pos_controller that publishes only position
-            self.pub_reduced_des_jstate = ros.Publisher("/" + self.robot_name + "/joint_group_pos_controller/command",
-                                                        Float64MultiArray, queue_size=10)
-            self.available_controllers = [
-                "joint_group_pos_controller",
-                "scaled_pos_joint_traj_controller" ]
-        else:
-            self.available_controllers = ["joint_group_pos_controller",
-                                          "pos_joint_traj_controller" ]
-        self.active_controller = self.available_controllers[0]
-
         self.broadcaster = tf.TransformBroadcaster()
         self.broadcaster2= tf.TransformBroadcaster()
         # store in the param server to be used from other planners
         self.utils = Utils()
         self.utils.putIntoGlobalParamServer("gripper_sim", self.gripper)
-
         self.sub_pointcloud = ros.Subscriber("/ur5/zed_node/point_cloud/cloud_registered", PointCloud2,   callback=self.receive_pointcloud, queue_size=1)
 
     def _receive_ftsensor(self, msg):
@@ -157,7 +130,6 @@ class Ur5Generic(BaseControllerFixed):
         contactMomentTool0[2] = msg.wrench.torque.z
         self.contactForceW = self.w_R_tool0.dot(contactForceTool0)
         self.contactMomentW = self.w_R_tool0.dot(contactMomentTool0)
-
 
     def updateKinematicsDynamics(self):
 
@@ -213,26 +185,7 @@ class Ur5Generic(BaseControllerFixed):
         self.u.putIntoGlobalParamServer("real_robot",  self.real_robot)
         print(colored("finished startup -- starting controller", "red"))
 
-    def switch_controller(self, target_controller):
-        """Activates the desired controller and stops all others from the predefined list above"""
-        print('Available controllers: ',self.available_controllers)
-        print('Controller manager: loading ', target_controller)
 
-        other_controllers = (self.available_controllers)
-        other_controllers.remove(target_controller)
-        print('Controller manager:Switching off  :  ',other_controllers)
-
-        srv = LoadControllerRequest()
-        srv.name = target_controller
-
-        self.load_controller_srv(srv)  
-        
-        srv = SwitchControllerRequest()
-        srv.stop_controllers = other_controllers 
-        srv.start_controllers = [target_controller]
-        srv.strictness = SwitchControllerRequest.BEST_EFFORT
-        self.switch_controller_srv(srv)
-        self.active_controller = target_controller
 
     def deregister_node(self):
         super().deregister_node()
@@ -310,7 +263,7 @@ def talker(p):
 
     # use the point to point position controller
     if not p.use_torque_control:
-        p.switch_controller("joint_group_pos_controller")
+        p.controller_manager.switch_controller("joint_group_pos_controller")
 
     # homing procedure
     if p.homing_flag:
