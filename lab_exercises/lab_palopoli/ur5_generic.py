@@ -294,7 +294,7 @@ def talker(p):
         ##test gripper
         # in Simulation remember to set gripper_sim : True in params.yaml!
         # if p.time>5.0 and (gripper_on == 0):
-        #     print("gripper 30")
+        #     print("gripper 10")
         #     p.controller_manager.gm.move_gripper(10)
         #     gripper_on = 1
         # if (gripper_on == 1) and p.time>10.0:

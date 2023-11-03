@@ -102,32 +102,30 @@ class GripperManager():
                 sock.send(l)
                 l = f.read(2024)
             f.close()
-            self.resend_robot_program()
 
         elif self.gripper_type == 'robotiq_2':
             # 2 finger rigid gripper
-            robotiq_script = scripts_path + "/robotiq.script"
-            if diameter >= 40.:
-                robotiq_script = scripts_path + 'robotiq_open.script'
-            else:
-                robotiq_script = scripts_path + 'robotiq_close.script'
+            robotiq_script = scripts_path + "/robotiq_set.script"
 
             file = open(robotiq_script, "rb")  # Robotiq Gripper
             lines = file.readlines()
             file.close()
+            #0 open /255 closed
+            input_robotiq = 255 - diameter*255/85.
+            #print(input_robotiq)
             offset = 0
-            buffer = 80000
+            buffer = 2500
+            cmd_string1 = f'    rq_set_pos_spd_for({input_robotiq}, 255, 255, "1")\n'
+            cmd_string2 = f'    rq_wait_pos_spe_for_request({input_robotiq}, 255, 255, "1")\n'
+            line_number_to_add = 2422
+            new_lines = lines[0:line_number_to_add]
+            new_lines.insert(line_number_to_add + 1, str.encode(cmd_string1))
+            new_lines.insert(line_number_to_add + 1, str.encode(cmd_string2))
+            new_lines += lines[line_number_to_add::]
+            # debug [b'    rq_activate_and_wait("1")\n', b'    rq_set_pos_spd_for(250, 255, 255, "1")\n', b'    rq_wait_pos_spe_for_request(250, 255, 255, "1")\n', b'    rq_go_to("1")\n', b'    rq_wait("1")\n', b'    # end: URCap Program Node\n', b'  end\n', b'end\n', b'\n', b'gripper_control()\n']
+            # print(new_lines[-10:])
+            lines1 = b''.join(new_lines)
 
-            # TODO set diameter
-            # diameter = 0
-            # cmd_string = f"rq_set_pos_spd_for({diameter}, 255, 255, '1')"
-            # print(cmd_string)
-            # line_number_to_add = 2423
-            # new_lines = lines[0:line_number_to_add]
-            # new_lines.insert(line_number_to_add + 1, str.encode(cmd_string))
-            # new_lines += lines[line_number_to_add::]
-            # lines1 = b''.join(new_lines)
-            lines1 = b''.join(lines)
             if len(lines1) < buffer:
                 buffer = len(lines1)
             data = lines1[0:buffer]
