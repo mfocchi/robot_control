@@ -167,15 +167,18 @@ def talker(p):
     p.admit.setPosturalTask(np.copy(p.q_des_q0))
 
 
-    # homing procedure
+    # # homing procedure
     if p.homing_flag:
         if p.real_robot:
             v_des = 0.2
         else:
             v_des = 3.0
-        #TODO set qhome differently for andrea
-        p.homing_procedure(conf.robot_params[p.robot_name]['dt'], v_des, conf.robot_params[p.robot_name]['q_0'], rate)
-
+        v_ref = 0.0
+        if lab_conf.USER_TRAJECTORY:
+            q_home = p.Q_ref[0][0, :]
+        else:
+            q_home = conf.robot_params[p.robot_name]['q_0']
+        p.homing_procedure(conf.robot_params[p.robot_name]['dt'], v_des,q_home, rate)
 
     if (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
         # to test the trajectory
@@ -211,14 +214,15 @@ def talker(p):
                     if(ext_traj_counter < len(p.Q_ref)-1):
                         print(colored("TRAJECTORY %d COMPLETED"%ext_traj_counter, 'blue'))
                         if(ext_traj_counter==0):
-                            p.controller_manager.gm.move_gripper(65)
+                            p.controller_manager.gm.move_gripper(30)
                         if (ext_traj_counter == 1):
+                            p.controller_manager.gm.move_gripper(80)
                             p.controller_manager.gm.move_gripper(30)
                         ext_traj_counter += 1
                         ext_traj_t = 0
                     elif(not traj_completed):
                         print(colored("LAST TRAJECTORY COMPLETED", 'red'))
-                        p.controller_manager.gm.move_gripper(60)
+                        p.controller_manager.gm.move_gripper(80)
                         traj_completed = True
                         #ext_traj_t = 0
                         #ext_traj_counter = 0
@@ -226,15 +230,15 @@ def talker(p):
             # EXE L8-1.1: set constant joint reference
             #p.q_des = np.copy(p.q_des_q0)
 
-            # test gripper
+            #test gripper
             # if p.gripper:
             #     if p.time > 5.0 and (gripper_on == 0):
             #         print("gripper 30")
-            #         p.controller_manager.gm.move_gripper(30)
+            #         p.controller_manager.gm.move_gripper(20)
             #         gripper_on = 1
             #     if (gripper_on == 1) and p.time > 10.0:
             #         print("gripper 100")
-            #         p.controller_manager.gm.move_gripper(100)
+            #         p.controller_manager.gm.move_gripper(80)
             #         gripper_on = 2
 
             # EXE L8-1.2: set sinusoidal joint reference

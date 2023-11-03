@@ -56,7 +56,7 @@ class GripperManager():
             delta =0.5*(diameter - D0)
             return math.atan2(delta, L)
         elif self.gripper_type == 'robotiq_2':
-            return 0.8 -(diameter) * 0.8/80.  # D = 0.1  => 0, D = 0 => 0.8
+            return 0.85 -(diameter) * 0.85/85.  # D = 0.1  => 0, D = 0 => 0.8
         else:
             return (diameter - 22) / (130 - 22) * (-np.pi) + np.pi  # D = 130-> q = 0, D = 22 -> q = 3.14
 
@@ -70,6 +70,7 @@ class GripperManager():
             q_finger = self.mapToGripperJoints(diameter)
             self.q_des_gripper = q_finger * np.ones(self.number_of_fingers)
             return
+
 
         # this is for the real robot, is a service call that sends a sting directly to the URcap driver
         import socket
@@ -86,7 +87,8 @@ class GripperManager():
         sock.settimeout(None)
         scripts_path = rospkg.RosPack().get_path('ur_description') + '/gripper/scripts/'
 
-        if self.soft_gripper:
+        if self.gripper_type == 'soft_2':
+
             if diameter > 30.:
                 script = scripts_path + 'soft_open.script'
             elif diameter < 30.:
@@ -101,6 +103,42 @@ class GripperManager():
                 l = f.read(2024)
             f.close()
             self.resend_robot_program()
+
+        elif self.gripper_type == 'robotiq_2':
+            # 2 finger rigid gripper
+            robotiq_script = scripts_path + "/robotiq.script"
+            if diameter >= 40.:
+                robotiq_script = scripts_path + 'robotiq_open.script'
+            else:
+                robotiq_script = scripts_path + 'robotiq_close.script'
+
+            file = open(robotiq_script, "rb")  # Robotiq Gripper
+            lines = file.readlines()
+            file.close()
+            offset = 0
+            buffer = 80000
+
+            # TODO set diameter
+            # diameter = 0
+            # cmd_string = f"rq_set_pos_spd_for({diameter}, 255, 255, '1')"
+            # print(cmd_string)
+            # line_number_to_add = 2423
+            # new_lines = lines[0:line_number_to_add]
+            # new_lines.insert(line_number_to_add + 1, str.encode(cmd_string))
+            # new_lines += lines[line_number_to_add::]
+            # lines1 = b''.join(new_lines)
+            lines1 = b''.join(lines)
+            if len(lines1) < buffer:
+                buffer = len(lines1)
+            data = lines1[0:buffer]
+            while data:
+                sock.send(data)
+                offset += buffer
+                if len(lines1) < offset + buffer:
+                    buffer = len(lines1) - offset
+                data = lines1[offset:offset + buffer]
+            sock.close()
+
         else:
             # 3 finger rigid gripper
             onrobot_script = scripts_path + "/onrobot_superminimal.script"
