@@ -31,12 +31,12 @@ import time
 from base_controllers.utils.common_functions import plotJoint, plotAdmittanceTracking, plotEndeff
 
 #config files
-import  lab_palopoli.params as conf
+import  base_controllers.params as conf
 import L8_conf as lab_conf
 robotName = "ur5"
 
 # mother classs
-from lab_palopoli.ur5_generic import Ur5Generic
+from base_controllers.ur5_generic import Ur5Generic
 
 #lab specific imports
 from base_controllers.components.obstacle_avoidance.obstacle_avoidance import ObstacleAvoidance
