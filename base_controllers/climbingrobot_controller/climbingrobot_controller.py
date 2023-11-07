@@ -7,17 +7,17 @@ Created on Fri Nov  2 16:52:08 2018
 
 from __future__ import print_function
 import rospy as ros
-from utils.math_tools import *
+from base_controllers.utils.math_tools import *
 import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import matplotlib.pyplot as plt
 from numpy import nan
-from utils.common_functions import plotJoint, plotFrameLinear
+from base_controllers.utils.common_functions import plotJoint, plotFrameLinear
 from termcolor import colored
 import os
 from rospy import Time
 import tf
-from base_controller_fixed import BaseControllerFixed
+from base_controllers.base_controller_fixed import BaseControllerFixed
 from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from std_srvs.srv    import Empty, EmptyRequest
@@ -27,7 +27,7 @@ from gazebo_msgs.msg import ContactsState
 import scipy.io.matlab as mio
 import rospkg
 
-import  params as conf
+import  base_controllers.params as conf
 robotName = "climbingrobot"
 
 class ClimbingrobotController(BaseControllerFixed):

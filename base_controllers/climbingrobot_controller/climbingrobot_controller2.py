@@ -11,17 +11,17 @@ import numpy as np
 import rospy as ros
 import scipy.linalg
 
-from utils.math_tools import *
+from base_controllers.utils.math_tools import *
 import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import matplotlib.pyplot as plt
 from numpy import nan
-from utils.common_functions import plotJoint, plotFrameLinear
+from base_controllers.utils.common_functions import plotJoint, plotFrameLinear
 from termcolor import colored
 import os
 from rospy import Time
 import tf
-from base_controller_fixed import BaseControllerFixed
+from base_controllers.base_controller_fixed import BaseControllerFixed
 from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from std_srvs.srv    import Empty, EmptyRequest
@@ -43,7 +43,7 @@ import pandas as pd
 import sys
 sys.path.insert(0,'./codegen')
 
-import  params as conf
+import  base_controllers.params as conf
 #robotName = "climbingrobot2landing"
 robotName = "climbingrobot2"
 
@@ -58,7 +58,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
-        self.MULTIPLE_JUMPS = True # use this for paper to generate targets in an ellipsoid around p0,
+        self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
         self.ADD_NOISE = True #in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
         self.OBSTACLE_AVOIDANCE = False
