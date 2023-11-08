@@ -36,7 +36,7 @@ USER_TRAJECTORY = False
 
 import os
 # list of trajectories file names to track in sequence
-traj_folder = os.environ["LOCOSIM_DIR"]+"/robot_control/lab_exercises/custom_traj"
+traj_folder = os.environ["LOCOSIM_DIR"]+"/robot_control/lab_exercises/custom_traj/"
 traj_file_name = ['home_2_table_robot', 'table_2_belt_robot', 'belt_2_home_robot']
 # traj_file_name = 'home_2_table_2_belt_2_home_robot'
 traj_slow_down_factor = 1 # how many times the reference trajectory has to be slowed down

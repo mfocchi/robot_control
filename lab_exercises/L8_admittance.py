@@ -105,13 +105,17 @@ class LabAdmittanceController(Ur5Generic):
         self.obs_avoidance.setCubeParameters(0.25, np.array([0.125, 0.75,0.975]))
         self.obs_avoidance.setCylinderParameters(0.125, 0.3, np.array([0.6, 0.25, 1.0]))
         self.admit = AdmittanceControl(self.ikin, lab_conf.Kx, lab_conf.Dx, conf.robot_params[self.robot_name])
-
+        self.time_poly = None
 
         if lab_conf.USER_TRAJECTORY:
             self.Q_ref = []
             for name in lab_conf.traj_file_name:
                 data = np.load(lab_conf.traj_folder + name + '.npz')
                 self.Q_ref.append(data['q'])
+            self.ext_traj_counter = 0  # counter for which trajectory is currently tracked
+            self.ext_traj_t = 0  # counter for the time inside a trajectory
+            self.traj_completed = False
+
 
     def logData(self):
         if (conf.robot_params[self.robot_name]['control_type'] == "admittance"):
@@ -173,57 +177,38 @@ def talker(p):
             v_des = 0.2
         else:
             v_des = 3.0
-        v_ref = 0.0
-        if lab_conf.USER_TRAJECTORY:
-            q_home = p.Q_ref[0][0, :]
-        else:
-            q_home = conf.robot_params[p.robot_name]['q_0']
+        q_home = conf.robot_params[p.robot_name]['q_0']
         p.homing_procedure(conf.robot_params[p.robot_name]['dt'], v_des,q_home, rate)
 
     if (conf.robot_params[p.robot_name]['control_mode'] == "trajectory"):
         # to test the trajectory
-        if (p.real_robot):
-            p.controller_manager.switch_controller("scaled_pos_joint_traj_controller")
-        else:
-            p.controller_manager.switch_controller("pos_joint_traj_controller")
-        p.traj_manager.send_joint_trajectory_2() #with gripper
-
-    else:
-        if not p.use_torque_control:            
-            p.controller_manager.switch_controller("joint_group_pos_controller")
-        # reset to actual
-        p.updateKinematicsDynamics()
-        p.time_poly = None
-
-        ext_traj_counter = 0    # counter for which trajectory is currently tracked
-        ext_traj_t = 0          # counter for the time inside a trajectory
-        traj_completed = False
-
+        p.traj_manager.send_joint_trajectory_2() #send_joint_trajectory_2 manages also gripper
+    else:# control_mode =  point
         gripper_on = 0
+
         #control loop
         while not ros.is_shutdown():
-
             #update the kinematics
             p.updateKinematicsDynamics()
 
-            if lab_conf.USER_TRAJECTORY:
-                if (int(ext_traj_t) < p.Q_ref[ext_traj_counter].shape[0]): # and p.time>6.0:
-                    p.q_des = p.Q_ref[ext_traj_counter][int(ext_traj_t),:]
-                    ext_traj_t += 1.0/lab_conf.traj_slow_down_factor
+            if lab_conf.USER_TRAJECTORY: #Del Prete Optimal Trajectory point to point
+                if (int(p.ext_traj_t) < p.Q_ref[p.ext_traj_counter].shape[0]): # and p.time>6.0:
+                    p.q_des = p.Q_ref[p.ext_traj_counter][int(p.ext_traj_t),:]
+                    p.ext_traj_t += 1.0/lab_conf.traj_slow_down_factor
                 else:
-                    if(ext_traj_counter < len(p.Q_ref)-1):
-                        print(colored("TRAJECTORY %d COMPLETED"%ext_traj_counter, 'blue'))
-                        if(ext_traj_counter==0):
+                    if(p.ext_traj_counter < len(p.Q_ref)-1):
+                        print(colored("TRAJECTORY %d COMPLETED"%p.ext_traj_counter, 'blue'))
+                        if(p.ext_traj_counter==0):
                             p.controller_manager.gm.move_gripper(30)
-                        if (ext_traj_counter == 1):
+                        if (p.ext_traj_counter == 1):
                             p.controller_manager.gm.move_gripper(80)
                             p.controller_manager.gm.move_gripper(30)
-                        ext_traj_counter += 1
-                        ext_traj_t = 0
-                    elif(not traj_completed):
+                        p.ext_traj_counter += 1
+                        p.ext_traj_t = 0
+                    elif(not p.traj_completed):
                         print(colored("LAST TRAJECTORY COMPLETED", 'red'))
                         p.controller_manager.gm.move_gripper(80)
-                        traj_completed = True
+                        p.traj_completed = True
                         #ext_traj_t = 0
                         #ext_traj_counter = 0
 

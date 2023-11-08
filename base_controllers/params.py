@@ -35,14 +35,16 @@ robot_params['tractor'] ={'dt': 0.01,
 robot_params['ur5'] ={'dt': 0.001,
                        'kp': np.array([300, 300, 300,30,30,1]),
                        'kd':  np.array([20,20,20,5, 5,0.5]),
-                       'q_0':  np.array([ -0.32,-0.78, -2.56,-1.63, -1.57, 3.49]), #limits([0,pi],   [0, -pi], [-pi/2,pi/2],)
-                       'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
+                       'q_0':  np.array([ -0.32,-0.78, -2.56,-1.63, -1.57, 3.49]),
+                       'joint_names': ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
+                                       'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
                        'ee_frame': 'tool0',
                        'control_mode': 'point', # 'trajectory','point'
                        'real_robot': False,
                        'control_type': 'position', # 'position', 'torque'
-                       'gripper_sim': True, # False: the gripper is treated as a Rigid Body, True: you can move the finger joints
-                       'gripper_type': 'robotiq_2', # 3 finger rigid gripper: 'hard',  2 finger soft gripper: 'soft_2', robotiq gripper: 'robotiq_2'
+                       'gripper_sim': True, # False: the gripper is treated as a Rigid Body
+                       'gripper_type': 'robotiq_2', # 3 finger rigid gripper: 'hard',  2 finger soft gripper: 'soft_2',
+                                                    # robotiq gripper: 'robotiq_2'
                        'spawn_x' : 0.5,
                        'spawn_y' : 0.35,
                        'spawn_z' : 1.75,

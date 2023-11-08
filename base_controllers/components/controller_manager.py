@@ -42,7 +42,7 @@ class ControllerManager():
         self.load_controller_srv = ros.ServiceProxy("/" + self.robot_name + "/controller_manager/load_controller",
                                                     LoadController)
 
-        #  different controllers are available from the real robot and in simulation
+        #  different controllers are available from the real robot and in simulation in case of position control
         if self.real_robot:
             self.available_controllers = [
                 "joint_group_pos_controller",
@@ -50,8 +50,18 @@ class ControllerManager():
         else:
             self.available_controllers = ["joint_group_pos_controller",
                                           "pos_joint_traj_controller"]
-
         self.active_controller = self.available_controllers[0]
+
+        # switch to the selected controller
+        if (self.conf['control_mode'] == "trajectory"):
+            if (self.real_robot):
+                self.switch_controller("scaled_pos_joint_traj_controller")
+            else:
+                self.switch_controller("pos_joint_traj_controller")
+        else: # control_mode point
+            if self.control_type == 'position':
+                self.switch_controller("joint_group_pos_controller")
+
         # instantiate the gripper manager that will read soft gripper param from param server
         self.gm = GripperManager(self.gripper_type, self.real_robot, self.conf['dt'])
 

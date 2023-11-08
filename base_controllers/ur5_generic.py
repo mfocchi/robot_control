@@ -185,14 +185,11 @@ class Ur5Generic(BaseControllerFixed):
         self.u.putIntoGlobalParamServer("real_robot",  self.real_robot)
         print(colored("finished startup -- starting controller", "red"))
 
-
-
     def deregister_node(self):
         super().deregister_node()
         if not self.real_robot:
             os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
             os.system(" rosnode kill gazebo")
-
 
     def plotStuff(self):
         plotJoint('position',time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log)
@@ -261,10 +258,6 @@ def talker(p):
     p.q_des_q0 = conf.robot_params[p.robot_name]['q_0']
     p.q_des = np.copy(p.q_des_q0)
 
-    # use the point to point position controller
-    if not p.use_torque_control:
-        p.controller_manager.switch_controller("joint_group_pos_controller")
-
     # homing procedure
     if p.homing_flag:
         if p.real_robot:
@@ -285,7 +278,6 @@ def talker(p):
     while not ros.is_shutdown():
 
         p.updateKinematicsDynamics()
-
 
         ## set joints here
         # p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
