@@ -117,7 +117,8 @@ class Ur5Generic(BaseControllerFixed):
         # store in the param server to be used from other planners
         self.utils = Utils()
         self.utils.putIntoGlobalParamServer("gripper_sim", self.gripper)
-        self.sub_pointcloud = ros.Subscriber("/ur5/zed_node/point_cloud/cloud_registered", PointCloud2,   callback=self.receive_pointcloud, queue_size=1)
+        if not p.use_torque_control: # do not start in torque mode cause it slows down the rate
+            self.sub_pointcloud = ros.Subscriber("/ur5/zed_node/point_cloud/cloud_registered", PointCloud2,   callback=self.receive_pointcloud, queue_size=1)
 
     def _receive_ftsensor(self, msg):
         contactForceTool0 = np.zeros(3)
@@ -179,7 +180,7 @@ class Ur5Generic(BaseControllerFixed):
     def startupProcedure(self):
         if (self.use_torque_control):
             #set joint pdi gains
-            self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
+            self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], conf.robot_params[self.robot_name]['ki'])
         if (self.real_robot):
             self.zero_sensor()
         self.u.putIntoGlobalParamServer("real_robot",  self.real_robot)
@@ -210,6 +211,7 @@ class Ur5Generic(BaseControllerFixed):
                 v_ref += 0.005 * (v_des - v_ref)
                 self.q_des += dt * v_ref * e / e_norm
                 self.controller_manager.sendReference(self.q_des)
+                #self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
             rate.sleep()
             if (e_norm < 0.001):
                 self.homing_flag = False
@@ -250,7 +252,8 @@ def talker(p):
     p.startupProcedure()
 
     # sleep to avoid that the real robot crashes on the table
-    time.sleep(3.)
+    if p.real_robot:
+        time.sleep(3.)
 
     # loop frequency
     rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
@@ -263,7 +266,7 @@ def talker(p):
         if p.real_robot:
             v_des = 0.2
         else:
-            v_des = 3.0
+            v_des = 2.0
         p.homing_procedure(conf.robot_params[p.robot_name]['dt'], v_des, conf.robot_params[p.robot_name]['q_0'], rate)
 
     gripper_on = 0
@@ -276,12 +279,11 @@ def talker(p):
 
     #control loop (runs every dt seconds)
     while not ros.is_shutdown():
-
         p.updateKinematicsDynamics()
 
         ## set joints here
-        # p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
-        # p.qd_des = 0.1 * 2 * np.pi * 0.5* np.cos(2 * np.pi * 0.5 * p.time)*np.ones(p.robot.na)
+        #p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
+        #p.qd_des = 0.1 * 2 * np.pi * 0.5* np.cos(2 * np.pi * 0.5 * p.time)*np.ones(p.robot.na)
 
         ##test gripper
         # in Simulation remember to set gripper_sim : True in params.yaml!
@@ -294,8 +296,7 @@ def talker(p):
         #     p.controller_manager.gm.move_gripper(80)
         #     gripper_on = 2
         # ##need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
-        # p.controller_manager.sendReference(p.q_des, p.qd_des, p.h)
-        # print(p.controller_manager.gm.getDesGripperJoints())
+        #p.controller_manager.sendReference(p.q_des, p.qd_des, p.g) #np.zeros(len(p.joint_names))
 
         if p.real_robot:
             p.ros_pub.add_arrow(p.x_ee + p.base_offset, p.contactForceW / (6 * p.robot.robot_mass), "green")
