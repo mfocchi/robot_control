@@ -70,6 +70,7 @@ class Ur5Generic(BaseControllerFixed):
 
         self.world_name = None # only the workbench
         #self.world_name = 'empty.world'
+        #self.world_name = 'palopoli.world' # class example
         #self.world_name = 'tavolo_obstacles.world'
 
         print("Initialized ur5 generic  controller---------------------------------------------------------------")

@@ -9,8 +9,6 @@ from __future__ import print_function
 import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
-import matplotlib.pyplot as plt
-import rospkg
 from base_controllers.base_controller import BaseController
 from base_controllers.base_controller_fixed import BaseControllerFixed
 from base_controllers.utils.common_functions import plotFrame, plotJoint
@@ -18,7 +16,6 @@ from base_controllers.utils.common_functions import plotFrame, plotJoint
 import params as conf
 robotName = "myrobot" # needs to inherit BaseController
 #robotName = "ur5"  # needs to inherit BaseControllerFixed
-
 
 class GenericSimulator(BaseController):
     
@@ -40,14 +37,18 @@ class GenericSimulator(BaseController):
 
 def talker(p):
     p.start()
-    additional_args = None #'gui:=false'
+    additional_args = None
     p.startSimulator(additional_args = additional_args)
+    # uncomment for ur5
     #xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'
     #p.loadModelAndPublishers(xacro_path)
+
     p.loadModelAndPublishers()
-    p.initVars()
     p.initSubscribers()
+
+    p.initVars()
     p.startupProcedure()
+
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
@@ -55,6 +56,7 @@ def talker(p):
 
     while not ros.is_shutdown():
         p.tau_ffwd = np.zeros(p.robot.na)
+        #p.q_des = p.q_des_q0  + 0.3 * np.sin(2*np.pi*0.5*p.time)
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
         # log variables
@@ -71,6 +73,6 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        plotJoint('position', 0, p.time_log, p.q_log, p.q_des_log, joint_names = p.joint_names)
+        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names = p.joint_names)
 
 

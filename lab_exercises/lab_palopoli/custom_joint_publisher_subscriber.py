@@ -69,15 +69,15 @@ def talker(p):
 
     while not ros.is_shutdown():
         # 2 - generate step reference
-        if time < 4.:
-            p.q_des = q0
-        else:
+        # if time < 4.:
+        #     p.q_des = q0
+        # else:
             #p.q_des = q0 + np.array([0., 0.4, 0., 0., 0., 0])
-        #     # 3- generate filtered step reference
-            p.q_des = p.secondOrderFilter(q0 + np.array([0., -0.4, 0., 0., 0., 0]), loop_frequency, 5.)
+            # 3- generate filtered step reference
+            #p.q_des = p.secondOrderFilter(q0 + np.array([0., -0.4, 0., 0., 0., 0]), loop_frequency, 5.)
 
         # 1 - generate sine reference
-        #p.q_des = q0 + np.multiply(amp, np.sin(2 * np.pi * freq * time))
+        p.q_des = q0 + np.multiply(amp, np.sin(2 * np.pi * freq * time))
 
         p.qd_des = np.zeros(6)
         p.tau_ffwd = np.zeros(6)

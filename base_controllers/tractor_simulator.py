@@ -11,7 +11,6 @@ from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.common_functions import checkRosMaster, plotFrame, plotJoint
-import time
 import params as conf
 robotName = "tractor" # needs to inherit BaseController
 import os
@@ -25,7 +24,7 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = False
+        self.GAZEBO = True
 
     def initVars(self):
         super().initVars()
@@ -55,12 +54,12 @@ class GenericSimulator(BaseController):
             ros.sleep(1.5)
 
             # run robot state publisher + load robot description + rviz
-            # run robot state publisher + load robot description + rviz
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
             roslaunch.configure_logging(uuid)
             launch = roslaunch.parent.ROSLaunchParent(uuid, [rospkg.RosPack().get_path('tractor_description')+"/launch/rviz_nojoints.launch"])
             launch.start()
 
+            # launch separately
             # package = 'robot_state_publisher'
             # executable = 'robot_state_publisher'
             # node = roslaunch.core.Node(package, executable)

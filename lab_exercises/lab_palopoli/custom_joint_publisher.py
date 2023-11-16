@@ -41,7 +41,7 @@ def talker(p):
 
     # init variables
     time = 0
-    q_des0 = np.array([-0.3223527113543909, -0.7805794638446351, -2.5675506591796875, -1.6347843609251917, -1.5715253988849085, -1.0017417112933558])
+    q_des0 = np.array([ -0.32,-0.78, -2.56,-1.63, -1.57, 3.49])
     p.initFilter(q_des0)
 
     # check if gripper is actuated
@@ -50,18 +50,20 @@ def talker(p):
     amp = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])  # amplitude
     freq = np.array([0.2, 0.0, 0.0, 0.0, 0., 0.0]) # frequency
 
-
     while not ros.is_shutdown():
-        # 1 - generate step reference
-        if time < 4.:
-            p.q_des = q_des0
-        else:
-            p.q_des = q_des0 + np.array([0., 0.4, 0., 0., 0., 0])
+        if p.gripper_sim == True:
+            print("this publisher cannot handle the gripper joints")
+            break
+        # 2 - generate step reference
+        # if time < 4.:
+        #     p.q_des = q_des0
+        # else:
+        #     p.q_des = q_des0 + np.array([0., 0.4, 0., 0., 0., 0])
             # 3- generate filtered step reference
             #p.q_des = p.secondOrderFilter(q_des0 + np.array([0., 0.4, 0., 0., 0., 0]), loop_frequency, 5.)
 
-        # 2 - generate sine reference
-        #p.q_des = q_des0 + np.multiply(amp, np.sin(2*np.pi*freq*time))
+        # 1 - generate sine reference
+        p.q_des = q_des0 + np.multiply(amp, np.sin(2*np.pi*freq*time))
 
         p.qd_des = np.zeros(6)
         p.tau_ffwd = np.zeros(6)
