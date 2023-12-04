@@ -231,7 +231,7 @@ class Ur5Generic(BaseControllerFixed):
             points_list.append([data[0], data[1], data[2]])
         #print("Data Optical frame: ", points_list)
         self.center_pointW = self.w_R_c.dot(points_list[0]) + self.x_c
-        #print("Data World frame: ", self.pointW)
+        #print("Data World frame: ", self.center_pointW)
 
 def talker(p):
     p.start()
