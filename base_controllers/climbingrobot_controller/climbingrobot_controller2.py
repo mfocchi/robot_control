@@ -1146,6 +1146,7 @@ def talker(p):
                     print(colored("Start "+ p.stateMachine, "blue"))
 
                     #add impulsive disturbance
+                    p.delayed_start = 0.
                     if p.type_of_disturbance == 'impulse':
                         p.dist_duration = 0.1
                         p.base_dist = np.array([0., -50., 30.])
@@ -1160,7 +1161,6 @@ def talker(p):
                     #add constant disturbance
                     if p.type_of_disturbance == 'const':
                         p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
-                        p.delayed_start = 0.
                         p.base_dist = np.array([0., -7., 0.])
                         if p.PROPELLERS:
                             p.base_dist = np.array([7., -7., 0.])
