@@ -144,7 +144,7 @@ class ClimbingrobotController(BaseControllerFixed):
             except:
                 pass
             print(colored('CREATING NEW CSV TO STORE NOISE TESTS', 'blue'))
-            self.df = pd.DataFrame(columns=['test_nr', 'ideal_target', 'target', 'landing_error', 'relative_error'])
+            self.df = pd.DataFrame(columns=['test_nr', 'ideal_target', 'target', 'landing_error', 'relative_error', 'energy', 'rmse'])
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -297,6 +297,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.touch_down_detected_r = False
         self.optimal_control_traj_finished = False
         self.impulse_start_count  = 0
+        self.MPC_tracking_error = []
 
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
@@ -304,7 +305,6 @@ class ClimbingrobotController(BaseControllerFixed):
         #self.ldot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_rpy_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.ref_base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
         self.time_jump_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.Fr_l_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
@@ -328,7 +328,6 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.simp_model_state_log[:, self.log_counter] = np.array([self.psi, self.l_1, self.l_2])
                 # self.ldot_log[self.log_counter] = self.ldot
                 self.base_pos_log[:, self.log_counter] = self.base_pos
-                self.ref_base_pos_log[:, self.log_counter] = self.ref_base_pos
                 self.base_rpy_log[:, self.log_counter] = self.base_rpy
                 self.Fr_l_log[self.log_counter] = self.Fr_l
                 self.Fr_r_log[self.log_counter] = self.Fr_r
@@ -344,9 +343,6 @@ class ClimbingrobotController(BaseControllerFixed):
 
             super().logData()
 
-    def computeRMSE(self, ref, act):
-
-        return
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill -a")
@@ -811,6 +807,9 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.deltaFr_l = x[:self.mpc_N]
                 self.deltaFr_r = x[self.mpc_N:]
 
+            # store tracking error for RMSE computation
+            tracking_error = self.ref_com[:, self.mpc_index] - (self.base_pos - p.anchor_pos)
+            self.MPC_tracking_error.append(np.linalg.norm(tracking_error))
             #online plot MPC
             if self.PLOT_MPC:
                 self.onlinePlotMPC(self.deltaFr_l, self.deltaFr_r)
@@ -1112,9 +1111,6 @@ def talker(p):
                 p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
                 p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
 
-                # store this to compute RMSE
-                p.ref_base_pos = p.ref_com[:, p.getIndex(delta_t)]
-
                 # plot rope forces
                 p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
                 p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
@@ -1174,9 +1170,6 @@ def talker(p):
                 # after the thrust we start MPC it will start from time 0.05 so the index should be 12
                 # applying forces to ropes
                 delta_t = p.time - p.end_orienting
-                # store this to compute RMSE
-                p.ref_base_pos = p.ref_com[:, p.getIndex(delta_t)]
-
                 if p.MPC_control:
                     deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
                     if p.PROPELLERS:
@@ -1219,14 +1212,17 @@ def talker(p):
                         print(colored(f" while from optim it should be  {matlab_target}", "blue"))
                         print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
                         jump_length = np.linalg.norm(p0[:2] - matlab_target[:2])
+                        MSE = np.square(np.array(p.MPC_tracking_error)).mean()
+                        RMSE = math.sqrt(MSE)
                         print(colored(
                             f" the relative error is {np.linalg.norm(landing_location - matlab_target) / jump_length}",
                             "blue"))
                         print(colored(f" the energy consumption is  {energy}", "blue"))
+                        print(colored(f" the rmse of tracking error is  {RMSE}", "blue"))
 
                         if p.ADD_NOISE:
                             dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'target': p.targetPos, 'landing_error': np.linalg.norm(landing_location - matlab_target),
-                                    'relative_error': np.linalg.norm(landing_location - matlab_target) / jump_length,'energy':energy}
+                                    'relative_error': np.linalg.norm(landing_location - matlab_target) / jump_length,'energy':energy, 'rmse': RMSE}
                             df_dict = pd.DataFrame([dict])
                             p.df = pd.concat([p.df, df_dict], ignore_index=True)
                             #print(p.df.head())
@@ -1248,8 +1244,6 @@ def talker(p):
             if (p.stateMachine == 'flying_and_reorient_lander'):
                 # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
                 delta_t = p.time - p.end_orienting
-                # store this to compute RMSE
-                p.ref_base_pos = p.ref_com[:, p.getIndex(delta_t)]
 
                 if p.MPC_control:
                     deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
