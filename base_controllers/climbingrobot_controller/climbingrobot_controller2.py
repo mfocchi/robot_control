@@ -60,7 +60,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.PROPELLERS = True
         self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
-        self.ADD_NOISE = True #in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
+        self.ADD_NOISE = False #in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
         self.OBSTACLE_AVOIDANCE = False
         self.obstacle_location = np.array([-0.5, 2.5, -6])
 
@@ -140,7 +140,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.ADD_NOISE:
             # remove any previous instance
             try:
-                os.system('rm noise_test.csv')
+                os.system('rm *.csv')
             except:
                 pass
             print(colored('CREATING NEW CSV TO STORE NOISE TESTS', 'blue'))
@@ -304,6 +304,7 @@ class ClimbingrobotController(BaseControllerFixed):
         #self.ldot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))*nan
         self.base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_rpy_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.ref_base_pos_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
         self.time_jump_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.Fr_l_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
@@ -327,6 +328,7 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.simp_model_state_log[:, self.log_counter] = np.array([self.psi, self.l_1, self.l_2])
                 # self.ldot_log[self.log_counter] = self.ldot
                 self.base_pos_log[:, self.log_counter] = self.base_pos
+                self.ref_base_pos_log[:, self.log_counter] = self.ref_base_pos
                 self.base_rpy_log[:, self.log_counter] = self.base_rpy
                 self.Fr_l_log[self.log_counter] = self.Fr_l
                 self.Fr_r_log[self.log_counter] = self.Fr_r
@@ -342,6 +344,9 @@ class ClimbingrobotController(BaseControllerFixed):
 
             super().logData()
 
+    def computeRMSE(self, ref, act):
+
+        return
     def deregister_node(self):
         super().deregister_node()
         os.system(" rosnode kill -a")
@@ -631,7 +636,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if not p.MULTIPLE_JUMPS:
             self.optim_params['w2'] = 0. # hoist work
         else:
-            self.optim_params['w2'] = 100.  # hoist work use this for multiple jumps for energetic comparison
+            self.optim_params['w2'] = 100.  # hoist work use this for multiple jumps for energetic comparison (test are for 0 or 100)
         self.optim_params['w3'] = 0.
         self.optim_params['w4'] = 0.
         self.optim_params['w5'] = 0.
@@ -781,6 +786,7 @@ class ClimbingrobotController(BaseControllerFixed):
             Fr_l0 = matlab.double(self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
             Fr_r0 = matlab.double(self.Fr_r0[self.mpc_index:self.mpc_index + self.mpc_N].tolist())
             actual_t = matlab.double(self.ref_time[self.mpc_index])
+
 
             # unit test  normal (no landing)  mpc_index = 1 horizon 0.4 N
             #actual_state = matlab.double([0.0937, 6.6182, 6.5577, 0.1738, 1.1335, 1.3561]).reshape(6, 1)
@@ -1106,6 +1112,9 @@ def talker(p):
                 p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
                 p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
 
+                # store this to compute RMSE
+                p.ref_base_pos = p.ref_com[:, p.getIndex(delta_t)]
+
                 # plot rope forces
                 p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
                 p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
@@ -1165,6 +1174,9 @@ def talker(p):
                 # after the thrust we start MPC it will start from time 0.05 so the index should be 12
                 # applying forces to ropes
                 delta_t = p.time - p.end_orienting
+                # store this to compute RMSE
+                p.ref_base_pos = p.ref_com[:, p.getIndex(delta_t)]
+
                 if p.MPC_control:
                     deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
                     if p.PROPELLERS:
@@ -1214,11 +1226,12 @@ def talker(p):
 
                         if p.ADD_NOISE:
                             dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'target': p.targetPos, 'landing_error': np.linalg.norm(landing_location - matlab_target),
-                                    'relative_error': np.linalg.norm(landing_location - matlab_target) / jump_length}
+                                    'relative_error': np.linalg.norm(landing_location - matlab_target) / jump_length,'energy':energy}
                             df_dict = pd.DataFrame([dict])
                             p.df = pd.concat([p.df, df_dict], ignore_index=True)
                             #print(p.df.head())
-                            p.df.to_csv('noise_test.csv', index=None)
+                            filename = f'noise_multiple_{p.MULTIPLE_JUMPS}_dist_{p.type_of_disturbance}.csv'
+                            p.df.to_csv(filename, index=None)
                         # fundamental: save everything before initVars! cause it will be deleted
                         else:
                             p.plotStuff()
@@ -1235,6 +1248,9 @@ def talker(p):
             if (p.stateMachine == 'flying_and_reorient_lander'):
                 # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
                 delta_t = p.time - p.end_orienting
+                # store this to compute RMSE
+                p.ref_base_pos = p.ref_com[:, p.getIndex(delta_t)]
+
                 if p.MPC_control:
                     deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
                     if p.PROPELLERS:
