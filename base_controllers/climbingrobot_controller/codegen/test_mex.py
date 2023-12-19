@@ -42,11 +42,11 @@ params['p_a1'] = matlab.double([0.,0.,0.]).reshape(3,1)
 params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
 params['g'] = 9.81
 params['w1']= 1. # smooth
-params['w2']= 0. # hoist work
-params['w3']= 0.
-params['w4']= 0.
-params['w5']= 0.
-params['w6']= 0.
+params['w2']= 1. # hoist work
+params['w3']= 1.
+params['w4']= 1.
+params['w5']= 1.
+params['w6']= 1.
 params['T_th'] =  0.05
 
 #jump params
