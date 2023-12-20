@@ -144,7 +144,8 @@ class ClimbingrobotController(BaseControllerFixed):
             except:
                 pass
             print(colored('CREATING NEW CSV TO STORE NOISE TESTS', 'blue'))
-            self.df = pd.DataFrame(columns=['test_nr', 'ideal_target', 'target', 'landing_error', 'relative_error', 'energy', 'rmse'])
+            self.df = pd.DataFrame(columns=['test_nr', 'ideal_target', 'optim_target', 'landing_error', 'relative_error', 'energy', 'rmse'])
+
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -162,6 +163,10 @@ class ClimbingrobotController(BaseControllerFixed):
         #sample magnitude
         amp = min + max*np.random.randn()
         return amp*direction
+
+    def generateWindDisturbance(self,n_test, amp):
+        directions = np.array([[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]] )
+        return amp*directions[n_test,:]
 
     def updateKinematicsDynamics(self):
 
@@ -1040,7 +1045,11 @@ def talker(p):
             landingW = np.array([0.28, 4, -4]).reshape(3, 1)
 
         if p.ADD_NOISE:
-            landingW = np.matlib.repmat(landingW, 1, 100)
+            if p.type_of_disturbance == 'impulse':
+                number_of_tests = 100
+            else:
+                number_of_tests = 6
+            landingW = np.matlib.repmat(landingW, 1, number_of_tests)
 
     for p.n_test in range(landingW.shape[1]):
         pf = landingW[:,p.n_test]
@@ -1152,7 +1161,7 @@ def talker(p):
                             if (p.n_test % 10) == 0:
                                 p.impulse_start_count+=1
                                 p.delayed_start = p.impulse_start_count * (p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"])/10
-                            p.base_dist = p.generateDisturbanceOnSphere(50, 100)
+                            p.base_dist = p.generateDisturbanceOnSphere(30, 30)
 
                     #add constant disturbance
                     if p.type_of_disturbance == 'const':
@@ -1161,7 +1170,7 @@ def talker(p):
                         if p.PROPELLERS:
                             p.base_dist = np.array([7., -7., 0.])
                         if p.ADD_NOISE:
-                            p.base_dist = p.generateDisturbanceOnSphere(5, 10)
+                            p.base_dist = p.generateWindDisturbance(p.n_test,7)
 
                     if p.type_of_disturbance != 'none':
                         p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration, start_time=ros.Time.now()+ros.Duration(p.delayed_start))
@@ -1198,7 +1207,7 @@ def talker(p):
                     # reset the qdes
                     # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
                     p.resetRope()
-                    matlab_target = p.jumps[p.jumpNumber]["targetPos"]
+
                     energy = p.computeJumpEnergyConsumption()
                     p.jumpNumber += 1
                     if (p.jumpNumber < p.numberOfJumps):
@@ -1209,20 +1218,20 @@ def talker(p):
                         #p.pause_physics_client()
                         landing_location = p.base_pos-p.mat2Gazebo
                         print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
-                        print(colored(f" while from optim it should be  {matlab_target}", "blue"))
-                        print(colored(f" the error is  {np.linalg.norm(landing_location - matlab_target)}", "blue"))
-                        jump_length = np.linalg.norm(p0[:2] - matlab_target[:2])
+                        print(colored(f" while from optim it should be  {p.targetPos}", "blue"))
+                        print(colored(f" the error is  {np.linalg.norm(landing_location - p.targetPos)}", "blue"))
+                        jump_length = np.linalg.norm(p0[:2] - p.targetPos[:2])
                         MSE = np.square(np.array(p.MPC_tracking_error)).mean()
                         RMSE = math.sqrt(MSE)
                         print(colored(
-                            f" the relative error is {np.linalg.norm(landing_location - matlab_target) / jump_length}",
+                            f" the relative error is {np.linalg.norm(landing_location - p.targetPos) / jump_length}",
                             "blue"))
                         print(colored(f" the energy consumption is  {energy}", "blue"))
                         print(colored(f" the rmse of tracking error is  {RMSE}", "blue"))
 
                         if p.ADD_NOISE:
-                            dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'target': p.targetPos, 'landing_error': np.linalg.norm(landing_location - matlab_target),
-                                    'relative_error': np.linalg.norm(landing_location - matlab_target) / jump_length,'energy':energy, 'rmse': RMSE}
+                            dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'optim_target': p.targetPos, 'landing_error': np.linalg.norm(landing_location - p.targetPos),
+                                    'relative_error': np.linalg.norm(landing_location - p.targetPos) / jump_length,'energy':energy, 'rmse': RMSE}
                             df_dict = pd.DataFrame([dict])
                             p.df = pd.concat([p.df, df_dict], ignore_index=True)
                             #print(p.df.head())
