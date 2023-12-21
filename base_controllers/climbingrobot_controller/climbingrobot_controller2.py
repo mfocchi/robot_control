@@ -70,6 +70,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.hip_roll_joint = 13
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
         self.anchor_passive_joints = np.array([0,1, 6,7])
+        self.impulse_start_count = 0 # start disturbance at different point of the flight phase
 
         if robot_name == 'climbingrobot2landing':
             self.landing = True
@@ -301,7 +302,6 @@ class ClimbingrobotController(BaseControllerFixed):
         self.touch_down_detected_l = False
         self.touch_down_detected_r = False
         self.optimal_control_traj_finished = False
-        self.impulse_start_count  = 0
         self.MPC_tracking_error = []
 
         # init new logged vars here
@@ -1160,8 +1160,9 @@ def talker(p):
                         if p.ADD_NOISE:
                             if (p.n_test % 10) == 0:
                                 p.impulse_start_count+=1
+                                print(colored(f'APPLYING IMPULSE AT {p.impulse_start_count*10}% of the flying phase\n', 'red'))
                                 p.delayed_start = p.impulse_start_count * (p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"])/10
-                            p.base_dist = p.generateDisturbanceOnSphere(30, 30)
+                            p.base_dist = p.generateDisturbanceOnSphere(25, 25)
 
                     #add constant disturbance
                     if p.type_of_disturbance == 'const':
@@ -1188,8 +1189,8 @@ def talker(p):
                     deltaFr_r0 = 0.
 
                 if p.type_of_disturbance != 'none':
-                    if delta_t < p.dist_duration:
-                        p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "blue", scale=4.5)
+                    if ((delta_t-p.delayed_start)>=0) and ((delta_t-p.delayed_start) < p.dist_duration):
+                        p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "green", scale=16.5)
 
                 p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
                 p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
@@ -1265,7 +1266,7 @@ def talker(p):
                     deltaFr_r0 = 0.
 
                 if p.type_of_disturbance != 'none':
-                    if delta_t < p.dist_duration:
+                    if ((delta_t - p.delayed_start) >= 0) and ((delta_t - p.delayed_start) < p.dist_duration):
                         p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "blue", scale=4.5)
 
                 if not p.optimal_control_traj_finished:
