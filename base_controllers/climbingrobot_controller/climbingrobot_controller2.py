@@ -145,7 +145,11 @@ class ClimbingrobotController(BaseControllerFixed):
             except:
                 pass
             print(colored('CREATING NEW CSV TO STORE NOISE TESTS', 'blue'))
-            self.df = pd.DataFrame(columns=['test_nr', 'ideal_target', 'optim_target', 'landing_error', 'relative_error', 'energy', 'rmse'])
+            columns = ['test_nr', 'ideal_target', 'optim_target', 'landing_location', 'landing_error', 'relative_error', 'energy', 'rmse']
+            if p.type_of_disturbance is not 'none':
+                columns.append('base_dist')
+            self.df = pd.DataFrame(columns=columns)
+
 
 
     def getRobotMass(self):
@@ -157,10 +161,13 @@ class ClimbingrobotController(BaseControllerFixed):
         total_robot_mass = sum(robot_link_masses[self.robot.model.getJointId('wire_base_yaw_l'):])
         return total_robot_mass
 
-    def generateDisturbanceOnSphere(self, min, max):
+    def generateDisturbanceOnHemiSphere(self, min, max):
         # sample_spherical(npoints, ndim=3):
         direction = np.random.randn(3)
         direction /= np.linalg.norm(direction, axis=0)
+        # hemisphere
+        if direction[2] > 0:
+            direction[2] *= -1
         #sample magnitude
         amp = min + max*np.random.randn()
         return amp*direction
@@ -1162,7 +1169,7 @@ def talker(p):
                                 p.impulse_start_count+=1
                                 print(colored(f'APPLYING IMPULSE AT {p.impulse_start_count*10}% of the flying phase\n', 'red'))
                                 p.delayed_start = p.impulse_start_count * (p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"])/10
-                            p.base_dist = p.generateDisturbanceOnSphere(25, 25)
+                            p.base_dist = p.generateDisturbanceOnHemiSphere(25, 25)
 
                     #add constant disturbance
                     if p.type_of_disturbance == 'const':
@@ -1231,8 +1238,10 @@ def talker(p):
                         print(colored(f" the rmse of tracking error is  {RMSE}", "blue"))
 
                         if p.ADD_NOISE:
-                            dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'optim_target': p.targetPos, 'landing_error': np.linalg.norm(landing_location - p.targetPos),
+                            dict = {'test_nr': p.n_test, 'ideal_target': [landingW[:,p.n_test]], 'optim_target': [p.targetPos],'landing_location':[landing_location], 'landing_error': np.linalg.norm(landing_location - p.targetPos),
                                     'relative_error': np.linalg.norm(landing_location - p.targetPos) / jump_length,'energy':energy, 'rmse': RMSE}
+                            if p.type_of_disturbance is not 'none':
+                                dict['base_dist'] = p.base_dist
                             df_dict = pd.DataFrame([dict])
                             p.df = pd.concat([p.df, df_dict], ignore_index=True)
                             #print(p.df.head())
