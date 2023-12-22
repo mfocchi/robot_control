@@ -169,7 +169,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if direction[2] > 0:
             direction[2] *= -1
         #sample magnitude
-        amp = min + max*np.random.randn()
+        amp = min + max*np.random.uniform(low=0, high=1,size=1)    
         return amp*direction
 
     def generateWindDisturbance(self,n_test, amp):
@@ -1066,7 +1066,7 @@ def talker(p):
         if p.MULTIPLE_JUMPS:
             p.startJump = 2.5 # wait more for longer jumps to initialize
         else:
-            p.startJump = 1.5
+            p.startJump = 2.5
         p.orientTime = 1.0
         p.stateMachine = 'idle'
         p.jumpNumber  = 0
@@ -1170,6 +1170,8 @@ def talker(p):
                                 print(colored(f'APPLYING IMPULSE AT {p.impulse_start_count*10}% of the flying phase\n', 'red'))
                                 p.delayed_start = p.impulse_start_count * (p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"])/10
                             p.base_dist = p.generateDisturbanceOnHemiSphere(25, 25)
+                            print(colored(f"generated disturbance direction {p.base_dist}","red"))
+                            
 
                     #add constant disturbance
                     if p.type_of_disturbance == 'const':
@@ -1180,7 +1182,7 @@ def talker(p):
                         if p.ADD_NOISE:
                             p.base_dist = p.generateWindDisturbance(p.n_test,7)
 
-                    if p.type_of_disturbance != 'none':
+                    if p.type_of_disturbance is not 'none':
                         p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration, start_time=ros.Time.now()+ros.Duration(p.delayed_start))
 
             if (p.stateMachine == 'flying'):
@@ -1195,7 +1197,7 @@ def talker(p):
                     deltaFr_l0 = 0.
                     deltaFr_r0 = 0.
 
-                if p.type_of_disturbance != 'none':
+                if p.type_of_disturbance is not 'none':
                     if ((delta_t-p.delayed_start)>=0) and ((delta_t-p.delayed_start) < p.dist_duration):
                         p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "green", scale=16.5)
 
@@ -1238,7 +1240,7 @@ def talker(p):
                         print(colored(f" the rmse of tracking error is  {RMSE}", "blue"))
 
                         if p.ADD_NOISE:
-                            dict = {'test_nr': p.n_test, 'ideal_target': [landingW[:,p.n_test]], 'optim_target': [p.targetPos],'landing_location':[landing_location], 'landing_error': np.linalg.norm(landing_location - p.targetPos),
+                            dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'optim_target': p.targetPos,'landing_location':landing_location, 'landing_error': np.linalg.norm(landing_location - p.targetPos),
                                     'relative_error': np.linalg.norm(landing_location - p.targetPos) / jump_length,'energy':energy, 'rmse': RMSE}
                             if p.type_of_disturbance is not 'none':
                                 dict['base_dist'] = p.base_dist
@@ -1274,7 +1276,7 @@ def talker(p):
                     deltaFr_l0 = 0.
                     deltaFr_r0 = 0.
 
-                if p.type_of_disturbance != 'none':
+                if p.type_of_disturbance is not 'none':
                     if ((delta_t - p.delayed_start) >= 0) and ((delta_t - p.delayed_start) < p.dist_duration):
                         p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "blue", scale=4.5)
 
