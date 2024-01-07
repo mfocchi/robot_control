@@ -227,7 +227,7 @@ class BaseControllerFixed(threading.Thread):
         self.contactForceW = np.zeros(3)
         self.contactMomentW = np.zeros(3)
 
-        self.time  = 0.
+        self.time  = np.zeros(1)
 
         #log vars
         self.q_des_log = np.empty((self.robot.na, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
@@ -245,7 +245,8 @@ class BaseControllerFixed(threading.Thread):
 
         self.log_counter = 0
 
-        self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
+        if  'ee_frame' in conf.robot_params[self.robot_name].keys():
+            self.ikin = robotKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frame'])
 
 
     def logData(self):

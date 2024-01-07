@@ -19,10 +19,6 @@ from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
 from termcolor import colored
 
-#gazebo messages
-from gazebo_msgs.srv import SetModelState
-from gazebo_msgs.srv import SetModelStateRequest
-from gazebo_msgs.msg import ModelState
 #gazebo services
 from gazebo_msgs.srv import SetPhysicsProperties
 from gazebo_msgs.srv import SetPhysicsPropertiesRequest
@@ -31,27 +27,24 @@ from gazebo_msgs.srv import GetPhysicsProperties
 # ros utils
 import roslaunch
 import rospkg
-from gazebo_msgs.srv import ApplyBodyWrench
 import tf
 
 #other utils
-from base_controllers.utils.ros_publish import RosPub
-from base_controllers.utils.pidManager import PidManager
 from base_controllers.utils.math_tools import *
 from numpy import nan
-import matplotlib.pyplot as plt
+
 from base_controllers.utils.common_functions import *
 import pinocchio as pin
-from base_controllers.utils.common_functions import getRobotModel
 from ros_impedance_controller.msg import EffortPid
 
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
+from base_controllers.base_controller_fixed import  BaseControllerFixed
 import  base_controllers.params as conf
 robotName = "solo"
 
 
-class BaseController(threading.Thread):
+class BaseController(BaseControllerFixed):
     """
         This Class can be used to simulate floating base robots that
         have an under-actuated base (e.g. like quadrupeds, mobile robots)
@@ -98,11 +91,10 @@ class BaseController(threading.Thread):
 
     """
     
-    def __init__(self, robot_name="hyq", launch_file=None, external_conf = None, broadcast_world = True):
-        threading.Thread.__init__(self)
-        if (external_conf is not None):
-            conf.robot_params = external_conf.robot_params
-        self.robot_name = robot_name
+    def __init__(self, robot_name="solo", launch_file=None, external_conf = None, broadcast_world = True):
+        super().__init__(robot_name,launch_file)
+
+
         self.base_offset = np.array([conf.robot_params[self.robot_name]['spawn_x'],
                                      conf.robot_params[self.robot_name]['spawn_y'],
                                      conf.robot_params[self.robot_name]['spawn_z'],
@@ -110,17 +102,11 @@ class BaseController(threading.Thread):
                                      conf.robot_params[self.robot_name].get('spawn_P', 0.),
                                      conf.robot_params[self.robot_name].get('spawn_Y', 0.)])
 
-        self.joint_names = conf.robot_params[self.robot_name]['joint_names']
-        self.u = Utils()
-        self.math_utils = Math()
-        # send data to param server
-        self.verbose = conf.verbose
         self.custom_launch_file = False
         self.use_ground_truth_contacts = False
         self.apply_external_wrench = False
         self.time_external_wrench = 0.6
         self.broadcaster = tf.TransformBroadcaster()
-        self.use_torque_control = False
         self.real_robot = conf.robot_params[self.robot_name].get('real_robot', False)
         self.broadcast_world = broadcast_world
 
@@ -165,30 +151,6 @@ class BaseController(threading.Thread):
         parent.start()
         ros.sleep(1.0)
         print(colored('SIMULATION Started', 'blue'))
-
-    def loadModelAndPublishers(self, xacro_path=None):
-
-        # Loading a robot model of robot (Pinocchio)
-        if xacro_path is None:
-            xacro_path = rospkg.RosPack().get_path(
-                self.robot_name + '_description') + '/robots/' + self.robot_name + '.urdf.xacro'
-        else:
-            print("loading custom xacro path: ", xacro_path)
-        self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path)
-
-        # instantiating objects
-        self.ros_pub = RosPub(self.robot_name, only_visual=True)
-
-        self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
-        # freeze base  and pause simulation service
-        self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
-        self.set_physics_client = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
-        self.get_physics_client = ros.ServiceProxy('/gazebo/get_physics_properties', GetPhysicsProperties)
-        self.pause_physics_client = ros.ServiceProxy('/gazebo/pause_physics', Empty)
-        self.unpause_physics_client = ros.ServiceProxy('/gazebo/unpause_physics', Empty)
-        self.u.putIntoGlobalParamServer("verbose", self.verbose)
-
-        self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
 
 
@@ -270,28 +232,12 @@ class BaseController(threading.Thread):
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
 
-    def _receive_jstate(self, msg):
-        for msg_idx in range(len(msg.name)):
-            for joint_idx in range(len(self.joint_names)):
-                if self.joint_names[joint_idx] == msg.name[msg_idx]:
-                    self.q[joint_idx] = msg.position[msg_idx]
-                    self.qd[joint_idx] = msg.velocity[msg_idx]
-                    self.tau[joint_idx] = msg.effort[msg_idx]
 
     def _receive_pid_effort(self, msg):
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
                 if self.joint_names[joint_idx] == msg.name[msg_idx]:
                     self.tau_fb[joint_idx] = msg.effort_pid[msg_idx]
-
-    def send_des_jstate(self, q_des, qd_des, tau_ffwd):
-         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
-         msg = JointState()
-         msg.name = self.joint_names
-         msg.position = q_des
-         msg.velocity = qd_des
-         msg.effort = tau_ffwd                
-         self.pub_des_jstate.publish(msg)
 
     def deregister_node(self):
         print( "deregistering nodes"     )
@@ -477,58 +423,59 @@ class BaseController(threading.Thread):
             pass
                                  
     def startupProcedure(self):
+        super().startupProcedure()
 
-            self.pid = PidManager(self.joint_names) #I start after cause it needs joint names filled in by receive jstate callback
-            # set joint pdi gains
-            self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))
+        if (self.robot_name == 'hyq'):
+            # these torques are to compensate the leg gravity
+            self.gravity_comp = np.array(
+                [24.2571, 1.92, 50.5,  21.3801, -2.08377, -44.9598, 24.2, 1.92, 50.5739, 21.3858, -2.08365, -44.9615])
 
-            if (self.robot_name == 'hyq'):                        
-                # these torques are to compensate the leg gravity
-                self.gravity_comp = np.array(
-                    [24.2571, 1.92, 50.5,  21.3801, -2.08377, -44.9598, 24.2, 1.92, 50.5739, 21.3858, -2.08365, -44.9615])
-                                                        
-                print("reset posture...")
-                self.freezeBase(1, basePoseW=self.base_offset )
-                start_t = ros.get_time()
-                while ros.get_time() - start_t < 1.0:
-                    self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-                    ros.sleep(0.01)
-                if self.verbose:
-                    print("q err prima freeze base", (self.q - self.q_des))
-  
-          
-                print("put on ground and start compensating gravity...")
-                self.freezeBase(0)                                                
-                ros.sleep(0.5)
-                if self.verbose:
-                    print("q err pre grav comp", (self.q - self.q_des))
-                                                        
-                start_t = ros.get_time()
-                while ros.get_time()- start_t < 1.0:
-                    self.send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
-                    ros.sleep(0.01)
-                if self.verbose:
-                    print("q err post grav comp", (self.q - self.q_des))
-                                                        
-                print("starting com controller (no joint PD)...")                
-                self.pid.setPDs(0.0, 0.0, 0.0)
-                self.use_torque_control = True
-            
-            if (self.robot_name == 'aliengo' or self.robot_name=='go1'):
-                start_t = ros.get_time()
-                while ros.get_time() - start_t < 0.5:
-                    self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-                    ros.sleep(0.01)
-                #self.pid.setPDs(0.0, 0.0, 0.0)
+            print("reset posture...")
+            self.freezeBase(1, basePoseW=self.base_offset )
+            start_t = ros.get_time()
+            while ros.get_time() - start_t < 1.0:
+                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                ros.sleep(0.01)
+            if self.verbose:
+                print("q err prima freeze base", (self.q - self.q_des))
 
-            if (self.robot_name == 'solo'):
-                start_t = ros.get_time()
-                while ros.get_time() - start_t < 0.5:
-                    self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-                    ros.sleep(0.01)
-            print(colored("finished startup -- starting controller", "red"))
+
+            print("put on ground and start compensating gravity...")
+            self.freezeBase(0)
+            ros.sleep(0.5)
+            if self.verbose:
+                print("q err pre grav comp", (self.q - self.q_des))
+
+            start_t = ros.get_time()
+            while ros.get_time()- start_t < 1.0:
+                self.send_des_jstate(self.q_des, self.qd_des, self.gravity_comp)
+                ros.sleep(0.01)
+            if self.verbose:
+                print("q err post grav comp", (self.q - self.q_des))
+
+            print("starting com controller (no joint PD)...")
+            self.pid.setPDs(0.0, 0.0, 0.0)
+            self.use_torque_control = True
+
+        if (self.robot_name == 'aliengo' or self.robot_name=='go1'):
+            start_t = ros.get_time()
+            while ros.get_time() - start_t < 0.5:
+                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                ros.sleep(0.01)
+            #self.pid.setPDs(0.0, 0.0, 0.0)
+
+        if (self.robot_name == 'solo'):
+            start_t = ros.get_time()
+            while ros.get_time() - start_t < 0.5:
+                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                ros.sleep(0.01)
+        print(colored("Startup accomplished -- starting controller", "red"))
 
     def initVars(self):
+        super().initVars()
+        self.q_des = conf.robot_params[self.robot_name]['q_0']
+        self.tau_fb = np.zeros(self.robot.na)
+
         self.basePoseW = np.zeros(6)
         self.baseTwistW = np.zeros(6)
         self.comPoseW = np.zeros(6)
@@ -539,15 +486,8 @@ class BaseController(threading.Thread):
         self.gen_velocities = np.zeros(self.robot.nv)
         self.neutral_fb_jointstate = pin.neutral(self.robot.model)
         self.configuration = pin.neutral(self.robot.model)
-        self.q = np.zeros(self.robot.na)
-        self.qd = np.zeros(self.robot.na)
-        self.tau = np.zeros(self.robot.na)
-        self.tau_fb = np.zeros(self.robot.na)
-        self.q_des = np.zeros(self.robot.na)
         self.quaternion = np.array([0., 0., 0., 1.]) #fundamental otherwise receivepose gets stuck
-        self.q_des = conf.robot_params[self.robot_name]['q_0']
-        self.qd_des = np.zeros(self.robot.na)
-        self.tau_ffwd = np.zeros(self.robot.na)
+
         self.gravity_comp = np.zeros(self.robot.na)
         self.b_R_w = np.eye(3)
         self.grForcesW = np.zeros(self.robot.na)
@@ -581,9 +521,8 @@ class BaseController(threading.Thread):
         self.time_log = np.full((conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.constr_viol_log = np.full((4, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         
-        self.time = np.zeros(1)
         self.loop_time = conf.robot_params[self.robot_name]['dt']
-        self.log_counter = 0
+
 
         # order: lf rf lh rh
         if self.use_ground_truth_contacts:
@@ -602,15 +541,9 @@ class BaseController(threading.Thread):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
             self.basePoseW_log[:, self.log_counter] = self.basePoseW
             self.baseTwistW_log[:, self.log_counter] =  self.baseTwistW
-            self.q_des_log[:, self.log_counter] =  self.q_des
-            self.q_log[:,self.log_counter] =  self.q  
-            self.qd_des_log[:,self.log_counter] =  self.qd_des
-            self.qd_log[:,self.log_counter] = self.qd                       
-            self.tau_ffwd_log[:,self.log_counter] = self.tau_ffwd                    
-            self.tau_log[:,self.log_counter] = self.tau                     
             self.grForcesW_log[:,self.log_counter] =  self.grForcesW
             self.time_log[self.log_counter] = self.time
-            self.log_counter+=1
+            super().logData()
 
     def sync_check(self):
         new_time = ros.Time.now().to_sec()
@@ -699,8 +632,7 @@ if __name__ == '__main__':
         if conf.plotting:
             plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
                       start=0, end=-1)
-            plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
-                      title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
+            plotFrame('position', time_log=p.time_log, Pose_log=p.basePoseW_log, title='CoM', frame='W')
 
 
 
