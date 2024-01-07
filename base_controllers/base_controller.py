@@ -112,47 +112,6 @@ class BaseController(BaseControllerFixed):
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None, additional_args = None):
-        # needed to be able to load a custom world file
-        print(colored('Adding gazebo model path!', 'blue'))
-        custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
-        if os.getenv("GAZEBO_MODEL_PATH") is not None:
-            os.environ["GAZEBO_MODEL_PATH"] +=":"+custom_models_path
-        else:
-            os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
-
-        # clean up previous process
-        os.system("killall rosmaster rviz gzserver gzclient")
-
-        if self.custom_launch_file:
-            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
-        else:
-            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_floating.launch'
-
-        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-        roslaunch.configure_logging(uuid)
-        cli_args = [launch_file,
-                    'robot_name:=' + self.robot_name,
-                    'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
-                    'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
-                    'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z']),
-                    'spawn_R:=' + str(conf.robot_params[self.robot_name].get('spawn_R', 0.)),
-                    'spawn_P:=' + str(conf.robot_params[self.robot_name].get('spawn_P', 0.)),
-                    'spawn_Y:=' + str(conf.robot_params[self.robot_name].get('spawn_Y', 0.)),
-                    'real_robot:=' + str(self.real_robot)]
-        if world_name is not None:
-            print(colored("Setting custom model: "+str(world_name), "blue"))
-            cli_args.append('world_name:=' + str(world_name))
-        if additional_args is not None:
-            cli_args.extend(additional_args)
-        roslaunch_args = cli_args[1:]
-        roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
-        parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
-        parent.start()
-        ros.sleep(1.0)
-        print(colored('SIMULATION Started', 'blue'))
-
-
 
     def initSubscribers(self):
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
@@ -556,8 +515,15 @@ class BaseController(BaseControllerFixed):
 def talker(p):
     p.start()
     if  (p.robot_name == 'solo_fw'):
-        p.custom_launch_file = True
-    p.startSimulator()
+        launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
+    else:
+        launch_file = None
+
+    additional_args = ['spawn_R:=' + str(conf.robot_params[p.robot_name].get('spawn_R', 0.)),
+                        'spawn_P:=' + str(conf.robot_params[p.robot_name].get('spawn_P', 0.)),
+                        'spawn_Y:=' + str(conf.robot_params[p.robot_name].get('spawn_Y', 0.)),
+                        'real_robot:=' + str(p.real_robot)]
+    p.startSimulator(launch_file=launch_file, additional_args=additional_args)
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()

@@ -123,8 +123,7 @@ class BaseControllerFixed(threading.Thread):
             os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
 
         if launch_file is None:
-            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
-
+            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller.launch'
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
         if (distro.linux_distribution()[1] == "16.04"):
