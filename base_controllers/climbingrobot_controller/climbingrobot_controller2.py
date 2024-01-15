@@ -60,7 +60,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.PROPELLERS = True
         self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
-        self.ADD_NOISE = False #in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
+        self.ADD_NOISE = False #creates multiple jumps, in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
         self.OBSTACLE_AVOIDANCE = False
         self.obstacle_location = np.array([-0.5, 2.5, -6])
 
@@ -146,7 +146,7 @@ class ClimbingrobotController(BaseControllerFixed):
                 pass
             print(colored('CREATING NEW CSV TO STORE NOISE TESTS', 'blue'))
             columns = ['test_nr', 'ideal_target', 'optim_target', 'landing_location', 'landing_error', 'relative_error', 'energy', 'rmse']
-            if p.type_of_disturbance is not 'none':
+            if p.type_of_disturbance != 'none':
                 columns.append('base_dist')
             self.df = pd.DataFrame(columns=columns)
 
@@ -1161,9 +1161,8 @@ def talker(p):
                     p.delayed_start = 0.
                     if p.type_of_disturbance == 'impulse':
                         p.dist_duration = 0.1
-                        p.base_dist = np.array([0., -50., 30.])
-                        if p.PROPELLERS:
-                            p.base_dist = np.array([50., -50., 30.])
+                        p.base_dist = np.array([50., -50., 30.])
+
                         if p.ADD_NOISE:
                             if (p.n_test % 10) == 0:
                                 p.impulse_start_count+=1
@@ -1176,13 +1175,11 @@ def talker(p):
                     #add constant disturbance
                     if p.type_of_disturbance == 'const':
                         p.dist_duration = p.jumps[p.jumpNumber]["Tf"] - p.jumps[p.jumpNumber]["thrustDuration"]
-                        p.base_dist = np.array([0., -7., 0.])
-                        if p.PROPELLERS:
-                            p.base_dist = np.array([7., -7., 0.])
+                        p.base_dist = np.array([7., -7., 0.])
                         if p.ADD_NOISE:
                             p.base_dist = p.generateWindDisturbance(p.n_test,7)
 
-                    if p.type_of_disturbance is not 'none':
+                    if p.type_of_disturbance != 'none':
                         p.applyWrench(p.base_dist[0],p.base_dist[1],p.base_dist[2], time_interval=p.dist_duration, start_time=ros.Time.now()+ros.Duration(p.delayed_start))
 
             if (p.stateMachine == 'flying'):
@@ -1197,9 +1194,9 @@ def talker(p):
                     deltaFr_l0 = 0.
                     deltaFr_r0 = 0.
 
-                if p.type_of_disturbance is not 'none':
-                    if ((delta_t-p.delayed_start)>=0) and ((delta_t-p.delayed_start) < p.dist_duration):
-                        p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "green", scale=16.5)
+                #if p.type_of_disturbance != 'none':
+                    # if ((delta_t-p.delayed_start)>=0) and ((delta_t-p.delayed_start) < p.dist_duration):
+                    #     p.ros_pub.add_arrow(p.base_pos,  p.base_dist / 10., "green", scale=16.5)
 
                 p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
                 p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
@@ -1242,7 +1239,7 @@ def talker(p):
                         if p.ADD_NOISE:
                             dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'optim_target': p.targetPos,'landing_location':landing_location, 'landing_error': np.linalg.norm(landing_location - p.targetPos),
                                     'relative_error': np.linalg.norm(landing_location - p.targetPos) / jump_length,'energy':energy, 'rmse': RMSE}
-                            if p.type_of_disturbance is not 'none':
+                            if p.type_of_disturbance != 'none':
                                 dict['base_dist'] = p.base_dist
                             df_dict = pd.DataFrame([dict])
                             p.df = pd.concat([p.df, df_dict], ignore_index=True)
@@ -1276,7 +1273,7 @@ def talker(p):
                     deltaFr_l0 = 0.
                     deltaFr_r0 = 0.
 
-                if p.type_of_disturbance is not 'none':
+                if p.type_of_disturbance != 'none':
                     if ((delta_t - p.delayed_start) >= 0) and ((delta_t - p.delayed_start) < p.dist_duration):
                         p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "blue", scale=4.5)
 
