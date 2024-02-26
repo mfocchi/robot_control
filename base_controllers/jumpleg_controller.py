@@ -95,9 +95,10 @@ class Cost():
 
 class JumpLegController(BaseControllerFixed):
 
-    def __init__(self, robot_name="ur5"):
+    def __init__(self, robot_name="jumpleg"):
         super().__init__(robot_name=robot_name)
         self.agentMode = 'inference'
+        self.agentRL = 'PPO'
         self.restoreTrain = False
         self.gui = False
         self.model_name = 'latest'
@@ -544,13 +545,13 @@ class JumpLegController(BaseControllerFixed):
         else:
             return False
 
-    def loadRLAgent(self, mode='train', data_path=None, model_name='latest', restore_train=False):
-        print(colored(f"Starting RLagent in  {mode} mode", "red"))
+    def loadRLAgent(self, mode='train', rl='TD3', data_path=None, model_name='latest', restore_train=False):
+        print(colored(f"Starting {rl} RLagent in  {mode} mode", "red"))
         package = 'jumpleg_rl'
-        executable = 'JumplegAgent.py'
+        executable = f'JumplegAgent_{rl}.py'
         name = 'rlagent'
         namespace = '/'
-        args = f'--mode {mode} --data_path {data_path} --model_name {model_name} --restore_train {restore_train}'
+        args = f'--mode {mode} --data_path {data_path}_{rl} --model_name {model_name} --restore_train {restore_train}'
         node = roslaunch.core.Node(
             package, executable, name, namespace, args=args, output="screen")
         self.launch = roslaunch.scriptapi.ROSLaunch()
@@ -740,7 +741,7 @@ def talker(p):
         p.startupProcedure()
 
 
-    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name=p.model_name, restore_train=p.restoreTrain)
+    p.loadRLAgent(mode=p.agentMode, rl=p.agentRL ,data_path=os.environ["LOCOSIM_DIR"] + "/robot_control/jumpleg_rl/runs", model_name=p.model_name, restore_train=p.restoreTrain)
 
     p.initVars()
     ros.sleep(1.0)

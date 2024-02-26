@@ -89,9 +89,10 @@ class Cost():
 
 class JumpLegController(BaseControllerFixed):
 
-    def __init__(self, robot_name="ur5"):
+    def __init__(self, robot_name="jumpleg"):
         super().__init__(robot_name=robot_name)
-        self.agentMode = 'train'
+        self.agentMode = 'inference'
+        self.agentRL = 'TD3'
         self.restoreTrain = False
         self.gui = False
         self.model_name = 'latest'
@@ -354,13 +355,13 @@ class JumpLegController(BaseControllerFixed):
         else:
             return False
 
-    def loadRLAgent(self, mode='train', data_path=None, model_name='latest', restore_train=False):
-        print(colored(f"Starting RLagent in  {mode} mode", "red"))
+    def loadRLAgent(self, mode='train', rl='TD3', data_path=None, model_name='latest', restore_train=False):
+        print(colored(f"Starting {rl} RLagent in  {mode} mode", "red"))
         package = 'jumpleg_rl'
-        executable = 'JumplegAgentInstantPos.py'
+        executable = f'JumplegAgentInstantPos_{rl}.py'
         name = 'rlagent'
         namespace = '/'
-        args = f'--mode {mode} --data_path {data_path} --model_name {model_name} --restore_train {restore_train}'
+        args = f'--mode {mode} --data_path {data_path}_{rl} --model_name {model_name} --restore_train {restore_train}'
         node = roslaunch.core.Node(
             package, executable, name, namespace, args=args, output="screen")
         self.launch = roslaunch.scriptapi.ROSLaunch()
@@ -460,19 +461,15 @@ class JumpLegController(BaseControllerFixed):
                                                        self.cost.weights[6] * self.cost.smoothness +
                                                        self.cost.weights[7] * self.cost.straight)
 
-        if reward < 0:
-            reward = 0
-
-        self.total_reward += reward
+        # if reward < 0:
+        #     reward = 0
 
         if done != -1:
 
             msg.next_state = np.concatenate((self.com, self.comd, self.q[3:]/np.pi, self.qd[3:]/20.,  self.target_CoM,
                                             [np.linalg.norm([self.com-self.target_CoM])], np.array(self.old_action).flatten()/(np.pi/2)))
 
-            # print(self.total_reward)
-            msg.reward = self.total_reward
-            # msg.reward = reward
+            msg.reward = reward
             msg.state = self.state
             msg.action = self.action
             msg.done = done
@@ -532,7 +529,7 @@ def talker(p):
         p.loadModelAndPublishers()
         p.startupProcedure()
 
-    p.loadRLAgent(mode=p.agentMode, data_path=os.environ["LOCOSIM_DIR"] +
+    p.loadRLAgent(mode=p.agentMode, rl=p.agentRL, data_path=os.environ["LOCOSIM_DIR"] +
                   "/robot_control/jumpleg_rl/runs_joints", model_name=p.model_name, restore_train=p.restoreTrain)
 
     p.initVars()
@@ -547,7 +544,6 @@ def talker(p):
 
     # initial com posiiton
     p.com_0 = np.array([-0.01303,  0.00229,  0.25252])
-    p.sampling_freq = 5
     p.number_of_episode = 0
 
     # here the RL loop...
@@ -573,7 +569,6 @@ def talker(p):
         p.total_reward = 0
         p.number_of_episode += 1
         p.freezeBase(True)
-        p.freq_counter = 0
 
         p.firstTime = True
         p.detectedApexFlag = False
@@ -615,43 +610,30 @@ def talker(p):
                     print("Target position from agent:", p.target_CoM)
                     p.trustPhaseFlag = True
 
-                # check freq
+                # Ask for torque value
+                p.state = np.concatenate((p.com, p.comd, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM,
+                                          [np.linalg.norm([p.com-p.target_CoM])], np.array(p.old_action).flatten()/(np.pi/2)))
 
-                if p.freq_counter == 0:
+                # print(p.state)
 
-                    # Ask for torque value
-                    p.state = np.concatenate((p.com, p.comd, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM,
-                                              [np.linalg.norm([p.com-p.target_CoM])], np.array(p.old_action).flatten()/(np.pi/2)))
+                if any(np.isnan(p.state)):
+                    print(f"Agent state:\n {p.state}\n")
+                    print(colored('NAN IN STATE!!!', 'red'))
+                    quit()
 
-                    # print(p.state)
+                p.action = np.asarray(p.action_service(p.state).action)
 
-                    if any(np.isnan(p.state)):
-                        print(f"Agent state:\n {p.state}\n")
-                        print(colored('NAN IN STATE!!!', 'red'))
-                        quit()
+                # print(f"Actor action with torques:\n {action}\n")
+                if any(np.isnan(p.action)):
+                    print(f"Agent state:\n {p.state}\n")
+                    print(
+                        f"Actor action with des positions:\n {p.action}\n")
+                    print(colored('NAN IN ACTION!!!', 'red'))
+                    quit()
 
-                    p.action = np.asarray(p.action_service(p.state).action)
-                    # After apex disable Agent action
-                    if (p.detectedApexFlag):
-                        p.action = np.array([0., 0., 0.])
-
-                    # print(f"Actor action with torques:\n {action}\n")
-                    if any(np.isnan(p.action)):
-                        print(f"Agent state:\n {p.state}\n")
-                        print(
-                            f"Actor action with des positions:\n {p.action}\n")
-                        print(colored('NAN IN ACTION!!!', 'red'))
-                        quit()
-
-                    # update queue
-                    # p.old_q.pop()
-                    # p.old_q.appendleft(p.q[3:].copy())
-                    # p.old_qd.pop()
-                    # p.old_qd.appendleft(p.qd[3:].copy())
-                    p.old_action.pop()
-                    p.old_action.appendleft(p.action.copy())
-                    # p.old_com.pop()
-                    # p.old_com.appendleft(p.com.copy())
+                # update queue
+                p.old_action.pop()
+                p.old_action.appendleft(p.action.copy())
 
                 # Apply action
                 p.q_des[3:] = p.q_des_q0[3:] + p.action
@@ -681,19 +663,12 @@ def talker(p):
                 # send commands to gazebo
                 p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-                if p.freq_counter == 0:
-                    # send reward with done state = 0
-                    p.evalTotalReward(0)
-                    # reset partial cumulative reward
-                    p.total_reward = 0
-
-                else:
-                    # evaluate reward without sending it
-                    p.evalTotalReward(-1)
+                # send reward with done state = 0
+                p.evalTotalReward(0)
 
                 # rest cost (much easyer to learn difference between last loop, paper: heim)
                 p.cost.reset()
-                p.freq_counter = (p.freq_counter + 1) % p.sampling_freq
+                # p.freq_counter = (p.freq_counter + 1) % p.sampling_freq
 
             # plot end-effector and contact force
             if not p.use_ground_truth_contacts:
