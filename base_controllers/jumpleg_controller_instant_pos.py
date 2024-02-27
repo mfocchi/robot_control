@@ -46,12 +46,13 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
-        self.no_touchdown = 0
+        self.fly_config = 0
+        self.hop = 0
         self.smoothness = 0
         self.straight = 0
         self.target = 0
 
-        self.weights = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self.weights = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
 
     def reset(self):
         self.unilateral = 0
@@ -59,7 +60,8 @@ class Cost():
         self.singularity = 0
         self.joint_range = 0
         self.joint_torques = 0
-        self.no_touchdown = 0
+        self.fly_config = 0
+        self.hop = 0
         self.smoothness = 0
         self.straight = 0
         self.target = 0
@@ -70,7 +72,8 @@ class Cost():
                f"sing: {self.singularity} " \
                f"jointkin:{self.joint_range} " \
                f"torques:{self.joint_torques} " \
-               f"no_touchdown:{self.no_touchdown} " \
+               f"fly_config:{self.fly_config} " \
+               f"hop:{self.hop} " \
                f"smoothness:{self.smoothness} " \
                f"straight:{self.straight} " \
                f"target:{self.target}"
@@ -81,18 +84,19 @@ class Cost():
                f"sing: {self.weights[2]*self.singularity} " \
                f"jointkin:{self.weights[3]*self.joint_range} " \
                f"torques:{self.weights[4]*self.joint_torques} " \
-               f"no_touchdown:{self.weights[5] * self.no_touchdown} " \
-               f"smoothness:{self.weights[6] * self.smoothness} " \
-               f"straight:{self.weights[7] * self.straight} " \
-               f"target:{self.weights[8]*self.target}"
+               f"fly_config:{self.weights[5]*self.fly_config} " \
+               f"hop:{self.weights[6]*self.hop} " \
+               f"smoothness:{self.weights[7] * self.smoothness} " \
+               f"straight:{self.weights[8] * self.straight} " \
+               f"target:{self.weights[9]*self.target}"
 
 
 class JumpLegController(BaseControllerFixed):
 
     def __init__(self, robot_name="jumpleg"):
         super().__init__(robot_name=robot_name)
-        self.agentMode = 'inference'
-        self.agentRL = 'TD3'
+        self.agentMode = 'train'
+        self.agentRL = 'PPO'
         self.restoreTrain = False
         self.gui = False
         self.model_name = 'latest'
@@ -192,9 +196,9 @@ class JumpLegController(BaseControllerFixed):
         self.a = np.empty((3, 6))
         self.cost = Cost()
 
-        #  unilateral  friction   singularity   joint_range  joint_torques no_touchdown smoothness straight target
+        #  unilateral  friction   singularity   joint_range  joint_torques fly_config hop smoothness straight target
         self.cost.weights = np.array(
-            [1000., 0.1, 10., 0.01, 1000., 10, 0.5, 10, 1.])
+            [1000., 0.1, 10., 0.01, 1000., 10, 10, 0.5, 10, 1.])
 
         self.mu = 0.8
 
@@ -452,14 +456,15 @@ class JumpLegController(BaseControllerFixed):
             print(colored("Weighted Costs: " +
                   self.cost.printWeightedCosts(), "green"))
 
-        reward = self.cost.weights[8] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
+        reward = self.cost.weights[9] * target_cost - (self.cost.weights[0]*self.cost.unilateral +
                                                        self.cost.weights[1]*self.cost.friction +
                                                        self.cost.weights[2] * self.cost.singularity +
                                                        self.cost.weights[3]*self.cost.joint_range +
                                                        self.cost.weights[4] * self.cost.joint_torques +
-                                                       self.cost.weights[5] * self.cost.no_touchdown +
-                                                       self.cost.weights[6] * self.cost.smoothness +
-                                                       self.cost.weights[7] * self.cost.straight)
+                                                       self.cost.weights[5] * self.cost.fly_config +
+                                                       self.cost.weights[6] * self.cost.hop +
+                                                       self.cost.weights[7] * self.cost.smoothness +
+                                                       self.cost.weights[8] * self.cost.straight)
 
         # if reward < 0:
         #     reward = 0
@@ -479,7 +484,8 @@ class JumpLegController(BaseControllerFixed):
             msg.singularity = self.cost.singularity
             msg.joint_range = self.cost.joint_range
             msg.joint_torques = self.cost.joint_torques
-            msg.no_touchdown = self.cost.no_touchdown
+            msg.fly_config = self.cost.fly_config
+            msg.hop = self.cost.hop
             msg.smoothness = self.cost.smoothness
             msg.straight = self.cost.straight
             self.reward_service(msg)
@@ -597,8 +603,6 @@ def talker(p):
                 if (p.time > startTrust + max_episode_time):
                     # max episode time elapsed
                     print(colored("--Max time elapsed!--", "blue"))
-                    # Penalize the non touchdown
-                    p.cost.no_touchdown = 100
                     timout_occured = True
                 # release base
                 if p.firstTime:
@@ -609,6 +613,19 @@ def talker(p):
                         f"STARTING A NEW EPISODE--------------------------------------------# :{p.number_of_episode}", "red"))
                     print("Target position from agent:", p.target_CoM)
                     p.trustPhaseFlag = True
+                    # intial contact counter
+                    p.ground_contact = 1
+
+                if not p.detectedApexFlag:
+                    # update counter only if robot is not flying
+                    if p.contactForceW[2] > 1:
+                        p.ground_contact += 1
+                else:
+                    # after the flight phase no penalty is applied
+                    p.ground_contact = 1
+
+                # update the cost of hopping
+                p.cost.hop = p.ground_contact - 1
 
                 # Ask for torque value
                 p.state = np.concatenate((p.com, p.comd, p.q[3:]/np.pi, p.qd[3:]/20.,  p.target_CoM,
@@ -650,6 +667,8 @@ def talker(p):
                 if (p.detectedApexFlag):
                     p.tau_ffwd[3:] = np.zeros(3)
                     # set jump platform (avoid collision in jumping)
+                    # calculate the error between aerial conf and q0
+                    p.cost.fly_config = np.linalg.norm(p.q[3:] - p.q_des_q0[3:])
                     if p.detectTouchDown():
                         break  # END STATE
 
