@@ -198,7 +198,7 @@ class JumpLegController(BaseControllerFixed):
 
         #  unilateral  friction   singularity   joint_range  joint_torques fly_config hop smoothness straight target
         self.cost.weights = np.array(
-            [1000., 0.1, 10., 0.01, 1000., 10, 10, 0.5, 10, 1.])
+            [1000., 0.1, 10., 0.01, 1000., 10, 20, 0.5, 10, 1.])
 
         self.mu = 0.8
 
@@ -466,8 +466,8 @@ class JumpLegController(BaseControllerFixed):
                                                        self.cost.weights[7] * self.cost.smoothness +
                                                        self.cost.weights[8] * self.cost.straight)
 
-        # if reward < 0:
-        #     reward = 0
+        if reward < 0:
+            reward = 0
 
         if done != -1:
 
