@@ -107,7 +107,7 @@
 % Colours in equations
 \usepackage{xcolor}
 
-\title{LAB 1: Kinematics and Dynamics Lab: Simulation of a 4-DoF Serial Manipulator}
+\title{LAB 1: Kinematics Lab: Simulation of a 4-DoF Serial Manipulator}
 \author{Michele Focchi and Octavio Villarreal}
 \date{}
 
@@ -118,13 +118,13 @@ The goals of this assignment are:
 \begin{itemize}
     \item learning the basic procedure to visualize a robot model using the Unified Robot Description Format (URDF)
     \item compute and visualize the direct/inverse kinematics of a 4-DoF serial manipulator 
-    \item compute and analyze the forward/inverse dynamics of a 4-DoF serial manipulator using the Recursive Newton-Euler Algorithm (RNEA)
+%    \item compute and analyze the forward/inverse dynamics of a 4-DoF serial manipulator using the Recursive Newton-Euler Algorithm (RNEA)
 \end{itemize}
 
 \noindent
 Tools that we are going to be using in this lab (all open-source):
 \begin{itemize}
-	\item Python programming (2.7, 3.5)\footnote{https://docs.python.org/2.7/}
+	\item Python programming (3.5)\footnote{https://docs.python.org/3.8}
 	\item Robot Operating System (ROS)\footnote{https://www.ros.org/}
 	\item Pinocchio Library for Rigid Body Dynamics Algorithms\footnote{https://github.com/stack-of-tasks/pinocchio}
 	\item Locosim\footnote{https://github.com/mfocchi/locosim}
@@ -132,11 +132,14 @@ Tools that we are going to be using in this lab (all open-source):
 %
 %
 %\noindent
-The goal of this assignment is to arrive to simulate the behavior of a 4-DoF anthropomorphic robot manipulator under zero-torque at the joints (i.e., free-falling under the effect of gravity which is the only force making work on the robot). Initially we will learn how to describe a robot using the URDF convention, such that ROS is able to "understand" and visualize our robot using the visualizer tool in RVIZ.\footnote{https://dl.acm.org/doi/abs/10.1007/s11235-015-0034-5} Secondly, we will proceed to develop code in Python to compute the direct and inverse kinematics functions of  our robot manipulator and we will design a simple trajectory for our robot to follow based on polynomials. Finally, we will write functions to compute both the forward (to simulate) and the inverse dynamics (to control) of our robot manipulator using the RNEA.  Based on RNEA, we will compute separately each of the terms of the dynamics equation ($\mathbf{M}$, $\mathbf{h}$ and $\mathbf{g}$) and perform analysis on them. For both the kinematics and dynamics parts, we will compare our results with the built-in functions of the Pinocchio library to verify the correctness of our computations.
+The goal of this assignment is to arrive to simulate the behavior of a 4-DoF anthropomorphic robot manipulator under zero-torque at the joints (i.e., free-falling under the effect of gravity which is the only force making work on the robot). Initially we will learn how to describe a robot using the URDF convention, such that ROS is able to "understand" and visualize our robot using the visualizer tool in RVIZ.\footnote{https://dl.acm.org/doi/abs/10.1007/s11235-015-0034-5} Secondly, we will proceed to develop code in Python to compute the direct and inverse kinematics functions of  our robot manipulator and we will design a simple trajectory for our robot to follow based on polynomials. 
+
+
+%Finally, we will write functions to compute both the forward (to simulate) and the inverse dynamics (to control) of our robot manipulator using the RNEA.  Based on RNEA, we will compute separately each of the terms of the dynamics equation ($\mathbf{M}$, $\mathbf{h}$ and $\mathbf{g}$) and perform analysis on them. For both the kinematics and dynamics parts, we will compare our results with the built-in functions of the Pinocchio library to verify the correctness of our computations.
 
 %
 \section{Preliminaries}
-We are going to be using functions and interfaces written in the locosim package installed in the provided virtual machine (VM) for the course. Locosim is stored as a github\footnote{https://git-scm.com/} repository, and we have created a branch containing the files needed for this lab, but we need to get them in our VM to do so, follow these steps:
+We are going to be using functions and interfaces written in the locosim package installed in the provided Docker/virtual machine (VM) for the course. Locosim is stored as a github\footnote{https://git-scm.com/} repository. In case you are using the VM, to get the most updated version, follow these steps:
 
 \begin{enumerate}
 	\item Open a new terminal inside of the VM (either by clicking on the icon of the launcher on the left or by hitting the keyboard shortcut \codeword{Ctrl + Alt + T})
@@ -166,7 +169,7 @@ In this part of the lab we are going to visualize our 4-DoF manipulator using th
 	cd ~/ros_ws/src/locosim/robot_urdf
 \end{verbatim}
 
- If you do not find \codeword{~} replace it with \codeword{/home/student}.
+ %If you do not find \codeword{~} replace it with \codeword{/home/student}.
 Let's start by inspecting a file that describe a robot made of regular geometries (a box and a cylinder). Type on the terminal:
 
 \begin{verbatim}
@@ -303,9 +306,9 @@ This file was just for testing and we will use that in  the next lab session.
 %
 For this part of the assignment, we will use these four main files: 
 \begin{itemize}
-	\item \codeword{LOCOSIM/robot_control/L1_1_kinematics.py} (Main file to run the visualization and all exercises up to 2.5)
-	\item \codeword{LOCOSIM/robot_control/L1_1_kinematics_ur5.py} (Main file to run the exercise 2.6)
-	\item \codeword{LOCOSIM/robot_control/L1_conf.py} (Initializations of variables and simulaion parameters)
+	\item \codeword{LOCOSIM/robot_control/lab_exercises/L1_1_kinematics.py} (Main file to run the visualization and all exercises up to 2.5)
+	\item \codeword{LOCOSIM/robot_control/lab_exercises/L1_1_kinematics_ur5.py} (Main file to run the exercise 2.6)
+	\item \codeword{LOCOSIM/robot_control/lab_exercises/L1_conf.py} (Initializations of variables and simulaion parameters)
 	\item \codeword{LOCOSIM/robot_control/base_controller/utils/kin_dyn_utils.py} (Kinematics and dynamics functions)
 \end{itemize}
 Inspect these files in detail. In this assignment you will try to write your own kinematics and dynamics functions of the file \codeword{kin_dyn_utils.py}.\\
@@ -387,7 +390,7 @@ where $\mathbf{T}_{RPY}^{-1}$ is the transformation matrix from angular velocity
 
 and implement it in the function \codeword{geometric2analyticJacobian}.\\
 Let's have a look to the structure of the Analytical Jacobian and compare with the Geometrical one both computed at the $q_0$ configuration. 
-There is a rows of zeros in the angular (the lienar part is the same) part in two different directions, why is that?
+There is a rows of zeros in the angular (the linear part is the same) part in two different directions, why is that?
 
 \begin{verbatim}
 Geometric Jacobian:
@@ -410,7 +413,7 @@ Analytic Jacobian:
 
 
 
-This fact gives us the chance to deeply understand the difference between the two Jacobian. Let's have a loot to the orientation of the end-effector frame 
+This fact gives us the chance to deeply understand the difference between the two Jacobian. Let's have a look to the orientation of the end-effector frame 
 in the $q_0$ configuration, illustrated in Fig. \ref{fig:init_conf}
 
 \begin{figure}[bht]
@@ -480,25 +483,25 @@ This highlights the fact that, being the Euler Angles subsequent rotations, and 
 hence they have a "local" meaning. This is independent by the overall orientation of the arm w.r.t to the base link (dictated by the  \codeword{shoulder_pan_joint}). 
 Instead, the  Geometric Jacobian (orientation part) always spits out the vector $\omega$ of angular velocity, which represents the rate of change of the orientation of the end-effector axes with respect to the base frame axes, hence it is affected by the  \codeword{shoulder_pan_joint}.
 
-\textbf{2.4 Numerical inverse kinematics (lecture E4).} Now you have all the necessary ingredients to compute the manipulator's inverse kinematics. Since we have 4-DoF, the analytical solution of the inverse kinematics problems is not straightforward, so we suggest to take the iterative approach given by the algorithm described in Fig.~\ref{fig:CLIK}.  
+\textbf{2.4 Numerical inverse kinematics (lecture E4).} Now you have all the necessary ingredients to compute the manipulator's inverse kinematics. Since we have 4-DoF, the \textit{analytical} solution of the inverse kinematics problems is not straightforward, so we suggest to take the iterative approach given by the algorithm described in Fig.~\ref{fig:CLIK}.  
 %
 \begin{figure}[bht]
 	\centering
-	\includegraphics[width=8cm]{pics/flow_chart.png}
+	\includegraphics[width=10cm]{pics/flow_chart.png}
 	\caption{Numerical inverse kinematics algorithm or closed-loop inverse kinematics (CLIK)}
 	\label{fig:CLIK}
 \end{figure}
 %
 To start simple, consider your task space variables to be the Cartesian space position (i.e., $x,y,z$) and the roll angle $\psi$ of the end-effector. 
-Why can't the full orientation be defined in the task? (hint: check which row in the Jacobians goes to zero).
-%You will need to adequately choose the rows of interest of the analytical Jacobian $\mathbf{J}_r$. 
-Since we have 4 task variables and 4 DoFs then   $\mathbf{J}_a$ is a square matrix and we expect $\mathbf{J}_a^T\mathbf{J}_a$ to be always invertible (out of singularities).  After implementing your function, try to find the corresponding joint angles for $p = \mat{-0.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to the roll angle $\psi$ of the end-effector frame. Set your hyper-parameters for the algorithm as follows: $\alpha = 1$, $\epsilon = 1 \times 10^{-6}$ and $\beta = 0.5$ where $\beta$ is the coefficient of step-size reduction in the line search, and $\epsilon$ is the termination tolerance. 
-First, implement the algorithm without line search (i.e., with constant step size $\alpha$) and then compare it with the adjustable step size. Is there any difference in the number of iterations?  (you should notice that the line search might take a smaller number of iterations, 10 instead of 35). What is the influence of the initial condition? 
+Why can't the full orientation be defined in the task? (hint: check which row in the Jacobians goes to zero). 
+Therefore, you will need to adequately choose the rows of interest of the \textit{analytical} Jacobian $\mathbf{J}_a$. 
+Since we have 4 task variables and 4 DoFs then   $\mathbf{J}_a$ is a square matrix and we expect $\mathbf{J}_a^T\mathbf{J}_a$ to be always invertible (out of singularities).  After implementing an inverse kinematics function, try to find the corresponding joint angles for the task $p = \mat{-0.5 & -0.2 & 0.5 & \frac{\pi}{3}}^T$, where the first three components are the $x$, $y$, $z$ Cartesian coordinates of the end-effector and the fourth component corresponds to the roll angle $\psi$ of the end-effector frame. Set your hyper-parameters for the algorithm as follows: $\alpha = 1$ (Newton step  size), $\epsilon = 1 \times 10^{-6}$ and $\beta = 0.5$ where $\beta$ is the coefficient of step-size reduction in the line search, and $\epsilon$ is the termination tolerance. 
+First, implement the algorithm without line search (i.e., with constant step size $\alpha$=1) and then compare it with the adjustable step size. Is there any difference in the number of iterations?  (you should notice that the line search might take a smaller number of iterations, 10 instead of 18). What is the influence of the initial condition? 
 Check that the algorithm converges to different joint configurations depending on how you initialize it and that the number of iterations changes. 
-Try to set it in order to converge to the elbow up or elbow down configuration.  
+Try to set it in order to converge to the elbow up or elbow down configuration. Find also an initial configuration that requires a higher number of iterations to converge.
 %Are the output values for the trajectory "safe"? 
 
-Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles obtained from the inverse kinematics and verify the error is close to zero.  
+\textit{Sanity check}: Using the joint angles coming out of the numerical inverse kinematics, compute the direct kinematics and obtain the error between the asked task space position and the computed one using the joint angles obtained from the inverse kinematics and verify the error is close to zero.  
 %Then you  can compute the norm of the error between the position that was asked and the final position reached.
  
 
@@ -601,7 +604,7 @@ which can be rewritten in matrix form as:
 Then we can pre-multiply both sides of the equation by the inverse of the square (6X6) matrix and on the right-hand side of the equation obtain the values for the coefficients of the polynomials.
 With these coefficients we can generate the whole trajectory $q(t)$ starting for a time $t=0$ (where $q = q_0$) up to $t=t_f$ (where  $q = q_f$).
 
-Implement this trajectory by modifying the function \codeword{fifthOrderPolynomialTrajectory}. Plot the trajectories by un-commenting the final lines of the file \codeword{L1_1_kinematics.py} and see if you notice any problem. Hint: you can set a \codeword{SLOW_FACTOR} of 50 to better see the motion. You will see that the robot is doing very strange loops. If you remove the \textit{wrapping} feature you will get something even worse. This is because of the initialization that has a strong influence. Try to initialize the ik with $q_0$ instead  than with $q_i$ and you will see that the trajectory improves significantly. However, if you set a target that is more far away (e.g.  $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$) you will still see loops. 
+Implement this trajectory by modifying the function \codeword{fifthOrderPolynomialTrajectory}. Plot the trajectories by un-commenting the final lines of the file \codeword{L1_1_kinematics.py} and see if you notice any problem. Hint: you can set a \codeword{SLOW_FACTOR} of 50 to better see the motion. You will see that the robot is doing very strange loops (too see them you need to restore $\lambda$ to its default value). If you remove the \textit{wrapping} feature you will get something even worse. This is because of the initialization that has a strong influence. Try to initialize the ik with $q_0$ instead  than with $q_i$ and you will see that the trajectory improves significantly. However, if you set a target that is more far away (e.g.  $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$) you will still see loops. 
 Using this approach to generate the trajectory is simple, but has no guarantee on what is happening (e.g. where the end-effector will be) in between the initial and the final configurations.
 Namely, you only now for sure where the end-effector is at the beginning and the end of the motion, which in real-life scenarios can lead to potential collisions or unwanted paths.
 
@@ -609,7 +612,7 @@ Namely, you only now for sure where the end-effector is at the beginning and the
 
 \textbf{Cartesian trajectory:} The solution is  to  design a trajectory directly in Cartesian space via parametric curves. For instance you can design a trajectory of a line in 3D Cartesian space parameterized by time and, for each position given by the curve along the trajectory, you will need to compute the inverse kinematics to provide the joint values (hint: you need to do it also at the velocity and at the acceleration level). As initial guess at each time instant you can set the configuration at the previous sample. Compare the results of the trajectory with respect to the one designed in 2.5.\\
 
-\textbf{2.6 Dealing with the redundancy: the postural task.} 
+\noindent\textbf{2.6 Dealing with the redundancy: the postural task.} 
 
 Now, let's consider a ur5 robot with 6 DoFs. In this case we want to set \textit{only} the \textit{position} of the end-effector to be at $p^d_e =\mat{0.5 & -0.2 & 0.5}^T$. Hence, the robot (6 DoFs) becomes redundant for the task (3 variables) and we expect to have an  infinite number of solutions for the inverse kinematics problem. In particular the matrix $J^TJ$ becomes singular (semi-positive definite). Instead of using a regularization that would select a configuration that depends on the initial guess, we want to have a solution that is as  \textit{close} as possible to a desired configuration $q^p$ that we call \textit{postural} configuration. This could be, for instance, a configuration that tries to keep the joints in the middle of their range or minimize gravity torques. To achieve this,  we can implement a ``postural task'' at the kinematic level to solve the redundancy.
 This will  select, among the infinite solutions, the one (joint configuration $\tilde{q}^\star$) that is closer (in an Euclidean sense) to the desired configuration $q^p$. 
@@ -623,14 +626,14 @@ where $w$ is a scalar weight and $q^p$ the postural configuration. The solution 
 
 
 \begin{align*}
-\Delta q &= -\left( \mat { J^T &  wI_{3 \times 3} } \underbrace{ \mat{J  \\ wI_{3 \times 3}}}_{\bar{J}} \right)^{-1} \left(J^T e_x + w^2e_q \right) \\
-&= -\left( J^TJ + w^2I_{3 \times 3}\right)^{-1} \underbrace{ \left(J^T e_x + w^2 e_q \right) }_{\bar{J}^T\bar{e}}
+\Delta q &= -\left( \underbrace{ \mat { J^T &  wI_{3 \times 3} }}_{\bar{J}^T} \underbrace{ \mat{J  \\ wI_{3 \times 3}}}_{\bar{J}} \right)^{-1} \left(J^T e_x + w^2e_q \right) \\
+&= -\left(\underbrace{  J^TJ + w^2I_{3 \times 3}}_{\bar{J}^T\bar{J}} \right)^{-1} \underbrace{ \left(J^T e_x + w^2 e_q \right) }_{\bar{J}^T\bar{e}}
 \end{align*}
 
 %old: note that we have a minus sign just because we defined differently $e_p$ (in Exe2.4 we were using $e_p = p^d- p$ instead of $e_p = p - p^d$).
 
-So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian $\bar{J}^T\bar{J}$ and make it full rank and therefore invertible, 2) we added ad term $w^2 e_q $ in the computation of the Newton step, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$.
-Set different postural configurations and observe that the optimal configuration is the one that places the end-effector in the desired position and is close to the postural  configuration selected.
+So, with respect to the exercise 2.4: 1) we use $w^2$ instead of $\lambda $ to regularize the Hessian $\bar{J}^T\bar{J}$ and make it full rank and therefore invertible, 2) we added ad term $w^2 e_q $ in the computation of the Newton step, 3) we changed the stopping criteria of the IK algorithm checking if the norm of this new gradient $\bar{J}^T\bar{e}$ goes below $\epsilon$ rather than  $J^T\bar{e}$.
+Set different postural configurations and observe that the optimal configuration is the one that places the end-effector in the desired position and is close to the postural  configuration selected. Try to (slightly) change the initial configuration and you will see that the ik solution is no longer changing and is always the same. 
 \\
 
 \section{Robot dynamics}

@@ -230,7 +230,7 @@ def numericalInverseKinematics(p_d, q0, line_search = False, wrap = False):
     math_utils = Math()
 
     # hyper-parameters
-    epsilon = 1e-06 # Tolerance for stropping criterion
+    epsilon = 1e-06 # Tolerance for stopping criterion
     lambda_ = 1e-08  # Regularization or damping factor (1e-08->0.01)
     max_iter = 200  # Maximum number of iterations
     # For line search only

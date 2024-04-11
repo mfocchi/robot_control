@@ -76,17 +76,17 @@ print("Direct Kinematics - ee Gometric Jacobian (6X4 matrix), differece with Pin
 # exercise 2.3
 ##################
 J_a = geometric2analyticJacobian(J, T_0e)
-#print("Analytic Jacobian:\n", J_a)
+print("Analytic Jacobian:\n", J_a)
 
 ##################
 ##exercise 2.4
 ##################
-## desired task space position
+# desired task space position
 p = np.array([-0.5, -0.2, 0.5, math.pi/3])
 # outside of workspace, gets the solution with minumum error
 #p = np.array([-1.0, -0.2, 0.5, math.pi/3])
 
-# initial guess (elbow up)
+# initial guess (elbow up without line search)
 q_i  = np.array([ 0.5, -1.5, 1.0, -math.pi])
 # initial guess (elbow down)
 #q_i  = np.array([ -0.5, 1.0, -0.8, -math.pi])
@@ -121,6 +121,7 @@ plt.xlabel("number of iterations")
 plt.semilogy(log_grad, linestyle='-', color='blue')
 plt.grid()
 
+
 # EXE 2.5 comment this part
 tm.sleep(2.)
 ros_pub.add_marker(p[:3])
@@ -130,6 +131,7 @@ ros_pub.add_marker(p[:3])
 ros_pub.publish(robot, q_f)
 tm.sleep(2.)
 ros_pub.add_marker(p[:3])
+plt.show(block=True)
 sys.exit()
 
 #######################################
@@ -155,6 +157,7 @@ while np.count_nonzero(q - q_f) :
     qd_log= np.vstack((qd_log, qd))
     qdd_log= np.vstack((qdd_log, qdd))
 
+
     #publish joint variables
     ros_pub.publish(robot, q, qd)
     ros_pub.add_marker(p)
@@ -167,7 +170,7 @@ while np.count_nonzero(q - q_f) :
 plotJoint('position', time_log, q_log.T)
 
 
-ros_pub.deregister_node()  
+ros_pub.deregister_node()
 plt.show(block=True)
 
 

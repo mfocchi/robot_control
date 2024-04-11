@@ -31,7 +31,7 @@ q_ik, _, _ = kin.endeffectorInverseKinematicsLineSearch(p, conf.frame_name,
                                                         verbose = True,
                                                         use_error_as_termination_criteria = False,
                                                         postural_task = True,
-                                                        w_postural = 0.0001,
+                                                        w_postural = 0.001,
                                                         q_postural = q_postural)
 print("Desired End effector \n", p)
 
