@@ -111,16 +111,16 @@ while (not ros.is_shutdown()) or any(i >= 0.01 for i in np.abs(error)):
     #############################################
     # viscous friction to stop the motion
     damping = zero
-    #damping =  - 20*qd
+    #damping =  -20*qd
 
     end_stop_tau = np.zeros(4)
     #############################################
-    # Exercise 3.6: add end-stops
+    # Exercise 3.7: add end-stops
     #############################################
     # jl_K = 100000
     # jl_D = 100
-    # q_max = np.array([2*np.pi,   np.pi/2,  2*np.pi, 2*np.pi])
-    # q_min = np.array([-2*np.pi, -np.pi/2, -2*np.pi, -2*np.pi])
+    # q_max = np.array([2*np.pi,   0.5,  2*np.pi, 2*np.pi])
+    # q_min = np.array([-2*np.pi, -0.5, -2*np.pi, -2*np.pi])
     # end_stop_tau =  (q > q_max) * (jl_K * (q_max - q) + jl_D * (-qd)) +  (q  < q_min) * (jl_K * (q_min - q) + jl_D * (-qd))
 
     #############################################
@@ -129,7 +129,7 @@ while (not ros.is_shutdown()) or any(i >= 0.01 for i in np.abs(error)):
 
     # compute accelerations (torques are zero!)
     # Pinocchio
-    #qdd = np.linalg.inv(Mp).dot(damping-hp)
+    #qdd = np.linalg.inv(Mp).dot(end_stop_tau + damping-hp)
     qdd = np.linalg.inv(M).dot(end_stop_tau + damping -c -g)
 
     #############################################

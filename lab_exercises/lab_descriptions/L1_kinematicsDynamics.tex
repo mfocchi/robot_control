@@ -725,7 +725,15 @@ where $b$ is the damping coefficient of the joints. For now we keep $b$ as a sca
 
 \textbf{3.6 Compare results against Pinocchio.} Compute the terms of the dynamics equation $\mathbf{M}$, $\mathbf{c}$ and $\mathbf{g}$ using the built in functions from Pinocchio. To compute $\mathbf{g}$ use the following function: \codeword{robot.gravity(q)}, which takes as only argument the vector of joint positions. To compute $\mathbf{M}$ use: \codeword{robot.mass(q, False)}\footnote{For the functions of the mass and nonlinear terms the second argument is a boolean related to the update of the joint variables, in our case we are keeping it as false since we are updating the joint states manually}. In the case of vector $\mathbf{C}$, Pinocchio only provides the sum $\mathbf{h} = \mathbf{c} +  \mathbf{g}$ through the function: \codeword{robot.nle(q, qd, False)}\footnote{Nle stands for non linear effects.}. Run again the simulation using Pinocchio and verify that the outputs of the function that you wrote coincides with those of the built-in functions. Now remove entirely the implementation with your functions and visualize the robot falling. You will notice that the robot is moving  faster that with your own implementation. Why is this the case?  This is mainly due to the fact that Pinocchio is implemented in C++ but used in Python through bindings and because our implementation is done with respect to the world frames. Whereas in Pinocchio computations are done  with respect to the link frame, and this results in "sparser" matrix multiplications (i.e. the inertia tensors are full of zeros and this results in faster matrix multiplications).
 
+\textbf{3.7 Model end-stops.} Our joints have not an infinite range of motion and are usually limited by end-stops. Model this feature as an additional torque/force that gets activated when the 
+joint exceed its limits. Set the joint range for all the joints to:
 
+\begin{align*}
+q_{\text{max}} = \mat{2\pi &   0.5 &  2\pi & 2\pi}^T \quad \quad
+q_{\text{min}} = \mat{-2\pi &   -0.5 &  -2\pi & -2\pi}^T
+\end{align*}
+
+If you run the simulation you will see that the second joint cannot move to the vertical as before due to the presence of the end-stop that limits its motion.
 
 \end{document}
 
