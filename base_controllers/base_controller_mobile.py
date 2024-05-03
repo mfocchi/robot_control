@@ -63,11 +63,13 @@ from  base_controllers.doretta.utils import constants as constants
 from  base_controllers.doretta.environment.trajectory import Trajectory, ModelsList
 from  base_controllers.doretta.models.unicycle import Unicycle
 from  base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams
-import base_controllers.doretta.velocity_tests as vt
+from base_controllers.doretta.velocity_generator import VelocityGenerator
 from base_controllers.doretta.utils.tools import unwrap
 
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
+
+# I cannot inherit from basecontroller because mir description is part of a ros package and I have issues generating Pinocchio from the xacro
 
 class BaseControllerMobile(threading.Thread):
     """
@@ -300,15 +302,17 @@ def talker(p):
     print(f"Initial pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
 
     #vel_gen = vt.velocity_mir
-    vel_gen = vt.velocity_mir_smooth
+    vel_gen = VelocityGenerator(simulation_time=10., DT=conf.robot_params[p.robot_name]['dt'])
     initial_des_x = 0.1
     initial_des_y = 0.1
     initial_des_theta = 0.3
-    p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen)
+    p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta,
+                        vel_gen.velocity_mir_smooth, conf.robot_params[p.robot_name]['dt'])
+
     # Lyapunov controller parameters
     K_P = 5.0
     K_THETA = 1.0
-    params = LyapunovParams(K_P=K_P, K_THETA=K_THETA)
+    params = LyapunovParams(K_P=K_P, K_THETA=K_THETA, DT=conf.robot_params[p.robot_name]['dt'])
     controller = LyapunovController(params=params)
     controller.config(start_time=p.time, trajectory=p.traj)
 
@@ -328,7 +332,6 @@ def talker(p):
         # v_l = v - omega *b/2
         # v_r = v + omega * b / 2
 
-        #
         # # SAFE CHECK -> clipping velocities
         # v = np.clip(v, -constants.MAX_LINEAR_VELOCITY, constants.MAX_LINEAR_VELOCITY)
         # o = np.clip(o, -constants.MAX_ANGULAR_VELOCITY, constants.MAX_ANGULAR_VELOCITY)

@@ -1,6 +1,5 @@
 import numpy as np
 
-from ..utils import constants as const
 from ..utils.tools import normalize_angle
 from base_controllers.doretta.utils.tools import unwrap_angle
 
@@ -15,13 +14,14 @@ class Unicycle:
         :param omega: (float) angular velocity
     """
 
-    def __init__(self, x=0.0, y=0.0, theta=0.0, v=0.0, omega=0.0):
+    def __init__(self, x=0.0, y=0.0, theta=0.0, v=0.0, omega=0.0, DT=0.01):
         self.x = x
         self.y = y
         self.theta = theta
         self.v = v
         self.omega = omega
         self.theta_old = theta
+        self.DT = DT
 
     def update(self, vel, omega):
         """
@@ -40,9 +40,9 @@ class Unicycle:
         # self.theta = normalize_angle(self.theta)
 
         # proper integration with ZOH updtes considering the constant evolution of theta across the steps with constant omega and v
-        self.x += vel * const.DT  * np.sinc(omega*const.DT/2) * np.cos(self.theta + omega* const.DT/2)
-        self.y += vel * const.DT  * np.sinc(omega*const.DT/2) * np.sin(self.theta + omega* const.DT/2)
-        self.theta += omega * const.DT
+        self.x += vel * self.DT  * np.sinc(omega*self.DT/2) * np.cos(self.theta + omega* self.DT/2)
+        self.y += vel * self.DT  * np.sinc(omega*self.DT/2) * np.sin(self.theta + omega* self.DT/2)
+        self.theta += omega * self.DT
         # this is not needed here
         # self.theta = unwrap_angle(self.theta, self.theta_old)
 

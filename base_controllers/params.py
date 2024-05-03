@@ -27,7 +27,7 @@ robot_params['tractor'] ={'dt': 0.01,
                         'q_0':  np.array([0, 0, 0, 0]),
                         'joint_names': ['front_left_wheel_joint', 'front_right_wheel_joint',  'rear_left_wheel_joint', 'rear_right_wheel_joint'],
                         'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
-                        'spawn_x': -0.5,
+                        'spawn_x': -0.,
                         'spawn_y': 0.0,
                         'spawn_z': 1.0,
                         'buffer_size': 1000}
@@ -196,7 +196,7 @@ robot_params['jumpleg'] ={'dt': 0.001,
                        'spawn_z' : 0.0,
                        'buffer_size': 1000} # note the frames are all aligned with base for joints = 0
 
-robot_params['mir'] ={'dt': 0.001,
+robot_params['mir'] ={'dt': 0.01,
                        'q_0':  np.array([ 0.0, 0.0]),
                        'joint_names': ['left_wheel_joint', 'right_wheel_joint'],
                        'spawn_x' : 0.0,

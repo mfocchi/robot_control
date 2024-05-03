@@ -12,7 +12,7 @@ from base_controllers.doretta.controllers.lyapunov import LyapunovController, Ly
 from base_controllers.doretta.controllers.lyapunov_zou import LyapunovControllerZou, LyapunovParamsZou
 from base_controllers.doretta.controllers.stanley import StanleyController, StanleyParams
 
-import base_controllers.doretta.velocity_tests as vt
+import base_controllers.doretta.velocity_generator as vt
 import sys
 print(sys.setrecursionlimit(3000))
 save = False

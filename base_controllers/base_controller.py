@@ -115,7 +115,7 @@ class BaseController(threading.Thread):
         self.math_utils = Math()
         # send data to param server
         self.verbose = conf.verbose
-        self.custom_launch_file = False
+        self.custom_locosim_launch_file = False
         self.use_ground_truth_contacts = False
         self.apply_external_wrench = False
         self.time_external_wrench = 0.6
@@ -126,7 +126,7 @@ class BaseController(threading.Thread):
 
         print("Initialized basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None, additional_args = None):
+    def startSimulator(self, world_name = None, launch_file = None, additional_args = None):
         # needed to be able to load a custom world file
         print(colored('Adding gazebo model path!', 'blue'))
         custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
@@ -138,10 +138,11 @@ class BaseController(threading.Thread):
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
 
-        if self.custom_launch_file:
-            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
-        else:
-            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_floating.launch'
+        if launch_file is None:
+            if self.custom_locosim_launch_file:
+                launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
+            else:
+                launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_floating.launch'
 
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
@@ -163,6 +164,7 @@ class BaseController(threading.Thread):
         roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
         parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
         parent.start()
+        ros.sleep(1.0)
         ros.sleep(1.0)
         print(colored('SIMULATION Started', 'blue'))
 
@@ -623,7 +625,7 @@ class BaseController(threading.Thread):
 def talker(p):
     p.start()
     if  (p.robot_name == 'solo_fw'):
-        p.custom_launch_file = True
+        p.custom_locosim_launch_file = True
     p.startSimulator()
     p.loadModelAndPublishers()
     p.initVars()

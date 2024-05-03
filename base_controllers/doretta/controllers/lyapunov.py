@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 
-from ..utils.constants import DT
+
 from ..environment.trajectory import Trajectory, ModelsList
 from ..utils.tools import normalize_angle
 import math
@@ -16,9 +16,13 @@ from base_controllers.doretta.utils.tools import unwrap_angle
 # ------------------------------------ #
 
 class LyapunovParams:
-    def __init__(self, K_P, K_THETA):
+    def __init__(self, K_P, K_THETA, DT=0.001):
         self.K_P = K_P
         self.K_THETA = K_THETA
+        self.DT = DT
+
+class Robot:
+    pass
 
 class LyapunovController:
     def __init__(self, params: LyapunovParams):
@@ -35,10 +39,11 @@ class LyapunovController:
         self.goal_reached = False
         self.theta_old = 0.
         self.des_theta_old = 0.
+        self.params = params
 
     def config(self, start_time, trajectory):
         self.trajectory = trajectory
-        self.total_time = len(self.trajectory.x) * DT
+        self.total_time = len(self.trajectory.x) * self.params.DT
         self.start_time = start_time
         self.draw_e_x.append(0.0)
         self.draw_e_y.append(0.0)
@@ -49,7 +54,7 @@ class LyapunovController:
         ritorna i valori di linear e angular velocity
         """
         elapsed_time = current_time - self.start_time
-        current_index = int(elapsed_time / DT)
+        current_index = int(elapsed_time / self.params.DT)
 
         # quando arrivo all'indice dell'ultimo punto della traiettoria, la traiettoria è finita
         if current_index >= len(self.trajectory.v)-1:

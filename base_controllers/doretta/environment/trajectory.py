@@ -9,7 +9,7 @@ class ModelsList(Enum):
 
 
 class Trajectory:
-    def __init__(self, model, start_x, start_y, start_theta, velocity_generator):
+    def __init__(self, model, start_x, start_y, start_theta, velocity_generator, DT):
         self.x = [start_x]
         self.y = [start_y]
         self.theta = [start_theta]
@@ -17,7 +17,7 @@ class Trajectory:
         self.omega = []
 
         if model is ModelsList.UNICYCLE:
-            self.robot = Unicycle(start_x, start_y, start_theta)
+            self.robot = Unicycle(start_x, start_y, start_theta, velocity_generator, DT)
         else:
             assert False, "Trajectory generator: model is not valid"
 

@@ -315,8 +315,8 @@ if __name__ == '__main__':
     q[7:12 + 7] = qj
 
     IK = InverseKinematics(robot)
-    IKOpt = InverseKinematicsOptimization(robot)
-    RK = robotKinematics(robot, ['lf_foot', 'rf_foot','lh_foot', 'rh_foot'])
+    #IKOpt = InverseKinematicsOptimization(robot)
+    #RK = robotKinematics(robot, ['lf_foot', 'rf_foot','lh_foot', 'rh_foot'])
     pin.forwardKinematics(robot.model, robot.data, q)
     pin.updateFramePlacements(robot.model, robot.data)
     legs = ['lf', 'rf','lh', 'rh']
@@ -345,18 +345,18 @@ if __name__ == '__main__':
         print('\n\tAnalytics time:', np.round(np.array([T*1000]),3)[0], 'ms')
         print('\tIK Solution Analytics:', sol)
 
-        start = time.time()
-        solOpt = IKOpt.solve(feet_pos[i], robot.model.frames[foot].name, q0=np.array([0.0, 0.7, -1.4]))
-        T = time.time() - start
-        print('\n\tOptimization time:', np.round(np.array([T*1000]),3)[0], 'ms')
-        print('\tIK Solution Optimization:', solOpt.x)
+        # start = time.time()
+        # solOpt = IKOpt.solve(feet_pos[i], robot.model.frames[foot].name, q0=np.array([0.0, 0.7, -1.4]))
+        # T = time.time() - start
+        # print('\n\tOptimization time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        # print('\tIK Solution Optimization:', solOpt.x)
 
 
-        start = time.time()
-        solMic, IKsuccess = RK.footInverseKinematicsFixedBaseLineSearch(feet_pos[i], robot.model.frames[foot].name, q0_leg=np.array([0.0, 0.7, -1.4]))
-        T = time.time() - start
-        print('\n\tMichele time:', np.round(np.array([T*1000]),3)[0], 'ms')
-        print('\tIK Solution Michele:      ', solMic)
+        # start = time.time()
+        # solMic, IKsuccess = RK.footInverseKinematicsFixedBaseLineSearch(feet_pos[i], robot.model.frames[foot].name, q0_leg=np.array([0.0, 0.7, -1.4]))
+        # T = time.time() - start
+        # print('\n\tMichele time:', np.round(np.array([T*1000]),3)[0], 'ms')
+        # print('\tIK Solution Michele:      ', solMic)
 
 
 
