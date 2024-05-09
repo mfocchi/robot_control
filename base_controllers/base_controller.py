@@ -24,9 +24,9 @@ from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.msg import ModelState
 #gazebo services
+from gazebo_msgs.srv import GetPhysicsProperties
 from gazebo_msgs.srv import SetPhysicsProperties
 from gazebo_msgs.srv import SetPhysicsPropertiesRequest
-from gazebo_msgs.srv import GetPhysicsProperties
 
 # ros utils
 import roslaunch
@@ -621,6 +621,19 @@ class BaseController(threading.Thread):
             #if  self.loop_time> conf.robot_params[self.robot_name]['dt']*1.05:
                 #print('Out of loop frequency')
         self.ros_time = new_time
+
+    def setSimSpeed(self, dt_sim=0.001, max_update_rate=1000, iters=50):
+        physics_req = SetPhysicsPropertiesRequest()
+        physics_req.time_step = dt_sim
+        physics_req.max_update_rate = max_update_rate
+        physics_req.ode_config.sor_pgs_iters = iters
+        physics_req.ode_config.sor_pgs_w = 1.3
+        physics_req.ode_config.contact_surface_layer = 0.001
+        physics_req.ode_config.contact_max_correcting_vel = 100
+        physics_req.ode_config.erp = 0.2
+        physics_req.ode_config.max_contacts = 20
+        physics_req.gravity.z = -9.81
+        self.set_physics_client(physics_req)
 	
 def talker(p):
     p.start()
