@@ -440,7 +440,7 @@ class Controller(BaseController):
             print('Set world file to slow.world')
             world_name = 'slow.world'
 
-        self.startSimulator(world_name, additional_args)            # run gazebo
+        self.startSimulator(world_name=world_name, additional_args=additional_args)            # run gazebo
         if world_name is None:
             self.world_name_str = ''
         else:
