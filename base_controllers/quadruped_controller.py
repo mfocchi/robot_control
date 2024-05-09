@@ -50,6 +50,8 @@ class Controller(BaseController):
 
         self.use_ground_truth_pose = True
 
+        self.gravity_comp_duration = 0.5 #1.5
+        self.standup_period = 1. #3
     #####################
     # OVERRIDEN METHODS #
     #####################
@@ -999,15 +1001,15 @@ class Controller(BaseController):
                 self.updateKinematics()
                 # self.visualizeContacts()
                 GCTime = self.time - GCStartTime
-                if GCTime <= 1.5:
+                if GCTime <= self.gravity_comp_duration:
                     if alpha < 1:
-                        alpha = GCTime/1.5
+                        alpha = GCTime/self.gravity_comp_duration
 
                 self.send_command(self.q_des, self.qd_des, alpha*self.gravityCompensation())
 
             # IMU BIAS ESTIMATION
-            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
             if self.real_robot and self.robot_name == 'go1':
+                print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
                 # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
                 while self.imu_utils.counter < self.imu_utils.timeout:
                     self.updateKinematics()
@@ -1038,16 +1040,14 @@ class Controller(BaseController):
             if (i%3) != 0:
                 q_ref[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
         # IMU BIAS ESTIMATION
-        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
-        #if self.real_robot and self.robot_name == 'go1':
+        if self.real_robot and self.robot_name == 'go1':
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
             # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
-
-        while self.imu_utils.counter < self.imu_utils.timeout:
-            self.updateKinematics()
-            self.imu_utils.IMU_bias_estimation(self.b_R_w, self.baseLinAccB)
-            self.tau_ffwd[:] = 0.
-
-            self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+            while self.imu_utils.counter < self.imu_utils.timeout:
+                self.updateKinematics()
+                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.baseLinAccB)
+                self.tau_ffwd[:] = 0.
+                self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
         self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
 
@@ -1154,7 +1154,7 @@ class Controller(BaseController):
                 if state == 1:
                     GCTime = self.time-GCStartTime
                     self.qd_des[:] = 0
-                    if GCTime <= 1.5:
+                    if GCTime <= self.gravity_comp_duration:
                         if alpha < 1:
                             alpha = GCTime
                         self.tau_ffwd = alpha* self.self_weightCompensation()
@@ -1162,18 +1162,17 @@ class Controller(BaseController):
                         print(colored("[startupProcedure t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
                         HStarttime = self.time
                         # 5-th order polynomial
-                        HPeriod = 3.0
                         final_comPose_des = self.comPoseW.copy()
                         final_comPose_des[2] = self.robot_height+0.02
                         pos, vel, acc = polynomialRef(self.comPoseW, final_comPose_des,
                                                       np.zeros(6), np.zeros(6),
                                                       np.zeros(6), np.zeros(6),
-                                                      HPeriod)
+                                                      self.standup_period)
                         self.W_contacts_des = self.W_contacts.copy()
                         state = 2
 
                 if state == 2:
-                    if self.time - HStarttime < HPeriod:
+                    if self.time - HStarttime < self.standup_period:
                         self.comPoseW_des = pos(self.time - HStarttime)
                         self.comTwistW_des = vel(self.time - HStarttime)
                         self.Wcom2Joints_des()
@@ -1353,11 +1352,6 @@ class Controller(BaseController):
                 #print('Jpg files removed', flush=True)
         except:
             pass
-
-
-
-
-
 
 
 if __name__ == '__main__':
