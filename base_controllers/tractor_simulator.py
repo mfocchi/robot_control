@@ -39,7 +39,7 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
-        self.ControlType = 'CLOSED_LOOP' #'CLOSED_LOOP'
+        self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
 
         if self.GAZEBO:
             self.actuated_wheels = [0, 1, 2, 3]
@@ -100,10 +100,10 @@ class GenericSimulator(BaseController):
             os.system("killall rosmaster rviz coppeliaSim")
             # launch roscore
             checkRosMaster()
-            ros.sleep(0.5)
+            ros.sleep(1.5)
 
             # launch coppeliasim
-            scene = rospkg.RosPack().get_path('tractor_description') + '/CoppeliaSimModels/scene.ttt'
+            scene = rospkg.RosPack().get_path('tractor_description') + '/CoppeliaSimModels/tractor_ros.ttt'
             file = os.getenv("LOCOSIM_DIR")+"/CoppeliaSim/coppeliaSim.sh"+" "+scene+" &"
             os.system(file)
             ros.sleep(1.5)
@@ -131,6 +131,11 @@ class GenericSimulator(BaseController):
             # launch.start()
             # process = launch.launch(node)
 
+            # wait for coppelia to start
+            ros.sleep(1.5)
+
+
+
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
@@ -139,18 +144,20 @@ class GenericSimulator(BaseController):
             self.startPub=ros.Publisher("/startSimulation", Bool, queue_size=1, tcp_nodelay=True)
             self.pausePub=ros.Publisher("/pauseSimulation", Bool, queue_size=1, tcp_nodelay=True)
             self.stopPub=ros.Publisher("/stopSimulation", Bool, queue_size=1, tcp_nodelay=True)
-            self.enableSynModePub=ros.Publisher("/enableSyncMode", Bool, queue_size=1, tcp_nodelay=True)
+            self.enableSyncModePub=ros.Publisher("/enableSyncMode", Bool, queue_size=1, tcp_nodelay=True)
             self.triggerNextStepPub=ros.Publisher("/triggerNextStep", Bool, queue_size=1, tcp_nodelay=True)
+            self.renderSimulationPub = ros.Publisher("/renderSimulation", Bool, queue_size=1, tcp_nodelay=True)
             # simStepDoneSub=ros.Subscriber("/simulationStepDone", Bool, sim_done_)
             self.simStateSub=ros.Subscriber("/simulationState", Int32, self.sim_state_)
             # simTimeSub=simROS.Subscriber('/simulationTime',Float32, time_sim_)
+
 
     def sim_state_(self, msg):
         pass
 
     def deregister_node(self):
         if not self.GAZEBO:
-            self.stopPub.publish(True)
+            self.simulationControl('stop')
         os.system("killall rosmaster rviz coppeliaSim")
         super().deregister_node()
 
@@ -163,18 +170,34 @@ class GenericSimulator(BaseController):
             msg.data = True
             for i in range(30):
                 self.startPub.publish(msg)
+        if input == 'stop':
+            self.stopPub.publish(True)
+        if input == 'enable_sync_mode':
+            self.enableSyncModePub.publish(True)
+        if input=='trigger_next_step':
+            self.triggerNextStepPub.publish(True)
+        if input=='gui_off':
+            self.renderSimulationPub.publish(True)
 
     def startupProcedure(self):
         if self.GAZEBO:
             super().startupProcedure()
             if self.torque_control:
                 self.pid.setPDs(0.0, 0.0, 0.0)
+            # loop frequency
+            self.rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
         else:
             # we need to broadcast the TF world baselink in coppelia not in base controller for synchro issues
             self.broadcast_world = False
+
             self.simulationControl('start')
-            #wait for coppelia to start
-            ros.sleep(1.5)
+            # start coppeliasim
+            self.simulationControl('enable_sync_mode')
+            #Coppelia Runs with increment of 0.01 but is not able to run at 100Hz but at 25 hz so I "slow down" ros, but still update time with dt = 0.01
+            slow_down_factor = 4
+            # loop frequency
+            self.rate = ros.Rate(1 / (slow_down_factor * conf.robot_params[p.robot_name]['dt']))
+
 
     def plotData(self):
         if conf.plotting:
@@ -182,8 +205,6 @@ class GenericSimulator(BaseController):
             plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log,
                       joint_names=p.joint_names)
             if p.ControlType == 'CLOSED_LOOP':
-
-
                 plt.figure()
                 plt.plot(p.traj.x, p.traj.y, "-r", label="desired")
                 plt.plot(p.basePoseW_log[0, :], p.basePoseW_log[1, :], "-b", label="real")
@@ -253,8 +274,6 @@ def talker(p):
     p.initSubscribers()
     p.startupProcedure()
 
-    #loop frequency
-    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     #init joints
     p.q_des = np.copy(p.q_des_q0)
     robot = Robot()
@@ -263,7 +282,7 @@ def talker(p):
     if p.ControlType == 'OPEN_LOOP':
         # OPEN loop control
         while not ros.is_shutdown():
-            forward_speed = 1.0
+            forward_speed = 1. #max speed is 4.56 rad/s
             p.qd_des[p.actuated_wheels] = forward_speed
             if p.torque_control:
                 p.tau_ffwd = 30*conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des, p.q) -2* conf.robot_params[p.robot_name]['kd'] * p.qd
@@ -274,23 +293,29 @@ def talker(p):
             #note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             #senting it to be tracked from the impedance loop
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+
             # log variables
             p.logData()
 
+            p.simulationControl('trigger_next_step')
             # wait for synconization of the control loop
-            rate.sleep()
+            p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
     else:
         # CLOSE loop control
         # generate reference trajectory
-        vel_gen = VelocityGenerator(simulation_time=10., DT=conf.robot_params[p.robot_name]['dt'])
-        initial_des_x = 0.1
-        initial_des_y = 0.1
-        initial_des_theta = 0.3
+        vel_gen = VelocityGenerator(simulation_time=10.,    DT=conf.robot_params[p.robot_name]['dt'])
+        # initial_des_x = 0.1
+        # initial_des_y = 0.1
+        # initial_des_theta = 0.3
+        initial_des_x = 0.0
+        initial_des_y = 0.0
+        initial_des_theta = 0.0
         p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen.velocity_mir_smooth, conf.robot_params[p.robot_name]['dt'])
 
+        # TODO fix the 180deg rotation issue
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=5., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=2., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
         controller = LyapunovController(params=params)
         controller.config(start_time=p.time, trajectory=p.traj)
         v_des, omega_des, _ = vel_gen.velocity_mir_smooth()
@@ -301,7 +326,6 @@ def talker(p):
             robot.y = p.basePoseW[p.u.sp_crd["LY"]]
             robot.theta = p.basePoseW[p.u.sp_crd["AZ"]]
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
-
 
             # controllers
             p.ctrl_v, p.ctrl_omega, p.v_ref, p.omega_ref, p.V, p.V_dot = controller.control(robot, p.time)
@@ -320,9 +344,9 @@ def talker(p):
 
             # log variables
             p.logData()
-
+            p.simulationControl('trigger_next_step')
             # wait for synconization of the control loop
-            rate.sleep()
+            p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
 if __name__ == '__main__':

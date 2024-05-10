@@ -7,25 +7,26 @@ class VelocityGenerator:
         self.DT = DT
         self.n_samples = int(simulation_time / self.DT)
 
-    def velocity_mir_smooth(self):
+    def velocity_mir_smooth(self, t1_ = 1, t2_ = 2, v_max_ = 0.1, omega_max_ = 0.1):
         t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
         v = []
         o = []
-        t1 = 3
-        t2 = 7
+        t1 = t1_
+        t2 =t2_
         #v_max = 0.4
-
-        v_max = 0.1
+        omega_max =omega_max_
+        v_max = v_max_
         for i in range(t.shape[0]):
             if (t[i] < t1):
                 v.append(v_max * t[i])
                 o.append(0)
             elif (t[i] < t2):
-                v.append(t1 * v_max - t1 * v_max / (t2 - t1) * (t[i] - t1))
-                o.append(-0.2)
+                #v.append(t1 * v_max - t1 * v_max / (t2 - t1) * (t[i] - t1))
+                v.append(v_max)
+                o.append(omega_max)
             else:
-                v.append(0.)
-                o.append(0.)
+                v.append(v_max)
+                o.append(omega_max)
         s = "mir_smooth"
         return v, o, s
 
