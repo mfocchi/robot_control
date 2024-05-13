@@ -846,7 +846,6 @@ class Controller(BaseController):
 
         # log variables
         self.rate.sleep()
-        self.logData()
         self.sync_check()
         self.time = np.round(self.time + self.dt, 3)#np.array([self.loop_time]), 3)
 
@@ -1371,6 +1370,7 @@ if __name__ == '__main__':
             p.updateKinematics()
             p.visualizeContacts()
             p.tau_ffwd = p.gravityCompensation()
+            p.logData()
             p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
 
 
