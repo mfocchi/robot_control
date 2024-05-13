@@ -20,7 +20,7 @@ from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from numpy import nan
 from matplotlib import pyplot as plt
-from base_controllers.doretta.utils.tools import unwrap
+from base_controllers.doretta.utils.tools import unwrap_angle
 from  base_controllers.doretta.utils import constants as constants
 from  base_controllers.doretta.models.unicycle import Unicycle
 from base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams, Robot
@@ -40,12 +40,6 @@ class GenericSimulator(BaseController):
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
-
-        if self.GAZEBO:
-            self.actuated_wheels = [0, 1, 2, 3]
-        else:
-            print(colored(f"---------To run this you need to clone https://github.com/mfocchi/CoppeliaSim inside locosim folder", "red"))
-            self.actuated_wheels = [0, 1]
 
 
     def initVars(self):
@@ -96,6 +90,9 @@ class GenericSimulator(BaseController):
             #world_name = tractor.world
             super().startSimulator(world_name=None, additional_args=['spawn_Y:=0.'])
         else:
+            print(colored(
+                f"---------To run this you need to clone https://github.com/mfocchi/CoppeliaSim inside locosim folder",
+                "red"))
             # clean up previous process
             os.system("killall rosmaster rviz coppeliaSim")
             # launch roscore
@@ -251,39 +248,43 @@ class GenericSimulator(BaseController):
         # # SAFE CHECK -> clipping velocities
         # v = np.clip(v, -constants.MAX_LINEAR_VELOCITY, constants.MAX_LINEAR_VELOCITY)
         # o = np.clip(o, -constants.MAX_ANGULAR_VELOCITY, constants.MAX_ANGULAR_VELOCITY)
-        if self.GAZEBO:
-            qd_des = np.zeros(4)
-            qd_des[0] = (v - omega * constants.TRACK_WIDTH/2)/ (0.3/2) #left front
-            qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2)/(0.3/2)  # rightfront
-            qd_des[2] = (v - omega * constants.TRACK_WIDTH / 2)/(0.23/2)  # left hind
-            qd_des[3] = (v + omega * constants.TRACK_WIDTH / 2)/(0.23/2)  # right hind
-        else:
-            qd_des = np.zeros(2)
-            qd_des[0] = (v - omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
-            qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
+        qd_des = np.zeros(2)
+        qd_des[0] = (v - omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
+        qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
 
         return qd_des
+
+    def _receive_jstate(self, msg):
+        super()._receive_jstate()
+        for i in range(self.robot.na):
+            self.q[i] =unwrap_angle(self.q[i], self.q_old[i])
+        self.q_old = np.copy(self.q)
 
 def talker(p):
     p.start()
     p.startSimulator()
     p.loadModelAndPublishers()
-    if not p.GAZEBO:
-        p.robot.na = 2 #initialize properly vars for only 2 actuators
+    p.robot.na = 2 #initialize properly vars for only 2 actuators (other 2 are caster wheels)
     p.initVars()
+    p.q_old = np.zeros(2)
     p.initSubscribers()
     p.startupProcedure()
 
     #init joints
     p.q_des = np.copy(p.q_des_q0)
-    robot = Robot()
+    p.q_old = np.zeros(2)
+    robot_state = Robot()
     ros.sleep(1.)
+    #
+    p.q_des = np.zeros(2)
+    p.qd_des = np.zeros(2)
+    p.tau_ffwd = np.zeros(2)
 
     if p.ControlType == 'OPEN_LOOP':
         # OPEN loop control
         while not ros.is_shutdown():
             forward_speed = 1. #max speed is 4.56 rad/s
-            p.qd_des[p.actuated_wheels] = forward_speed
+            p.qd_des = forward_speed
             if p.torque_control:
                 p.tau_ffwd = 30*conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des, p.q) -2* conf.robot_params[p.robot_name]['kd'] * p.qd
             else:
@@ -296,8 +297,8 @@ def talker(p):
 
             # log variables
             p.logData()
-
-            p.simulationControl('trigger_next_step')
+            if not p.GAZEBO:
+                p.simulationControl('trigger_next_step')
             # wait for synconization of the control loop
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
@@ -322,13 +323,13 @@ def talker(p):
         count = 0
         while not ros.is_shutdown():
             # update kinematics
-            robot.x = p.basePoseW[p.u.sp_crd["LX"]]
-            robot.y = p.basePoseW[p.u.sp_crd["LY"]]
-            robot.theta = p.basePoseW[p.u.sp_crd["AZ"]]
+            robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
+            robot_state.y = p.basePoseW[p.u.sp_crd["LY"]]
+            robot_state.theta = p.basePoseW[p.u.sp_crd["AZ"]]
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
 
             # controllers
-            p.ctrl_v, p.ctrl_omega, p.v_ref, p.omega_ref, p.V, p.V_dot = controller.control(robot, p.time)
+            p.ctrl_v, p.ctrl_omega, p.v_ref, p.omega_ref, p.V, p.V_dot = controller.control(robot_state, p.time)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
             # debug send openloop vels
@@ -344,7 +345,8 @@ def talker(p):
 
             # log variables
             p.logData()
-            p.simulationControl('trigger_next_step')
+            if not p.GAZEBO:
+                p.simulationControl('trigger_next_step')
             # wait for synconization of the control loop
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
