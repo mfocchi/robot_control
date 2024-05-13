@@ -178,7 +178,7 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
 def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None,
               sharex=False, sharey=False, start=0, end=-1):
     plot_var_des_log = None
-    if name == 'position':
+    if name=='position':
         unit = '[rad]'
         if   (q_log is not None):
             plot_var_log = q_log
@@ -189,7 +189,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         else:
             plot_var_des_log = None
 
-    elif name == 'velocity':
+    if name=='velocity':
         unit = '[rad/s]'
         if   (qd_log is not None):
             plot_var_log = qd_log
@@ -200,7 +200,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         else:
             plot_var_des_log = None
 
-    elif name == 'acceleration':
+    if name == 'acceleration':
         unit = '[rad/s^2]'
         if   (qdd_log is not None):
             plot_var_log = qdd_log
@@ -211,7 +211,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         else:
             plot_var_des_log = None
 
-    elif name == 'torque':
+    if name == 'torque':
         unit = '[Nm]'
         if   (tau_log is not None):
             plot_var_log = tau_log
@@ -221,9 +221,6 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
             plot_var_des_log  = tau_des_log
         else:
           plot_var_des_log = None                                                
-    else:
-       print(colored("plotJoint error: wrong input string", "red") )
-       return
 
     dt = np.round(time_log[1] - time_log[0], 3)
     if type(start) == str:
@@ -235,6 +232,8 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         njoints = min(plot_var_log.shape)
     elif plot_var_des_log is not None:
         njoints = min(plot_var_des_log.shape)
+    else:
+        print("no log var has been defined")
 
     if len(plt.get_fignums()) == 0:
         figure_id = 1
@@ -254,6 +253,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
             labels = labels_flywheel4
     else:
         labels = joint_names
+        njoints = len(joint_names)
 
     if (njoints % 3 == 0): #divisible by 3
         n_rows = int(njoints/ 3)

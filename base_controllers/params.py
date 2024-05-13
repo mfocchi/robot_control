@@ -130,7 +130,7 @@ robot_params['aliengo'] ={'dt': 0.002,
                           'spawn_z': 0.5,
                           'buffer_size': 30001} # note the frames are all aligned with base for joints = 0
 robot_params['go1'] ={'dt': 0.002,
-                      'buffer_size': 60001, # 120 seconds
+                      'buffer_size': 5001, # 120 seconds
                       # simulation gains
                       # stand alone joint pid
                       'kp': np.array([15., 15., 15.]*4),

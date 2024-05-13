@@ -394,7 +394,7 @@ class BaseController(threading.Thread):
         for leg in range(4):
             self.B_contacts[leg] = self.robot.framePlacement(self.neutral_fb_jointstate,
                                                              self.robot.model.getFrameId(ee_frames[leg]),
-                                                             update_kinematics=False ).translation
+                                                             update_kinematics=False ).translation.copy()
             self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
         if self.use_ground_truth_contacts:
             for leg in range(4):

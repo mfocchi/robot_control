@@ -6,7 +6,7 @@ import time
 
 import sys
 sys.path.append('../utils')#allows to incude stuff on the same level
-from common_functions import getRobotModel
+from base_controllers.utils.common_functions import getRobotModel
 
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 
