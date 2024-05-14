@@ -899,6 +899,17 @@ def wrapToPi(angle):
 
     return angle
 
+def angdiff(y,x):
+    d = y - x
+    if abs(d) > np.pi:
+        # wrapToPi
+        etheta = wrapTo2pi(d + np.pi) - np.pi
+    else:
+        etheta = d
+    return etheta
 
+def wrapTo2pi(theta):
+    theta = np.mod(theta, 2 * np.pi)
+    return theta
 
 
