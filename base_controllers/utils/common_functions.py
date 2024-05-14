@@ -488,6 +488,7 @@ def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_
               des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
     plot_var_log = None
     plot_var_des_log = None
+    labels = ["", "", ""]
     if name == 'position':
         labels = ["x", "y", "z"]
         lin_unit = '[m]'

@@ -10,7 +10,7 @@ import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from base_controllers.base_controller import BaseController
-from base_controllers.utils.common_functions import checkRosMaster, plotFrame, plotJoint
+from base_controllers.utils.common_functions import checkRosMaster, plotFrameLinear, plotJoint
 import params as conf
 import os
 from std_msgs.msg import Bool, Int32, Float32
@@ -27,8 +27,7 @@ from base_controllers.doretta.controllers.lyapunov import LyapunovController, Ly
 from  base_controllers.doretta.environment.trajectory import Trajectory, ModelsList
 from base_controllers.doretta.velocity_generator import VelocityGenerator
 from termcolor import colored
-from nav_msgs.msg import Odometry
-from tf.transformations import euler_from_quaternion
+from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -38,9 +37,9 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = False
+        self.GAZEBO = True
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
-
+        self.SAVE_BAGS = False
 
     def initVars(self):
         super().initVars()
@@ -59,6 +58,9 @@ class GenericSimulator(BaseController):
         self.omega_ref_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.V_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.V_dot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
+
+        self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
 
     def reset_joints(self, q0, joint_names = None):
         # create the message
@@ -83,6 +85,12 @@ class GenericSimulator(BaseController):
                 self.omega_ref_log[self.log_counter] = self.omega_ref
                 self.V_log[self.log_counter] = self.V
                 self.V_dot_log[self.log_counter] = self.V_dot
+                self.des_state_log[0, self.log_counter] = self.des_x
+                self.des_state_log[1, self.log_counter] = self.des_y
+                self.des_state_log[2, self.log_counter] = self.des_theta
+                self.state_log[0, self.log_counter] = self.basePoseW[self.u.sp_crd["LX"]]
+                self.state_log[1, self.log_counter] = self.basePoseW[self.u.sp_crd["LY"]]
+                self.state_log[2, self.log_counter] =  self.basePoseW[self.u.sp_crd["AZ"]]
             super().logData()
 
     def startSimulator(self):
@@ -103,7 +111,7 @@ class GenericSimulator(BaseController):
             scene = rospkg.RosPack().get_path('tractor_description') + '/CoppeliaSimModels/tractor_ros.ttt'
             file = os.getenv("LOCOSIM_DIR")+"/CoppeliaSim/coppeliaSim.sh"+" "+scene+" &"
             os.system(file)
-            ros.sleep(1.5)
+
 
             # run robot state publisher + load robot description + rviz
             uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
@@ -136,6 +144,8 @@ class GenericSimulator(BaseController):
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
+        if self.SAVE_BAGS:
+            self.recorder = RosbagControlledRecorder('rosbag record -a', False)
 
         if not self.GAZEBO:
             self.startPub=ros.Publisher("/startSimulation", Bool, queue_size=1, tcp_nodelay=True)
@@ -191,7 +201,7 @@ class GenericSimulator(BaseController):
             # start coppeliasim
             self.simulationControl('enable_sync_mode')
             #Coppelia Runs with increment of 0.01 but is not able to run at 100Hz but at 25 hz so I "slow down" ros, but still update time with dt = 0.01
-            slow_down_factor = 4
+            slow_down_factor = 8
             # loop frequency
             self.rate = ros.Rate(1 / (slow_down_factor * conf.robot_params[p.robot_name]['dt']))
 
@@ -199,8 +209,9 @@ class GenericSimulator(BaseController):
     def plotData(self):
         if conf.plotting:
             plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
-            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log,
-                      joint_names=p.joint_names)
+            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
+            plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
+
             if p.ControlType == 'CLOSED_LOOP':
                 plt.figure()
                 plt.plot(p.traj.x, p.traj.y, "-r", label="desired")
@@ -253,12 +264,34 @@ class GenericSimulator(BaseController):
         qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
 
         return qd_des
-
-    def _receive_jstate(self, msg):
-        super()._receive_jstate()
+    #
+    def unwrap(self):
         for i in range(self.robot.na):
-            self.q[i] =unwrap_angle(self.q[i], self.q_old[i])
-        self.q_old = np.copy(self.q)
+            self.q[i], self.q_old[i] =unwrap_angle(self.q[i], self.q_old[i])
+
+    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.6, dt = 0.005, long_v = 0.1):
+        # only around 0.3
+        change_interval = 6.
+        increment = 0.05
+        turning_radius_vec = np.arange(R_initial, R_final, increment)
+
+        ang_w = np.round(long_v / turning_radius_vec, 3)  # [rad/s]
+        omega_vec = []
+        v_vec = []
+        time = 0
+        i = 0
+        while True:
+            time = np.round(time + dt, 3)
+            omega_vec.append(ang_w[i])
+            v_vec.append(long_v)
+            # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
+            if time > ((1 + i) * change_interval):
+                i += 1
+            if i == len(turning_radius_vec):
+                break
+        v_vec.append(0.0)
+        omega_vec.append(0.0)
+        return v_vec, omega_vec
 
 def talker(p):
     p.start()
@@ -280,11 +313,22 @@ def talker(p):
     p.qd_des = np.zeros(2)
     p.tau_ffwd = np.zeros(2)
 
+    if p.SAVE_BAGS:
+        p.recorder.start_recording_srv()
+
     if p.ControlType == 'OPEN_LOOP':
+        counter = 0
+        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.05, R_final=0.6, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1)
         # OPEN loop control
         while not ros.is_shutdown():
-            forward_speed = 1. #max speed is 4.56 rad/s
-            p.qd_des = forward_speed
+            if counter<len(v_ol):
+                p.qd_des = p.mapToWheels(v_ol[counter], omega_ol[counter])
+                counter+=1
+            else:
+                print(colored("identification test accomplished", "red"))
+                break
+            #forward_speed = 1. #max speed is 4.56 rad/s
+            #p.qd_des = forward_speed
             if p.torque_control:
                 p.tau_ffwd = 30*conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des, p.q) -2* conf.robot_params[p.robot_name]['kd'] * p.qd
             else:
@@ -295,10 +339,11 @@ def talker(p):
             #senting it to be tracked from the impedance loop
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-            # log variables
-            p.logData()
             if not p.GAZEBO:
                 p.simulationControl('trigger_next_step')
+                p.unwrap()
+                # log variables
+            p.logData()
             # wait for synconization of the control loop
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
@@ -329,7 +374,7 @@ def talker(p):
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
 
             # controllers
-            p.ctrl_v, p.ctrl_omega, p.v_ref, p.omega_ref, p.V, p.V_dot = controller.control(robot_state, p.time)
+            p.ctrl_v, p.ctrl_omega,  p.des_x, p.des_y, p.des_theta, p.v_ref, p.omega_ref, p.V, p.V_dot = controller.control(robot_state, p.time)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
             # debug send openloop vels
@@ -343,13 +388,16 @@ def talker(p):
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
-            # log variables
-            p.logData()
             if not p.GAZEBO:
                 p.simulationControl('trigger_next_step')
+                p.unwrap()
+            # log variables
+            p.logData()
             # wait for synconization of the control loop
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
+    if p.SAVE_BAGS:
+        p.recorder.stop_recording_srv()
 
 if __name__ == '__main__':
     p = GenericSimulator(robotName)
