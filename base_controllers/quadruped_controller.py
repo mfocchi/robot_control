@@ -651,7 +651,7 @@ class Controller(BaseController):
 
     # Whole body controller that includes ffwd wrench + fb wrench (Virtual PD) + gravity compensation
     # all vector is in the wf
-    def WBC(self, des_pose, des_twist, des_acc = None, comControlled = True, type = 'projection'):
+    def WBC(self, des_pose, des_twist, des_acc = None, comControlled = True, type = 'projection', stance_legs=[True, True, True, True]):
         # does side effect on tau_ffwd
         self.virtualImpedanceWrench(des_pose, des_twist, des_acc, comControlled)
         if self.real_robot:
@@ -664,7 +664,7 @@ class Controller(BaseController):
         for leg in range(self.robot.nee):
             start_col = 3 * leg
             end_col = 3 * (leg + 1)
-            if True:#self.contact_state[leg]:
+            if stance_legs[leg]:#self.contact_state[leg]:
                 # ---> linear part
                 # identity matrix (I avoid to rewrite zeros)
                 self.NEMatrix[self.u.sp_crd["LX"], start_col] = 1.
@@ -672,10 +672,14 @@ class Controller(BaseController):
                 self.NEMatrix[self.u.sp_crd["LZ"], start_col + 2] = 1.
                 # ---> angular part
                 # all in a function
-                self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1, start_col:end_col] = \
-                    pin.skew(self.W_contacts[leg] - self.u.linPart(self.comPoseW))
+                if comControlled:
+                    self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1, start_col:end_col] = \
+                        pin.skew(self.W_contacts[leg] - self.u.linPart(self.comPoseW))
+                else:
+                    self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1, start_col:end_col] = \
+                        pin.skew(self.W_contacts[leg] - self.u.linPart(self.basePoseW))
             else:
-                # clean the matrix
+                # clean the matrix (where there are zeros the grf will be zero and so the torques)
                 self.NEMatrix[:, start_col:end_col] = 0.
 
         # Map the desired wrench to grf
@@ -685,7 +689,7 @@ class Controller(BaseController):
             self.grForcesW_wbc = self.qpWBC()
 
         h_jointFromRos = self.u.mapFromRos(self.h_joints)
-        for leg in range(4):
+        for leg in range(4):#(where there are zeros in the Matrix, the grf will be zero and so the torques, no need to check stance legs here)
             tau_leg = self.u.getLegJointState(leg, h_jointFromRos) - \
                       self.wJ[leg].T @ self.u.getLegJointState(leg, self.grForcesW_wbc)
             self.u.setLegJointState(leg, tau_leg, self.tau_ffwd)
