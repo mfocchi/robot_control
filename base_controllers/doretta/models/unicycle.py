@@ -1,7 +1,6 @@
 import numpy as np
 
-from ..utils.tools import normalize_angle
-from base_controllers.doretta.utils.tools import unwrap_angle
+from base_controllers.utils.math_tools import unwrap_angle
 
 class Unicycle:
     """
@@ -37,14 +36,13 @@ class Unicycle:
         # self.x += vel * np.cos(self.theta) * const.DT
         # self.y += vel * np.sin(self.theta) * const.DT
         # self.theta += omega * const.DT
-        # self.theta = normalize_angle(self.theta)
 
         # proper integration with ZOH updtes considering the constant evolution of theta across the steps with constant omega and v
         self.x += vel * self.DT  * np.sinc(omega*self.DT/2) * np.cos(self.theta + omega* self.DT/2)
         self.y += vel * self.DT  * np.sinc(omega*self.DT/2) * np.sin(self.theta + omega* self.DT/2)
         self.theta += omega * self.DT
         # this is not needed here
-        # self.theta = unwrap_angle(self.theta, self.theta_old)
+        # self.theta,self.theta_old = unwrap_angle(self.theta, self.theta_old)
 
     def state(self):
         return self.x, self.y, self.theta

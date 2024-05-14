@@ -20,7 +20,7 @@ from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from numpy import nan
 from matplotlib import pyplot as plt
-from base_controllers.doretta.utils.tools import unwrap_angle
+from base_controllers.utils.math_tools import unwrap_angle
 from  base_controllers.doretta.utils import constants as constants
 from  base_controllers.doretta.models.unicycle import Unicycle
 from base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams, Robot
@@ -264,7 +264,7 @@ class GenericSimulator(BaseController):
         qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
 
         return qd_des
-    #
+    #unwrap the joints states
     def unwrap(self):
         for i in range(self.robot.na):
             self.q[i], self.q_old[i] =unwrap_angle(self.q[i], self.q_old[i])
@@ -359,7 +359,6 @@ def talker(p):
         initial_des_theta = 0.0
         p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen.velocity_mir_smooth, conf.robot_params[p.robot_name]['dt'])
 
-        # TODO fix the 180deg rotation issue
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=2., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
         controller = LyapunovController(params=params)

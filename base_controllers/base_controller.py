@@ -17,6 +17,7 @@ from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
+from base_controllers.utils.math_tools import unwrap_vector
 from termcolor import colored
 
 #gazebo messages
@@ -250,6 +251,8 @@ class BaseController(threading.Thread):
         self.quaternion[2]=    msg.pose.pose.orientation.z
         self.quaternion[3]=    msg.pose.pose.orientation.w
         self.euler = np.array(euler_from_quaternion(self.quaternion))
+        #unwrap
+        self.euler, self.euler_old = unwrap_vector(self.euler, self.euler_old)
 
         self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
         self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
@@ -547,6 +550,7 @@ class BaseController(threading.Thread):
         self.tau_fb = np.zeros(self.robot.na)
         self.q_des = np.zeros(self.robot.na)
         self.quaternion = np.array([0., 0., 0., 1.]) #fundamental otherwise receivepose gets stuck
+        self.euler_old = np.zeros(3)
         self.q_des = conf.robot_params[self.robot_name]['q_0']
         self.qd_des = np.zeros(self.robot.na)
         self.tau_ffwd = np.zeros(self.robot.na)

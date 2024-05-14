@@ -1,12 +1,6 @@
-import time
-
 import numpy as np
-
-
-from ..environment.trajectory import Trajectory, ModelsList
-from ..utils.tools import normalize_angle
 import math
-from base_controllers.doretta.utils.tools import unwrap_angle
+from base_controllers.utils.math_tools import unwrap_angle
 # ------------------------------------ #
 # CONTROLLER'S PARAMETERS
 # K_P = 8.0
@@ -49,6 +43,19 @@ class LyapunovController:
         self.draw_e_y.append(0.0)
         self.draw_e_theta.append(0.0)
 
+    def angdiff(self, y,x):
+        d = y - x
+        if abs(d) > np.pi:
+            # wrapToPi
+            etheta = wrapTo2pi(d + np.pi) - np.pi
+        else:
+            etheta = d
+        return etheta
+
+    def wrapTo2pi(self,theta):
+        theta = np.mod(theta, 2 * np.pi)
+        return theta
+
     def control(self, robot, current_time):
         """
         ritorna i valori di linear e angular velocity
@@ -80,7 +87,8 @@ class LyapunovController:
 
         theta,self.theta_old = unwrap_angle(robot.theta, self.theta_old)
         des_theta, self.des_theta_old = unwrap_angle(self.trajectory.theta[current_index], self.des_theta_old)
-        etheta = theta-des_theta
+
+        etheta = theta -des_theta
 
 
         alpha = theta + des_theta
