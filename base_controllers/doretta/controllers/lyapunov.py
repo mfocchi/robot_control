@@ -68,18 +68,19 @@ class LyapunovController:
             self.draw_e_theta.append(0.0)
 
 
-            return 0.0, 0.0, 0., 0., 0., 0.
+            return 0.0, 0.0, 0., 0., 0., 0., 0., 0.,0.
 
         assert current_index < len(self.trajectory.v)-1, "Lyapunov controller: index out of range"
 
-
+        des_x = self.trajectory.x[current_index]
+        des_y = self.trajectory.y[current_index]
         # compute errors
         ex = robot.x - self.trajectory.x[current_index]
         ey = robot.y - self.trajectory.y[current_index]
 
-        theta = unwrap_angle(robot.theta, self.theta_old)
-        des_theta = unwrap_angle(self.trajectory.theta[current_index], self.des_theta_old)
-        etheta = theta- des_theta
+        theta,self.theta_old = unwrap_angle(robot.theta, self.theta_old)
+        des_theta, self.des_theta_old = unwrap_angle(self.trajectory.theta[current_index], self.des_theta_old)
+        etheta = theta-des_theta
 
 
         alpha = theta + des_theta
@@ -111,6 +112,6 @@ class LyapunovController:
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
 
 
-        return v_ref + dv, o_ref + domega, v_ref, o_ref, V, V_dot
+        return v_ref + dv, o_ref + domega, des_x, des_y, des_theta, v_ref, o_ref, V, V_dot
 
 

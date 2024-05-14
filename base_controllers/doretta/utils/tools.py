@@ -10,18 +10,16 @@ def unwrap(rpy_meas, rpy_old):
         while (rpy_unwrapped[i] > rpy_old[i] + math.pi):
             rpy_unwrapped[i] -= 2 * math.pi
         rpy_old[i] = rpy_unwrapped[i]
-    return rpy_unwrapped
+    return rpy_unwrapped, rpy_old
 
 def unwrap_angle(angle_meas, angle_old):
-    angle_unwrapped = 0.
-    for i in range(3):
-        angle_unwrapped = angle_meas
-        while (angle_unwrapped < angle_old - math.pi):
+    angle_unwrapped = angle_meas
+    while (angle_unwrapped < (angle_old - math.pi)):
             angle_unwrapped += 2 * math.pi
-        while (angle_unwrapped > angle_old + math.pi):
-            angle_unwrapped -= 2 * math.pi
-        angle_old = angle_unwrapped
-    return angle_unwrapped
+    while (angle_unwrapped > (angle_old + math.pi)):
+        angle_unwrapped -= 2 * math.pi
+    angle_old = angle_unwrapped
+    return angle_unwrapped, angle_old
 
 def normalize_angle(angle):
     """
