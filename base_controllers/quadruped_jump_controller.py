@@ -47,14 +47,31 @@ class QuadrupedJumpController(Controller):
     def evalBezier(self, t_, T_th):
         com = np.array(self.Bezier3(self.bezier_weights_lin,t_,T_th))
         comd = np.array(self.Bezier2(self.bezier_weights_lin,t_,T_th))
+        comdd = np.array(self.Bezier1(self.bezier_weights_lin, t_, T_th))
         eul = np.array(self.Bezier3(self.bezier_weights_ang,t_,T_th))
         euld = np.array(self.Bezier2(self.bezier_weights_ang,t_,T_th))
+        euldd = np.array(self.Bezier1(self.bezier_weights_ang, t_, T_th))
+
         Jb = p.computeJcb(self.W_contacts, com, self.stance_legs)
 
+        W_des_basePose = np.empty(6)
+        W_des_basePose[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = com
+        W_des_basePose[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = eul
+
+        W_des_baseTwist = np.empty(6)
+        W_des_baseTwist[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = comd
+        Jomega = self.math_utils.Tomega(eul)
+        W_des_baseTwist[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = self.math_utils.Tomega(eul).dot(euld)
+
+        W_des_baseAcc = np.empty(6)
+        W_des_baseAcc[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = comdd
+        # compute w_omega_dot =  Jomega* euler_rates_dot + Jomega_dot*euler_rates (Jomega already computed, see above)
+        Jomega_dot = self.math_utils.Tomega_dot(eul, euld)
+        W_des_baseAcc[self.u.sp_crd['AX']:self.u.sp_crd['AX'] + 3] = Jomega @ euldd + \
+                                                            Jomega_dot @ euld
+
         #map base twist into feet relative vel (wrt com/base)
-        omega_b = self.math_utils.Tomega(eul).dot(euld)
-        W_baseTwist = np.hstack((comd, omega_b))
-        W_feetRelVelDes = -Jb.dot(W_baseTwist)
+        W_feetRelVelDes = -Jb.dot(W_des_baseTwist)
         w_R_b_des = self.math_utils.eul2Rot(eul)
 
         qd_des = np.zeros(12)
@@ -85,25 +102,27 @@ class QuadrupedJumpController(Controller):
             #compute joint variables
             qd_des[3 * leg:3 *(leg+1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 *(leg+1)])
 
-        tau_ffwd =self.gravityCompensation()
+        tau_ffwd = self.WBC(W_des_basePose, W_des_baseTwist, W_des_baseAcc, comControlled = False, type='projection', stance_legs=self.stance_legs)
+        #OLD
+        #tau_ffwd = self.gravityCompensation()
+
+        #check unloading of front legs
         grf_lf = self.u.getLegJointState(0, self.grForcesW)
         grf_rf = self.u.getLegJointState(2, self.grForcesW)
         #if unloaded raise front legs and compute Jb for a subset of lefs
         if not self.rearingFlag  and (grf_lf[2] < 5.) and (grf_rf[2] < 5.): # LF RF
             self.rearingFlag = True
+            self.stance_legs = [False, True, False, True]
             print(colored(f"rearing front legs at time {self.time}", "red"))
 
         #overwrite front legs
         if self.rearingFlag:
-            self.stance_legs = [False, True, False, True]
-            q_des[0:3] = p.qj_0[0:3]
-            q_des[6:9] = p.qj_0[6:9]
-            qd_des[0:3] = np.zeros(3)
-            qd_des[6:9] = np.zeros(3)
-            tau_ffwd[0:3] = np.zeros(3)
-            tau_ffwd[6:9] = np.zeros(3)
-
-        return q_des, qd_des, tau_ffwd #com, comd, comdd
+            for leg in range(self.robot.nee):
+                if self.stance_legs[leg]:
+                    q_des[3 * leg:3 * (leg+1)] = p.qj_0[3 * leg:3 * (leg+1)]
+                    qd_des[3 * leg:3 * (leg+1)] = np.zeros(3)
+                    #the small torques to compensate self weight of the legs in the air have been already computed by WBC
+        return q_des, qd_des, tau_ffwd, W_des_basePose, W_des_baseTwist
 
     def plotTrajectoryBezier(self):
         # plot com intermediate positions
@@ -136,6 +155,11 @@ class QuadrupedJumpController(Controller):
         return ((w[:,1]-w[:,0]))*(3/t_th)*self.bernstein_pol(0,2,t)+\
             ((w[:,2]-w[:,1]))*(3/t_th)*self.bernstein_pol(1,2,t)+\
             ((w[:,3]-w[:,2]))*(3/t_th)*self.bernstein_pol(2,2,t)
+
+    def Bezier1(self, w, t_ex, t_th):
+        t = t_ex / t_th
+        return ((w[:, 2] - 2 * w[:, 2] + w[:, 0])) * (6 / np.power(t_th, 2)) * self.bernstein_pol(0, 1, t) + \
+               ((w[:, 3] - 2 * w[:, 2] + w[:, 1])) * (6 / np.power(t_th, 2)) * self.bernstein_pol(1, 1, t)
 
     def computeJcb(self, feetW, com, stance_legs):
         Jb = np.zeros([3 * self.robot.nee, 6])  # Newton-Euler matrix
@@ -203,14 +227,14 @@ if __name__ == '__main__':
                  # compute joint reference
                 if (p.trustPhaseFlag):
                     t = p.time - startTrust
-                    p.q_des, p.qd_des, p.tau_ffwd = p.evalBezier(t, p.T_th)
+                    p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(t, p.T_th)
                     if p.time >= (startTrust + p.T_th):
                         p.trustPhaseFlag = False
                         #we se this here to have enough retraction (important)
                         p.q_des = p.qj_0
                         p.qd_des = np.zeros(12)
                         p.tau_ffwd = np.zeros(12)
-                        print(f"thrust completed! at time {p.time}")
+                        print(colored(f"thrust completed! at time {p.time}","red"))
 
             p.plotTrajectoryBezier()
             p.visualizeContacts()
@@ -228,5 +252,7 @@ if __name__ == '__main__':
                   start=0, end=-1)
         plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,
                   start=0, end=-1)
-        plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
-                  title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
+                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
+                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
