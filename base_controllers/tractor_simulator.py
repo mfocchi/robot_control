@@ -37,7 +37,7 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = True
+        self.GAZEBO = False
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
         self.SAVE_BAGS = False
 
@@ -211,6 +211,21 @@ class GenericSimulator(BaseController):
             plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
             plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
+            #tracking errors
+            self.log_e_x, self.log_e_y,  self.log_e_theta = self.controller.getErrors()
+            plt.figure()
+            plt.subplot(3, 1, 1)
+            plt.plot(self.log_e_x, "-b")
+            plt.ylabel("ex")
+            plt.grid(True)
+            plt.subplot(3, 1, 2)
+            plt.plot(self.log_e_y, "-b")
+            plt.ylabel("ey")
+            plt.grid(True)
+            plt.subplot(3, 1, 3)
+            plt.plot(self.log_e_y, "-b")
+            plt.ylabel("eth")
+            plt.grid(True)
 
             if p.ControlType == 'CLOSED_LOOP':
                 plt.figure()
@@ -221,7 +236,6 @@ class GenericSimulator(BaseController):
                 plt.ylabel("y[m]")
                 plt.axis("equal")
                 plt.grid(True)
-                #
                 # # VELOCITY
                 plt.figure()
                 plt.subplot(2, 1, 1)
@@ -361,10 +375,10 @@ def talker(p):
 
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=2., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
-        controller = LyapunovController(params=params)
-        controller.config(start_time=p.time, trajectory=p.traj)
-        v_des, omega_des, _ = vel_gen.velocity_mir_smooth()
-        count = 0
+        p.controller = LyapunovController(params=params)
+        p.controller.config(start_time=p.time, trajectory=p.traj)
+        #v_des, omega_des, _ = vel_gen.velocity_mir_smooth()
+        #count = 0
         while not ros.is_shutdown():
             # update kinematics
             robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
@@ -373,7 +387,8 @@ def talker(p):
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
 
             # controllers
-            p.ctrl_v, p.ctrl_omega,  p.des_x, p.des_y, p.des_theta, p.v_ref, p.omega_ref, p.V, p.V_dot = controller.control(robot_state, p.time)
+            p.ctrl_v, p.ctrl_omega, p.des_x, p.des_y, p.des_theta, p.v_ref, p.omega_ref, p.V, p.V_dot = p.controller.control_alpha0(robot_state, p.time)
+            #p.ctrl_v, p.ctrl_omega,  p.des_x, p.des_y, p.des_theta, p.v_ref, p.omega_ref, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
             # debug send openloop vels
