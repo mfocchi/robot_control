@@ -82,21 +82,40 @@ def checkRosMaster():
         parent = ROSLaunchParent("roscore", [], is_core=True)  # run_id can be any string
         parent.start()
 
-def startNode(node_name):
-    
+def launchFileNode(package,launch_file, additional_args=None):
+    launch_file = rospkg.RosPack().get_path(package) + '/launch/'+launch_file
+    print("AAAA")
+    uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+    roslaunch.configure_logging(uuid)
+    cli_args = [launch_file]
+    if additional_args is not None:
+        cli_args.extend(additional_args)
+    roslaunch_args = cli_args[1:]
+    roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
+    parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
+    parent.start()
+
+def launchFileGeneric(launch_file):
+    # run robot state publisher + load robot description + rviz
+    uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+    roslaunch.configure_logging(uuid)
+    launch = roslaunch.parent.ROSLaunchParent(uuid, [launch_file])
+    launch.start()
+
+def startNode(package, executable, args=''):
     nodes = rosnode.get_node_names()
-    if "/reference_generator" in nodes:
+    #kill previous instances
+    if package in nodes:
         print(colored("Re Starting ref generator","red"))
-        os.system("rosnode kill /"+node_name)
-    package = node_name
-    executable = node_name
-    name = node_name
+        os.system("rosnode kill /"+package)
+    package = package
+    executable = executable
+    name = package
     namespace = ''
-    node = roslaunch.core.Node(package, executable, name, namespace, output="screen")
+    node = roslaunch.core.Node(package, executable, name, namespace, args=args, output="screen")
     launch = roslaunch.scriptapi.ROSLaunch()
     launch.start()
     process = launch.launch(node)
-
 
 def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, additional_urdf_args = None):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
@@ -177,6 +196,7 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
 
 def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None,
               sharex=False, sharey=False, start=0, end=-1):
+    plot_var_log = None
     plot_var_des_log = None
     if name=='position':
         unit = '[rad]'
@@ -200,7 +220,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         else:
             plot_var_des_log = None
 
-    if name == 'acceleration':
+    if name=='acceleration':
         unit = '[rad/s^2]'
         if   (qdd_log is not None):
             plot_var_log = qdd_log
@@ -211,7 +231,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         else:
             plot_var_des_log = None
 
-    if name == 'torque':
+    if name=='torque':
         unit = '[Nm]'
         if   (tau_log is not None):
             plot_var_log = tau_log

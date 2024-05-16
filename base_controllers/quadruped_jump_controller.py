@@ -16,7 +16,7 @@ import os, sys
 class QuadrupedJumpController(Controller):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
-
+        self.DEBUG = False
 
     #####################
     # OVERRIDEN METHODS OF BASECONTROLLER#
@@ -52,6 +52,17 @@ class QuadrupedJumpController(Controller):
         euld = np.array(self.Bezier2(self.bezier_weights_ang,t_,T_th))
         euldd = np.array(self.Bezier1(self.bezier_weights_ang, t_, T_th))
 
+        if self.DEBUG:
+            freq = 0.5
+            amp_lin = np.array([0., 0.,0.05])
+            amp_ang = np.array([0., 0.1, 0])
+            com = self.initial_com + np.multiply(amp_lin, np.sin(2*np.pi*freq * self.time ))
+            comd = np.multiply(2*np.pi*freq*amp_lin, np.cos(2*np.pi*freq * self.time))
+            comdd = np.multiply(np.power(2*np.pi*freq*amp_lin, 2), -np.sin(2*np.pi*freq * self.time))
+            eul = np.array([0., 0.0, 0]) + np.multiply(amp_ang, np.sin(2 * np.pi * freq * self.time))
+            euld = np.multiply(2 * np.pi * freq * amp_ang, np.cos(2 * np.pi * freq * self.time))
+            euldd = np.multiply(np.power(2 * np.pi * freq * amp_ang, 2), -np.sin(2 * np.pi * freq * self.time))
+
         Jb = p.computeJcb(self.W_contacts, com, self.stance_legs)
 
         W_des_basePose = np.empty(6)
@@ -80,7 +91,10 @@ class QuadrupedJumpController(Controller):
         w_J = self.u.listOfArrays(4, np.zeros((3, 3)))
         #integrate relative Velocity
         for leg in range(self.robot.nee):
-            self.W_feetRelPosDes[leg] += W_feetRelVelDes[3 * leg:3 * (leg+1)]*self.dt
+            # with this you do not have proper tracking of com and trunk orientation, I think there is a bug in the ik
+            #self.W_feetRelPosDes[leg] += W_feetRelVelDes[3 * leg:3 * (leg+1)]*self.dt
+            # this has better tracking
+            self.W_feetRelPosDes[leg] = self.W_contacts[leg] -com
             #now we can do Ik
             q_des[3 * leg:3 * (leg+1)], isFeasible = self.IK.ik_leg(w_R_b_des.T.dot(self.W_feetRelPosDes[leg]),
                                                    self.leg_names[leg],
@@ -204,7 +218,11 @@ if __name__ == '__main__':
         eul_0 = p.basePoseW[3:]
         eul_lo = np.array([0., -0.2, 0.])
         euld_lo = np.array([0., 0.1, 0.])
-        p.T_th = 0.6
+        if p.DEBUG:
+            p.initial_com = np.copy(com_0)
+            p.T_th = 5.
+        else:
+            p.T_th = 0.6
         p.computeHeuristicSolutionBezierLinear(com_0, com_lo, comd_lo,p.T_th)
         p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th)
 
@@ -220,14 +238,17 @@ if __name__ == '__main__':
         #reset integration of feet
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
         #p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
+        #p.pid.setPDs(0.0, 0.0, 0.0)
         while not ros.is_shutdown():
             p.updateKinematics()
 
             if (p.time > startTrust):
+
                  # compute joint reference
                 if (p.trustPhaseFlag):
                     t = p.time - startTrust
                     p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(t, p.T_th)
+
                     if p.time >= (startTrust + p.T_th):
                         p.trustPhaseFlag = False
                         #we se this here to have enough retraction (important)
@@ -252,6 +273,7 @@ if __name__ == '__main__':
                   start=0, end=-1)
         plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,
                   start=0, end=-1)
+        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
         plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
