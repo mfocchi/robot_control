@@ -61,6 +61,9 @@ class GenericSimulator(BaseController):
 
         self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.beta_l_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.beta_r_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.alpha_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
     def reset_joints(self, q0, joint_names = None):
         # create the message
@@ -91,6 +94,9 @@ class GenericSimulator(BaseController):
                 self.state_log[0, self.log_counter] = self.basePoseW[self.u.sp_crd["LX"]]
                 self.state_log[1, self.log_counter] = self.basePoseW[self.u.sp_crd["LY"]]
                 self.state_log[2, self.log_counter] =  self.basePoseW[self.u.sp_crd["AZ"]]
+                self.beta_l_log[self.log_counter] = self.beta_l
+                self.beta_r_log[self.log_counter] = self.beta_r
+                self.alpha_log[self.log_counter] = self.alpha
             super().logData()
 
     def startSimulator(self):
@@ -211,6 +217,8 @@ class GenericSimulator(BaseController):
             plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
             plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
+            plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=p.baseTwistW_log[:3,:])
+
             #tracking errors
             self.log_e_x, self.log_e_y,  self.log_e_theta = self.controller.getErrors()
             plt.figure()
@@ -225,6 +233,20 @@ class GenericSimulator(BaseController):
             plt.subplot(3, 1, 3)
             plt.plot(self.log_e_y, "-b")
             plt.ylabel("eth")
+            plt.grid(True)
+            #slippage vars
+            plt.figure()
+            plt.subplot(3, 1, 1)
+            plt.plot(self.time_log, self.beta_l_log, "-b")
+            plt.ylabel("beta_l")
+            plt.grid(True)
+            plt.subplot(3, 1, 2)
+            plt.plot(self.time_log, self.beta_r_log, "-b")
+            plt.ylabel("beta_r")
+            plt.grid(True)
+            plt.subplot(3, 1, 3)
+            plt.plot(self.time_log, self.alpha_log, "-b")
+            plt.ylabel("alpha")
             plt.grid(True)
 
             if p.ControlType == 'CLOSED_LOOP':
@@ -307,6 +329,32 @@ class GenericSimulator(BaseController):
         omega_vec.append(0.0)
         return v_vec, omega_vec
 
+    def estimateSlippages(self,W_baseTwist, theta, qd):
+        wheel_L = qd[0]
+        wheel_R = qd[1]
+        w_vel_xy = np.zeros(2)
+        w_vel_xy[0] = W_baseTwist[self.u.sp_crd["LX"]]
+        w_vel_xy[1] = W_baseTwist[self.u.sp_crd["LY"]]
+        omega = W_baseTwist[self.u.sp_crd["AZ"]]
+
+        #compute BF velocity
+        w_R_b = np.array([[np.cos(theta), -np.sin(theta)],
+                         [np.sin(theta), np.cos(theta)]])
+        b_vel_xy = w_R_b.T.dot(w_vel_xy)
+
+        # track velocity  from encoder
+        v_enc_l = constants.SPROCKET_RADIUS *  wheel_L
+        v_enc_r = constants.SPROCKET_RADIUS *  wheel_R
+        B = constants.TRACK_WIDTH
+
+        v_track_l = b_vel_xy[0] - omega* B / 2
+        v_track_r = b_vel_xy[0] + omega* B / 2
+
+        beta_l = np.abs(v_track_l) - np.abs(v_enc_l)
+        beta_r = np.abs(v_track_r) - np.abs(v_enc_r)
+        side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
+        return beta_l, beta_r, side_slip
+
 def talker(p):
     p.start()
     p.startSimulator()
@@ -374,7 +422,7 @@ def talker(p):
         p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen.velocity_mir_smooth, conf.robot_params[p.robot_name]['dt'])
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=2., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=10., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.controller.config(start_time=p.time, trajectory=p.traj)
         #v_des, omega_des, _ = vel_gen.velocity_mir_smooth()
@@ -405,6 +453,8 @@ def talker(p):
             if not p.GAZEBO:
                 p.simulationControl('trigger_next_step')
                 p.unwrap()
+
+            p.beta_l, p.beta_r, p.alpha = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
             # log variables
             p.logData()
             # wait for synconization of the control loop

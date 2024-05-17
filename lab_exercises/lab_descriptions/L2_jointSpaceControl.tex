@@ -238,7 +238,7 @@ disturbance rejection, etc.
 Implement the inverse dynamics  (computed Torque) algorithm at the joint space. Keep the same $K_p$, $K_d$ gains as in (1.3) and add a Feed-forward acceleration term $\ddot{q}^d$. 
 
 \begin{equation*}
-u = M(q) (\ddot{q}^d + K_{p} (q^d  - q) + K_{d} (\dot{q}^d  - \dot{q}) + h(q,\dot{q}))
+u = M(q) (\ddot{q}^d + K_{p} (q^d  - q) + K_{d} (\dot{q}^d  - \dot{q})) + h(q,\dot{q})
 \end{equation*}
 
 Observe that the tracking errors  now are  always zero also for the joints that are not moving, 
