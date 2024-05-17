@@ -10,7 +10,7 @@ from base_controllers.utils.math_tools import unwrap_angle
 # ------------------------------------ #
 
 class LyapunovParams:
-    def __init__(self, K_P, K_THETA, DT=0.001, C1= -0.6, C2= -5.5):
+    def __init__(self, K_P, K_THETA, DT=0.001, C1= -2.0397, C2= -5.2179):
         self.K_P = K_P
         self.K_THETA = K_THETA
         self.DT = DT

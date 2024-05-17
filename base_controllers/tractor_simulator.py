@@ -28,6 +28,7 @@ from  base_controllers.doretta.environment.trajectory import Trajectory, ModelsL
 from base_controllers.doretta.velocity_generator import VelocityGenerator
 from termcolor import colored
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
+from sensor_msgs.msg import JointState
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -58,6 +59,9 @@ class GenericSimulator(BaseController):
         self.omega_ref_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.V_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.V_dot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
+        self.des_x = 0.
+        self.des_y = 0.
+        self.des_theta = 0.
 
         self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
@@ -150,6 +154,7 @@ class GenericSimulator(BaseController):
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
+        self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAGS:
             self.recorder = RosbagControlledRecorder('rosbag record -a', False)
 
@@ -290,14 +295,22 @@ class GenericSimulator(BaseController):
                 # plotFrame('position', time_log=p.time_log, Pose_log=p.basePoseW_log,
                 #           title='Base', frame='W', sharex=True)
 
-    def mapToWheels(self, v,omega):
+    def mapToWheels(self, v_des,omega_des):
         #
         # # SAFE CHECK -> clipping velocities
         # v = np.clip(v, -constants.MAX_LINEAR_VELOCITY, constants.MAX_LINEAR_VELOCITY)
         # o = np.clip(o, -constants.MAX_ANGULAR_VELOCITY, constants.MAX_ANGULAR_VELOCITY)
         qd_des = np.zeros(2)
-        qd_des[0] = (v - omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
-        qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
+        qd_des[0] = (v_des - omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
+        qd_des[1] = (v_des + omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
+
+        #publish des commands
+        msg = JointState()
+        msg.name = self.joint_names
+        msg.header.stamp = ros.Time.from_sec(self.time)
+        msg.velocity = np.array([v_des, omega_des])
+        self.des_vel.publish(msg)
+
 
         return qd_des
     #unwrap the joints states
@@ -305,10 +318,10 @@ class GenericSimulator(BaseController):
         for i in range(self.robot.na):
             self.q[i], self.q_old[i] =unwrap_angle(self.q[i], self.q_old[i])
 
-    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.6, dt = 0.005, long_v = 0.1):
+    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.6, increment=0.05, dt = 0.005, long_v = 0.1):
         # only around 0.3
-        change_interval = 6.
-        increment = 0.05
+        change_interval = 4.
+        increment = increment
         turning_radius_vec = np.arange(R_initial, R_final, increment)
 
         ang_w = np.round(long_v / turning_radius_vec, 3)  # [rad/s]
@@ -354,6 +367,15 @@ class GenericSimulator(BaseController):
         beta_r = np.abs(v_track_r) - np.abs(v_enc_r)
         side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
         return beta_l, beta_r, side_slip
+    def send_des_jstate(self, q_des, qd_des, tau_ffwd):
+         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
+         msg = JointState()
+         msg.name = self.joint_names
+         msg.header.stamp = ros.Time.from_sec(self.time)
+         msg.position = q_des
+         msg.velocity = qd_des
+         msg.effort = tau_ffwd
+         self.pub_des_jstate.publish(msg)
 
 def talker(p):
     p.start()
@@ -380,14 +402,14 @@ def talker(p):
 
     if p.ControlType == 'OPEN_LOOP':
         counter = 0
-        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.05, R_final=0.6, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1)
+        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.05, R_final=0.6, increment=0.1, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1)
         # OPEN loop control
         while not ros.is_shutdown():
             if counter<len(v_ol):
                 p.qd_des = p.mapToWheels(v_ol[counter], omega_ol[counter])
                 counter+=1
             else:
-                print(colored("identification test accomplished", "red"))
+                print(colored("Identification test accomplished", "red"))
                 break
             #forward_speed = 1. #max speed is 4.56 rad/s
             #p.qd_des = forward_speed
