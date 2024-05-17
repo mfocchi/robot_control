@@ -27,8 +27,8 @@ class Trajectory:
     def set_initial_time(self, start_time):
         self.start_time = start_time
 
-    def getSingleUpdate(self, robot_state, v, o):
-        self.ideal_unicycle.set_state(robot_state.x, robot_state.y, robot_state.theta)
+    def getSingleUpdate(self, x, y, theta, v, o):
+        self.ideal_unicycle.set_state( x, y, theta)
         self.ideal_unicycle.update(v, o)
         return self.ideal_unicycle.x, self.ideal_unicycle.y, self.ideal_unicycle.theta
 

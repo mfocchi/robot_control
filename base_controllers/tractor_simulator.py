@@ -30,6 +30,7 @@ from termcolor import colored
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
 robotName = "tractor" # needs to inherit BaseController
 
 class GenericSimulator(BaseController):
@@ -42,7 +43,7 @@ class GenericSimulator(BaseController):
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
         self.SAVE_BAGS = False
         self.SLIPPAGE_CONTROL = False
-        self.NAVIGATION = True
+        self.NAVIGATION = False
 
     def initVars(self):
         super().initVars()
@@ -167,6 +168,10 @@ class GenericSimulator(BaseController):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
+
+        if self.NAVIGATION:
+            self.nav_vel_sub = ros.Subscriber("/cmd_vel", Twist, self.get_command_vel)
+
         if self.SAVE_BAGS:
             self.recorder = RosbagControlledRecorder('rosbag record -a', False)
 
@@ -181,6 +186,9 @@ class GenericSimulator(BaseController):
             self.simStateSub=ros.Subscriber("/simulationState", Int32, self.sim_state_)
             # simTimeSub=simROS.Subscriber('/simulationTime',Float32, time_sim_)
 
+    def get_command_vel(self, msg):
+        self.v_d = msg.linear.x
+        self.omega_d = msg.angular.z
 
     def sim_state_(self, msg):
         pass
@@ -251,29 +259,31 @@ class GenericSimulator(BaseController):
             plt.plot(self.log_e_y, "-b")
             plt.ylabel("eth")
             plt.grid(True)
-            #slippage vars
-            plt.figure()
-            plt.subplot(4, 1, 1)
-            plt.plot(self.time_log, self.beta_l_log, "-b")
-            plt.ylabel("beta_l")
-            plt.grid(True)
-            plt.subplot(4, 1, 2)
-            plt.plot(self.time_log, self.beta_r_log, "-b")
-            plt.ylabel("beta_r")
-            plt.grid(True)
-            plt.subplot(4, 1, 3)
-            plt.plot(self.time_log, self.alpha_log, "-b", label="real")
-            plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
-            plt.ylabel("alpha")
-            plt.legend()
-            plt.subplot(4, 1, 4)
-            plt.plot(self.time_log, self.radius_log, "-b", label="des")
-            plt.ylabel("alpha")
-            plt.grid(True)
+
+            if p.SLIPPAGE_CONTROL:
+                #slippage vars
+                plt.figure()
+                plt.subplot(4, 1, 1)
+                plt.plot(self.time_log, self.beta_l_log, "-b")
+                plt.ylabel("beta_l")
+                plt.grid(True)
+                plt.subplot(4, 1, 2)
+                plt.plot(self.time_log, self.beta_r_log, "-b")
+                plt.ylabel("beta_r")
+                plt.grid(True)
+                plt.subplot(4, 1, 3)
+                plt.plot(self.time_log, self.alpha_log, "-b", label="real")
+                plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
+                plt.ylabel("alpha")
+                plt.legend()
+                plt.subplot(4, 1, 4)
+                plt.plot(self.time_log, self.radius_log, "-b", label="des")
+                plt.ylabel("alpha")
+                plt.grid(True)
 
             if p.ControlType == 'CLOSED_LOOP':
                 plt.figure()
-                plt.plot(p.traj.x, p.traj.y, "-r", label="desired")
+                plt.plot(p.des_state_log[0,:], p.des_state_log[1,:], "-r", label="desired")
                 plt.plot(p.basePoseW_log[0, :], p.basePoseW_log[1, :], "-b", label="real")
                 plt.legend()
                 plt.xlabel("x[m]")
@@ -490,6 +500,7 @@ def talker(p):
         initial_des_theta = 0.0
         p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen.velocity_mir_smooth, conf.robot_params[p.robot_name]['dt'])
 
+
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=10., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
@@ -504,8 +515,11 @@ def talker(p):
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
 
             # controllers
-            #getSingleUpdate()
-            p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished = p.traj.evalTraj(p.time)
+            if p.NAVIGATION:
+                p.des_x, p.des_y, p.des_theta = p.traj.getSingleUpdate(p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d)
+                traj_finished = None
+            else:
+                p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished = p.traj.evalTraj(p.time)
             if p.SLIPPAGE_CONTROL:
                 p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha0(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             else:
