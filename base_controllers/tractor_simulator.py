@@ -29,7 +29,7 @@ from base_controllers.doretta.velocity_generator import VelocityGenerator
 from termcolor import colored
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 from sensor_msgs.msg import JointState
-
+from nav_msgs.msg import Odometry
 robotName = "tractor" # needs to inherit BaseController
 
 class GenericSimulator(BaseController):
@@ -38,10 +38,11 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = False
+        self.GAZEBO = True
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
         self.SAVE_BAGS = False
         self.SLIPPAGE_CONTROL = False
+        self.NAVIGATION = True
 
     def initVars(self):
         super().initVars()
@@ -383,15 +384,45 @@ class GenericSimulator(BaseController):
         beta_r = np.abs(v_track_r) - np.abs(v_enc_r)
         side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
         return beta_l, beta_r, side_slip
+    
+    def computeLongSlipCompensation(self, v, omega, qd_des, settings):
+        radius = v/(omega+1e-10)
+        #compute track velocity from encoder
+        v_enc_l = settings.SPROCKET_RADIUS*qd_des[0]
+        v_enc_r = settings.SPROCKET_RADIUS*qd_des[1]
+
+        #estimate beta_inner, beta_outer from turning radius
+        if(radius >= 0.0): # turning left, left wheel is inner there is discontinuity
+            beta_inner = settings.BI[0]*np.exp(settings.BI[1]*radius)
+            v_enc_l-=beta_inner
+            beta_outer = settings.BO[0]*np.exp(settings.BO[1]*radius)
+            v_enc_r+=beta_outer
+        else:# turning right , left wheel is outer
+            beta_inner = settings.BI[0]*np.exp(settings.BI[1]*radius)
+            v_enc_r-=beta_inner
+            beta_outer = settings.BO[0]*np.exp(settings.BO[1]*radius)
+            v_enc_l+=beta_outer
+        qd_comp = np.zeros()
+        qd_comp[0] = 1/settings.SPROCKET_RADIUS * v_enc_l
+        qd_comp[1] = 1/settings.SPROCKET_RADIUS * v_enc_r
+        return qd_comp
+    
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
-         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
-         msg = JointState()
-         msg.name = self.joint_names
-         msg.header.stamp = ros.Time.from_sec(self.time)
-         msg.position = q_des
-         msg.velocity = qd_des
-         msg.effort = tau_ffwd
-         self.pub_des_jstate.publish(msg)
+        # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
+        msg = JointState()
+        msg.name = self.joint_names
+        msg.header.stamp = ros.Time.from_sec(self.time)
+        msg.position = q_des
+        msg.velocity = qd_des
+        msg.effort = tau_ffwd
+        self.pub_des_jstate.publish(msg)
+
+        #this is for wolf navigation
+        self.odom_pub = ros.Publisher("/odom", Odometry, queue_size=1, tcp_nodelay=True)
+        self.broadcaster.sendTransform(  np.zeros(3),
+                                         np.array([0., 0., 0., 1.]) ,
+                                         ros.Time.now(), '/odom', '/world')
+
 
 def talker(p):
     p.start()
@@ -480,6 +511,8 @@ def talker(p):
             else:
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
+            #TODO identification of long slip
+            #p.qd_des = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega,p.qd_des, settings)
 
             # debug send openloop vels
             # p.ctrl_v = v_des[count]
