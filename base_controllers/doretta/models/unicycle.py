@@ -13,14 +13,18 @@ class Unicycle:
         :param omega: (float) angular velocity
     """
 
-    def __init__(self, x=0.0, y=0.0, theta=0.0, v=0.0, omega=0.0, DT=0.01):
+    def __init__(self, x=0.0, y=0.0, theta=0.0, DT=0.01):
         self.x = x
         self.y = y
         self.theta = theta
-        self.v = v
-        self.omega = omega
+
         self.theta_old = theta
         self.DT = DT
+
+    def set_state(self, x=0.0, y=0.0, theta=0.0):
+        self.x = x
+        self.y = y
+        self.theta = theta
 
     def update(self, vel, omega):
         """
@@ -29,8 +33,7 @@ class Unicycle:
         :param vel: (float) Linear velocity
         :param omega: (float) Angular velocity
         """
-        self.v = vel
-        self.omega = omega
+
 
         # eulers integration
         # self.x += vel * np.cos(self.theta) * const.DT

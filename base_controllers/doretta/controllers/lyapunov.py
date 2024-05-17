@@ -27,59 +27,30 @@ class LyapunovController:
         self.C2 = params.C2
         self.C1 = params.C1
 
-        self.trajectory = None
-        self.total_time = -1.0
-        self.start_time = -1.0
+
         self.log_e_x = []
         self.log_e_y = []
         self.log_e_theta = []
         self.goal_reached = False
         self.theta_old = 0.
-        self.des_theta_old = 0.
+
         self.params = params
 
-    def config(self, start_time, trajectory):
-        self.trajectory = trajectory
-        self.total_time = len(self.trajectory.x) * self.params.DT
-        self.start_time = start_time
+
 
     def getErrors(self):
         return self.log_e_x, self.log_e_y,  self.log_e_theta
 
-    def evalTraj(self, current_time):
-        elapsed_time = current_time - self.start_time
-        current_index = int(elapsed_time / self.params.DT)
-
-        # quando arrivo all'indice dell'ultimo punto della traiettoria, la traiettoria è finita
-        if current_index >= len(self.trajectory.v) - 1:
-            # target is considered reached
-            print("Lyapunov controller: trajectory finished")
-            self.goal_reached = True
-
+    def control_unicycle(self, robot, current_time, des_x, des_y, des_theta, v_d, omega_d, traj_finished):
+        """
+        ritorna i valori di linear e angular velocity
+        """
+        if traj_finished:
             # save errors for plotting
             self.log_e_x.append(0.0)
             self.log_e_y.append(0.0)
             self.log_e_theta.append(0.0)
-            traj_finished = True
-            return 0,0,0,0,0, True
-
-        assert current_index < len(self.trajectory.v) - 1, "Lyapunov controller: index out of range"
-
-        des_x = self.trajectory.x[current_index]
-        des_y = self.trajectory.y[current_index]
-        des_theta, self.des_theta_old = unwrap_angle(self.trajectory.theta[current_index], self.des_theta_old)
-        v_d = self.trajectory.v[current_index]
-        omega_d = self.trajectory.omega[current_index]
-        return des_x, des_y, des_theta, v_d, omega_d, False
-
-    def control_unicycle(self, robot, current_time):
-        """
-        ritorna i valori di linear e angular velocity
-        """
-        des_x, des_y, des_theta, v_d, omega_d, traj_finished = self.evalTraj(current_time)
-
-        if traj_finished:
-            return 0.0, 0.0, 0., 0., 0., 0., 0., 0., 0.
+            return 0.0, 0.0, 0., 0.
 
         # compute errors
         ex = robot.x - des_x
@@ -110,25 +81,21 @@ class LyapunovController:
 
         # print("ERRORS -> x:%.2f, y:%.2f, theta:%.2f" % (ex, ey, etheta))
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
-        return v, omega, des_x, des_y, des_theta, v_d, omega_d, V, V_dot
+        return v, omega,  V, V_dot
 
-    def alpha_exp(self, v, omega):
 
-        radius = v/(omega+1e-10)
 
-        if radius > 0:
-            alpha = self.C1*np.exp(self.C2*radius)
-        else:
-            alpha = -self.C1*np.exp(-self.C2*radius)
-        return alpha
-
-    def control_alpha0(self, robot, current_time):
+    def control_alpha0(self, robot, current_time,  des_x, des_y, des_theta, v_d, omega_d, traj_finished):
         """
         ritorna i valori di linear e angular velocity
         """
-        des_x, des_y, des_theta, v_d, omega_d, traj_finished = self.evalTraj(current_time)
+
         if traj_finished:
-            return 0.0, 0.0, 0., 0., 0., 0., 0., 0., 0.
+            # save errors for plotting
+            self.log_e_x.append(0.0)
+            self.log_e_y.append(0.0)
+            self.log_e_theta.append(0.0)
+            return 0.0, 0.0, 0., 0.,0.
 
         # compute errors
         ex = robot.x - des_x
@@ -156,5 +123,14 @@ class LyapunovController:
         self.log_e_x.append(ex)
         self.log_e_y.append(ey)
         self.log_e_theta.append(etheta+alpha_0)
-        return v, omega, des_x, des_y, des_theta, v_d, omega_d, V, V_dot
+        return v, omega, V, V_dot, alpha_0
 
+    def alpha_exp(self, v, omega):
+
+        radius = v/(omega+1e-10)
+
+        if radius > 0:
+            alpha = self.C1*np.exp(self.C2*radius)
+        else:
+            alpha = -self.C1*np.exp(-self.C2*radius)
+        return alpha

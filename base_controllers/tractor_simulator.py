@@ -41,33 +41,41 @@ class GenericSimulator(BaseController):
         self.GAZEBO = False
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
         self.SAVE_BAGS = False
+        self.SLIPPAGE_CONTROL = False
 
     def initVars(self):
         super().initVars()
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
-        self.v_ref = 0.
-        self.omega_ref = 0.
+        self.v_d = 0.
+        self.omega_d = 0.
         self.V= 0.
         self.V_dot = 0.
 
         self.q_des_q0 = np.zeros(self.robot.na)
         self.ctrl_v_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.ctrl_omega_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
-        self.v_ref_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
-        self.omega_ref_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
+        self.v_d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
+        self.omega_d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.V_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.V_dot_log = np.empty((conf.robot_params[self.robot_name]['buffer_size']))* nan
         self.des_x = 0.
         self.des_y = 0.
         self.des_theta = 0.
+        self.beta_l= 0.
+        self.beta_r= 0.
+        self.alpha= 0.
+        self.alpha_control= 0.
+        self.radius = 0.
 
         self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.beta_l_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.beta_r_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.alpha_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.alpha_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.radius_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
     def reset_joints(self, q0, joint_names = None):
         # create the message
@@ -88,8 +96,8 @@ class GenericSimulator(BaseController):
                 ## add your logs here
                 self.ctrl_v_log[self.log_counter] = self.ctrl_v
                 self.ctrl_omega_log[self.log_counter] = self.ctrl_omega
-                self.v_ref_log[self.log_counter] = self.v_ref
-                self.omega_ref_log[self.log_counter] = self.omega_ref
+                self.v_d_log[self.log_counter] = self.v_d
+                self.omega_d_log[self.log_counter] = self.omega_d
                 self.V_log[self.log_counter] = self.V
                 self.V_dot_log[self.log_counter] = self.V_dot
                 self.des_state_log[0, self.log_counter] = self.des_x
@@ -98,9 +106,12 @@ class GenericSimulator(BaseController):
                 self.state_log[0, self.log_counter] = self.basePoseW[self.u.sp_crd["LX"]]
                 self.state_log[1, self.log_counter] = self.basePoseW[self.u.sp_crd["LY"]]
                 self.state_log[2, self.log_counter] =  self.basePoseW[self.u.sp_crd["AZ"]]
+
                 self.beta_l_log[self.log_counter] = self.beta_l
                 self.beta_r_log[self.log_counter] = self.beta_r
                 self.alpha_log[self.log_counter] = self.alpha
+                self.alpha_control_log[self.log_counter] = self.alpha_control
+                self.radius_log[self.log_counter] = self.radius
             super().logData()
 
     def startSimulator(self):
@@ -241,16 +252,21 @@ class GenericSimulator(BaseController):
             plt.grid(True)
             #slippage vars
             plt.figure()
-            plt.subplot(3, 1, 1)
+            plt.subplot(4, 1, 1)
             plt.plot(self.time_log, self.beta_l_log, "-b")
             plt.ylabel("beta_l")
             plt.grid(True)
-            plt.subplot(3, 1, 2)
+            plt.subplot(4, 1, 2)
             plt.plot(self.time_log, self.beta_r_log, "-b")
             plt.ylabel("beta_r")
             plt.grid(True)
-            plt.subplot(3, 1, 3)
-            plt.plot(self.time_log, self.alpha_log, "-b")
+            plt.subplot(4, 1, 3)
+            plt.plot(self.time_log, self.alpha_log, "-b", label="real")
+            plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
+            plt.ylabel("alpha")
+            plt.legend()
+            plt.subplot(4, 1, 4)
+            plt.plot(self.time_log, self.radius_log, "-b", label="des")
             plt.ylabel("alpha")
             plt.grid(True)
 
@@ -267,7 +283,7 @@ class GenericSimulator(BaseController):
                 plt.figure()
                 plt.subplot(2, 1, 1)
                 plt.plot(p.time_log, p.ctrl_v_log, "-b", label="REAL")
-                plt.plot(p.time_log, p.v_ref_log, "-r", label="desired")
+                plt.plot(p.time_log, p.v_d_log, "-r", label="desired")
                 plt.legend()
                 plt.xlabel("time[sec]")
                 plt.ylabel("linear velocity[m/s]")
@@ -275,7 +291,7 @@ class GenericSimulator(BaseController):
                 plt.grid(True)
                 plt.subplot(2, 1, 2)
                 plt.plot(p.time_log, p.ctrl_omega_log, "-b", label="REAL")
-                plt.plot(p.time_log, p.omega_ref_log, "-r", label="desired")
+                plt.plot(p.time_log, p.omega_d_log, "-r", label="desired")
                 plt.legend()
                 plt.xlabel("time[sec]")
                 plt.ylabel("angular velocity[rad/s]")
@@ -446,7 +462,7 @@ def talker(p):
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=10., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
-        p.controller.config(start_time=p.time, trajectory=p.traj)
+        p.traj.set_initial_time(start_time=p.time)
         #v_des, omega_des, _ = vel_gen.velocity_mir_smooth()
         #count = 0
         while not ros.is_shutdown():
@@ -457,8 +473,12 @@ def talker(p):
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
 
             # controllers
-            p.ctrl_v, p.ctrl_omega, p.des_x, p.des_y, p.des_theta, p.v_ref, p.omega_ref, p.V, p.V_dot = p.controller.control_alpha0(robot_state, p.time)
-            #p.ctrl_v, p.ctrl_omega,  p.des_x, p.des_y, p.des_theta, p.v_ref, p.omega_ref, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time)
+            #getSingleUpdate()
+            p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished = p.traj.evalTraj(p.time)
+            if p.SLIPPAGE_CONTROL:
+                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha0(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
+            else:
+                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
             # debug send openloop vels
