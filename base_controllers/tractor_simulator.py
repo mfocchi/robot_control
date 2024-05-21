@@ -44,6 +44,7 @@ class GenericSimulator(BaseController):
         self.SAVE_BAGS = False
         self.SLIPPAGE_CONTROL = False
         self.NAVIGATION = False
+        self.USE_GUI = True
 
     def initVars(self):
         super().initVars()
@@ -132,7 +133,11 @@ class GenericSimulator(BaseController):
 
             # launch coppeliasim
             scene = rospkg.RosPack().get_path('tractor_description') + '/CoppeliaSimModels/tractor_ros.ttt'
-            file = os.getenv("LOCOSIM_DIR")+"/CoppeliaSim/coppeliaSim.sh"+" "+scene+" &"
+            if self.USE_GUI:
+                file = os.getenv("LOCOSIM_DIR") + "/CoppeliaSim/coppeliaSim.sh " + scene + " &"
+            else:
+                file = os.getenv("LOCOSIM_DIR")+"/CoppeliaSim/coppeliaSim.sh -h "+" "+scene
+
             os.system(file)
 
 
