@@ -5,14 +5,15 @@ import numpy as np
 class VelocityGenerator:
     def __init__(self, simulation_time=10., DT=0.001):
         self.DT = DT
+        self.simulation_time = simulation_time
         self.n_samples = int(simulation_time / self.DT)
 
-    def velocity_mir_smooth(self, t1_ = 1, t2_ = 2, v_max_ = 0.1, omega_max_ = 0.5):
+    def velocity_mir_smooth(self, t1_perc = .1, t2_perc = .2, v_max_ = 0.1, omega_max_ = 0.5):
         t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
         v = []
         o = []
-        t1 = t1_
-        t2 =t2_
+        t1 = t1_perc*self.simulation_time
+        t2 =t2_perc*self.simulation_time
         #v_max = 0.4
         omega_max =omega_max_
         v_max = v_max_
