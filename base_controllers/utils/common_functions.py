@@ -505,7 +505,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
     return fig
 
 def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc_log=None, Acc_log=None,
-              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
+              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=False, start=0, end=-1):
     plot_var_log = None
     plot_var_des_log = None
     labels = ["", "", ""]
