@@ -43,6 +43,7 @@ class GenericSimulator(BaseController):
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
         self.SAVE_BAGS = False
         self.SLIPPAGE_CONTROL = False
+        self.LONG_SLIP_COMPENSATION = True
         self.NAVIGATION = False
         self.USE_GUI = True
 
@@ -71,6 +72,8 @@ class GenericSimulator(BaseController):
         self.alpha= 0.
         self.alpha_control= 0.
         self.radius = 0.
+        self.beta_l_control = 0.
+        self.beta_r_control = 0.
 
         self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
@@ -79,6 +82,8 @@ class GenericSimulator(BaseController):
         self.alpha_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.alpha_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.radius_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.beta_l_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.beta_r_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
     def reset_joints(self, q0, joint_names = None):
         # create the message
@@ -110,10 +115,13 @@ class GenericSimulator(BaseController):
                 self.state_log[1, self.log_counter] = self.basePoseW[self.u.sp_crd["LY"]]
                 self.state_log[2, self.log_counter] =  self.basePoseW[self.u.sp_crd["AZ"]]
 
+                self.alpha_log[self.log_counter] = self.alpha
                 self.beta_l_log[self.log_counter] = self.beta_l
                 self.beta_r_log[self.log_counter] = self.beta_r
-                self.alpha_log[self.log_counter] = self.alpha
+
                 self.alpha_control_log[self.log_counter] = self.alpha_control
+                self.beta_l_control_log[self.log_counter] = self.beta_l_control
+                self.beta_r_control_log[self.log_counter] = self.beta_r_control
                 self.radius_log[self.log_counter] = self.radius
             super().logData()
 
@@ -219,8 +227,7 @@ class GenericSimulator(BaseController):
             self.enableSyncModePub.publish(True)
         if input=='trigger_next_step':
             self.triggerNextStepPub.publish(True)
-        if input=='gui_off':
-            self.renderSimulationPub.publish(True)
+
 
     def startupProcedure(self):
         if self.GAZEBO:
@@ -244,49 +251,56 @@ class GenericSimulator(BaseController):
 
     def plotData(self):
         if conf.plotting:
-            plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
-            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
+            #plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
+            #plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
+            #states plot
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
-            plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=p.baseTwistW_log[:3,:])
-
-            #tracking errors
-            self.log_e_x, self.log_e_y,  self.log_e_theta = self.controller.getErrors()
-            plt.figure()
-            plt.subplot(3, 1, 1)
-            plt.plot(self.log_e_x, "-b")
-            plt.ylabel("ex")
-            plt.grid(True)
-            plt.subplot(3, 1, 2)
-            plt.plot(self.log_e_y, "-b")
-            plt.ylabel("ey")
-            plt.grid(True)
-            plt.subplot(3, 1, 3)
-            plt.plot(self.log_e_y, "-b")
-            plt.ylabel("eth")
-            plt.grid(True)
+            plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
             if p.SLIPPAGE_CONTROL:
                 #slippage vars
                 plt.figure()
                 plt.subplot(4, 1, 1)
-                plt.plot(self.time_log, self.beta_l_log, "-b")
+                plt.plot(self.time_log, self.beta_l_log, "-b", label="real")
+                plt.plot(self.time_log, self.beta_l_control_log, "-r", label="control")
                 plt.ylabel("beta_l")
+                plt.legend()
                 plt.grid(True)
                 plt.subplot(4, 1, 2)
-                plt.plot(self.time_log, self.beta_r_log, "-b")
+                plt.plot(self.time_log, self.beta_r_log, "-b", label="real")
+                plt.plot(self.time_log, self.beta_r_control_log, "-r", label="control")
                 plt.ylabel("beta_r")
+                plt.legend()
                 plt.grid(True)
                 plt.subplot(4, 1, 3)
                 plt.plot(self.time_log, self.alpha_log, "-b", label="real")
                 plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
                 plt.ylabel("alpha")
+                plt.grid(True)
                 plt.legend()
                 plt.subplot(4, 1, 4)
-                plt.plot(self.time_log, self.radius_log, "-b", label="des")
-                plt.ylabel("alpha")
+                plt.plot(self.time_log, self.radius_log, "-b")
+                plt.ylim([-1,1])
+                plt.ylabel("radius")
                 plt.grid(True)
 
             if p.ControlType == 'CLOSED_LOOP':
+                # tracking errors
+                self.log_e_x, self.log_e_y, self.log_e_theta = self.controller.getErrors()
+                plt.figure()
+                plt.subplot(3, 1, 1)
+                plt.plot(self.log_e_x, "-b")
+                plt.ylabel("ex")
+                plt.grid(True)
+                plt.subplot(3, 1, 2)
+                plt.plot(self.log_e_y, "-b")
+                plt.ylabel("ey")
+                plt.grid(True)
+                plt.subplot(3, 1, 3)
+                plt.plot(self.log_e_theta, "-b")
+                plt.ylabel("eth")
+                plt.grid(True)
+
                 plt.figure()
                 plt.plot(p.des_state_log[0,:], p.des_state_log[1,:], "-r", label="desired")
                 plt.plot(p.basePoseW_log[0, :], p.basePoseW_log[1, :], "-b", label="real")
@@ -377,6 +391,7 @@ class GenericSimulator(BaseController):
         return v_vec, omega_vec
 
     def estimateSlippages(self,W_baseTwist, theta, qd):
+
         wheel_L = qd[0]
         wheel_R = qd[1]
         w_vel_xy = np.zeros(2)
@@ -388,41 +403,60 @@ class GenericSimulator(BaseController):
         w_R_b = np.array([[np.cos(theta), -np.sin(theta)],
                          [np.sin(theta), np.cos(theta)]])
         b_vel_xy = w_R_b.T.dot(w_vel_xy)
+        b_vel_x = b_vel_xy[0]
 
         # track velocity  from encoder
         v_enc_l = constants.SPROCKET_RADIUS *  wheel_L
         v_enc_r = constants.SPROCKET_RADIUS *  wheel_R
         B = constants.TRACK_WIDTH
 
-        v_track_l = b_vel_xy[0] - omega* B / 2
-        v_track_r = b_vel_xy[0] + omega* B / 2
+        v_track_l = b_vel_x - omega* B / 2
+        v_track_r = b_vel_x + omega* B / 2
 
-        beta_l = np.abs(v_track_l) - np.abs(v_enc_l)
-        beta_r = np.abs(v_track_r) - np.abs(v_enc_r)
-        side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
+        beta_l = np.abs(v_track_l - v_enc_l)
+        beta_r = np.abs(v_track_r - v_enc_r)
+        if (abs(b_vel_xy[1])<0.001) or (abs(b_vel_xy[0])<0.001):
+            side_slip = 0.
+        else:
+            side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
+
         return beta_l, beta_r, side_slip
     
-    def computeLongSlipCompensation(self, v, omega, qd_des, settings):
-        radius = v/(omega+1e-10)
+    def computeLongSlipCompensation(self, v, omega, qd_des, constants):
+        radius = v/(omega)
         #compute track velocity from encoder
-        v_enc_l = settings.SPROCKET_RADIUS*qd_des[0]
-        v_enc_r = settings.SPROCKET_RADIUS*qd_des[1]
+        v_enc_l = constants.SPROCKET_RADIUS*qd_des[0]
+        v_enc_r = constants.SPROCKET_RADIUS*qd_des[1]
+
+        #in this cases radius is infinite and betas are zero
+        if abs(radius)>1e8:
+            return qd_des, 0., 0., 1e8
 
         #estimate beta_inner, beta_outer from turning radius
-        if(radius >= 0.0): # turning left, left wheel is inner there is discontinuity
-            beta_inner = settings.BI[0]*np.exp(settings.BI[1]*radius)
-            v_enc_l-=beta_inner
-            beta_outer = settings.BO[0]*np.exp(settings.BO[1]*radius)
-            v_enc_r+=beta_outer
-        else:# turning right , left wheel is outer
-            beta_inner = settings.BI[0]*np.exp(settings.BI[1]*radius)
-            v_enc_r-=beta_inner
-            beta_outer = settings.BO[0]*np.exp(settings.BO[1]*radius)
-            v_enc_l+=beta_outer
-        qd_comp = np.zeros()
-        qd_comp[0] = 1/settings.SPROCKET_RADIUS * v_enc_l
-        qd_comp[1] = 1/settings.SPROCKET_RADIUS * v_enc_r
-        return qd_comp
+        if(radius >= 0.0): # turning left, positive radius, left wheel is inner right wheel is outer
+            beta_l = constants.beta_slip_inner_coefficients_left[0]*np.exp(constants.beta_slip_inner_coefficients_left[1]*radius)
+            v_enc_l-=beta_l
+
+            beta_r = constants.beta_slip_outer_coefficients_left[0]*np.exp(constants.beta_slip_outer_coefficients_left[1]*radius)
+            v_enc_r+=beta_r
+
+        else:# turning right, negative radius, left wheel is outer right is inner
+            beta_r = constants.beta_slip_inner_coefficients_right[0]*np.exp(constants.beta_slip_inner_coefficients_right[1]*radius)
+            v_enc_r-=beta_r
+            beta_l =  constants.beta_slip_outer_coefficients_right[0]*np.exp(constants.beta_slip_outer_coefficients_right[1]*radius)
+            v_enc_l+=beta_l
+
+        qd_comp = np.zeros(2)
+        qd_comp[0] = 1/constants.SPROCKET_RADIUS * v_enc_l
+        qd_comp[1] = 1/constants.SPROCKET_RADIUS * v_enc_r
+        if beta_r > 1e20:
+            print("beta_r")
+            print(radius)
+
+        if beta_l > 1e20:
+            print("beta_l")
+            print(radius)
+        return qd_comp, beta_l, beta_r, radius
     
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
@@ -439,7 +473,8 @@ class GenericSimulator(BaseController):
         self.broadcaster.sendTransform(  np.zeros(3),
                                          np.array([0., 0., 0., 1.]) ,
                                          ros.Time.now(), '/odom', '/world')
-
+        if np.mod(self.time,1) == 0:
+            print(colored(f"TIME: {self.time}","red"))
 
 def talker(p):
     p.start()
@@ -532,8 +567,9 @@ def talker(p):
             else:
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
-            #TODO identification of long slip
-            #p.qd_des = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega,p.qd_des, settings)
+
+            if p.LONG_SLIP_COMPENSATION and not traj_finished:
+                p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
 
             # debug send openloop vels
             # p.ctrl_v = v_des[count]
