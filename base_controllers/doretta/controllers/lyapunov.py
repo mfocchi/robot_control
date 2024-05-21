@@ -117,8 +117,8 @@ class LyapunovController:
         v =   (v_d + dv) *np.cos(alpha_0)
         omega = omega_d + domega
 
-        V = 1 / 2 * (ex ** 2 + ey ** 2 + etheta ** 2)
-        V_dot = -self.K_THETA * etheta ** 2 - self.K_P * exy * math.pow(math.cos(psi - theta), 2)
+        V = 1 / 2 * (ex ** 2 + ey ** 2) + (1- math.cos(etheta + alpha_0))
+        V_dot = - self.K_P *math.pow( exy,2) * math.pow(math.cos(psi - (theta+alpha_0)), 2) -self.K_THETA * math.pow(math.sin(etheta+alpha_0),2)
         self.log_e_x.append(ex)
         self.log_e_y.append(ey)
         self.log_e_theta.append(etheta+alpha_0) #etheta should converge to -alpha

@@ -41,11 +41,14 @@ class GenericSimulator(BaseController):
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
-        self.SAVE_BAGS = False
-        self.SLIPPAGE_CONTROL = False
+        self.SAVE_BAGS = True
+        self.SLIPPAGE_CONTROL = True
         self.LONG_SLIP_COMPENSATION = True
         self.NAVIGATION = False
         self.USE_GUI = True
+        self.coppeliaModel='tractor_ros_0.3.ttt'
+        #TODO
+        #self.coppeliaModel = 'tractor_ros_0.6.ttt'
 
     def initVars(self):
         super().initVars()
@@ -140,7 +143,7 @@ class GenericSimulator(BaseController):
             ros.sleep(1.5)
 
             # launch coppeliasim
-            scene = rospkg.RosPack().get_path('tractor_description') + '/CoppeliaSimModels/tractor_ros.ttt'
+            scene = rospkg.RosPack().get_path('tractor_description') + '/CoppeliaSimModels/'+self.coppeliaModel
             if self.USE_GUI:
                 file = os.getenv("LOCOSIM_DIR") + "/CoppeliaSim/coppeliaSim.sh " + scene + " &"
             else:
