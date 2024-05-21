@@ -345,13 +345,15 @@ class GenericSimulator(BaseController):
         for i in range(self.robot.na):
             self.q[i], self.q_old[i] =unwrap_angle(self.q[i], self.q_old[i])
 
-    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.6, increment=0.05, dt = 0.005, long_v = 0.1):
+    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.5, increment=0.05, dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
-        change_interval = 4.
+        change_interval = 6.
         increment = increment
         turning_radius_vec = np.arange(R_initial, R_final, increment)
-
-        ang_w = np.round(long_v / turning_radius_vec, 3)  # [rad/s]
+        if direction=='left':
+            ang_w = np.round(long_v / turning_radius_vec, 3)  # [rad/s]
+        else:
+            ang_w = -np.round(long_v / turning_radius_vec, 3)  # [rad/s]
         omega_vec = []
         v_vec = []
         time = 0
@@ -459,7 +461,7 @@ def talker(p):
 
     if p.ControlType == 'OPEN_LOOP':
         counter = 0
-        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.05, R_final=0.6, increment=0.1, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1)
+        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1, direction='right')
         # OPEN loop control
         while not ros.is_shutdown():
             if counter<len(v_ol):

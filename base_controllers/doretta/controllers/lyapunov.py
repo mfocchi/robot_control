@@ -1,6 +1,7 @@
 import numpy as np
 import math
 from base_controllers.utils.math_tools import unwrap_angle
+from base_controllers.doretta.utils import constants
 # ------------------------------------ #
 # CONTROLLER'S PARAMETERS
 # K_P = 8.0
@@ -10,12 +11,10 @@ from base_controllers.utils.math_tools import unwrap_angle
 # ------------------------------------ #
 
 class LyapunovParams:
-    def __init__(self, K_P, K_THETA, DT=0.001, C1= -2.0397, C2= -5.2179):
+    def __init__(self, K_P, K_THETA, DT=0.001):
         self.K_P = K_P
         self.K_THETA = K_THETA
         self.DT = DT
-        self.C2=C2
-        self.C1 =C1
 class Robot:
     pass
 
@@ -24,9 +23,9 @@ class LyapunovController:
 
         self.K_P = params.K_P
         self.K_THETA = params.K_THETA
-        self.C2 = params.C2
-        self.C1 = params.C1
 
+        self.C1 = constants.side_slip_angle_coefficients[0]
+        self.C2 = constants.side_slip_angle_coefficients[1]
 
         self.log_e_x = []
         self.log_e_y = []
@@ -95,7 +94,7 @@ class LyapunovController:
             self.log_e_x.append(0.0)
             self.log_e_y.append(0.0)
             self.log_e_theta.append(0.0)
-            return 0.0, 0.0, 0., 0.,0.
+            return 0.0, 0.0, 0., 0.,0., 0.
 
         # compute errors
         ex = robot.x - des_x
@@ -122,7 +121,7 @@ class LyapunovController:
         V_dot = -self.K_THETA * etheta ** 2 - self.K_P * exy * math.pow(math.cos(psi - theta), 2)
         self.log_e_x.append(ex)
         self.log_e_y.append(ey)
-        self.log_e_theta.append(etheta+alpha_0)
+        self.log_e_theta.append(etheta+alpha_0) #etheta should converge to -alpha
         return v, omega, V, V_dot, alpha_0
 
     def alpha_exp(self, v, omega):
