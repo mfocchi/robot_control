@@ -39,7 +39,7 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = True
+        self.GAZEBO = False
         self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
         self.SAVE_BAGS = False
         self.SLIPPAGE_CONTROL = False
@@ -544,7 +544,7 @@ def talker(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=10., K_THETA=1.5, DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=2., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.traj.set_initial_time(start_time=p.time)
         #v_des, omega_des, _ = vel_gen.velocity_mir_smooth()
@@ -562,8 +562,11 @@ def talker(p):
                 traj_finished = None
             else:
                 p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished = p.traj.evalTraj(p.time)
+                if traj_finished:
+                    break
             if p.SLIPPAGE_CONTROL:
                 p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha0(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
+                p.des_theta-=p.alpha_control #we track theta_d -alpha
             else:
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
@@ -601,7 +604,6 @@ if __name__ == '__main__':
         talker(p)
     except (ros.ROSInterruptException, ros.service.ServiceException):
         pass
-
     ros.signal_shutdown("killed")
     p.deregister_node()
     print("Plotting")
