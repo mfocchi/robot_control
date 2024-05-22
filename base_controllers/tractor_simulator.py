@@ -10,9 +10,10 @@ import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from base_controllers.base_controller import BaseController
-from base_controllers.utils.common_functions import checkRosMaster, plotFrameLinear, plotJoint
+from base_controllers.utils.common_functions import checkRosMaster, plotFrameLinear, plotJoint, sendStaticTransform, launchFileGeneric, launchFileNode
 import params as conf
 import os
+import sys
 from std_msgs.msg import Bool, Int32, Float32
 import rospkg
 import roslaunch
@@ -31,6 +32,7 @@ from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
+
 robotName = "tractor" # needs to inherit BaseController
 
 class GenericSimulator(BaseController):
@@ -49,6 +51,10 @@ class GenericSimulator(BaseController):
         self.coppeliaModel='tractor_ros_0.3.ttt'
         #TODO
         #self.coppeliaModel = 'tractor_ros_0.6.ttt'
+
+        if self.GAZEBO and self.SLIPPAGE_CONTROL:
+            print(colored("Gazebo Model has no slippage, turn it off","red"))
+            sys.exit()
 
     def initVars(self):
         super().initVars()
@@ -151,12 +157,8 @@ class GenericSimulator(BaseController):
 
             os.system(file)
 
-
             # run robot state publisher + load robot description + rviz
-            uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-            roslaunch.configure_logging(uuid)
-            launch = roslaunch.parent.ROSLaunchParent(uuid, [rospkg.RosPack().get_path('tractor_description')+"/launch/rviz_nojoints.launch"])
-            launch.start()
+            launchFileGeneric(rospkg.RosPack().get_path('tractor_description')+"/launch/rviz_nojoints.launch")
 
             # launch separately
             # package = 'robot_state_publisher'
@@ -187,6 +189,11 @@ class GenericSimulator(BaseController):
 
         if self.NAVIGATION:
             self.nav_vel_sub = ros.Subscriber("/cmd_vel", Twist, self.get_command_vel)
+            self.odom_pub = ros.Publisher("/odom", Odometry, queue_size=1, tcp_nodelay=True)
+            self.broadcast_world = False # this prevents to publish baselink tf from world because we need baselink to odom
+            #launch orchard world
+            launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo')+"/launch/orchard_world.launch")
+            launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['launch_controller:=false', 'robot_model:=tractor','lidar_topic:=/lidar_points','base_frame:=base_link','stabilized_frame:=base_link','launch_odometry:=false','cmd_vel_topic:=/cmd_vel','max_vel_yaw:=1','max_vel_x:=0.5'])
 
         if self.SAVE_BAGS:
             self.recorder = RosbagControlledRecorder('rosbag record -a', False)
@@ -260,7 +267,7 @@ class GenericSimulator(BaseController):
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
             plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
-            if p.SLIPPAGE_CONTROL:
+            if p.SLIPPAGE_CONTROL and not self.GAZEBO:
                 #slippage vars
                 plt.figure()
                 plt.subplot(4, 1, 1)
@@ -452,13 +459,6 @@ class GenericSimulator(BaseController):
         qd_comp = np.zeros(2)
         qd_comp[0] = 1/constants.SPROCKET_RADIUS * v_enc_l
         qd_comp[1] = 1/constants.SPROCKET_RADIUS * v_enc_r
-        if beta_r > 1e20:
-            print("beta_r")
-            print(radius)
-
-        if beta_l > 1e20:
-            print("beta_l")
-            print(radius)
         return qd_comp, beta_l, beta_r, radius
     
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
@@ -471,11 +471,28 @@ class GenericSimulator(BaseController):
         msg.effort = tau_ffwd
         self.pub_des_jstate.publish(msg)
 
-        #this is for wolf navigation
-        self.odom_pub = ros.Publisher("/odom", Odometry, queue_size=1, tcp_nodelay=True)
-        self.broadcaster.sendTransform(  np.zeros(3),
-                                         np.array([0., 0., 0., 1.]) ,
-                                         ros.Time.now(), '/odom', '/world')
+        #this is for wolf navigation # gazebo publishes world, base controller publishes base link, we need to add two static transforms from world to odom and map
+        if p.NAVIGATION:
+            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                           self.quaternion,
+                                           ros.Time.now(), '/base_link', '/odom')
+            sendStaticTransform("odom", "world", np.zeros(3), np.array([1, 0, 0, 0]))  # this is just to not  brake the locosim rviz that still wants world
+            msg = Odometry()
+            msg.pose.pose.orientation.x = self.quaternion[0]
+            msg.pose.pose.orientation.y = self.quaternion[1]
+            msg.pose.pose.orientation.z = self.quaternion[2]
+            msg.pose.pose.orientation.w = self.quaternion[3]
+            msg.pose.pose.position.x = self.basePoseW[self.u.sp_crd["LX"]]
+            msg.pose.pose.position.y = self.basePoseW[self.u.sp_crd["LY"]]
+            msg.pose.pose.position.z = self.basePoseW[self.u.sp_crd["LZ"]]
+            msg.twist.twist.linear.x= self.baseTwistW[self.u.sp_crd["LX"]]
+            msg.twist.twist.linear.y= self.baseTwistW[self.u.sp_crd["LY"]]
+            msg.twist.twist.linear.z= self.baseTwistW[self.u.sp_crd["LZ"]]
+            msg.twist.twist.angular.x= self.baseTwistW[self.u.sp_crd["AX"]]
+            msg.twist.twist.angular.y= self.baseTwistW[self.u.sp_crd["AY"]]
+            msg.twist.twist.angular.z= self.baseTwistW[self.u.sp_crd["AZ"]]
+            self.odom_pub.publish(msg)
+
         if np.mod(self.time,1) == 0:
             print(colored(f"TIME: {self.time}","red"))
 
@@ -574,7 +591,7 @@ def talker(p):
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
-            if p.LONG_SLIP_COMPENSATION and not traj_finished:
+            if p.SLIPPAGE_CONTROL and p.LONG_SLIP_COMPENSATION and not traj_finished:
                 p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
 
             # debug send openloop vels
