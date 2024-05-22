@@ -20,6 +20,8 @@ import rospy as ros
 import rosnode
 import roslaunch
 import rosgraph
+import tf2_ros
+from geometry_msgs.msg import TransformStamped
 from roslaunch.parent import ROSLaunchParent
 import copy
 from base_controllers.utils.utils import Utils
@@ -116,6 +118,23 @@ def startNode(package, executable, args=''):
     launch = roslaunch.scriptapi.ROSLaunch()
     launch.start()
     process = launch.launch(node)
+
+def sendStaticTransform(parent, child, x_pos = np.zeros(3), quat=np.array([1,0,0,0]), static_broadcaster=None):
+    static_transformStamped = TransformStamped()
+    static_transformStamped.header.stamp = ros.Time.now()
+    static_transformStamped.header.frame_id = parent
+    static_transformStamped.child_frame_id = child
+    static_transformStamped.transform.translation.x = 0.
+    static_transformStamped.transform.translation.y = 0.
+    static_transformStamped.transform.translation.z = 0.
+    static_transformStamped.transform.rotation.x = 0
+    static_transformStamped.transform.rotation.y = 0
+    static_transformStamped.transform.rotation.z = 0
+    static_transformStamped.transform.rotation.w = 1
+    if static_broadcaster is None:
+        static_broadcaster = tf2_ros.StaticTransformBroadcaster()
+    static_broadcaster.sendTransform(static_transformStamped)
+
 
 def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, additional_urdf_args = None):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
