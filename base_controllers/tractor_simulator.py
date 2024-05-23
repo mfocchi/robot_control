@@ -267,7 +267,7 @@ class GenericSimulator(BaseController):
     def plotData(self):
         if conf.plotting:
             #plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
-            #plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
+            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
             #states plot
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
             plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
@@ -303,15 +303,11 @@ class GenericSimulator(BaseController):
                 # tracking errors
                 self.log_e_x, self.log_e_y, self.log_e_theta = self.controller.getErrors()
                 plt.figure()
-                plt.subplot(3, 1, 1)
-                plt.plot(self.log_e_x, "-b")
-                plt.ylabel("ex")
+                plt.subplot(2, 1, 1)
+                plt.plot(np.sqrt(np.power(self.log_e_x,2) +np.power(self.log_e_y,2)), "-b")
+                plt.ylabel("exy")
                 plt.grid(True)
-                plt.subplot(3, 1, 2)
-                plt.plot(self.log_e_y, "-b")
-                plt.ylabel("ey")
-                plt.grid(True)
-                plt.subplot(3, 1, 3)
+                plt.subplot(2, 1, 2)
                 plt.plot(self.log_e_theta, "-b")
                 plt.ylabel("eth")
                 plt.grid(True)
@@ -558,7 +554,7 @@ def talker(p):
     else:
         # CLOSE loop control
         # generate reference trajectory
-        vel_gen = VelocityGenerator(simulation_time=10.,    DT=conf.robot_params[p.robot_name]['dt'])
+        vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
         # initial_des_x = 0.1
         # initial_des_y = 0.1
         # initial_des_theta = 0.3
@@ -569,7 +565,7 @@ def talker(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=2., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.traj.set_initial_time(start_time=p.time)
         #v_des, omega_des, _ = vel_gen.velocity_mir_smooth()

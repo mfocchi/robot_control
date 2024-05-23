@@ -8,7 +8,7 @@ class VelocityGenerator:
         self.simulation_time = simulation_time
         self.n_samples = int(simulation_time / self.DT)
 
-    def velocity_mir_smooth(self, t1_perc = .1, t2_perc = .2, v_max_ = 0.1, omega_max_ = 0.5):
+    def velocity_mir_smooth(self, t1_perc = .1, t2_perc = .8, v_max_ = 0.2, omega_max_ = 0.3):
         t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
         v = []
         o = []
@@ -27,7 +27,7 @@ class VelocityGenerator:
                 o.append(omega_max)
             else:
                 v.append(v_max)
-                o.append(omega_max)
+                o.append(0)
         s = "mir_smooth"
         return v, o, s
 
