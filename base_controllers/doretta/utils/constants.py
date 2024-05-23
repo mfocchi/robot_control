@@ -7,6 +7,10 @@ MAX_LINEAR_VELOCITY: float = 1.0  # m/s
 MAX_ANGULAR_VELOCITY = np.radians(120)  # radians per second
 TRACK_WIDTH = 0.606
 SPROCKET_RADIUS = 0.0856
+MAXSPEED_MOTOR_RPM = 1500 #max speed of wheels (motors) is 1500 rpm and 157 rad /s => max omega is 1
+GEARBOX_RATIO = 34.45
+MAXSPEED_RADS_MOTOR = MAXSPEED_MOTOR_RPM*2*np.pi/60 #157 rad/s
+MAXSPEED_RADS_PULLEY = MAXSPEED_RADS_MOTOR/GEARBOX_RATIO #4.55 rad/s
 
 #friction coeff 0.3
 side_slip_angle_coefficients = np.array([1.4451,   -4.0347])

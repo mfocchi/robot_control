@@ -42,17 +42,17 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
-        self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP'
+        self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP'
+        self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.SAVE_BAGS = True
         self.SLIPPAGE_CONTROL = True
         self.LONG_SLIP_COMPENSATION = True
         self.NAVIGATION = False
         self.USE_GUI = True
-        self.frictionCoeff=0.3
+        self.frictionCoeff=0.3 #0.3 0.6
         self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}.ttt'
-        #TODO
-        #self.coppeliaModel = 'tractor_ros_0.6.ttt'
-
+    
+    
         if self.GAZEBO and self.SLIPPAGE_CONTROL:
             print(colored("Gazebo Model has no slippage, turn it off","red"))
             sys.exit()
@@ -267,7 +267,23 @@ class GenericSimulator(BaseController):
     def plotData(self):
         if conf.plotting:
             #plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
-            plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
+            #plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
+            plt.figure()
+            plt.subplot(2, 1, 1)
+            plt.plot(p.time_log, p.qd_log[0,:], "-b",  linewidth=3)
+            plt.plot(p.time_log, p.qd_des_log[0, :], "-r",  linewidth=4)
+            plt.plot(p.time_log, constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
+            plt.plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
+            plt.ylabel("WHEEL_L")
+            plt.grid(True)
+            plt.subplot(2, 1, 2)
+            plt.plot(p.time_log, p.qd_log[1, :], "-b",  linewidth=3)
+            plt.plot(p.time_log, p.qd_des_log[1, :], "-r",  linewidth=4)                
+            plt.plot(p.time_log, constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
+            plt.plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
+            plt.ylabel("WHEEL_R")
+            plt.grid(True)
+
             #states plot
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
             plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
@@ -375,7 +391,7 @@ class GenericSimulator(BaseController):
         for i in range(self.robot.na):
             self.q[i], self.q_old[i] =unwrap_angle(self.q[i], self.q_old[i])
 
-    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.5, increment=0.05, dt = 0.005, long_v = 0.1, direction="left"):
+    def generateOpenLoopTraj(self, R_initial= 0.1, R_final=0.6, increment=0.05, dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
         change_interval = 6.
         increment = increment
@@ -439,7 +455,7 @@ class GenericSimulator(BaseController):
         v_enc_l = constants.SPROCKET_RADIUS*qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS*qd_des[1]
 
-        #in this cases radius is infinite and betas are zero
+        #in the case radius is infinite, betas are zero (this is to avoid Nans)
         if abs(radius)>1e8:
             return qd_des, 0., 0., 1e8
 
@@ -447,7 +463,6 @@ class GenericSimulator(BaseController):
         if(radius >= 0.0): # turning left, positive radius, left wheel is inner right wheel is outer
             beta_l = constants.beta_slip_inner_coefficients_left[0]*np.exp(constants.beta_slip_inner_coefficients_left[1]*radius)
             v_enc_l-=beta_l
-
             beta_r = constants.beta_slip_outer_coefficients_left[0]*np.exp(constants.beta_slip_outer_coefficients_left[1]*radius)
             v_enc_r+=beta_r
 
@@ -522,7 +537,7 @@ def talker(p):
 
     if p.ControlType == 'OPEN_LOOP':
         counter = 0
-        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1, direction='right')
+        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1, direction=p.IDENT_DIRECTION)
         # OPEN loop control
         while not ros.is_shutdown():
             if counter<len(v_ol):
