@@ -994,7 +994,7 @@ class Controller(BaseController):
         self.q_des = conf.robot_params[self.robot_name]['q_0']
         alpha = 0.
         try:
-            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] applying gravity compensation", "blue"))
+            print(colored(f"[startupProcedure to {self.q_des} t: " + str(self.time[0]) + "s] applying gravity compensation", "blue"))
             GCStartTime = self.time
             while True:
                 q_norm = np.linalg.norm(self.q - self.q_des)
@@ -1162,7 +1162,7 @@ class Controller(BaseController):
                             alpha = GCTime
                         self.tau_ffwd = alpha* self.self_weightCompensation()
                     else:
-                        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
+                        print(colored(f"[startupProcedure to make RobotHeight {self.robot_height+0.02} t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
                         HStarttime = self.time
                         # 5-th order polynomial
                         final_comPose_des = self.comPoseW.copy()
