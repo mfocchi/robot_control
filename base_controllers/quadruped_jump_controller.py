@@ -16,7 +16,7 @@ import os, sys
 class QuadrupedJumpController(Controller):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
-        self.DEBUG = False
+        self.DEBUG = True
 
     #####################
     # OVERRIDEN METHODS OF BASECONTROLLER#
@@ -55,7 +55,7 @@ class QuadrupedJumpController(Controller):
         if self.DEBUG:
             freq = 0.5
             amp_lin = np.array([0., 0.,0.05])
-            amp_ang = np.array([0., 0.1, 0])
+            amp_ang = np.array([0., 0.0, 0])
             com = self.initial_com + np.multiply(amp_lin, np.sin(2*np.pi*freq * self.time ))
             comd = np.multiply(2*np.pi*freq*amp_lin, np.cos(2*np.pi*freq * self.time))
             comdd = np.multiply(np.power(2*np.pi*freq*amp_lin, 2), -np.sin(2*np.pi*freq * self.time))
@@ -64,6 +64,7 @@ class QuadrupedJumpController(Controller):
             euldd = np.multiply(np.power(2 * np.pi * freq * amp_ang, 2), -np.sin(2 * np.pi * freq * self.time))
 
         Jb = p.computeJcb(self.W_contacts, com, self.stance_legs)
+
 
         W_des_basePose = np.empty(6)
         W_des_basePose[self.u.sp_crd['LX']:self.u.sp_crd['LX'] + 3] = com
@@ -116,6 +117,7 @@ class QuadrupedJumpController(Controller):
             #compute joint variables
             qd_des[3 * leg:3 *(leg+1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 *(leg+1)])
 
+        print(q_des)
         tau_ffwd = self.WBC(W_des_basePose, W_des_baseTwist, W_des_baseAcc, comControlled = False, type='projection', stance_legs=self.stance_legs)
         #OLD
         #tau_ffwd = self.gravityCompensation()
@@ -220,6 +222,9 @@ if __name__ == '__main__':
         euld_lo = np.array([0., 0.1, 0.])
         if p.DEBUG:
             p.initial_com = np.copy(com_0)
+            print(f"Initial Com Position is {p.initial_com}")
+            print(f"Initial Joint Position is {p.q}")
+            print(f"Initial Joint torques {p.tau_ffwd}")
             p.T_th = 5.
         else:
             p.T_th = 0.6
@@ -239,6 +244,7 @@ if __name__ == '__main__':
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
         #p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
         #p.pid.setPDs(0.0, 0.0, 0.0)
+
         while not ros.is_shutdown():
             p.updateKinematics()
 
@@ -256,7 +262,8 @@ if __name__ == '__main__':
                         p.qd_des = np.zeros(12)
                         p.tau_ffwd = np.zeros(12)
                         print(colored(f"thrust completed! at time {p.time}","red"))
-
+                        if p.DEBUG:
+                            break
             p.plotTrajectoryBezier()
             p.visualizeContacts()
             p.logData()
