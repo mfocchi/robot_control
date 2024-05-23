@@ -16,6 +16,8 @@ class Trajectory:
         self.des_theta_old = 0.
         self.v = []
         self.omega = []
+        self.v_dot = []
+        self.omega_dot = []
         self.DT =DT
         if model is ModelsList.UNICYCLE:
             self.ideal_unicycle = Unicycle(start_x, start_y, start_theta, DT)

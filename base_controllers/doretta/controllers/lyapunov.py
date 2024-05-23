@@ -125,8 +125,11 @@ class LyapunovController:
         return v, omega, V, V_dot, alpha_0
 
     def alpha_exp(self, v, omega):
+        # in the case radius is infinite, betas are zero (this is to avoid Nans)
+        if abs(omega) < 1e-05:
+            return  0.
 
-        radius = v/(omega+1e-10)
+        radius = v/(omega)
 
         if radius > 0:
             alpha = self.C1*np.exp(self.C2*radius)

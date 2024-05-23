@@ -51,8 +51,7 @@ class GenericSimulator(BaseController):
         self.USE_GUI = True
         self.frictionCoeff=0.3 #0.3 0.6
         self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}.ttt'
-    
-    
+                                
         if self.GAZEBO and self.SLIPPAGE_CONTROL:
             print(colored("Gazebo Model has no slippage, turn it off","red"))
             sys.exit()
@@ -450,14 +449,14 @@ class GenericSimulator(BaseController):
         return beta_l, beta_r, side_slip
     
     def computeLongSlipCompensation(self, v, omega, qd_des, constants):
+        # in the case radius is infinite, betas are zero (this is to avoid Nans)
+        if abs(omega) < 1e-05:
+            return qd_des, 0., 0., 1e8
+
         radius = v/(omega)
         #compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS*qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS*qd_des[1]
-
-        #in the case radius is infinite, betas are zero (this is to avoid Nans)
-        if abs(radius)>1e8:
-            return qd_des, 0., 0., 1e8
 
         #estimate beta_inner, beta_outer from turning radius
         if(radius >= 0.0): # turning left, positive radius, left wheel is inner right wheel is outer
