@@ -48,7 +48,8 @@ class GenericSimulator(BaseController):
         self.LONG_SLIP_COMPENSATION = True
         self.NAVIGATION = False
         self.USE_GUI = True
-        self.coppeliaModel='tractor_ros_0.3.ttt'
+        self.frictionCoeff=0.3
+        self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}.ttt'
         #TODO
         #self.coppeliaModel = 'tractor_ros_0.6.ttt'
 
@@ -196,7 +197,11 @@ class GenericSimulator(BaseController):
             launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['launch_controller:=false', 'robot_model:=tractor','lidar_topic:=/lidar_points','base_frame:=base_link','stabilized_frame:=base_link','launch_odometry:=false','cmd_vel_topic:=/cmd_vel','max_vel_yaw:=1','max_vel_x:=0.5'])
 
         if self.SAVE_BAGS:
-            self.recorder = RosbagControlledRecorder('rosbag record -a', False)
+            if p.ControlType=='OPEN_LOOP':
+                bag_name= f"ident_sim_{self.frictionCoeff}.bag"
+            else:
+                bag_name = f"{p.ControlType}_Side_{self.SLIPPAGE_CONTROL}_Long_{self.LONG_SLIP_COMPENSATION}.bag"
+            self.recorder = RosbagControlledRecorder(bag_name=bag_name)
 
         if not self.GAZEBO:
             self.startPub=ros.Publisher("/startSimulation", Bool, queue_size=1, tcp_nodelay=True)

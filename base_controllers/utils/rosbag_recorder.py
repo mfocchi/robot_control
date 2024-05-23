@@ -76,7 +76,10 @@ def format_to_columns(input_list, cols):
 class RosbagControlledRecorder(object):
     """Record a rosbag with service calls to control start, stop  and pause"""
 
-    def __init__(self, rosbag_command_, record_from_startup_=False):
+    def __init__(self, topics=' -a', bag_name=None, record_from_startup_=False):
+        rosbag_command_ = "rosbag record"+topics
+        if bag_name is not None:
+            rosbag_command_+=" -O "+bag_name
         self.rosbag_command = shlex.split(rosbag_command_)
         self.recording_started = False
         self.recording_paused = False

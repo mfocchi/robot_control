@@ -137,7 +137,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
-            self.recorder = RosbagControlledRecorder('rosbag record -a', False)
+            self.recorder = RosbagControlledRecorder(False)
         if self.ADD_NOISE:
             # remove any previous instance
             try:
