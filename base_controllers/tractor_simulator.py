@@ -42,8 +42,11 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
-        self.ControlType = 'CLOSED_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP'
+        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
+        self.IDENT_LONG_SPEED = 0.05 #0.05:0.05:0.4
+
+
         self.SAVE_BAGS = True
         self.SLIPPAGE_CONTROL = True
         self.LONG_SLIP_COMPENSATION = True
@@ -197,7 +200,7 @@ class GenericSimulator(BaseController):
 
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
-                bag_name= f"ident_sim_{self.frictionCoeff}.bag"
+                bag_name= f"ident_sim_friction_{self.frictionCoeff}_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.bag"
             else:
                 bag_name = f"{p.ControlType}_Side_{self.SLIPPAGE_CONTROL}_Long_{self.LONG_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
@@ -258,15 +261,42 @@ class GenericSimulator(BaseController):
             # start coppeliasim
             self.simulationControl('enable_sync_mode')
             #Coppelia Runs with increment of 0.01 but is not able to run at 100Hz but at 25 hz so I "slow down" ros, but still update time with dt = 0.01
-            slow_down_factor = 8
+            slow_down_factor = 6
             # loop frequency
             self.rate = ros.Rate(1 / (slow_down_factor * conf.robot_params[p.robot_name]['dt']))
 
 
     def plotData(self):
         if conf.plotting:
+            #xy plot
+            plt.figure()
+            plt.plot(p.des_state_log[0, :], p.des_state_log[1, :], "-r", label="desired")
+            plt.plot(p.basePoseW_log[0, :], p.basePoseW_log[1, :], "-b", label="real")
+            plt.legend()
+            plt.xlabel("x[m]")
+            plt.ylabel("y[m]")
+            plt.axis("equal")
+            plt.grid(True)
+
+            # # command plot
+            plt.figure()
+            plt.subplot(2, 1, 1)
+            plt.plot(p.time_log, p.ctrl_v_log, "-b", label="REAL")
+            plt.plot(p.time_log, p.v_d_log, "-r", label="desired")
+            plt.legend()
+            plt.ylabel("linear velocity[m/s]")
+            plt.grid(True)
+            plt.subplot(2, 1, 2)
+            plt.plot(p.time_log, p.ctrl_omega_log, "-b", label="REAL")
+            plt.plot(p.time_log, p.omega_d_log, "-r", label="desired")
+            plt.legend()
+            plt.xlabel("time[sec]")
+            plt.ylabel("angular velocity[rad/s]")
+            plt.grid(True)
+
+
             #plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
-            #plotJoint('velocity', p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, joint_names=p.joint_names)
+            #joint velocities with limits
             plt.figure()
             plt.subplot(2, 1, 1)
             plt.plot(p.time_log, p.qd_log[0,:], "-b",  linewidth=3)
@@ -287,7 +317,7 @@ class GenericSimulator(BaseController):
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
             plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
-            if p.SLIPPAGE_CONTROL and not self.GAZEBO:
+            if p.SLIPPAGE_CONTROL and not self.GAZEBO and not p.ControlType=='OPEN_LOOP':
                 #slippage vars
                 plt.figure()
                 plt.subplot(4, 1, 1)
@@ -327,32 +357,6 @@ class GenericSimulator(BaseController):
                 plt.ylabel("eth")
                 plt.grid(True)
 
-                plt.figure()
-                plt.plot(p.des_state_log[0,:], p.des_state_log[1,:], "-r", label="desired")
-                plt.plot(p.basePoseW_log[0, :], p.basePoseW_log[1, :], "-b", label="real")
-                plt.legend()
-                plt.xlabel("x[m]")
-                plt.ylabel("y[m]")
-                plt.axis("equal")
-                plt.grid(True)
-                # # VELOCITY
-                plt.figure()
-                plt.subplot(2, 1, 1)
-                plt.plot(p.time_log, p.ctrl_v_log, "-b", label="REAL")
-                plt.plot(p.time_log, p.v_d_log, "-r", label="desired")
-                plt.legend()
-                plt.xlabel("time[sec]")
-                plt.ylabel("linear velocity[m/s]")
-                # plt.axis("equal")
-                plt.grid(True)
-                plt.subplot(2, 1, 2)
-                plt.plot(p.time_log, p.ctrl_omega_log, "-b", label="REAL")
-                plt.plot(p.time_log, p.omega_d_log, "-r", label="desired")
-                plt.legend()
-                plt.xlabel("time[sec]")
-                plt.ylabel("angular velocity[rad/s]")
-                # plt.axis("equal")
-                plt.grid(True)
                 #
                 # # liapunov V
                 # plt.figure()
@@ -533,14 +537,19 @@ def talker(p):
 
     if p.SAVE_BAGS:
         p.recorder.start_recording_srv()
-
+    # OPEN loop control
     if p.ControlType == 'OPEN_LOOP':
         counter = 0
-        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = 0.1, direction=p.IDENT_DIRECTION)
-        # OPEN loop control
+        #identification repeat long_v = 0.05:0.05:0.4
+        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
+        #generic open loop test
+        #vel_gen = VelocityGenerator(simulation_time=10., DT=conf.robot_params[p.robot_name]['dt'])
+        #v_ol, omega_ol, _ = vel_gen.velocity_mir_smooth()
         while not ros.is_shutdown():
             if counter<len(v_ol):
-                p.qd_des = p.mapToWheels(v_ol[counter], omega_ol[counter])
+                p.v_d = v_ol[counter]
+                p.omega_d = omega_ol[counter]
+                p.qd_des = p.mapToWheels(p.v_d, p.omega_d )
                 counter+=1
             else:
                 print(colored("Identification test accomplished", "red"))
@@ -582,8 +591,6 @@ def talker(p):
         params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.traj.set_initial_time(start_time=p.time)
-        #v_des, omega_des, _ = vel_gen.velocity_mir_smooth()
-        #count = 0
         while not ros.is_shutdown():
             # update kinematics
             robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
@@ -609,12 +616,6 @@ def talker(p):
             if p.SLIPPAGE_CONTROL and p.LONG_SLIP_COMPENSATION and not traj_finished:
                 p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
 
-            # debug send openloop vels
-            # p.ctrl_v = v_des[count]
-            # p.ctrl_omega = omega_des[count]
-            # if count < (len(v_des)-1):
-            #     count+=1
-
             # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             # senting it to be tracked from the impedance loop
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
@@ -639,6 +640,8 @@ if __name__ == '__main__':
         talker(p)
     except (ros.ROSInterruptException, ros.service.ServiceException):
         pass
+    if p.SAVE_BAGS:
+        p.recorder.stop_recording_srv()
     ros.signal_shutdown("killed")
     p.deregister_node()
     print("Plotting")
