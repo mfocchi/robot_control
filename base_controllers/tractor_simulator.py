@@ -412,7 +412,7 @@ class GenericSimulator(BaseController):
         for i in range(self.robot.na):
             self.q[i], self.q_old[i] =unwrap_angle(self.q[i], self.q_old[i])
 
-    def generateOpenLoopTraj(self, R_initial= 0.1, R_final=0.6, increment=0.05, dt = 0.005, long_v = 0.1, direction="left"):
+    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.325, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
         change_interval = 6.
         increment = increment
