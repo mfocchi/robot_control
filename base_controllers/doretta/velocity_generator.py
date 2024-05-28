@@ -12,6 +12,8 @@ class VelocityGenerator:
         t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
         v = []
         o = []
+        v_dot =[]
+        omega_dot = []
         t1 = t1_perc*self.simulation_time
         t2 =t2_perc*self.simulation_time
         #v_max = 0.4
@@ -21,33 +23,40 @@ class VelocityGenerator:
             if (t[i] < t1):
                 v.append(v_max * t[i])
                 o.append(0)
+                v_dot.append(v_max / t1)
+                omega_dot.append(omega_max/t1)
             elif (t[i] < t2):
                 #v.append(t1 * v_max - t1 * v_max / (t2 - t1) * (t[i] - t1))
                 v.append(v_max)
                 o.append(omega_max)
+                v_dot.append(-v_max / (t2-t1))
+                omega_dot.append(-omega_max / (t2-t1))
             else:
                 v.append(v_max)
                 o.append(0)
+                v_dot.append(0)
+                omega_dot.append(0)
         s = "mir_smooth"
-        return v, o, s
+        return v, o, v_dot, omega_dot, s
 
-    def velocity_mir_smooth1(self):
-        t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
-        v = []
-        o = []
-        t1 = 5
-        t2 = 10
-        v_max = 0.5
-        for i in range(t.shape[0]):
-            if (t[i] < t1):
-                v.append(v_max * t[i])
-                o.append(0.5)
-            elif (t[i] < t2):
-                v.append(t1 * v_max - t1 * v_max / (t2 - t1) * (t[i] - t1))
-                o.append(-0.5)
-            else:
-                v.append(0.)
-                o.append(0.)
-        s = "mir_smooth"
-        return v, o, s
+    # def velocity_mir_smooth(self):
+    #     t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
+    #     v = []
+    #     o = []
+    #
+    #     t1 = 5
+    #     t2 = 10
+    #     v_max = 0.5
+    #     for i in range(t.shape[0]):
+    #         if (t[i] < t1):
+    #             v.append(v_max * t[i])
+    #             o.append(0.5)
+    #         elif (t[i] < t2):
+    #             v.append(t1 * v_max - t1 * v_max / (t2 - t1) * (t[i] - t1))
+    #             o.append(-0.5)
+    #         else:
+    #             v.append(0.)
+    #             o.append(0.)
+    #     s = "mir_smooth"
+    #     return v, o, s
 

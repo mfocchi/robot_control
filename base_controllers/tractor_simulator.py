@@ -42,20 +42,19 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
-        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP'
+        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.05 #0.05:0.05:0.4
 
 
         self.SAVE_BAGS = True
-        self.SLIPPAGE_CONTROL = True
         self.LONG_SLIP_COMPENSATION = True
         self.NAVIGATION = False
-        self.USE_GUI = True
+        self.USE_GUI = True #false does not work in headless mode
         self.frictionCoeff=0.3 #0.3 0.6
         self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}.ttt'
                                 
-        if self.GAZEBO and self.SLIPPAGE_CONTROL:
+        if self.GAZEBO and not self.ControlType=='OPEN_LOOP':
             print(colored("Gazebo Model has no slippage, turn it off","red"))
             sys.exit()
 
@@ -156,7 +155,7 @@ class GenericSimulator(BaseController):
             if self.USE_GUI:
                 file = os.getenv("LOCOSIM_DIR") + "/CoppeliaSim/coppeliaSim.sh " + scene + " &"
             else:
-                file = os.getenv("LOCOSIM_DIR")+"/CoppeliaSim/coppeliaSim.sh -h "+" "+scene
+                file = os.getenv("LOCOSIM_DIR")+"/CoppeliaSim/coppeliaSim.sh -h "+ scene + " &"
 
             os.system(file)
 
@@ -202,7 +201,7 @@ class GenericSimulator(BaseController):
             if p.ControlType=='OPEN_LOOP':
                 bag_name= f"ident_sim_friction_{self.frictionCoeff}_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.bag"
             else:
-                bag_name = f"{p.ControlType}_Side_{self.SLIPPAGE_CONTROL}_Long_{self.LONG_SLIP_COMPENSATION}.bag"
+                bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
 
         if not self.GAZEBO:
@@ -279,9 +278,9 @@ class GenericSimulator(BaseController):
             # start coppeliasim
             self.simulationControl('enable_sync_mode')
             #Coppelia Runs with increment of 0.01 but is not able to run at 100Hz but at 25 hz so I "slow down" ros, but still update time with dt = 0.01
-            slow_down_factor = 6
+            self.slow_down_factor = 8
             # loop frequency
-            self.rate = ros.Rate(1 / (slow_down_factor * conf.robot_params[p.robot_name]['dt']))
+            self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
 
 
     def plotData(self):
@@ -335,7 +334,7 @@ class GenericSimulator(BaseController):
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
             plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
-            if p.SLIPPAGE_CONTROL and not self.GAZEBO and not p.ControlType=='OPEN_LOOP':
+            if not self.GAZEBO and not p.ControlType=='CLOSED_LOOP_UNICYCLE' and not p.ControlType=='OPEN_LOOP':
                 #slippage vars
                 plt.figure()
                 plt.subplot(4, 1, 1)
@@ -354,6 +353,7 @@ class GenericSimulator(BaseController):
                 plt.plot(self.time_log, self.alpha_log, "-b", label="real")
                 plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
                 plt.ylabel("alpha")
+                plt.ylim([-1, 1])
                 plt.grid(True)
                 plt.legend()
                 plt.subplot(4, 1, 4)
@@ -621,17 +621,22 @@ def talker(p):
                 p.des_x, p.des_y, p.des_theta = p.traj.getSingleUpdate(p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d)
                 traj_finished = None
             else:
-                p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished = p.traj.evalTraj(p.time)
+                p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, p.v_dot_d, p.omega_dot_d, traj_finished = p.traj.evalTraj(p.time)
                 if traj_finished:
                     break
-            if p.SLIPPAGE_CONTROL:
-                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha0(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
-                p.des_theta-=p.alpha_control #we track theta_d -alpha
-            else:
+            if p.ControlType=='CLOSED_LOOP_SLIP_0':
+                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, approx=True)
+                p.des_theta -= p.alpha_control  # we track theta_d -alpha
+
+            if p.ControlType == 'CLOSED_LOOP_SLIP':
+                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,approx=False)
+                p.des_theta -= p.alpha_control  # we track theta_d -alpha
+
+            if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
-            if p.SLIPPAGE_CONTROL and p.LONG_SLIP_COMPENSATION and not traj_finished:
+            if not p.ControlType=='CLOSED_LOOP_UNICYCLE' and p.LONG_SLIP_COMPENSATION and not traj_finished:
                 p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
 
             # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and

@@ -39,7 +39,7 @@ class Trajectory:
         :param velocity_generator: function which returns a list of longitudinal velocity and a list of angular velocities
         :return: void
         """
-        v, o, _ = velocity_generator()
+        v, o, v_dot, omega_dot, _ = velocity_generator()
         assert len(v) == len(o), "Trajectory generator: Invalid input (lenght)"
         for i in range(len(v) - 1):
             self.ideal_unicycle.update(v[i], o[i])
@@ -48,10 +48,14 @@ class Trajectory:
             self.theta.append(self.ideal_unicycle.theta)
             self.v.append(v[i])
             self.omega.append(o[i])
+            self.v_dot.append(v_dot[i])
+            self.omega_dot.append(omega_dot[i])
         
         # append finale di velocità nulle
         self.v.append(0.0)
         self.omega.append(0.0)
+        self.v_dot.append(0.0)
+        self.omega_dot.append(0.0)
 
     def evalTraj(self, current_time):
         elapsed_time = current_time - self.start_time
@@ -61,7 +65,7 @@ class Trajectory:
         if current_index >= len(self.v) - 1:
             # target is considered reached
             print("Lyapunov controller: trajectory finished")
-            return 0, 0, 0, 0, 0, True
+            return 0, 0, 0, 0, 0, 0,0,True
 
         assert current_index < len(self.v) - 1, "Lyapunov controller: index out of range"
 
@@ -70,5 +74,7 @@ class Trajectory:
         des_theta, self.des_theta_old = unwrap_angle(self.theta[current_index], self.des_theta_old)
         v_d = self.v[current_index]
         omega_d = self.omega[current_index]
-        return des_x, des_y, des_theta, v_d, omega_d, False
+        v_dot_d = self.v_dot[current_index]
+        omega_dot_d = self.omega_dot[current_index]
+        return des_x, des_y, des_theta, v_d, omega_d,v_dot_d, omega_dot_d, False
 

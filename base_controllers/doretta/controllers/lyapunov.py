@@ -2,6 +2,7 @@ import numpy as np
 import math
 from base_controllers.utils.math_tools import unwrap_angle
 from base_controllers.doretta.utils import constants
+from scipy.optimize import fsolve
 # ------------------------------------ #
 # CONTROLLER'S PARAMETERS
 # K_P = 8.0
@@ -82,9 +83,7 @@ class LyapunovController:
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
         return v, omega,  V, V_dot
 
-
-
-    def control_alpha0(self, robot, current_time,  des_x, des_y, des_theta, v_d, omega_d, traj_finished):
+    def control_alpha(self, robot, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, approx=False):
         """
         ritorna i valori di linear e angular velocity
         """
@@ -107,22 +106,39 @@ class LyapunovController:
         beta = theta + des_theta
         exy = math.sqrt(ex ** 2 + ey ** 2)
 
-        #estimate alpha from des values
-        alpha_0 = self.alpha_exp(v_d, omega_d)
+        #initial guess for alpha from des values
+        alpha_d = self.alpha_exp(v_d, omega_d)
+        alpha_dot_d = self.alpha_dot_exp(v_d, omega_d, v_dot_d, omega_dot_d)
 
-        dv = -self.K_P * exy * math.cos(psi -  (alpha_0 + theta))
-        domega = -v_d / math.cos((etheta + alpha_0) / 2) * exy * math.sin(psi - ((alpha_0 + beta) / 2)) - self.K_THETA * math.sin(etheta + alpha_0)
+        dv0 = -self.K_P * exy * math.cos(psi -  (alpha_d + theta))
+        domega0 = -v_d / math.cos((etheta + alpha_d) / 2) * exy * math.sin(psi - ((alpha_d + beta) / 2)) - self.K_THETA * math.sin(etheta + alpha_d) -alpha_dot_d
 
-        #compute the controls
-        v =   (v_d + dv) *np.cos(alpha_0)
-        omega = omega_d + domega
+        if approx:
+            #compute the controls
+            v =   (v_d + dv0) *np.cos(alpha_d)
+            omega = omega_d + domega0
+            alpha = alpha_d
+        else:
+            params = ( psi, etheta, exy, theta, alpha_d, beta, v_d, omega_d, v_dot_d, omega_dot_d)
+            alpha, dv, domega = fsolve(self.equations, (dv0, domega0), args=params)
 
-        V = 1 / 2 * (ex ** 2 + ey ** 2) + (1- math.cos(etheta + alpha_0))
-        V_dot = - self.K_P *math.pow( exy,2) * math.pow(math.cos(psi - (theta+alpha_0)), 2) -self.K_THETA * math.pow(math.sin(etheta+alpha_0),2)
+        V = 1 / 2 * (ex ** 2 + ey ** 2) + (1- math.cos(etheta + alpha))
+        V_dot = - self.K_P *math.pow( exy,2) * math.pow(math.cos(psi - (theta+alpha)), 2) -self.K_THETA * math.pow(math.sin(etheta+alpha),2)
         self.log_e_x.append(ex)
         self.log_e_y.append(ey)
-        self.log_e_theta.append(etheta+alpha_0) #etheta should converge to -alpha
-        return v, omega, V, V_dot, alpha_0
+        self.log_e_theta.append(etheta+alpha) #etheta should converge to -alpha
+        return v, omega, V, V_dot, alpha
+
+
+    def equations(self, vars, *data):
+        psi, etheta, exy, theta, alpha_d, beta, v_d, omega_d, v_dot_d, omega_dot_d = data
+        alpha, dv, domega = vars
+        alphadot_d = self.alpha_dot_exp(v_d, omega_d, v_dot_d, omega_dot_d)
+        #system of non linear equations
+        eq1 = alpha - self.alpha_exp((v_d + dv) * math.cos(alpha), (omega_d + domega))
+        eq2 = dv + self.K_P * exy * math.cos(psi - (alpha + theta))
+        eq3 = domega + v_d / math.cos((etheta + alpha) / 2) * exy * math.sin(psi - ((alpha + beta) / 2)) + self.K_THETA * math.sin(etheta + alpha_d) + alphadot_d
+        return [eq1, eq2, eq3]
 
     def alpha_exp(self, v, omega):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
@@ -136,3 +152,21 @@ class LyapunovController:
         else:
             alpha = -self.C1*np.exp(-self.C2*radius)
         return alpha
+
+    def alpha_dot_exp(self, v, omega, v_dot, omega_dot):
+        if (v == 0) or (omega == 0):
+            alpha_dot = 0.
+        else:
+            # deal with degenerate cases (I computed numerically the limits in situations that creatde Nans)
+            if abs(omega)<0.0001:
+                alpha_dot = 0
+            else:
+                r = v / omega
+                if r > 0:
+                    alpha = self.C1*math.exp(self.C2*r);
+                    alpha_dot = alpha * math.log(alpha/(self.C1))*(v_dot/v - omega_dot/omega)
+                else:
+                    alpha = -self.C1*math.exp(-self.C2*r);
+                    alpha_dot = alpha * math.log(alpha/(-self.C1))*(v_dot/v - omega_dot/omega)
+
+        return  alpha_dot
