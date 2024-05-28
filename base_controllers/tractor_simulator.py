@@ -215,6 +215,24 @@ class GenericSimulator(BaseController):
             # simStepDoneSub=ros.Subscriber("/simulationStepDone", Bool, sim_done_)
             self.simStateSub=ros.Subscriber("/simulationState", Int32, self.sim_state_)
             # simTimeSub=simROS.Subscriber('/simulationTime',Float32, time_sim_)
+            # I do this only to check frequency
+            self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState, callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+
+    def _receive_jstate(self, msg):
+        for msg_idx in range(len(msg.name)):
+            for joint_idx in range(len(self.joint_names)):
+                if self.joint_names[joint_idx] == msg.name[msg_idx]:
+                    self.q[joint_idx] = msg.position[msg_idx]
+                    self.qd[joint_idx] = msg.velocity[msg_idx]
+                    self.tau[joint_idx] = msg.effort[msg_idx]
+        if hasattr(self, 'check_time'):
+            loop_time = ros.Time.now().to_sec() - self.check_time
+            if loop_time > 1.05*(self.slow_down_factor * conf.robot_params[p.robot_name]['dt']):
+                freq_ros = 1/(self.slow_down_factor * conf.robot_params[p.robot_name]['dt'])
+                freq_coppelia = 1/loop_time
+                print(colored(f"freq mismatch beyond 5%: coppelia is running at {freq_coppelia} Hz while it should run at {freq_ros} Hz", "red"))
+                print(colored(f"freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
+        self.check_time = ros.Time.now().to_sec()
 
     def get_command_vel(self, msg):
         self.v_d = msg.linear.x
