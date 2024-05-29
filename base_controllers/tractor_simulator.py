@@ -226,11 +226,10 @@ class GenericSimulator(BaseController):
                     self.tau[joint_idx] = msg.effort[msg_idx]
         if hasattr(self, 'check_time'):
             loop_time = ros.Time.now().to_sec() - self.check_time
-            if loop_time > 1.05*(self.slow_down_factor * conf.robot_params[p.robot_name]['dt']):
+            if loop_time > 1.1*(self.slow_down_factor * conf.robot_params[p.robot_name]['dt']):
                 freq_ros = 1/(self.slow_down_factor * conf.robot_params[p.robot_name]['dt'])
                 freq_coppelia = 1/loop_time
-                print(colored(f"freq mismatch beyond 5%: coppelia is running at {freq_coppelia} Hz while it should run at {freq_ros} Hz", "red"))
-                print(colored(f"freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
+                print(colored(f"freq mismatch beyond 10%: coppelia is running at {freq_coppelia} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
         self.check_time = ros.Time.now().to_sec()
 
     def get_command_vel(self, msg):
@@ -472,10 +471,14 @@ class GenericSimulator(BaseController):
     
     def computeLongSlipCompensation(self, v, omega, qd_des, constants):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
-        if abs(omega) < 1e-05:
-            return qd_des, 0., 0., 1e8
 
-        radius = v/(omega)
+        if (abs(omega) < 1e-05) and (abs(v) > 1e-05):
+            radius = 1e08 * np.sign(v)
+        elif (abs(omega) < 1e-05) and (abs(v) < 1e-05):
+            radius = 1e8
+        else:
+            radius = v / (omega)
+
         #compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS*qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS*qd_des[1]
@@ -560,9 +563,10 @@ def talker(p):
         counter = 0
         #identification repeat long_v = 0.05:0.05:0.4
         v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
-        #generic open loop test
+
+        #generic open loop test for comparison with matlab
         #vel_gen = VelocityGenerator(simulation_time=10., DT=conf.robot_params[p.robot_name]['dt'])
-        #v_ol, omega_ol, _ = vel_gen.velocity_mir_smooth()
+        #v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth()
         while not ros.is_shutdown():
             if counter<len(v_ol):
                 p.v_d = v_ol[counter]
@@ -595,7 +599,7 @@ def talker(p):
     else:
         # CLOSE loop control
         # generate reference trajectory
-        vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
+        vel_gen = VelocityGenerator(simulation_time=10.,    DT=conf.robot_params[p.robot_name]['dt'])
         # initial_des_x = 0.1
         # initial_des_y = 0.1
         # initial_des_theta = 0.3
