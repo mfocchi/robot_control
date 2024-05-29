@@ -120,7 +120,10 @@ class LyapunovController:
             alpha = alpha_d
         else:
             params = ( psi, etheta, exy, theta, alpha_d, beta, v_d, omega_d, v_dot_d, omega_dot_d)
-            alpha, dv, domega = fsolve(self.equations, (dv0, domega0), args=params)
+            alpha, dv, domega = fsolve(self.equations, (alpha_d, dv0, domega0), args=params)
+            print(f"alpha: {alpha}, alpha: {dv},domega: {domega}")
+            v = (v_d + dv) * np.cos(alpha)
+            omega = omega_d + domega
 
         V = 1 / 2 * (ex ** 2 + ey ** 2) + (1- math.cos(etheta + alpha))
         V_dot = - self.K_P *math.pow( exy,2) * math.pow(math.cos(psi - (theta+alpha)), 2) -self.K_THETA * math.pow(math.sin(etheta+alpha),2)
