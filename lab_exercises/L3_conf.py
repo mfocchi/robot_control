@@ -53,6 +53,6 @@ qdd0 = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])    # joint acceleration
 # EXE 2-3: Add external force
 # Value of linear external force
 extForce = np.array([0.0, 0.0, 200.0])
-EXTERNAL_FORCE = False
+EXTERNAL_FORCE = True
 
 RemoveInitialError = False

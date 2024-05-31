@@ -124,7 +124,7 @@
 	\noindent
 	Tools that we are going to be using in this lab (all open-source):
 	\begin{itemize}
-		\item Python programming (2.7/3.5)\footnote{https://docs.python.org/}
+		\item Python programming (3.8)\footnote{https://docs.python.org/}
 		\item Robot Operating System (ROS)\footnote{https://www.ros.org/}
 		\item Pinocchio Library for Rigid Body Dynamics Algorithms\footnote{https://github.com/stack-of-tasks/pinocchio}
 		\item Locosim\footnote{https://github.com/mfocchi/locosim}
@@ -149,6 +149,13 @@ git submodule update
 cd ~/ros_ws
 catkin_make install
 \end{verbatim}
+
+In case you have uncommitted changes in some submodule type: 
+
+\begin{verbatim}
+	git stash save
+\end{verbatim}
+
 
 %If you use Spyder use this configuration (Fig. \ref{fig:spyder}) in \codeword{Run/Configure...} to enable the interactive shell:
 %
@@ -265,10 +272,11 @@ Implement Cartesian space inverse dynamics with a postural task in the null spac
 Note that because our robot is redundant for the (3D) positioning task the Jacobian is rectangular and we will have to use the $J^{\#}$ in place of the $J^{-1}$:
 
 \begin{align}
-&F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
+&v^d =  \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
 & \Lambda = (J M^{-1}J^T)^{-1}\\
 &\mu(q,\dot{q})  = J^{T\#} h -\Lambda \dot{J} \dot{q} \\
-&\tau  = J^T\left( \Lambda F^d +  \mu(q,\dot{q}) \right) + \tau_{null}
+&F^d = \Lambda v^d +  \mu(q,\dot{q})\\
+&\tau  = J^TF^d+ \tau_{null}
 \end{align}
 
 
@@ -279,8 +287,8 @@ Observe that the tracking is now almost perfect, there are no coupling between d
 \textbf{2.2 - Cartesian space inverse dynamics - simplified:}
 Rather than compensate for the bias terms reflected at the end-effector $\mu(q,\dot{q})$,  compensate for them at the joint space level ($h$) and observe that the result is the same. 
 \begin{align}
-&F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
-&\tau  = J^T\left( \Lambda F^d  \right) + h + \tau_{null}
+&v^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
+&\tau  = J^T\left( \Lambda v^d  \right) + h + \tau_{null}
 \end{align}
 
 The advantage of this (less elegant) approach is that it saves us the computation of the terms $\dot{J}$ and $J^{T\#}$.\\
@@ -453,12 +461,13 @@ Remember that for this control law we need also to add the desired \textit{accel
 Note that the postural task is no longer needed, because we are assigning a $6D$ task. Therefore, the full control law is:
  
 \begin{align}
-& F^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
-& \Gamma^d  = \dot{\omega}^d + K_{o} e_o  + D_o(\omega^d - \omega)  \\
-& W^d = \mat{F^d \\ \Gamma^d} \\
+& v_l^d = \ddot{p}^d + K_x(p^d - p) + D_x(\dot{p}^d -\dot{p})  \\
+& v_o^d  = \dot{\omega}^d + K_{o} e_o  + D_o(\omega^d - \omega)  \\
+& v^d = \mat{v_l \\ v_o} \\
 & \Lambda = (J M^{-1}J^T + \rho^2 I_{6 \times6})^{-1}\\
 &\mu(q,\dot{q})  = J^{T\#} h -\Lambda \dot{J} \dot{q} \\
-& \tau = J^T\left( \Lambda W^d + \mu \right)
+& W^d = \left( \Lambda v^d + \mu \right)\\
+& \tau = J^TW^d 
 \end{align} 
 
 Verify that the tracking is almost perfect (apart from the transient due to the difference from the initial state and the reference) both during the motion and at steady-state, showing a perfect cancellation of all the non-linear terms, making the system linear and decoupled. 

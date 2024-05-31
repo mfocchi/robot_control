@@ -151,29 +151,29 @@ while True:
 
     # EXE 1.5: PD control (cartesian task) + postural task
     # null space torques (postural task)
-    # tau0 = conf.Kp_postural*(conf.q0-q) - conf.Kd_postural*qd
-    # tau_null = N.dot(tau0)
-    # tau = J.T.dot(F_des)  + tau_null
+    tau0 = conf.Kp_postural*(conf.q0-q) - conf.Kd_postural*qd
+    tau_null = N.dot(tau0)
+    tau = J.T.dot(F_des)  + tau_null
     
     # EXE 1.6: PD control + Gravity Compensation:
-    # F_des = conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)	+ JTpinv.dot(g)
-    # tau = J.T.dot(F_des) + tau_null
+    F_des = conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)	+ JTpinv.dot(g)
+    tau = J.T.dot(F_des) + tau_null
         
         
     # EXE 1.7: PD control  + Gravity Compensation + Feed-Forward term
-    # F_des = lambda_.dot(pdd_des) + conf.Kx.dot(p_des-p)+conf.Dx.dot(pd_des-pd) + JTpinv.dot(g)
-    # tau = J.T.dot(F_des) + tau_null
+    F_des = lambda_.dot(pdd_des) + conf.Kx.dot(p_des-p)+conf.Dx.dot(pd_des-pd) + JTpinv.dot(g)
+    tau = J.T.dot(F_des) + tau_null
      
      
     # EXE 2.1: Cartesian space inverse dynamics
-    # F_des = pdd_des + conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)
-    # mu =  JTpinv.dot(h) -lambda_.dot(Jdqd)
-    # tau = J.T.dot(lambda_.dot(F_des) + mu) + tau_null
+    F_des = pdd_des + conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)
+    mu =  JTpinv.dot(h) -lambda_.dot(Jdqd)
+    tau = J.T.dot(lambda_.dot(F_des) + mu) + tau_null
     
     
     # EXE 2.2: Cartesian space inverse dynamics with bias compensation in joint space (simpler to compute)
     # F_des = pdd_des + conf.Kx.dot(p_des-p) + conf.Dx.dot(pd_des-pd)
-    # tau =  J.T.dot(lambda_.dot(F_des)) + h + tau_null
+    tau =  J.T.dot(lambda_.dot(F_des)) + h + tau_null
 
 
     # EXE 3.1:  Control of orientation with PD: constant orientation
