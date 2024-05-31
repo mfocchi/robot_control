@@ -32,6 +32,10 @@ from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
+import numpy as np
+import catboost as cb
+
+
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -42,7 +46,7 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
-        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.05 #0.05:0.05:0.4
 
@@ -60,6 +64,12 @@ class GenericSimulator(BaseController):
 
     def initVars(self):
         super().initVars()
+
+        # regressor
+        self.model = cb.CatBoostRegressor()
+        # laod model
+        self.model.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/doretta/controllers/slippage_regressor.cb')
+
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -500,6 +510,41 @@ class GenericSimulator(BaseController):
         qd_comp[0] = 1/constants.SPROCKET_RADIUS * v_enc_l
         qd_comp[1] = 1/constants.SPROCKET_RADIUS * v_enc_r
         return qd_comp, beta_l, beta_r, radius
+
+    def computeLongSlipCompensationNN(self, v, omega, qd_des, constants):
+        # in the case radius is infinite, betas are zero (this is to avoid Nans)
+
+        if (abs(omega) < 1e-05) and (abs(v) > 1e-05):
+            radius = 1e08 * np.sign(v)
+        elif (abs(omega) < 1e-05) and (abs(v) < 1e-05):
+            radius = 1e8
+        else:
+            radius = v / (omega)
+
+        # compute track velocity from encoder
+        v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
+        v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
+
+        alpha, beta_inner, beta_outer = self.model.predict(np.array([v, abs(omega)]))
+
+        # estimate beta_inner, beta_outer from turning radius
+        if (radius >= 0.0):  # turning left, positive radius, left wheel is inner right wheel is outer
+            beta_l = beta_inner
+            beta_r = beta_outer
+            v_enc_l -= beta_l
+            v_enc_r += beta_r
+
+        else:  # turning right, negative radius, left wheel is outer right is inner
+            beta_l = beta_outer
+            beta_r = beta_inner
+            v_enc_r -= beta_r
+            v_enc_l += beta_l
+
+
+        qd_comp = np.zeros(2)
+        qd_comp[0] = 1 / constants.SPROCKET_RADIUS * v_enc_l
+        qd_comp[1] = 1 / constants.SPROCKET_RADIUS * v_enc_r
+        return qd_comp, beta_inner, beta_r, radius
     
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
