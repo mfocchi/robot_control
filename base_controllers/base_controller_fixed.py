@@ -122,8 +122,12 @@ class BaseControllerFixed(threading.Thread):
         else:
             os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
 
+        if launch_file=='standard':
+            launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/start_framework.launch'
+
         if launch_file is None:
             launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_' + self.robot_name + '.launch'
+
 
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
@@ -132,6 +136,7 @@ class BaseControllerFixed(threading.Thread):
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
         cli_args = [launch_file,
+                    'robot_name:=' + self.robot_name,
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]

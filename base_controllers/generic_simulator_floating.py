@@ -15,7 +15,6 @@ from base_controllers.utils.common_functions import plotFrame, plotJoint
 
 import params as conf
 robotName = "myrobot" # needs to inherit BaseController
-#robotName = "ur5"  # needs to inherit BaseControllerFixed
 
 class GenericSimulator(BaseController):
     
@@ -39,10 +38,6 @@ def talker(p):
     p.start()
     additional_args = None
     p.startSimulator(additional_args = additional_args)
-    # uncomment for ur5
-    #xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'
-    #p.loadModelAndPublishers(xacro_path)
-
     p.loadModelAndPublishers()
     p.initSubscribers()
 

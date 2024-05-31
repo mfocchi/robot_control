@@ -20,6 +20,16 @@ robot_params['myrobot'] ={'dt': 0.001,
                         'spawn_z': 1.0,
                         'buffer_size': 30001}
 
+robot_params['z1'] ={'dt': 0.001,
+                        'kp': np.array([20.,   20.,    20.,  20., 20.,  20.]),
+                        'kd':  np.array([0.5,    0.5,    0.5,   0.5, 0.5, 0.5]),
+                        'q_0':  np.array([0, 0.5, -1, 0, 0, 0]),
+                        'joint_names': ['joint1', 'joint2',  'joint3', 'joint4', 'joint5', 'joint6'],
+                        'ee_frame': ['tool0'], #TODO rename ee_frame to ee_frames
+                        'spawn_x': 0.0,
+                        'spawn_y': 0.0,
+                        'spawn_z': 0.0,
+                        'buffer_size': 30001}
 
 robot_params['tractor'] ={'dt': 0.02,
                         'kp': np.array([100.,   100.,    100.,  100.]),
