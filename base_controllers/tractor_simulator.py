@@ -46,18 +46,22 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
+        self.ControlType = 'CLOSED_LOOP_SLIP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'NONE'
+        self.IDENT_DIRECTION = 'right' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.05 #0.05:0.05:0.4
+        self.IDENT_WHEEL_L = 4.5  # -4.5:0.5:4.5
 
+        self.GRAVITY_COMPENSATION = True
 
         self.SAVE_BAGS = True
-        self.LONG_SLIP_COMPENSATION = True
+        self.LONG_SLIP_COMPENSATION = 'EXP'#'NN', 'EXP', 'NONE'
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
         self.frictionCoeff=0.3 #0.3 0.6
-        self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}.ttt'
-                                
+        self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}centered.ttt'
+        #self.coppeliaModel = f'new_track.ttt'
+
         if self.GAZEBO and not self.ControlType=='OPEN_LOOP':
             print(colored("Gazebo Model has no slippage, turn it off","red"))
             sys.exit()
@@ -68,7 +72,7 @@ class GenericSimulator(BaseController):
         # regressor
         self.model = cb.CatBoostRegressor()
         # laod model
-        self.model.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/doretta/controllers/slippage_regressor.cb')
+        self.model.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/doretta/controllers/slippage_regressor_wheels.cb')
 
         ## add your variables to initialize here
         self.ctrl_v = 0.
@@ -171,28 +175,8 @@ class GenericSimulator(BaseController):
 
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description')+"/launch/rviz_nojoints.launch")
-
-            # launch separately
-            # package = 'robot_state_publisher'
-            # executable = 'robot_state_publisher'
-            # node = roslaunch.core.Node(package, executable)
-            # launch = roslaunch.scriptapi.ROSLaunch()
-            # launch.start()
-            # process = launch.launch(node)
-            #
-            # # run rviz
-            # package = 'rviz'
-            # executable = 'rviz'
-            # args = '-d ' + rospkg.RosPack().get_path('ros_impedance_controller') + '/config/operator.rviz'
-            # node = roslaunch.core.Node(package, executable, args=args)
-            # launch = roslaunch.scriptapi.ROSLaunch()
-            # launch.start()
-            # process = launch.launch(node)
-
             # wait for coppelia to start
             ros.sleep(1.5)
-
-
 
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
@@ -209,7 +193,10 @@ class GenericSimulator(BaseController):
 
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
-                bag_name= f"ident_sim_friction_{self.frictionCoeff}_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.bag"
+                if p.IDENT_TYPE=='V_OMEGA':
+                    bag_name= f"ident_sim_friction_{self.frictionCoeff}_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.bag"
+                else:
+                    bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}_friction_{self.frictionCoeff}.bag"
             else:
                 bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
@@ -226,7 +213,8 @@ class GenericSimulator(BaseController):
             # simTimeSub=simROS.Subscriber('/simulationTime',Float32, time_sim_)
             # I do this only to check frequency
             self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState, callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
-
+            # self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
+            #                                queue_size=1, tcp_nodelay=True)
     def _receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
@@ -234,6 +222,7 @@ class GenericSimulator(BaseController):
                     self.q[joint_idx] = msg.position[msg_idx]
                     self.qd[joint_idx] = msg.velocity[msg_idx]
                     self.tau[joint_idx] = msg.effort[msg_idx]
+        #check frequency
         if hasattr(self, 'check_time'):
             loop_time = ros.Time.now().to_sec() - self.check_time
             if loop_time > 1.1*(self.slow_down_factor * conf.robot_params[p.robot_name]['dt']):
@@ -241,6 +230,32 @@ class GenericSimulator(BaseController):
                 freq_coppelia = 1/loop_time
                 print(colored(f"freq mismatch beyond 10%: coppelia is running at {freq_coppelia} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
         self.check_time = ros.Time.now().to_sec()
+
+    # def _receive_pose(self, msg):
+    #     self.quaternion[0]=    msg.pose.pose.orientation.x
+    #     self.quaternion[1]=    msg.pose.pose.orientation.y
+    #     self.quaternion[2]=    msg.pose.pose.orientation.z
+    #     self.quaternion[3]=    msg.pose.pose.orientation.w
+    #     self.euler = np.array(euler_from_quaternion(self.quaternion))
+    #     #unwrap
+    #     self.euler, self.euler_old = unwrap_vector(self.euler, self.euler_old)
+    #     # compute orientation matrix
+    #     self.b_R_w = self.math_utils.rpyToRot(self.euler)
+    #
+    #     base_offset_wrt_chassis = np.array([-0.07,0,0])
+    #     self.basePoseW[:3] = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]) + self.b_R_w.T.dot(base_offset_wrt_chassis)
+    #     self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
+    #     self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
+    #     self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
+    #
+    #     omega = np.array([msg.twist.twist.angular.x, msg.twist.twist.angular.y,  msg.twist.twist.angular.z])
+    #     self.baseTwistW[:3] = np.array([msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z]) + omega.dot(self.b_R_w.T.dot(base_offset_wrt_chassis))
+    #     self.baseTwistW[3:] = omega
+    #
+    #     if self.broadcast_world:
+    #         self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+    #                                    self.quaternion,
+    #                                    ros.Time.now(), '/base_link', '/world')
 
     def get_command_vel(self, msg):
         self.v_d = msg.linear.x
@@ -282,7 +297,6 @@ class GenericSimulator(BaseController):
         else:
             # we need to broadcast the TF world baselink in coppelia not in base controller for synchro issues
             self.broadcast_world = False
-
             self.simulationControl('start')
             # start coppeliasim
             self.simulationControl('enable_sync_mode')
@@ -297,7 +311,7 @@ class GenericSimulator(BaseController):
             #xy plot
             plt.figure()
             plt.plot(p.des_state_log[0, :], p.des_state_log[1, :], "-r", label="desired")
-            plt.plot(p.basePoseW_log[0, :], p.basePoseW_log[1, :], "-b", label="real")
+            plt.plot(p.state_log[0, :], p.state_log[1, :], "-b", label="real")
             plt.legend()
             plt.xlabel("x[m]")
             plt.ylabel("y[m]")
@@ -407,7 +421,7 @@ class GenericSimulator(BaseController):
         qd_des[0] = (v_des - omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
         qd_des[1] = (v_des + omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
 
-        #publish des commands
+        #publish des commands as well
         msg = JointState()
         msg.name = self.joint_names
         msg.header.stamp = ros.Time.from_sec(self.time)
@@ -420,6 +434,34 @@ class GenericSimulator(BaseController):
     def unwrap(self):
         for i in range(self.robot.na):
             self.q[i], self.q_old[i] =unwrap_angle(self.q[i], self.q_old[i])
+
+    def generateWheelTraj(self, wheel_l = -4.5):
+        ####################################
+        # OPEN LOOP wl , wr (from -4.5 to 4.5)
+        ####################################
+        wheel_l_vec = []
+        wheel_r_vec = []
+        change_interval = 3.
+        nsamples = 12
+        if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
+            wheel_r = np.linspace(-constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY, nsamples)
+        else:
+            wheel_r = np.linspace(constants.MAXSPEED_RADS_PULLEY, -constants.MAXSPEED_RADS_PULLEY, nsamples)
+        time = 0
+        i = 0
+        while True:
+            time = np.round(time + conf.robot_params[p.robot_name]['dt'], 3)
+            wheel_l_vec.append(wheel_l)
+            wheel_r_vec.append(wheel_r[i])
+            # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
+            if time > ((1 + i) * change_interval):
+                i += 1
+            if i == len(wheel_r):
+                break
+
+        wheel_l_vec.append(0.0)
+        wheel_r_vec.append(0.0)
+        return wheel_l_vec,wheel_r_vec
 
     def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.325, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
@@ -478,7 +520,11 @@ class GenericSimulator(BaseController):
             side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
 
         return beta_l, beta_r, side_slip
-    
+
+    def computeGravityCompensation(self, roll, pitch):
+        pass
+
+
     def computeLongSlipCompensation(self, v, omega, qd_des, constants):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
 
@@ -513,7 +559,7 @@ class GenericSimulator(BaseController):
 
     def computeLongSlipCompensationNN(self, v, omega, qd_des, constants):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
-
+        #
         if (abs(omega) < 1e-05) and (abs(v) > 1e-05):
             radius = 1e08 * np.sign(v)
         elif (abs(omega) < 1e-05) and (abs(v) < 1e-05):
@@ -525,26 +571,17 @@ class GenericSimulator(BaseController):
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
 
-        alpha, beta_inner, beta_outer = self.model.predict(np.array([v, abs(omega)]))
+        beta_l, beta_r, alpha = self.model.predict(qd_des)
 
-        # estimate beta_inner, beta_outer from turning radius
-        if (radius >= 0.0):  # turning left, positive radius, left wheel is inner right wheel is outer
-            beta_l = beta_inner
-            beta_r = beta_outer
-            v_enc_l -= beta_l
-            v_enc_r += beta_r
 
-        else:  # turning right, negative radius, left wheel is outer right is inner
-            beta_l = beta_outer
-            beta_r = beta_inner
-            v_enc_r -= beta_r
-            v_enc_l += beta_l
+        v_enc_l += beta_l
+        v_enc_r += beta_r
 
 
         qd_comp = np.zeros(2)
         qd_comp[0] = 1 / constants.SPROCKET_RADIUS * v_enc_l
         qd_comp[1] = 1 / constants.SPROCKET_RADIUS * v_enc_r
-        return qd_comp, beta_inner, beta_r, radius
+        return qd_comp, beta_l, beta_r, radius
     
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
@@ -606,17 +643,27 @@ def talker(p):
     # OPEN loop control
     if p.ControlType == 'OPEN_LOOP':
         counter = 0
-        #identification repeat long_v = 0.05:0.05:0.4
-        v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
+        if p.IDENT_TYPE=='NONE':
+        # generic open loop test for comparison with matlab
+            vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
+            v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth()
+            traj_length = len(v_ol)
+        if p.IDENT_TYPE == 'V_OMEGA':
+            #identification repeat long_v = 0.05:0.05:0.4
+            v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.6, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
+            traj_length = len(v_ol)
+        if p.IDENT_TYPE == 'WHEELS':
+            wheel_l_ol, wheel_r_ol  = p.generateWheelTraj(p.IDENT_WHEEL_L)
+            traj_length = len(wheel_l_ol)
 
-        #generic open loop test for comparison with matlab
-        #vel_gen = VelocityGenerator(simulation_time=10., DT=conf.robot_params[p.robot_name]['dt'])
-        #v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth()
         while not ros.is_shutdown():
-            if counter<len(v_ol):
-                p.v_d = v_ol[counter]
-                p.omega_d = omega_ol[counter]
-                p.qd_des = p.mapToWheels(p.v_d, p.omega_d )
+            if counter<traj_length:
+                if p.IDENT_TYPE == 'WHEELS':
+                    p.qd_des = np.array([wheel_l_ol[counter], wheel_r_ol[counter]])
+                else:
+                    p.v_d = v_ol[counter]
+                    p.omega_d = omega_ol[counter]
+                    p.qd_des = p.mapToWheels(p.v_d, p.omega_d )
                 counter+=1
             else:
                 print(colored("Identification test accomplished", "red"))
@@ -642,6 +689,7 @@ def talker(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
     else:
+
         # CLOSE loop control
         # generate reference trajectory
         vel_gen = VelocityGenerator(simulation_time=10.,    DT=conf.robot_params[p.robot_name]['dt'])
@@ -655,7 +703,7 @@ def talker(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=5., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
@@ -675,22 +723,28 @@ def talker(p):
                     break
             if p.ControlType=='CLOSED_LOOP_SLIP_0':
                 p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, approx=True)
-                p.des_theta -= p.alpha_control  # we track theta_d -alpha
+                p.des_theta -=  p.controller.alpha_exp(p.v_d, p.omega_d)  # we track theta_d -alpha_d
 
             if p.ControlType == 'CLOSED_LOOP_SLIP':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,approx=False)
-                p.des_theta -= p.alpha_control  # we track theta_d -alpha
+                p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d)  # we track theta_d -alpha_d
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
-            if not p.ControlType=='CLOSED_LOOP_UNICYCLE' and p.LONG_SLIP_COMPENSATION and not traj_finished:
-                p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
-
+            if not p.ControlType=='CLOSED_LOOP_UNICYCLE' and p.LONG_SLIP_COMPENSATION is not 'NONE' and not traj_finished:
+                if p.LONG_SLIP_COMPENSATION=='NN':
+                    p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensationNN(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
+                else:#exponential
+                    p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
+    
             # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             # senting it to be tracked from the impedance loop
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
+            #if p.GRAVITY_COMPENSATION:
+             #   p.tau_ffwd = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]],p.basePoseW[p.u.sp_crd["AY"]])
+
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
             if not p.GAZEBO:

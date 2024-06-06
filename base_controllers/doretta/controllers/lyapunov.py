@@ -121,7 +121,7 @@ class LyapunovController:
         else:
             params = ( psi, etheta, exy, theta, alpha_d, beta, v_d, omega_d, v_dot_d, omega_dot_d)
             alpha, dv, domega = fsolve(self.equations, (alpha_d, dv0, domega0), args=params)
-            print(f"alpha: {alpha}, alpha: {dv},domega: {domega}")
+            #print(f"alpha: {alpha}, dv: {dv},domega: {domega}")
             v = (v_d + dv) * np.cos(alpha)
             omega = omega_d + domega
 
