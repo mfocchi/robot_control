@@ -46,10 +46,10 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.GAZEBO = False
-        self.ControlType = 'CLOSED_LOOP_SLIP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'NONE'
-        self.IDENT_DIRECTION = 'right' #used only when OPEN_LOOP
-        self.IDENT_LONG_SPEED = 0.05 #0.05:0.05:0.4
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA', 'NONE'
+        self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
+        self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
         self.IDENT_WHEEL_L = 4.5  # -4.5:0.5:4.5
 
         self.GRAVITY_COMPENSATION = True
@@ -463,7 +463,7 @@ class GenericSimulator(BaseController):
         wheel_r_vec.append(0.0)
         return wheel_l_vec,wheel_r_vec
 
-    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.325, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
+    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.6, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
         change_interval = 6.
         increment = increment
@@ -501,7 +501,7 @@ class GenericSimulator(BaseController):
         #compute BF velocity
         w_R_b = np.array([[np.cos(theta), -np.sin(theta)],
                          [np.sin(theta), np.cos(theta)]])
-        b_vel_xy = w_R_b.T.dot(w_vel_xy)
+        b_vel_xy = (w_R_b.T).dot(w_vel_xy)
         b_vel_x = b_vel_xy[0]
 
         # track velocity  from encoder
@@ -511,9 +511,11 @@ class GenericSimulator(BaseController):
 
         v_track_l = b_vel_x - omega* B / 2
         v_track_r = b_vel_x + omega* B / 2
-
-        beta_l = np.abs(v_track_l - v_enc_l)
-        beta_r = np.abs(v_track_r - v_enc_r)
+        
+        # discrepancy bw what it turn out to be (real track) and what it
+        # should be (desired) from encoder
+        beta_l = v_enc_l-v_track_l
+        beta_r = v_enc_r-v_track_r  
         if (abs(b_vel_xy[1])<0.001) or (abs(b_vel_xy[0])<0.001):
             side_slip = 0.
         else:
@@ -542,13 +544,13 @@ class GenericSimulator(BaseController):
         #estimate beta_inner, beta_outer from turning radius
         if(radius >= 0.0): # turning left, positive radius, left wheel is inner right wheel is outer
             beta_l = constants.beta_slip_inner_coefficients_left[0]*np.exp(constants.beta_slip_inner_coefficients_left[1]*radius)
-            v_enc_l-=beta_l
+            v_enc_l+=beta_l
             beta_r = constants.beta_slip_outer_coefficients_left[0]*np.exp(constants.beta_slip_outer_coefficients_left[1]*radius)
             v_enc_r+=beta_r
 
         else:# turning right, negative radius, left wheel is outer right is inner
             beta_r = constants.beta_slip_inner_coefficients_right[0]*np.exp(constants.beta_slip_inner_coefficients_right[1]*radius)
-            v_enc_r-=beta_r
+            v_enc_r+=beta_r
             beta_l =  constants.beta_slip_outer_coefficients_right[0]*np.exp(constants.beta_slip_outer_coefficients_right[1]*radius)
             v_enc_l+=beta_l
 
@@ -570,9 +572,7 @@ class GenericSimulator(BaseController):
         # compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
-
         beta_l, beta_r, alpha = self.model.predict(qd_des)
-
 
         v_enc_l += beta_l
         v_enc_r += beta_r
