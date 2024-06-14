@@ -34,7 +34,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 import numpy as np
 import catboost as cb
-
+import pinocchio as pin
 
 
 robotName = "tractor" # needs to inherit BaseController
@@ -45,24 +45,24 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = False
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA', 'NONE'
+        self.GAZEBO = True
+        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.IDENT_TYPE = 'NONE' # 'V_OMEGA', 'NONE'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
         self.IDENT_WHEEL_L = 4.5  # -4.5:0.5:4.5
 
         self.GRAVITY_COMPENSATION = True
 
-        self.SAVE_BAGS = True
-        self.LONG_SLIP_COMPENSATION = 'EXP'#'NN', 'EXP', 'NONE'
+        self.SAVE_BAGS = False
+        self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP', 'NONE'
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
         self.frictionCoeff=0.3 #0.3 0.6
         self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}centered.ttt'
         #self.coppeliaModel = f'new_track.ttt'
 
-        if self.GAZEBO and not self.ControlType=='OPEN_LOOP':
+        if self.GAZEBO and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
             print(colored("Gazebo Model has no slippage, turn it off","red"))
             sys.exit()
 
@@ -152,8 +152,8 @@ class GenericSimulator(BaseController):
 
     def startSimulator(self):
         if self.GAZEBO:
-            #world_name = tractor.world
-            super().startSimulator(world_name=None, additional_args=['spawn_Y:=0.'])
+            world_name = 'ramps.world'
+            super().startSimulator(world_name=world_name, additional_args=['spawn_Y:=0.'])
         else:
             print(colored(
                 f"---------To run this you need to clone https://github.com/mfocchi/CoppeliaSim inside locosim folder",
@@ -524,8 +524,50 @@ class GenericSimulator(BaseController):
         return beta_l, beta_r, side_slip
 
     def computeGravityCompensation(self, roll, pitch):
-        pass
+        W = np.array([0., 0., constants.mass*9.81, 0., 0., 0.])
+        track_discretization = 4
+        grasp_matrix_left = np.zeros((6, 3*track_discretization))
+        grasp_matrix_right = np.zeros((6, 3*track_discretization))
+        b_pos_track_left_x = np.linspace(constants.b_left_track_start[0], constants.b_left_track_end[0], track_discretization)
+        b_pos_track_right_x = np.linspace(constants.b_right_track_start[0], constants.b_right_track_end[0], track_discretization)
+        #mapping to horizontal frame
+        w_R_b = self.math_utils.eul2Rot(np.array([roll, pitch, self.basePoseW[self.u.sp_crd["AZ"]]]))
 
+        #fill in grasp matrix
+        for i in range(track_discretization):
+            b_pos_track_left_i = np.array([b_pos_track_left_x[i], constants.b_left_track_start[1], constants.b_left_track_start[2]])
+            grasp_matrix_left[:3,i*3:i*3+3] = np.eye(3)
+            grasp_matrix_left[3:, i * 3:i * 3 + 3] = pin.skew( w_R_b.dot(b_pos_track_left_i))
+            self.ros_pub.add_arrow(p.basePoseW[:3], w_R_b.dot(b_pos_track_left_i), "red")
+
+        for i in range(track_discretization):
+            b_pos_track_right_i = np.array([b_pos_track_right_x[i], constants.b_right_track_start[1], constants.b_right_track_start[2]])
+            grasp_matrix_right[:3,i*3:i*3+3] = np.eye(3)
+            grasp_matrix_right[3:, i * 3:i * 3 + 3] = pin.skew( w_R_b.dot(b_pos_track_right_i))
+
+        #get track element forces distributiong load
+        fi = np.linalg.pinv(np.hstack((grasp_matrix_left,grasp_matrix_right))).dot(W)
+
+
+        #get contact frame
+        ty = w_R_b.dot(np.array([0, 1., 0.]))
+        n = w_R_b.dot(np.array([0., 0., 1.]))
+        #projection on tx
+        # fill in projection/sum matrix
+        proj_matrix = np.zeros((3, 3*track_discretization))
+        sum_matrix = np.zeros((3, 3*track_discretization))
+        for i in range(track_discretization):
+            #compute projections by outer product I-n*nt, project first on n-x plane then on x
+            proj_matrix[:3, i*3:i*3+3] = (np.eye(3) - np.multiply.outer(n.ravel(), n.ravel())).dot((np.eye(3) -  np.multiply.outer(ty.ravel(), ty.ravel())))
+            sum_matrix[:3, i*3:i*3+3] = np.eye(3)
+
+        F_l = sum_matrix.dot(fi[:3*track_discretization])
+        F_r = sum_matrix.dot(fi[3*track_discretization:])
+        F_lx = proj_matrix.dot(fi[:3*track_discretization])
+        F_rx = proj_matrix.dot(fi[3*track_discretization:])
+
+        tau_g = np.array([F_lx*constants.SPROCKET_RADIUS, F_rx*constants.SPROCKET_RADIUS])
+        return  tau_g, F_l, F_r
 
     def computeLongSlipCompensation(self, v, omega, qd_des, constants):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
@@ -646,7 +688,7 @@ def talker(p):
         if p.IDENT_TYPE=='NONE':
         # generic open loop test for comparison with matlab
             vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
-            v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth()
+            v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth() #velocity_straight
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'V_OMEGA':
             #identification repeat long_v = 0.05:0.05:0.4
@@ -676,10 +718,18 @@ def talker(p):
                 p.tau_ffwd = np.zeros(p.robot.na)
 
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
+
+            if p.GRAVITY_COMPENSATION:
+                p.tau_g, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
+                w_center_track_left = p.b_R_w.T.dot(0.5 * (constants.b_left_track_start + constants.b_left_track_end))
+                w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
+                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l / np.linalg.norm(p.F_l), "red")
+                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r / np.linalg.norm(p.F_r), "red")
+
             #note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             #senting it to be tracked from the impedance loop
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-
+            p.ros_pub.publishVisual(delete_markers=False)
             if not p.GAZEBO:
                 p.simulationControl('trigger_next_step')
                 p.unwrap()
@@ -692,7 +742,7 @@ def talker(p):
 
         # CLOSE loop control
         # generate reference trajectory
-        vel_gen = VelocityGenerator(simulation_time=10.,    DT=conf.robot_params[p.robot_name]['dt'])
+        vel_gen = VelocityGenerator(simulation_time=40.,    DT=conf.robot_params[p.robot_name]['dt'])
         # initial_des_x = 0.1
         # initial_des_y = 0.1
         # initial_des_theta = 0.3
@@ -742,10 +792,17 @@ def talker(p):
             # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             # senting it to be tracked from the impedance loop
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
-            #if p.GRAVITY_COMPENSATION:
-             #   p.tau_ffwd = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]],p.basePoseW[p.u.sp_crd["AY"]])
+            if p.GRAVITY_COMPENSATION:
+                p.tau_g, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
+                w_center_track_left = p.b_R_w.T.dot(0.5*(constants.b_left_track_start+constants.b_left_track_end))
+                w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
+                print(p.basePoseW[:3] + w_center_track_left)
+                print(p.F_r)
+                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l/np.linalg.norm(p.F_l), "red")
+                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r/np.linalg.norm(p.F_r), "red")
 
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            p.ros_pub.publishVisual(delete_markers=False)
 
             if not p.GAZEBO:
                 p.simulationControl('trigger_next_step')

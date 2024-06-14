@@ -30,3 +30,11 @@ beta_slip_outer_coefficients_left =np.array([ 0.2826 ,  -4.2355])
 #this should be used only with negative radius!
 beta_slip_inner_coefficients_right =np.array([ -0.1311,    3.4685])
 beta_slip_outer_coefficients_right =np.array([ 0.2723,    4.8530])
+
+#com base brame
+mass = 61.05
+#b_com = np.array([-0.082,0,-0.032])
+b_left_track_start = np.array([0.35,0.35, -0.2])
+b_left_track_end = np.array([-0.35,0.35,  -0.2])
+b_right_track_start = np.array([0.35,-0.35,-0.2])
+b_right_track_end = np.array([-0.35,-0.35,-0.2])
