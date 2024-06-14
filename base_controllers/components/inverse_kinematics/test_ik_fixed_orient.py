@@ -39,6 +39,13 @@ kin = robotKinematics(robot, ee_frame)
 start_time = time.time()
 q, ik_success, out_of_workspace = kin.endeffectorFrameInverseKinematicsLineSearch(ee_pos_des, w_R_e_des, ee_frame, q_guess, verbose = True, wrap = True)
 
+#with postural
+q_postural = np.array([0.8, -0.8, 0.8, -0.8, -0.8, 0.8])
+q, ik_success, out_of_workspace = kin.endeffectorFrameInverseKinematicsLineSearch(ee_pos_des, w_R_e_des, ee_frame, q_guess, verbose = True, wrap = True,
+                                                                                  postural_task=True,
+                                                                                  w_postural=0.0001,
+                                                                                  q_postural=q_postural )
+
 #chek orient
 print( robot.framePlacement(q, robot.model.getFrameId(ee_frame)).rotation)
 

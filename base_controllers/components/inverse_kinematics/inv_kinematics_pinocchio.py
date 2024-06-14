@@ -179,7 +179,7 @@ class robotKinematics():
         # Inverse kinematics with line search
         while True:
             # compute foot position
-            self.robot.computeAllTerms(q0, np.zeros(6))
+            self.robot.computeAllTerms(q0, np.zeros_like(q0))
             ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
         
             # get the square matrix jacobian that is smaller (3x6)
@@ -195,9 +195,10 @@ class robotKinematics():
             else:
                 # computed error wrt the des cartesian position
                 e_bar = np.hstack((ee_pos_des - ee_pos0, w_postural*(q_postural - q0) ))               
-                Je = np.vstack((J_ee, w_postural*np.identity(6)))                                
+                Je = np.vstack((J_ee, w_postural*np.identity(len(q0))))
                 grad = Je.T.dot(e_bar)
-                dq = (np.linalg.inv(  J_ee.T.dot(J_ee)  + pow(w_postural,2)* np.identity(6) )).dot(grad)
+                # the minus or not depends on error definition
+                dq = (np.linalg.inv(  J_ee.T.dot(J_ee)  + pow(w_postural,2)* np.identity(len(q0)) )).dot(grad)
                 
             if (use_error_as_termination_criteria):
                 print("ERROR",np.linalg.norm(e_bar))
@@ -231,7 +232,7 @@ class robotKinematics():
                     print("Iter #:", niter)
                 # Update
                 q1 = q0 + dq * alpha
-                self.robot.computeAllTerms(q1, np.zeros(6))
+                self.robot.computeAllTerms(q1, np.zeros_like(q0))
                 ee_pos1 =  self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).translation
 
                 if not postural_task:
@@ -273,7 +274,8 @@ class robotKinematics():
       The end-effector position should be specified in the BASE FRAME
       The output is the set of joints relative to the end-effector position
     '''
-    def endeffectorFrameInverseKinematicsLineSearch(self, ee_pos_des, w_R_e_des, frame_name, q0=np.zeros(6), verbose=False, wrap = False):
+    def endeffectorFrameInverseKinematicsLineSearch(self, ee_pos_des, w_R_e_des, frame_name, q0=np.zeros(6), verbose=False, wrap = False,
+                                                    postural_task=False,  w_postural = 0.001, q_postural = np.zeros(6)):
 
         # Error initialization
         e_bar = 1
@@ -293,7 +295,7 @@ class robotKinematics():
         # Inverse kinematics with line search
         while True:
             # compute foot position
-            self.robot.computeAllTerms(q0, np.zeros(6))
+            self.robot.computeAllTerms(q0, np.zeros_like(q0))
             ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
             w_R_e0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).rotation
 
@@ -301,10 +303,20 @@ class robotKinematics():
             J6 = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True,
                                           pinocchio.ReferenceFrame.LOCAL_WORLD_ALIGNED)
 
-            # computed error
-            e_bar = np.hstack((ee_pos_des - ee_pos0, w_R_e0.dot(self.errorInSO3(w_R_e0, w_R_e_des)   )    ))
-            grad = J6.T.dot(e_bar)
-            dq = np.linalg.inv(J6 + 1e-08* np.identity(6)).dot(e_bar)
+            # compute newton step
+            if not postural_task:
+                # computed error
+                e_bar = np.hstack((ee_pos_des - ee_pos0, w_R_e0.dot(self.errorInSO3(w_R_e0, w_R_e_des))))
+                Jpinv = (np.linalg.inv(J6.T.dot(J6) + lambda_ * np.identity(J6.shape[1]))).dot(J6.T)
+                grad = J6.T.dot(e_bar)
+                dq = Jpinv.dot(e_bar)
+            else:
+                # computed error wrt the des cartesian position
+                e_bar = np.hstack((ee_pos_des - ee_pos0, w_R_e0.dot(self.errorInSO3(w_R_e0, w_R_e_des)), w_postural * (q_postural - q0)))
+                Je = np.vstack((J6, w_postural * np.identity(len(q0))))
+                grad = Je.T.dot(e_bar)
+                # the minus or not depends on error definition
+                dq = (np.linalg.inv(J6.T.dot(J6) + pow(w_postural, 2) * np.identity(len(q0)))).dot(grad)
 
             if np.linalg.norm(grad) < epsilon:
                 IKsuccess = True
@@ -332,12 +344,18 @@ class robotKinematics():
                     print("Iter #:", niter)
                 # Update
                 q1 = q0 + dq * alpha
-                self.robot.computeAllTerms(q1, np.zeros(6))
+                self.robot.computeAllTerms(q1, np.zeros_like(q0))
                 ee_pos1 = self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).translation
                 w_R_e1 = self.robot.framePlacement(q1, self.robot.model.getFrameId(frame_name)).rotation
 
-                e_bar_new = np.hstack((ee_pos_des - ee_pos1, w_R_e1.dot(self.errorInSO3(w_R_e1, w_R_e_des))))
-                # print "e_bar_new", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
+                if not postural_task:
+                    # Compute error of next step
+                    e_bar_new = np.hstack((ee_pos_des - ee_pos1, w_R_e1.dot(self.errorInSO3(w_R_e1, w_R_e_des))))
+                    # print "e_bar_new", np.linalg.norm(e_bar_new), "e_bar", np.linalg.norm(e_bar)
+                else:
+                    e_bar_new = np.hstack((ee_pos_des - ee_pos1, w_R_e1.dot(self.errorInSO3(w_R_e1, w_R_e_des)), w_postural * (q_postural - q0)))
+
+
 
                 error_reduction = np.linalg.norm(e_bar) - np.linalg.norm(e_bar_new)
                 threshold = 0.0  # even more strict: gamma*alpha*np.linalg.norm(e_bar)
@@ -427,7 +445,7 @@ class robotKinematics():
         while True:
             # compute foot position
             q0 = np.hstack((np.zeros(3), q0_leg))
-            self.robot.computeAllTerms(q0, np.zeros(6))
+            self.robot.computeAllTerms(q0, np.zeros_like(q0))
             ee_pos0 = self.robot.framePlacement(q0, self.robot.model.getFrameId(frame_name)).translation
             # get the square matrix jacobian that is smaller (3x6)
             J_ee = self.robot.frameJacobian(q0, self.robot.model.getFrameId(frame_name), True,
