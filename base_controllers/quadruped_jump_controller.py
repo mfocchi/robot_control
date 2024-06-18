@@ -7,13 +7,13 @@ import pinocchio as pin
 # utility functions
 from base_controllers.utils.math_tools import *
 from termcolor import colored
-from base_controllers.quadruped_controller import Controller
+from base_controllers.quadruped_controller import QuadrupedController
 import base_controllers.params as conf
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 import os, sys
 
-class QuadrupedJumpController(Controller):
+class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.DEBUG = True

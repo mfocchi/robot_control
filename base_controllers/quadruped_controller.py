@@ -39,9 +39,9 @@ from base_controllers.components.imu_utils import IMU_utils
 
 import datetime
 
-class Controller(BaseController):
+class QuadrupedController(BaseController):
     def __init__(self, robot_name="hyq", launch_file=None):
-        super(Controller, self).__init__(robot_name, launch_file)
+        super(QuadrupedController, self).__init__(robot_name, launch_file)
         self.qj_0 = conf.robot_params[self.robot_name]['q_0']
         self.dt = conf.robot_params[self.robot_name]['dt']
 
@@ -460,7 +460,7 @@ class Controller(BaseController):
         self.initVars()                            # overloaded method
         self.initSubscribers()
         self.rate = ros.Rate(1 / self.dt)
-        print(colored("Started controller", "blue"))
+        print(colored("Started QuadrupedController", "blue"))
 
 
 
@@ -910,7 +910,7 @@ class Controller(BaseController):
                                                                                       qd=self.qd,
                                                                                       update_legOdom=update_legOdom)
         self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
-        super(Controller, self).updateKinematics()
+        super(QuadrupedController, self).updateKinematics()
 
 
     def checkBaseCollisions(self):
@@ -970,7 +970,7 @@ class Controller(BaseController):
         ros.sleep(.5)
         print(colored("Starting up", "blue"))
         if self.robot_name == 'hyq':
-            super(Controller, self).startupProcedure()
+            super(QuadrupedController, self).startupProcedure()
             return
 
         if self.go0_conf == 'standUp':
@@ -1358,7 +1358,7 @@ class Controller(BaseController):
 
 
 if __name__ == '__main__':
-    p = Controller('go1')
+    p = QuadrupedController('go1')
     world_name = 'fast.world'
     use_gui = True
     try:
