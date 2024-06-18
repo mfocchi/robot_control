@@ -499,7 +499,7 @@ class JumpLegController(BaseControllerFixed):
             self.intermediate_com_position.append(
                 self.Bezier3(self.bezier_weights, t[blob], T_th))
 
-    def plotTrajectoryFlight(self, com_f, comd_f, T_fl):
+    def plotTrajectoryFlight(self, com_lo, comd_lo, T_fl):
         self.number_of_blobs = 10
         if T_fl is None:
             T_fl = 0.3
@@ -507,8 +507,8 @@ class JumpLegController(BaseControllerFixed):
         self.intermediate_flight_com_position = []
         com = np.zeros(3)
         for blob in range(self.number_of_blobs):
-            com[2] = com_f[2] + comd_f[2]*t[blob] + 0.5*(-9.81)*t[blob]*t[blob]
-            com[:2] = com_f[:2] + comd_f[:2]*t[blob]
+            com[2] = com_lo[2] + comd_lo[2]*t[blob] + 0.5*(-9.81)*t[blob]*t[blob]
+            com[:2] = com_lo[:2] + comd_lo[:2]*t[blob]
             self.intermediate_flight_com_position.append(com.copy())
 
     def bernstein_pol(self,k,n,x):
@@ -710,15 +710,15 @@ class JumpLegController(BaseControllerFixed):
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
 
-    def computeIdealLanding(self, com_lo, comd_f, target_CoM):
+    def computeIdealLanding(self, com_lo, comd_lo, target_CoM):
         #get time of flight
-        arg = comd_f[2]*comd_f[2] - 2*9.81*(target_CoM[2] - com_lo[2])
+        arg = comd_lo[2]*comd_lo[2] - 2*9.81*(target_CoM[2] - com_lo[2])
         if arg<0:
             print(colored("Point Beyond Reach, tagret too high","red"))
             return False
         else:  #beyond apex
-            self.T_fl = (comd_f[2] + math.sqrt(arg))/9.81 # we take the highest value
-            self.ideal_landing = np.hstack((com_lo[:2] + self.T_fl*comd_f[:2], target_CoM[2]))
+            self.T_fl = (comd_lo[2] + math.sqrt(arg))/9.81 # we take the highest value
+            self.ideal_landing = np.hstack((com_lo[:2] + self.T_fl*comd_lo[:2], target_CoM[2]))
             return True
 
 
@@ -919,8 +919,6 @@ def talker(p):
                 p.ros_pub.add_marker(p.ideal_landing, color="purple", radius=0.1)
             #reachable space
             #p.ros_pub.add_marker([0, 0, 0], color="green", radius=0.64)
-            if p.DEBUG:
-                p.ros_pub.add_arrow(com_lo, comd_lo, "red")
 
             # plot com intermediate positions
             for blob in range(len(p.intermediate_com_position)):
@@ -936,8 +934,10 @@ def talker(p):
                 p.ros_pub.add_marker(p.bezier_weights[:, 2], color="red", radius=0.02)
                 p.ros_pub.add_marker(p.bezier_weights[:, 3], color="red", radius=0.02)
 
+
             # com at LIFT OFF given by the N network
             if p.DEBUG:
+                p.ros_pub.add_arrow(com_lo, comd_lo, "red")
                 p.ros_pub.add_marker(com_lo, color="red", radius=0.1)
 
             if (not p.trustPhaseFlag):

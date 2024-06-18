@@ -86,7 +86,6 @@ def checkRosMaster():
 
 def launchFileNode(package,launch_file, additional_args=None):
     launch_file = rospkg.RosPack().get_path(package) + '/launch/'+launch_file
-    print("AAAA")
     uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
     roslaunch.configure_logging(uuid)
     cli_args = [launch_file]

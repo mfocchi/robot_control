@@ -165,8 +165,6 @@ class BaseController(threading.Thread):
         roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
         parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
         parent.start()
-        ros.sleep(1.0)
-        ros.sleep(1.0)
         print(colored('SIMULATION Started', 'blue'))
 
     def loadModelAndPublishers(self, xacro_path=None):
@@ -326,6 +324,7 @@ class BaseController(threading.Thread):
         self.set_physics_client(req_reset_gravity)
 
     def freezeBase(self, flag, basePoseW=None, baseTwistW=None):
+        print(colored("Freezing base", "blue"))
         if flag:
             self.setGravity(0)
         else:
