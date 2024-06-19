@@ -49,7 +49,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.set_state = ros.ServiceProxy(
             '/gazebo/set_model_state', SetModelState)
 
-    
+        spawnModel('go1_description','jump_platform')
 
         #TODO
         # print("JumplegAgent services ready")

@@ -25,6 +25,7 @@ from geometry_msgs.msg import TransformStamped
 from roslaunch.parent import ROSLaunchParent
 import copy
 from base_controllers.utils.utils import Utils
+import subprocess
 
 #from urdf_parser_py.urdf import URDF
 #make plot interactive
@@ -114,6 +115,36 @@ def startNode(package, executable, args=''):
     name = package
     namespace = ''
     node = roslaunch.core.Node(package, executable, name, namespace, args=args, output="screen")
+    launch = roslaunch.scriptapi.ROSLaunch()
+    launch.start()
+    process = launch.launch(node)
+
+
+def loadXacro(package_name, model_name):
+    print(colored(f"Loading xacro for  {model_name} inside {package_name}", "blue"))
+    # first generate robot description
+    xacro_path = rospkg.RosPack().get_path(package_name) + '/robots/' + model_name + '.urdf.xacro'
+    command_string = "rosrun xacro xacro "+xacro_path
+
+    try:
+        robot_description_param = subprocess.check_output(command_string,shell=True,  stderr=subprocess.STDOUT).decode("utf-8") # shell=True is fundamental to load env variables!
+    except subprocess.CalledProcessError as process_error:
+        ros.logfatal('Failed to run xacro command with error: \n%s', process_error.output)
+        sys.exit(1)
+
+    # put on param server
+    ros.set_param('/'+model_name, robot_description_param)
+
+def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spawn_orient = np.array([0.,0.,0.]) ):
+    loadXacro(package_name, model_name)
+    print(colored(f"Spawning {model_name}", "blue"))
+    package = 'gazebo_ros'
+    executable = 'spawn_model'
+    name = model_name
+    namespace = '/'
+    args = '-urdf -param ' +model_name +' -model ' + model_name +' -x '+ str(spawn_pos[0])+ ' -y ' + str(spawn_pos[1]) +' -z ' + str(spawn_pos[2]) \
+           + ' -R ' + str(spawn_orient[0]) + ' -P ' + str(spawn_orient[1]) + ' -Y ' + str(spawn_orient[2])
+    node = roslaunch.core.Node(package, executable, name, namespace,args=args,output="screen")
     launch = roslaunch.scriptapi.ROSLaunch()
     launch.start()
     process = launch.launch(node)
