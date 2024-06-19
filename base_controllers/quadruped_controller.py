@@ -877,9 +877,11 @@ class QuadrupedController(BaseController):
             #     self.ros_pub.add_arrow(self.W_contacts[leg],
             #                            self.u.getLegJointState(leg,self.grForcesW_des / (6 * self.robot.robotMass)),
             #                            "red")
-            self.ros_pub.add_arrow(self.W_contacts[leg],
-                                   self.u.getLegJointState(leg, self.grForcesW_des / (6 * self.robot.robotMass)),
-                                   "blue")
+
+
+            # self.ros_pub.add_arrow(self.W_contacts[leg],
+            #                        self.u.getLegJointState(leg, self.grForcesW_des / (6 * self.robot.robotMass)),
+            #                        "blue")
 
         # self.ros_pub.add_polygon([self.B_contacts[0],
         #                           self.B_contacts[1],

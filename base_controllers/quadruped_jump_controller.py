@@ -11,19 +11,85 @@ from base_controllers.quadruped_controller import QuadrupedController
 import base_controllers.params as conf
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
+from base_controllers.utils.common_functions import *
 import os, sys
+np.set_printoptions(threshold=np.inf, precision=5,
+                    linewidth=1000, suppress=True)
+
+from gazebo_msgs.srv import SetModelStateRequest
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelConfigurationRequest
+from gazebo_msgs.srv import SetModelConfiguration
+from base_controllers.utils.pidManager import PidManager
+from gazebo_ros import gazebo_interface
 
 class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
-        self.DEBUG = True
+        self.use_gui = False
+        self.DEBUG = False
+        self.go0_conf = 'standDown'
+        print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
-    #####################
-    # OVERRIDEN METHODS OF BASECONTROLLER#
-    #####################
-    # initVars
-    # logData
-    # startupProcedure
+    def initVars(self):
+        super().initVars()
+        self.intermediate_com_position = []
+        self.intermediate_flight_com_position = []
+        self.ideal_landing = np.zeros(3)
+        self.firstTime = True
+        self.detectedApexFlag = False
+        self.rearingFlag = False
+        self.ideal_landing = np.zeros(3)
+        self.landing_position = np.zeros(3)
+        self.time = 0.  # reset time for logging
+
+        self.reset_joints = ros.ServiceProxy(
+            '/gazebo/set_model_configuration', SetModelConfiguration)
+        self.set_state = ros.ServiceProxy(
+            '/gazebo/set_model_state', SetModelState)
+
+    
+
+        #TODO
+        # print("JumplegAgent services ready")
+        # self.action_service = ros.ServiceProxy(
+        #     'JumplegAgent/get_action', get_action)
+        # self.target_service = ros.ServiceProxy(
+        #     'JumplegAgent/get_target', get_target)
+        # self.reward_service = ros.ServiceProxy(
+        #     'JumplegAgent/set_reward', set_reward)
+
+    def detectApex(self):
+        # foot tradius is 0.015
+        foot_lifted_off = np.array([False, False,False,False])
+        for leg in range(4):
+            foot_lifted_off[leg] = self.W_contacts[leg][2] > 0.017
+        if not self.detectedApexFlag and np.all(foot_lifted_off):
+            if  self.baseTwistW[2] < 0.0:
+                self.detectedApexFlag = True
+                self.pause_physics_client()
+                for i in range(10):
+                    self.setJumpPlatformPosition(self.target_CoM, com_0)
+                self.unpause_physics_client()
+                print(colored("APEX detected", "red"))
+
+    def detectTouchDown(self):
+        contact = np.array([False,False,False,False])
+        for leg in range(4):
+            contact[leg] = np.linalg.norm(self.grForcesW)>self.force_th
+        if np.all(contact):
+            print(colored("TOUCHDOWN detected", "red"))
+            return True
+        else:
+            return False
+
+    def resetRobot(self, basePoseDes=np.array([0, 0, 0.3, 0.,0.,0.])):
+        # this sets the position of the joints
+        gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
+        self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+        # this sets the position of the base
+        self.freezeBase(False,  basePoseW=basePoseDes)
 
     def computeHeuristicSolutionBezierLinear(self, com_0, com_lo, comd_lo, T_th):
         self.bezier_weights_lin = np.zeros([3, 4])
@@ -117,27 +183,26 @@ class QuadrupedJumpController(QuadrupedController):
             #compute joint variables
             qd_des[3 * leg:3 *(leg+1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 *(leg+1)])
 
-        print(q_des)
         tau_ffwd = self.WBC(W_des_basePose, W_des_baseTwist, W_des_baseAcc, comControlled = False, type='projection', stance_legs=self.stance_legs)
         #OLD
         #tau_ffwd = self.gravityCompensation()
 
         #check unloading of front legs
-        grf_lf = self.u.getLegJointState(0, self.grForcesW)
-        grf_rf = self.u.getLegJointState(2, self.grForcesW)
-        #if unloaded raise front legs and compute Jb for a subset of lefs
-        if not self.rearingFlag  and (grf_lf[2] < 5.) and (grf_rf[2] < 5.): # LF RF
-            self.rearingFlag = True
-            self.stance_legs = [False, True, False, True]
-            print(colored(f"rearing front legs at time {self.time}", "red"))
-
-        #overwrite front legs
-        if self.rearingFlag:
-            for leg in range(self.robot.nee):
-                if self.stance_legs[leg]:
-                    q_des[3 * leg:3 * (leg+1)] = p.qj_0[3 * leg:3 * (leg+1)]
-                    qd_des[3 * leg:3 * (leg+1)] = np.zeros(3)
-                    #the small torques to compensate self weight of the legs in the air have been already computed by WBC
+        # grf_lf = self.u.getLegJointState(0, self.grForcesW)
+        # grf_rf = self.u.getLegJointState(2, self.grForcesW)
+        # #if unloaded raise front legs and compute Jb for a subset of lefs
+        # if not self.rearingFlag  and (grf_lf[2] < 5.) and (grf_rf[2] < 5.): # LF RF
+        #     self.rearingFlag = True
+        #     self.stance_legs = [False, True, False, True]
+        #     print(colored(f"rearing front legs at time {self.time}", "red"))
+        #
+        # #overwrite front legs
+        # if self.rearingFlag:
+        #     for leg in range(self.robot.nee):
+        #         if self.stance_legs[leg]:
+        #             q_des[3 * leg:3 * (leg+1)] = p.qj_0[3 * leg:3 * (leg+1)]
+        #             qd_des[3 * leg:3 * (leg+1)] = np.zeros(3)
+        #             #the small torques to compensate self weight of the legs in the air have been already computed by WBC
         return q_des, qd_des, tau_ffwd, W_des_basePose, W_des_baseTwist
 
     def plotTrajectoryBezier(self):
@@ -147,10 +212,33 @@ class QuadrupedJumpController(QuadrupedController):
                 blob * 1. / self.number_of_blobs, blob * 1. / self.number_of_blobs, blob * 1. / self.number_of_blobs],
                                  radius=0.05)
 
+    def computeIdealLanding(self, com_lo, comd_lo, target_CoM):
+        # get time of flight
+        arg = comd_lo[2] * comd_lo[2] - 2 * 9.81 * (target_CoM[2] - com_lo[2])
+        if arg < 0:
+            print(colored("Point Beyond Reach, tagret too high", "red"))
+            return False
+        else:  # beyond apex
+            self.T_fl = (comd_lo[2] + math.sqrt(arg)) / 9.81  # we take the highest value
+            self.ideal_landing = np.hstack((com_lo[:2] + self.T_fl * comd_lo[:2], target_CoM[2]))
+            t = np.linspace(0, self.T_fl, self.number_of_blobs)
+            com = np.zeros(3)
+            for blob in range(self.number_of_blobs):
+                com[2] = com_lo[2] + comd_lo[2] * t[blob] + 0.5 * (-9.81) * t[blob] * t[blob]
+                com[:2] = com_lo[:2] + comd_lo[:2] * t[blob]
+                self.intermediate_flight_com_position.append(com.copy())
+            return True
+
+    def plotTrajectoryFlight(self):
+        # plot com intermediate positions
+        for blob in  range(len(self.intermediate_flight_com_position)):
+            self.ros_pub.add_marker(self.intermediate_flight_com_position[blob], color=[
+                blob * 0. / self.number_of_blobs, blob * 0.0 / self.number_of_blobs, blob * 0.5 / self.number_of_blobs],
+                                    radius=0.05)
+     
     def computeTrajectoryBezier(self, T_th):
         self.number_of_blobs = 30
         t = np.linspace(0, T_th, self.number_of_blobs)
-        self.intermediate_com_position = []
         for blob in range(self.number_of_blobs):
             self.intermediate_com_position.append(
                 self.Bezier3(self.bezier_weights_lin, t[blob], T_th))
@@ -194,32 +282,67 @@ class QuadrupedJumpController(QuadrupedController):
                 Jb[start_row:end_row, :3] = np.zeros(3)
         return Jb
 
+    def setJumpPlatformPosition(self, target, com0):
+        # create the message
+        set_platform_position = SetModelStateRequest()
+        # create model state
+        model_state = ModelState()
+        model_state.model_name = 'jump_platform'
+        model_state.pose.position.x = target[0]
+        model_state.pose.position.y = target[1]
+        model_state.pose.position.z = target[2]-com0[2]
+        model_state.pose.orientation.w = 1.0
+        model_state.pose.orientation.x = 0.0
+        model_state.pose.orientation.y = 0.0
+        model_state.pose.orientation.z = 0.0
+        set_platform_position.model_state = model_state
+        # send request and get response (in this case none)
+        self.set_state(set_platform_position)
+
+
+    def customStartupProcedure(self):
+        print(colored("Custom Startup Procedure", "red"))
+        self.q_des = self.qj_0
+        self.pid = PidManager(self.joint_names)
+        # set joint pdi gains
+        self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'],  np.zeros(self.robot.na))
+        p.resetRobot(basePoseDes=np.array([0, 0, 0.3,  0., 0., 0.]))
+        while self.time<=self.startTrust:
+            self.updateKinematics()
+            self.tau_ffwd = p.gravityCompensation()
+            self.send_command(p.q_des, p.qd_des, p.tau_ffwd)
+
 if __name__ == '__main__':
     p = QuadrupedJumpController('go1')
     world_name = 'fast.world'
-    use_gui = True
+
     try:
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
                           use_ground_truth_pose=True,
-                          use_ground_truth_contacts=False,
-                          additional_args=['gui:='+str(use_gui),
-                                           'go0_conf:=standDown'])
+                          use_ground_truth_contacts=True,
+                          additional_args=['gui:='+str(p.use_gui),
+                                           'go0_conf:='+p.go0_conf])
         # initialize data stucture to use them with desired values
         p.des_robot = RobotWrapper.BuildFromURDF(
             os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf")
-        p.startupProcedure()
 
+        p.startTrust = 1.
+        p.customStartupProcedure()
 
+        #TODO
+        p.target_CoM = np.array([0.4,0.,0.3])
         #initial pose
         #linear
-        com_lo = np.array([0.2,0.,0.4])
-        comd_lo = np.array([0.8, 0.,1.3])
-        com_0 = p.basePoseW[:3]
+        com_lo = np.array([0.1,0.,0.35])
+        comd_lo = np.array([1., 0.,1.6])
+        com_0 = p.basePoseW[:3].copy()
         #angular
-        eul_0 = p.basePoseW[3:]
-        eul_lo = np.array([0., -0.2, 0.])
-        euld_lo = np.array([0., 0.1, 0.])
+        eul_0 = p.basePoseW[3:].copy()
+        eul_lo = np.array([0., -0.0, 0.])
+        euld_lo = np.array([0., 0.0, 0.])
+
+
         if p.DEBUG:
             p.initial_com = np.copy(com_0)
             print(f"Initial Com Position is {p.initial_com}")
@@ -227,35 +350,36 @@ if __name__ == '__main__':
             print(f"Initial Joint torques {p.tau_ffwd}")
             p.T_th = 5.
         else:
-            p.T_th = 0.6
+            p.T_th = 0.3
         p.computeHeuristicSolutionBezierLinear(com_0, com_lo, comd_lo,p.T_th)
         p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th)
 
         #this is for visualization
         p.computeTrajectoryBezier(p.T_th)
-        p.time = 0. # reset time for logging
-        startTrust  = 0.
-        p.trustPhaseFlag = True
-        p.rearingFlag = False
-
         p.stance_legs = [True, True, True, True]
         #print(p.computeJcb(p.W_contacts, com_0))
         #reset integration of feet
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
-        #p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
-        #p.pid.setPDs(0.0, 0.0, 0.0)
+        p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
 
         while not ros.is_shutdown():
             p.updateKinematics()
-
-            if (p.time > startTrust):
-
-                 # compute joint reference
+            if (p.time > p.startTrust):
+                # release base
+                if p.firstTime:
+                    p.firstTime = False
+                    p.trustPhaseFlag = True
+                    p.T_fl = None
+                    if (p.computeIdealLanding(com_lo, comd_lo, p.target_CoM)):
+                        error = np.linalg.norm(p.ideal_landing - p.target_CoM)
+                    else:
+                        break
+                # compute joint reference
                 if (p.trustPhaseFlag):
-                    t = p.time - startTrust
+                    t = p.time - p.startTrust
                     p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(t, p.T_th)
 
-                    if p.time >= (startTrust + p.T_th):
+                    if p.time >= (p.startTrust + p.T_th):
                         p.trustPhaseFlag = False
                         #we se this here to have enough retraction (important)
                         p.q_des = p.qj_0
@@ -264,7 +388,35 @@ if __name__ == '__main__':
                         print(colored(f"thrust completed! at time {p.time}","red"))
                         if p.DEBUG:
                             break
+                else:
+                    # apex detection TODO
+                    p.detectApex()
+                    if (p.detectedApexFlag):
+                        # set jump position (avoid collision in jumping)
+                        if p.detectTouchDown():
+                            p.landing_position = p.u.linPart(p.basePoseW)
+                            perc_err = 100.* np.linalg.norm(p.target_CoM - p.landing_position) / np.linalg.norm(com_0 - p.target_CoM)
+                            print(colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
+                            break
+
             p.plotTrajectoryBezier()
+            p.plotTrajectoryFlight()
+            #plot target
+            p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
+
+            if p.DEBUG:
+                p.ros_pub.add_marker(p.bezier_weights_lin[:, 0], color="red", radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights_lin[:, 1], color="red", radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights_lin[:, 2], color="red", radius=0.02)
+                p.ros_pub.add_marker(p.bezier_weights_lin[:, 3], color="red", radius=0.02)
+
+            if (np.linalg.norm(p.ideal_landing) > 0.):
+                p.ros_pub.add_marker(p.ideal_landing, color="purple", radius=0.1)
+            # com at LIFT OFF given by the N network
+            if p.DEBUG:
+                p.ros_pub.add_arrow(com_lo, comd_lo, "red")
+                p.ros_pub.add_marker(com_lo, color="red", radius=0.1)
+
             p.visualizeContacts()
             p.logData()
             p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
@@ -273,15 +425,10 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
         
-    from base_controllers.utils.common_functions import *
-
     if conf.plotting:
-        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
-                  start=0, end=-1)
-        plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,
-                  start=0, end=-1)
-        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
+        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,start=0, end=-1)
+        #plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,   start=0, end=-1)
+        #('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
-        plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
-                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        #plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)

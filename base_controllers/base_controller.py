@@ -165,6 +165,7 @@ class BaseController(threading.Thread):
         roslaunch_file = [(roslaunch.rlutil.resolve_launch_arguments(cli_args)[0], roslaunch_args)]
         parent = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file)
         parent.start()
+        ros.sleep(1.0)
         print(colored('SIMULATION Started', 'blue'))
 
     def loadModelAndPublishers(self, xacro_path=None):
