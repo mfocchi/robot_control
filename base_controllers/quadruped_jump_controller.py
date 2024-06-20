@@ -32,6 +32,11 @@ class QuadrupedJumpController(QuadrupedController):
         self.go0_conf = 'standDown'
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
+    def logData(self):
+        self.q_des_f_log[:, self.log_counter] = self.q_des_f
+        super().logData()
+
+
     def initVars(self):
         super().initVars()
         self.intermediate_com_position = []
@@ -43,6 +48,8 @@ class QuadrupedJumpController(QuadrupedController):
         self.ideal_landing = np.zeros(3)
         self.landing_position = np.zeros(3)
         self.time = np.zeros(1)  # reset time for logging
+        self.q_des_f_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.q_des_f = np.zeros((12))
 
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
@@ -186,6 +193,7 @@ class QuadrupedJumpController(QuadrupedController):
         tau_ffwd = self.WBC(W_des_basePose, W_des_baseTwist, W_des_baseAcc, comControlled = False, type='projection', stance_legs=self.stance_legs)
         #OLD
         #tau_ffwd = self.gravityCompensation()
+      
 
         #check unloading of front legs
         # grf_lf = self.u.getLegJointState(0, self.grForcesW)
@@ -352,6 +360,9 @@ if __name__ == '__main__':
         p.T_th = 0.6
 
 
+        alpha = 1.
+
+
         if p.DEBUG:
             p.initial_com = np.copy(com_0)
             print(f"Initial Com Position is {p.initial_com}")
@@ -395,6 +406,7 @@ if __name__ == '__main__':
                         p.trustPhaseFlag = False
                         #we se this here to have enough retraction (important)
                         p.q_des = p.qj_0
+                        alpha = 0.9
                         p.qd_des = np.zeros(12)
                         p.tau_ffwd = np.zeros(12)
                         print(colored(f"thrust completed! at time {p.time}","red"))
@@ -415,6 +427,10 @@ if __name__ == '__main__':
             p.plotTrajectoryFlight()
             #plot target
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
+
+
+            # p.q_des_f = (1. - alpha)*p.q_des_f + alpha*p.q_des
+            # print(p.q_des_f -p.q_des)
 
             if p.DEBUG:
                 p.ros_pub.add_marker(p.bezier_weights_lin[:, 0], color="red", radius=0.02)
@@ -441,7 +457,7 @@ if __name__ == '__main__':
     if conf.plotting:
         plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,start=0, end=-1)
         #plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,   start=0, end=-1)
-        #('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
+        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
         #plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
