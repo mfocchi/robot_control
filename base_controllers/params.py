@@ -157,22 +157,22 @@ robot_params['go1'] ={'dt': 0.002,
                       'kd_ang': np.array([10., 10., 10.]),
                       # real robot gains
                       # stand alone joint pid
-                      'kp_real': np.array([30., 30.,30.]*4),
-                      'kd_real': np.array([.3, .3, .3]*4),
+                      'kp_real': 0.5*np.array([30., 30.,30.]*4),
+                      'kd_real': 0.5*np.array([.3, .3, .3]*4),
                       'ki_real': np.array([1.5, 1.5, 1.5]*4),
                       # joint pid + wbc (optional)
                       'kp_wbc_real': np.array([20., 30., 40.]*4),
-                      'kd_wbc_real': np.array([.3, .3, .3]*4),
+                      'kd_wbc_real': 0.5*np.array([.3, .3, .3]*4),
                       'ki_wbc_real': np.array([1.5, 1.5, 1.5]*4),
                       # virtual impedance wrench control
                       # 'kp_lin_real': np.array([300, 300., 300.]), # x y z
                       # 'kd_lin_real': np.array([30., 30., 30.]),
                       # 'kp_ang_real': np.array([50, 50., 50.]), # R P Y
                       # 'kd_ang_real': np.array([10., 10., 10.]),
-                      'kp_lin_real': np.array([300., 200., 350.]), #np.array([300., 300., 400.]), # x y z
-                      'kd_lin_real': np.array([40., 40., 80.]), #np.array([30., 20., 60.]),
-                      'kp_ang_real': np.array([40., 80., 40.]), # #np.array([30., 50., 30.]), # R P Y
-                      'kd_ang_real': np.array([3., 5., 3.]), #np.array([2., 4., 2.]),
+                      'kp_lin_real': 0.5*np.array([300., 200., 350.]), #np.array([300., 300., 400.]), # x y z
+                      'kd_lin_real': 0.5*np.array([40., 40., 80.]), #np.array([30., 20., 60.]),
+                      'kp_ang_real': 0.5*np.array([40., 80., 40.]), # #np.array([30., 50., 30.]), # R P Y
+                      'kd_ang_real': 0.5*np.array([3., 5., 3.]), #np.array([2., 4., 2.]),
                       # joint configuration
                       'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
                       'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
