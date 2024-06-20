@@ -49,9 +49,12 @@ class QuadrupedController(BaseController):
         self.leg_names = [foot[:2] for foot in self.ee_frames]
 
         self.use_ground_truth_pose = True
-
-        self.gravity_comp_duration = 0.5 #1.5
-        self.standup_period = 1. #3
+        if not self.real_robot:
+            self.gravity_comp_duration = 0.5 #1.5
+            self.standup_period = 1. #3
+        else:
+            self.gravity_comp_duration = 1.5
+            self.standup_period = 3.
     #####################
     # OVERRIDEN METHODS #
     #####################
@@ -998,7 +1001,7 @@ class QuadrupedController(BaseController):
         try:
             print(colored(f"[startupProcedure to {self.q_des} t: " + str(self.time[0]) + "s] applying gravity compensation", "blue"))
             GCStartTime = self.time
-            while True:
+            while not ros.is_shutdown():
                 q_norm = np.linalg.norm(self.q - self.q_des)
                 qd_norm = np.linalg.norm(self.qd - self.qd_des)
                 if q_norm < 0.1 and qd_norm < 0.1 or self.time > 5:
