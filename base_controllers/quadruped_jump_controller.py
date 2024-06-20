@@ -48,8 +48,8 @@ class QuadrupedJumpController(QuadrupedController):
             '/gazebo/set_model_configuration', SetModelConfiguration)
         self.set_state = ros.ServiceProxy(
             '/gazebo/set_model_state', SetModelState)
-
-        spawnModel('go1_description','jump_platform')
+        if not self.real_robot:
+            spawnModel('go1_description','jump_platform')
 
         #TODO
         # print("JumplegAgent services ready")
@@ -327,8 +327,15 @@ if __name__ == '__main__':
         p.des_robot = RobotWrapper.BuildFromURDF(
             os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf")
 
-        p.startTrust = 1.
-        p.customStartupProcedure()
+        if p.real_robot:
+            p.startTrust = 20.
+            p.startupProcedure()
+            p.updateKinematics() #neeeded to cal legodom to have an initial estimate of com position
+        else:
+            p.startTrust = 1.
+            p.customStartupProcedure()
+
+        ros.sleep(2.)
 
         #TODO
         p.target_CoM = np.array([0.4,0.,0.3])
@@ -341,6 +348,8 @@ if __name__ == '__main__':
         eul_0 = p.basePoseW[3:].copy()
         eul_lo = np.array([0., -0.0, 0.])
         euld_lo = np.array([0., 0.0, 0.])
+        #t_th
+        p.T_th = 0.6
 
 
         if p.DEBUG:
@@ -349,8 +358,7 @@ if __name__ == '__main__':
             print(f"Initial Joint Position is {p.q}")
             print(f"Initial Joint torques {p.tau_ffwd}")
             p.T_th = 5.
-        else:
-            p.T_th = 0.3
+
         p.computeHeuristicSolutionBezierLinear(com_0, com_lo, comd_lo,p.T_th)
         p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th)
 
@@ -360,7 +368,9 @@ if __name__ == '__main__':
         #print(p.computeJcb(p.W_contacts, com_0))
         #reset integration of feet
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
-        p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
+
+        if not p.real_robot:
+            p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
 
         while not ros.is_shutdown():
             p.updateKinematics()
@@ -424,7 +434,8 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        
+
+    p.deregister_node()
     if conf.plotting:
         plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,start=0, end=-1)
         #plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,   start=0, end=-1)
