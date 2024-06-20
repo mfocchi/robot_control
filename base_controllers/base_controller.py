@@ -301,9 +301,10 @@ class BaseController(threading.Thread):
         print( "deregistering nodes"     )
         self.ros_pub.deregister_node()
         os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")    
-        os.system(" rosnode kill /gazebo")   
-      
- 
+        os.system(" rosnode kill /gazebo")
+        os.system("pkill rosmaster")
+
+
     def get_contact(self):
         return self.W_contacts
     def get_pose(self):
