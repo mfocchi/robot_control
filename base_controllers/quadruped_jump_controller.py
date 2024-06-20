@@ -67,25 +67,30 @@ class QuadrupedJumpController(QuadrupedController):
         # self.reward_service = ros.ServiceProxy(
         #     'JumplegAgent/set_reward', set_reward)
 
-    def detectApex(self):
+    def detectApex(self, threshold = -3):
         # foot tradius is 0.015
         foot_lifted_off = np.array([False, False,False,False])
         for leg in range(4):
             foot_lifted_off[leg] = self.W_contacts[leg][2] > 0.017
         if not self.detectedApexFlag and np.all(foot_lifted_off):
-            if  self.baseTwistW[2] < 0.0:
-                self.detectedApexFlag = True
-                self.pause_physics_client()
-                for i in range(10):
-                    self.setJumpPlatformPosition(self.target_CoM, com_0)
-                self.unpause_physics_client()
-                print(colored("APEX detected", "red"))
+            if self.real_robot:
+                if self.baseLinAccW[2] < threshold:
+                    self.detectedApexFlag = True
+                    print(colored("APEX detected", "red"))
+            else:
+                if  self.baseTwistW[2] < 0.0:
+                    self.detectedApexFlag = True
+                    self.pause_physics_client()
+                    for i in range(10):
+                        self.setJumpPlatformPosition(self.target_CoM, com_0)
+                    self.unpause_physics_client()
+                    print(colored("APEX detected", "red"))
 
     def detectTouchDown(self):
-        contact = np.array([False,False,False,False])
-        for leg in range(4):
-            contact[leg] = np.linalg.norm(self.grForcesW)>self.force_th
-        if np.all(contact):
+        # contact = np.array([False,False,False,False])
+        # for leg in range(4):
+        #     contact[leg] = np.linalg.norm(self.grForcesW)>self.force_th
+        if np.all(self.contact_state):
             print(colored("TOUCHDOWN detected", "red"))
             return True
         else:
@@ -345,7 +350,6 @@ if __name__ == '__main__':
 
         ros.sleep(2.)
 
-        #TODO
         p.target_CoM = np.array([0.4,0.,0.3])
         #initial pose
         #linear
@@ -360,8 +364,7 @@ if __name__ == '__main__':
         p.T_th = 0.6
 
 
-        alpha = 1.
-
+        p.alpha = 1.
 
         if p.DEBUG:
             p.initial_com = np.copy(com_0)
@@ -405,8 +408,8 @@ if __name__ == '__main__':
                     if p.time >= (p.startTrust + p.T_th):
                         p.trustPhaseFlag = False
                         #we se this here to have enough retraction (important)
-                        p.q_des = p.qj_0
-                        alpha = 0.9
+                        p.q_des = p.qj_0.copy()
+                        p.alpha = 0.1
                         p.qd_des = np.zeros(12)
                         p.tau_ffwd = np.zeros(12)
                         print(colored(f"thrust completed! at time {p.time}","red"))
@@ -428,9 +431,8 @@ if __name__ == '__main__':
             #plot target
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
 
-
-            # p.q_des_f = (1. - alpha)*p.q_des_f + alpha*p.q_des
-            # print(p.q_des_f -p.q_des)
+            # filter des q to avoid abrupt changes
+            p.q_des_f = (1. - p.alpha)*p.q_des_f.copy() + p.alpha*p.q_des.copy()
 
             if p.DEBUG:
                 p.ros_pub.add_marker(p.bezier_weights_lin[:, 0], color="red", radius=0.02)
@@ -447,7 +449,12 @@ if __name__ == '__main__':
 
             p.visualizeContacts()
             p.logData()
-            p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
+
+            p.send_des_jstate(p.q_des_f, p.qd_des, p.tau_ffwd)
+            # log variables
+            p.rate.sleep()
+            p.sync_check()
+            p.time = np.round(p.time + p.dt, 3)  # np.array([self.loop_time]), 3)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
@@ -455,7 +462,7 @@ if __name__ == '__main__':
 
     p.deregister_node()
     if conf.plotting:
-        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,start=0, end=-1)
+        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_f_log, sharex=True, sharey=False,start=0, end=-1)
         #plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,   start=0, end=-1)
         plotJoint('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
