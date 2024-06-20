@@ -129,7 +129,7 @@ class QuadrupedJumpController(QuadrupedController):
             euld = np.multiply(2 * np.pi * freq * amp_ang, np.cos(2 * np.pi * freq * self.time))
             euldd = np.multiply(np.power(2 * np.pi * freq * amp_ang, 2), -np.sin(2 * np.pi * freq * self.time))
 
-        Jb = p.computeJcb(self.W_contacts, com, self.stance_legs)
+        Jb = p.computeJcb(self.W_contacts_sampled, com, self.stance_legs)
 
 
         W_des_basePose = np.empty(6)
@@ -161,7 +161,7 @@ class QuadrupedJumpController(QuadrupedController):
             # with this you do not have proper tracking of com and trunk orientation, I think there is a bug in the ik
             #self.W_feetRelPosDes[leg] += W_feetRelVelDes[3 * leg:3 * (leg+1)]*self.dt
             # this has better tracking
-            self.W_feetRelPosDes[leg] = self.W_contacts[leg] -com
+            self.W_feetRelPosDes[leg] = self.W_contacts_sampled[leg] -com #should use desired values to generate traj otherwise if it is unstable it detroys the ref signal
             #now we can do Ik
             q_des[3 * leg:3 * (leg+1)], isFeasible = self.IK.ik_leg(w_R_b_des.T.dot(self.W_feetRelPosDes[leg]),
                                                    self.leg_names[leg],
@@ -368,6 +368,8 @@ if __name__ == '__main__':
         #print(p.computeJcb(p.W_contacts, com_0))
         #reset integration of feet
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
+        p.W_contacts_sampled = np.copy(p.W_contacts)
+
 
         if not p.real_robot:
             p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
