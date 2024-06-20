@@ -42,7 +42,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.rearingFlag = False
         self.ideal_landing = np.zeros(3)
         self.landing_position = np.zeros(3)
-        self.time = 0.  # reset time for logging
+        self.time = np.zeros(1)  # reset time for logging
 
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
