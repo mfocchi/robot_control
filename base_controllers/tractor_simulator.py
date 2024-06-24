@@ -45,8 +45,8 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = True
-        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.GAZEBO = False
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.IDENT_TYPE = 'NONE' # 'V_OMEGA', 'NONE'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
@@ -59,7 +59,7 @@ class GenericSimulator(BaseController):
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
         self.frictionCoeff=0.3 #0.3 0.6
-        self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}centered.ttt'
+        self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}_slope.ttt'
         #self.coppeliaModel = f'new_track.ttt'
 
         if self.GAZEBO and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
@@ -796,8 +796,6 @@ def talker(p):
                 p.tau_g, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
                 w_center_track_left = p.b_R_w.T.dot(0.5*(constants.b_left_track_start+constants.b_left_track_end))
                 w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
-                print(p.basePoseW[:3] + w_center_track_left)
-                print(p.F_r)
                 p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l/np.linalg.norm(p.F_l), "red")
                 p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r/np.linalg.norm(p.F_r), "red")
 
