@@ -32,10 +32,6 @@ class QuadrupedJumpController(QuadrupedController):
         self.go0_conf = 'standDown'
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
-    def logData(self):
-        self.q_des_f_log[:, self.log_counter] = self.q_des_f
-        super().logData()
-
 
     def initVars(self):
         super().initVars()
@@ -48,8 +44,6 @@ class QuadrupedJumpController(QuadrupedController):
         self.ideal_landing = np.zeros(3)
         self.landing_position = np.zeros(3)
         self.time = np.zeros(1)  # reset time for logging
-        self.q_des_f_log = np.full((self.robot.na, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
-        self.q_des_f = np.zeros((12))
 
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
@@ -325,6 +319,9 @@ class QuadrupedJumpController(QuadrupedController):
             self.tau_ffwd = p.gravityCompensation()
             self.send_command(p.q_des, p.qd_des, p.tau_ffwd)
 
+    def lerp(self, start, end, weight):
+        return start + weight * (end - start)
+
 if __name__ == '__main__':
     p = QuadrupedJumpController('go1')
     world_name = 'fast.world'
@@ -363,8 +360,7 @@ if __name__ == '__main__':
         #t_th
         p.T_th = 0.6
 
-
-        p.alpha = 1.
+        p.lerp_time = 0.1
 
         if p.DEBUG:
             p.initial_com = np.copy(com_0)
@@ -408,14 +404,16 @@ if __name__ == '__main__':
                     if p.time >= (p.startTrust + p.T_th):
                         p.trustPhaseFlag = False
                         #we se this here to have enough retraction (important)
-                        p.q_des = p.qj_0.copy()
-                        p.alpha = 0.1
+                        p.q_t_th = p.q.copy()
                         p.qd_des = np.zeros(12)
                         p.tau_ffwd = np.zeros(12)
                         print(colored(f"thrust completed! at time {p.time}","red"))
                         if p.DEBUG:
                             break
                 else:
+                    elapsed_time = p.time - (p.startTrust + p.T_th)
+                    elapsed_ratio = np.clip(elapsed_time / p.lerp_time, 0, 1)
+                    p.q_des = p.lerp(p.q_t_th, p.qj_0, elapsed_ratio)
                     # apex detection TODO
                     p.detectApex()
                     if (p.detectedApexFlag):
@@ -430,9 +428,6 @@ if __name__ == '__main__':
             p.plotTrajectoryFlight()
             #plot target
             p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
-
-            # filter des q to avoid abrupt changes
-            p.q_des_f = (1. - p.alpha)*p.q_des_f.copy() + p.alpha*p.q_des.copy()
 
             if p.DEBUG:
                 p.ros_pub.add_marker(p.bezier_weights_lin[:, 0], color="red", radius=0.02)
@@ -450,19 +445,20 @@ if __name__ == '__main__':
             p.visualizeContacts()
             p.logData()
 
-            p.send_des_jstate(p.q_des_f, p.qd_des, p.tau_ffwd)
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             # log variables
             p.rate.sleep()
             p.sync_check()
             p.time = np.round(p.time + p.dt, 3)  # np.array([self.loop_time]), 3)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
+        p.pid.setPDjoints(np.zeros(p.robot.na), np.zeros(p.robot.na), np.zeros(p.robot.na))
         ros.signal_shutdown("killed")
         p.deregister_node()
 
     p.deregister_node()
     if conf.plotting:
-        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_f_log, sharex=True, sharey=False,start=0, end=-1)
+        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,start=0, end=-1)
         #plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,   start=0, end=-1)
         plotJoint('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
