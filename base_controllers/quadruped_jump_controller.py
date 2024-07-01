@@ -29,6 +29,7 @@ class QuadrupedJumpController(QuadrupedController):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
         self.DEBUG = False
+        self.ffwd_impulse = True
         self.go0_conf = 'standDown'
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
@@ -97,6 +98,8 @@ class QuadrupedJumpController(QuadrupedController):
         # this sets the position of the base
         self.freezeBase(False,  basePoseW=basePoseDes)
 
+
+
     def computeHeuristicSolutionBezierLinear(self, com_0, com_lo, comd_lo, T_th):
         self.bezier_weights_lin = np.zeros([3, 4])
         comd_0 = np.zeros(3)
@@ -116,7 +119,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.bezier_weights_ang[:, 3] = eul_lo
 
 
-    def evalBezier(self, t_, T_th):
+    def evalBezier(self, t_, T_th, ffwd_impulse = False, a_z = np.zeros((4))):
         com = np.array(self.Bezier3(self.bezier_weights_lin,t_,T_th))
         comd = np.array(self.Bezier2(self.bezier_weights_lin,t_,T_th))
         comdd = np.array(self.Bezier1(self.bezier_weights_lin, t_, T_th))
@@ -158,6 +161,17 @@ class QuadrupedJumpController(QuadrupedController):
         W_feetRelVelDes = -Jb.dot(W_des_baseTwist)
         w_R_b_des = self.math_utils.eul2Rot(eul)
 
+        if ffwd_impulse:
+            # compute ffwd torques
+            self.bezier_weights_impulze_z = np.zeros((4))
+            self.bezier_weights_impulze_z[0] = 0
+            self.bezier_weights_impulze_z[1] = -1 #this is to have the initial unloading
+            self.bezier_weights_impulze_z[2] = 1.7
+            self.bezier_weights_impulze_z[3] = 1 # this is to end up pushing
+            impulse_z = np.array(self.Bezier3(self.bezier_weights_impulze_z, t_, T_th))
+
+        grf_ffwd = np.zeros(12)
+        tau_ffwd = np.zeros(12)
         qd_des = np.zeros(12)
         q_des = np.zeros(12)
         fbjoints = pin.neutral(self.robot.model)
@@ -189,10 +203,20 @@ class QuadrupedJumpController(QuadrupedController):
             #compute joint variables
             qd_des[3 * leg:3 *(leg+1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 *(leg+1)])
 
-        tau_ffwd = self.WBC(W_des_basePose, W_des_baseTwist, W_des_baseAcc, comControlled = False, type='projection', stance_legs=self.stance_legs)
-        #OLD
-        #tau_ffwd = self.gravityCompensation()
-      
+        if not ffwd_impulse:
+            tau_ffwd = self.WBC(W_des_basePose, W_des_baseTwist, W_des_baseAcc, comControlled = False, type='projection', stance_legs=self.stance_legs)
+            #OLD
+            #tau_ffwd = self.gravityCompensation()
+        else:
+            for leg in range(self.robot.nee):
+                # todo do for x and y as well
+                grfDes = np.array([0., 0., impulse_z * a_z[leg]])
+                tau_leg = -w_J[leg].T.dot(grfDes)
+                self.u.setLegJointState(leg, grfDes, grf_ffwd)
+                self.u.setLegJointState(leg, tau_leg, tau_ffwd)
+            tau_ffwd += self.gravityCompensation()  # this also sets grForcesW_des
+            #on top we add our ffwd
+            self.grForcesW_des+=grf_ffwd
 
         #check unloading of front legs
         # grf_lf = self.u.getLegJointState(0, self.grForcesW)
@@ -256,10 +280,16 @@ class QuadrupedJumpController(QuadrupedController):
 
     def Bezier3(self,w,t_ex,t_th):
         t = t_ex/t_th
-        return  w[:,0]*self.bernstein_pol(0,3,t)+\
-                w[:,1]*self.bernstein_pol(1,3,t)+\
-                w[:,2]*self.bernstein_pol(2,3,t)+\
-                w[:,3]*self.bernstein_pol(3,3,t)
+        if w.ndim == 1:
+            return w[0] * self.bernstein_pol(0, 3, t) + \
+                   w[1] * self.bernstein_pol(1, 3, t) + \
+                   w[2] * self.bernstein_pol(2, 3, t) + \
+                   w[3] * self.bernstein_pol(3, 3, t)
+        else:
+            return  w[:,0]*self.bernstein_pol(0,3,t)+\
+                    w[:,1]*self.bernstein_pol(1,3,t)+\
+                    w[:,2]*self.bernstein_pol(2,3,t)+\
+                    w[:,3]*self.bernstein_pol(3,3,t)
 
     def Bezier2(self,w,t_ex,t_th):
         t = t_ex/t_th
@@ -359,6 +389,8 @@ if __name__ == '__main__':
         euld_lo = np.array([0., 0.0, 0.])
         #t_th
         p.T_th = 0.6
+        #impulse bezier
+        p.a_z = np.array([25,25,25,25]) #LF LH RF RH
 
         p.lerp_time = 0.1
 
@@ -399,7 +431,7 @@ if __name__ == '__main__':
                 # compute joint reference
                 if (p.trustPhaseFlag):
                     t = p.time - p.startTrust
-                    p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(t, p.T_th)
+                    p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(t, p.T_th, p.ffwd_impulse, p.a_z)
 
                     if p.time >= (p.startTrust + p.T_th):
                         p.trustPhaseFlag = False
@@ -460,7 +492,8 @@ if __name__ == '__main__':
     if conf.plotting:
         plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,start=0, end=-1)
         #plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,   start=0, end=-1)
-        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_ffwd_log,sharex=True, sharey=False, start=0, end=-1)
+        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_log, tau_des_log=p.tau_des_log,sharex=True, sharey=False, start=0, end=-1)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
         #plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        plotContacts('GRFs', time_log=p.time_log, des_Forces_log=p.grForcesW_des_log,  Forces_log=p.grForcesW_log, contact_states=p.contact_state_log, frame='W')
