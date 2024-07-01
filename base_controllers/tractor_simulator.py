@@ -10,20 +10,17 @@ import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from base_controllers.base_controller import BaseController
-from base_controllers.utils.common_functions import checkRosMaster, plotFrameLinear, plotJoint, sendStaticTransform, launchFileGeneric, launchFileNode
+from base_controllers.utils.common_functions import plotFrameLinear, plotJoint, sendStaticTransform, launchFileGeneric, launchFileNode
 import params as conf
 import os
 import sys
-from std_msgs.msg import Bool, Int32, Float32
 import rospkg
-import roslaunch
 from gazebo_msgs.srv import SetModelConfiguration
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from numpy import nan
 from matplotlib import pyplot as plt
 from base_controllers.utils.math_tools import unwrap_angle
 from  base_controllers.doretta.utils import constants as constants
-from  base_controllers.doretta.models.unicycle import Unicycle
 from base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams, Robot
 from  base_controllers.doretta.environment.trajectory import Trajectory, ModelsList
 from base_controllers.doretta.velocity_generator import VelocityGenerator
@@ -35,6 +32,7 @@ from geometry_msgs.msg import Twist
 import numpy as np
 import catboost as cb
 import pinocchio as pin
+from base_controllers.components.coppelia_manager import CoppeliaManager
 
 
 robotName = "tractor" # needs to inherit BaseController
@@ -155,28 +153,8 @@ class GenericSimulator(BaseController):
             world_name = 'ramps.world'
             super().startSimulator(world_name=world_name, additional_args=['spawn_Y:=0.'])
         else:
-            print(colored(
-                f"---------To run this you need to clone https://github.com/mfocchi/CoppeliaSim inside locosim folder",
-                "red"))
-            # clean up previous process
-            os.system("killall rosmaster rviz coppeliaSim")
-            # launch roscore
-            checkRosMaster()
-            ros.sleep(1.5)
-
-            # launch coppeliasim
-            scene = rospkg.RosPack().get_path('tractor_description') + '/CoppeliaSimModels/'+self.coppeliaModel
-            if self.USE_GUI:
-                file = os.getenv("LOCOSIM_DIR") + "/CoppeliaSim/coppeliaSim.sh " + scene + " &"
-            else:
-                file = os.getenv("LOCOSIM_DIR")+"/CoppeliaSim/coppeliaSim.sh -h "+ scene + " &"
-
-            os.system(file)
-
-            # run robot state publisher + load robot description + rviz
-            launchFileGeneric(rospkg.RosPack().get_path('tractor_description')+"/launch/rviz_nojoints.launch")
-            # wait for coppelia to start
-            ros.sleep(1.5)
+           self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
+           self.coppeliaManager.startSimulator()
 
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
@@ -202,19 +180,11 @@ class GenericSimulator(BaseController):
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
 
         if not self.GAZEBO:
-            self.startPub=ros.Publisher("/startSimulation", Bool, queue_size=1, tcp_nodelay=True)
-            self.pausePub=ros.Publisher("/pauseSimulation", Bool, queue_size=1, tcp_nodelay=True)
-            self.stopPub=ros.Publisher("/stopSimulation", Bool, queue_size=1, tcp_nodelay=True)
-            self.enableSyncModePub=ros.Publisher("/enableSyncMode", Bool, queue_size=1, tcp_nodelay=True)
-            self.triggerNextStepPub=ros.Publisher("/triggerNextStep", Bool, queue_size=1, tcp_nodelay=True)
-            self.renderSimulationPub = ros.Publisher("/renderSimulation", Bool, queue_size=1, tcp_nodelay=True)
-            # simStepDoneSub=ros.Subscriber("/simulationStepDone", Bool, sim_done_)
-            self.simStateSub=ros.Subscriber("/simulationState", Int32, self.sim_state_)
-            # simTimeSub=simROS.Subscriber('/simulationTime',Float32, time_sim_)
             # I do this only to check frequency
             self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState, callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
             # self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
             #                                queue_size=1, tcp_nodelay=True)
+
     def _receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
@@ -261,30 +231,11 @@ class GenericSimulator(BaseController):
         self.v_d = msg.linear.x
         self.omega_d = msg.angular.z
 
-    def sim_state_(self, msg):
-        pass
-
     def deregister_node(self):
         if not self.GAZEBO:
-            self.simulationControl('stop')
+            self.coppeliaManager.simulationControl('stop')
         os.system("killall rosmaster rviz coppeliaSim")
         super().deregister_node()
-
-    def simulationControl(self,input):
-        if input == 'start':
-            print("starting simulation")
-            ros.wait_for_message('/simulationState', Bool, timeout=5.)
-            ros.sleep(1.5)
-            msg = Bool()
-            msg.data = True
-            for i in range(30):
-                self.startPub.publish(msg)
-        if input == 'stop':
-            self.stopPub.publish(True)
-        if input == 'enable_sync_mode':
-            self.enableSyncModePub.publish(True)
-        if input=='trigger_next_step':
-            self.triggerNextStepPub.publish(True)
 
 
     def startupProcedure(self):
@@ -297,14 +248,14 @@ class GenericSimulator(BaseController):
         else:
             # we need to broadcast the TF world baselink in coppelia not in base controller for synchro issues
             self.broadcast_world = False
-            self.simulationControl('start')
             # start coppeliasim
-            self.simulationControl('enable_sync_mode')
+            self.coppeliaManager.simulationControl('start')
+            # manage coppelia simulation from locosim
+            self.coppeliaManager.simulationControl('enable_sync_mode')
             #Coppelia Runs with increment of 0.01 but is not able to run at 100Hz but at 25 hz so I "slow down" ros, but still update time with dt = 0.01
             self.slow_down_factor = 8
             # loop frequency
             self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
-
 
     def plotData(self):
         if conf.plotting:
@@ -731,7 +682,7 @@ def talker(p):
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
             if not p.GAZEBO:
-                p.simulationControl('trigger_next_step')
+                p.coppeliaManager.simulationControl('trigger_next_step')
                 p.unwrap()
                 # log variables
             p.logData()
@@ -803,7 +754,7 @@ def talker(p):
             p.ros_pub.publishVisual(delete_markers=False)
 
             if not p.GAZEBO:
-                p.simulationControl('trigger_next_step')
+                p.coppeliaManager.simulationControl('trigger_next_step')
                 p.unwrap()
 
             p.beta_l, p.beta_r, p.alpha = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
