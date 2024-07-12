@@ -872,19 +872,11 @@ class QuadrupedController(BaseController):
                                        "green", scale=0.0001)
                 #self.ros_pub.add_marker(self.W_contacts[leg], radius=0.001)
 
-            # if (self.use_ground_truth_contacts):
-            #     self.ros_pub.add_arrow(self.W_contacts[leg],
-            #                            self.u.getLegJointState(leg, self.grForcesW_gt / (6 * self.robot.robotMass)),
-            #                            "red")
-            # else:
-            #     self.ros_pub.add_arrow(self.W_contacts[leg],
-            #                            self.u.getLegJointState(leg,self.grForcesW_des / (6 * self.robot.robotMass)),
-            #                            "red")
+            if (self.use_ground_truth_contacts):
+                self.ros_pub.add_arrow(self.W_contacts[leg],
+                                       self.u.getLegJointState(leg, self.grForcesW_gt / (6 * self.robot.robotMass)),
+                                       "red")
 
-
-            # self.ros_pub.add_arrow(self.W_contacts[leg],
-            #                        self.u.getLegJointState(leg, self.grForcesW_des / (6 * self.robot.robotMass)),
-            #                        "blue")
 
         # self.ros_pub.add_polygon([self.B_contacts[0],
         #                           self.B_contacts[1],
@@ -899,7 +891,7 @@ class QuadrupedController(BaseController):
         #                           self.B_contacts_des[0]], "green", visual_frame="base_link")
         #
 
-        self.ros_pub.publishVisual()
+        self.ros_pub.publishVisual(delete_markers=False)
 
     def updateKinematics(self, update_legOdom=True, noise=None):
         if noise is not None:
@@ -1370,7 +1362,7 @@ if __name__ == '__main__':
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
                           use_ground_truth_pose=True,
-                          use_ground_truth_contacts=False,
+                          use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
         p.startupProcedure()

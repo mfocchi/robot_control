@@ -464,6 +464,12 @@ class BaseController(threading.Thread):
                 grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
                 grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
                 self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
+                # contact state is computed using gt forces if use_ground_truth_contacts == True (previous computation is overridden)
+                if self.contact_normal[leg].dot(grf_gt) >= conf.robot_params[self.robot_name]['force_th']:
+                    self.contact_state[leg] = True
+
+                else:
+                    self.contact_state[leg] = False
 
     def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration):
         from geometry_msgs.msg import Wrench, Point
