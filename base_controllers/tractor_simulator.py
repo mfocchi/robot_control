@@ -33,7 +33,7 @@ import numpy as np
 import catboost as cb
 import pinocchio as pin
 from base_controllers.components.coppelia_manager import CoppeliaManager
-
+from ros_impedance_controller.srv import optim, optimRequest
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -49,7 +49,7 @@ class GenericSimulator(BaseController):
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
         self.IDENT_WHEEL_L = 4.5  # -4.5:0.5:4.5
-
+        self.xf = np.array([2., 2.5, 0.])
         self.GRAVITY_COMPENSATION = True
 
         self.SAVE_BAGS = False
@@ -70,8 +70,11 @@ class GenericSimulator(BaseController):
         # regressor
         self.model = cb.CatBoostRegressor()
         # laod model
-        self.model.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/doretta/controllers/slippage_regressor_wheels.cb')
-
+        try:
+            self.model_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/doretta/controllers/regressor/model_beta_l.cb')
+            self.model_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/doretta/controllers/regressor/model_beta_r.cb')
+        except:
+            print(colored("need to generate the models with running doretta/controller/regressor/model_slippage_updated.py"))
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -226,6 +229,24 @@ class GenericSimulator(BaseController):
     #         self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
     #                                    self.quaternion,
     #                                    ros.Time.now(), '/base_link', '/world')
+
+    def getTrajFromMatlab(self):
+        ros.wait_for_service('optim')
+        try:
+            self.optim_client = ros.ServiceProxy('optim', optim)
+            request_optim = optimRequest()
+            request_optim.xf= self.pf[0]
+            request_optim.yf = self.pf[1]
+            request_optim.thetaf = self.pf[2]
+            request_optim.plan_type='dubins'
+            response = self.optim_client(request_optim)
+            print(response.des_x)
+            print(response.des_y)
+            print(response.des_theta)
+            print(response.des_v)
+            print(response.des_omega)
+        except:
+            print(colored("matlab service call not available"))
 
     def get_command_vel(self, msg):
         self.v_d = msg.linear.x
@@ -565,7 +586,8 @@ class GenericSimulator(BaseController):
         # compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
-        beta_l, beta_r, alpha = self.model.predict(qd_des)
+        beta_l = self.model_beta_l.predict(qd_des)
+        beta_r = self.model_beta_r.predict(qd_des)
 
         v_enc_l += beta_l
         v_enc_r += beta_r
@@ -630,6 +652,8 @@ def talker(p):
     p.q_des = np.zeros(2)
     p.qd_des = np.zeros(2)
     p.tau_ffwd = np.zeros(2)
+
+    p.getTrajFromMatlab()
 
     if p.SAVE_BAGS:
         p.recorder.start_recording_srv()
