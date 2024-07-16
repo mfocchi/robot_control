@@ -176,7 +176,7 @@ class BaseController(threading.Thread):
                 self.robot_name + '_description') + '/robots/' + self.robot_name + '.urdf.xacro'
         else:
             print("loading custom xacro path: ", xacro_path)
-        self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path)
+        self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path, floating_base=True)
 
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
@@ -725,7 +725,7 @@ if __name__ == '__main__':
         if conf.plotting:
             plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
                       start=0, end=-1)
-            plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
+            plotFrame('position', time_log=p.time_log, Pose_log=p.basePoseW_log,
                       title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
 

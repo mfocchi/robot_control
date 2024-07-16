@@ -26,6 +26,7 @@ from roslaunch.parent import ROSLaunchParent
 import copy
 from base_controllers.utils.utils import Utils
 import subprocess
+import pinocchio
 
 #from urdf_parser_py.urdf import URDF
 #make plot interactive
@@ -166,7 +167,7 @@ def sendStaticTransform(parent, child, x_pos = np.zeros(3), quat=np.array([1,0,0
     static_broadcaster.sendTransform(static_transformStamped)
 
 
-def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, additional_urdf_args = None):
+def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, additional_urdf_args = None, floating_base=False):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';
     path  = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
     srdf      = path + "/robot_urdf/" + robot_name + ".srdf"
@@ -220,7 +221,10 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, ad
             print("URDF generated_commons")
             urdf_location      = path + "/robot_urdf/generated_urdf/" + robot_name+ ".urdf"
             print(urdf_location)
-            robot = RobotWrapper.BuildFromURDF(urdf_location)
+            if floating_base:
+                robot = RobotWrapper.BuildFromURDF(urdf_location, root_joint=pinocchio.JointModelFreeFlyer())
+            else:
+                robot = RobotWrapper.BuildFromURDF(urdf_location)
             print("URDF loaded in Pinocchio")
         except:
             print ('Issues in URDF generation for Pinocchio, did not succeed')
