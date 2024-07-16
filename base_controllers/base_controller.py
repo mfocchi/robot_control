@@ -723,10 +723,11 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
         if conf.plotting:
-            plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
-                      start=0, end=-1)
+            plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
             plotFrame('position', time_log=p.time_log, Pose_log=p.basePoseW_log,
                       title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
+            plotJoint('torque', time_log=p.time_log, tau_log=p.tau_log, joint_names=p.joint_names)
+
 
 
 

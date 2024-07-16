@@ -567,8 +567,8 @@ def alignToPipe(roll, yaw):
 
 def talker(p):
     p.start()
-    p.startSimulator(world_name = 'starbot_tunnel.world')
-    #p.startSimulator()
+    #p.startSimulator(world_name = 'starbot_tunnel.world')
+    p.startSimulator()
     p.loadModelAndPublishers()
     p.initVars()
     p.initSubscribers()
