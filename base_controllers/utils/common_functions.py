@@ -166,6 +166,87 @@ def sendStaticTransform(parent, child, x_pos = np.zeros(3), quat=np.array([1,0,0
         static_broadcaster = tf2_ros.StaticTransformBroadcaster()
     static_broadcaster.sendTransform(static_transformStamped)
 
+def getRobotModelFloating(robot_name="hyq"):
+    ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n'
+    path = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
+
+    try:
+        urdf = ros.get_param('/robot_description')
+        print("URDF generated_commons")
+        urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
+        print(urdf_location)
+        text_file = open(urdf_location, "w")
+        text_file.write(urdf)
+        text_file.close()
+        robot = RobotWrapper.BuildFromURDF(urdf_location, root_joint=pinocchio.JointModelFreeFlyer())
+    except:
+        print('Issues in URDF generation for Pinocchio, did not succeed')
+    return robot
+
+def getRobotModel(robot_name="hyq", generate_urdf=False, xacro_path=None, additional_urdf_args=None):
+    ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n'
+    path = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
+    srdf = path + "/robot_urdf/" + robot_name + ".srdf"
+
+    if (generate_urdf):
+        try:
+            # old way
+            if (xacro_path is None):
+                xacro_path = rospkg.RosPack().get_path(
+                    robot_name + '_description') + '/robots/' + robot_name + '.urdf.xacro'
+
+            package = 'xacro'
+            executable = 'xacro'
+            name = 'xacro'
+            namespace = '/'
+            # with gazebo 11 you should set in the ros_impedance_controllerXX.launch the new_gazebo_version = true
+            # note we generate the urdf with the floating base joint (new gazebo version should be false by default in the xacro of the robot! because Pinocchio needs it!
+            args = xacro_path + ' --inorder -o ' + os.environ[
+                'LOCOSIM_DIR'] + '/robot_urdf/generated_urdf/' + robot_name + '.urdf'
+
+            try:
+                flywheel = ros.get_param('/flywheel4')
+                args += ' flywheel4:=' + flywheel
+            except:
+                pass
+
+            try:
+                flywheel2 = ros.get_param('/flywheel2')
+                args += ' flywheel2:=' + flywheel2
+            except:
+                pass
+
+            try:
+                angle = ros.get_param('/angle_deg')
+                args += ' angle_deg:=' + angle
+            except:
+                pass
+
+            try:
+                anchorZ = ros.get_param('/anchorZ')
+                args += ' anchorZ:=' + anchorZ
+            except:
+                pass
+
+            if additional_urdf_args is not None:
+                args += ' ' + additional_urdf_args
+
+            os.system("rosrun xacro xacro " + args)
+            # os.system("rosparam get /robot_description > "+os.environ['LOCOSIM_DIR']+'/robot_urdf/'+robot_name+'.urdf')
+            # urdf = URDF.from_parameter_server()
+            print("URDF generated_commons")
+            urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
+            print(urdf_location)
+            robot = RobotWrapper.BuildFromURDF(urdf_location)
+            print("URDF loaded in Pinocchio")
+        except:
+            print('Issues in URDF generation for Pinocchio, did not succeed')
+    else:
+
+        urdf = path + "/robot_urdf/" + robot_name + ".urdf"
+        robot = RobotWrapper.BuildFromURDF(urdf, [path, srdf])
+
+    return robot
 
 def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, additional_urdf_args = None, floating_base=False):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n';

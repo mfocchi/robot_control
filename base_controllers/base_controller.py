@@ -49,7 +49,7 @@ from ros_impedance_controller.msg import EffortPid
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
-robotName = "solo"
+robotName = "mantis"
 
 
 class BaseController(threading.Thread):
@@ -176,7 +176,7 @@ class BaseController(threading.Thread):
                 self.robot_name + '_description') + '/robots/' + self.robot_name + '.urdf.xacro'
         else:
             print("loading custom xacro path: ", xacro_path)
-        self.robot = getRobotModel(self.robot_name, generate_urdf=True, xacro_path=xacro_path, floating_base=True)
+        self.robot = getRobotModelFloating(self.robot_name)
 
         # instantiating objects
         self.ros_pub = RosPub(self.robot_name, only_visual=True)
