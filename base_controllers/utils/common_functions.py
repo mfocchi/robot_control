@@ -173,6 +173,7 @@ def getRobotModelFloating(robot_name="hyq"):
     try:
         urdf = ros.get_param('/robot_description')
         print("URDF generated_commons")
+        os.makedirs(path + "/robot_urdf/generated_urdf/", exist_ok=False)
         urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
         print(urdf_location)
         text_file = open(urdf_location, "w")
