@@ -198,7 +198,7 @@ robot_params['mantis'] ={'dt': 0.001,
                       'buffer_size': 5001, # 120 seconds
                       # simulation gains
                       # stand alone joint pid
-                      'kp': np.array([300., 300., 300.]*4),
+                      'kp': 2*np.array([600., 300., 300., 600., 300., 300., 600., 300., 300., 600., 300., 300.]),
                       'kd': np.array([50., 50., 50.]*4),
                       'ki': np.array([0., 0., 0.]*4),
                       # joint pid + wbc (optional)
@@ -225,8 +225,10 @@ robot_params['mantis'] ={'dt': 0.001,
                       'kd_ang_real': 0.5*np.array([3., 5., 3.]), #np.array([2., 4., 2.]),
                       # joint configuration
                       #'q_0':  np.array([0.0, 0.78, -1.7,  0.0, 0.78, -1.7, -0.0, 0.78, -1.7, -0.0, 0.78, -1.7]),
-                         #spider config
-                      'q_0': np.array([-1.57, 1.5, -1.5, -1.57, 1.5, -1.5,  1.57, 1.5, -1.5, 1.57, 1.5, -1.5]),
+                        #star config
+                       #'q_0': np.array([-1.57, 1.5, -1.5, -1.57, 1.5, -1.5,  1.57, 1.5, -1.5, 1.57, 1.5, -1.5]),
+                      # quadruped stance config
+                      'q_0': np.array([0.7, 0.75, -1.5, 0.7, 0.75, -1.5, -0.7, 0.75, -1.5, -0.7, 0.75, -1.5]),
                       'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
                       'joint_names': ['lf_hy_joint',  'lf_hp_joint', 'lf_kp_joint',
                                       'lh_hy_joint',  'lh_hp_joint', 'lh_kp_joint',
@@ -239,7 +241,7 @@ robot_params['mantis'] ={'dt': 0.001,
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,
-                      'spawn_z': 1.2,
+                      'spawn_z': 1.,
                       'spawn_R': 0.0,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
