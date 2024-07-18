@@ -200,39 +200,13 @@ robot_params['go1'] ={'dt': 0.002,
 robot_params['mantis'] ={'dt': 0.001,
                       'buffer_size': 5001, # 120 seconds
                       # simulation gains
-                      # stand alone joint pid
                       'kp': 2*np.array([600., 300., 300., 600., 300., 300., 600., 300., 300., 600., 300., 300.]),
-                      'kd': np.array([50., 50., 50.]*4),
+                      'kd': np.array([50., 50., 50., 50., 50., 50., 50., 50., 50., 50., 50., 50.]),
                       'ki': np.array([0., 0., 0.]*4),
-                      # joint pid + wbc (optional)
-                      'kp_wbc': np.array([15., 15., 15.]*4),
-                      'kd_wbc': np.array([1., 1., 1.]*4),
-                      'ki_wbc': np.array([0., 0., 0.]*4),
-                      # virtual impedance wrench control
-                      'kp_lin': np.array([800, 500., 900.]),  # x y z
-                      'kd_lin': np.array([100, 100., 100.]),
-                      'kp_ang': np.array([100, 100., 100.]),  # R P Y
-                      'kd_ang': np.array([10., 10., 10.]),
-                      # real robot gains
-                      # stand alone joint pid
-                      'kp_real': 0.5*np.array([30., 30.,30.]*4),
-                      'kd_real': 0.5*np.array([.3, .3, .3]*4),
-                      'ki_real': np.array([1.5, 1.5, 1.5]*4),
-                      # joint pid + wbc (optional)
-                      'kp_wbc_real': np.array([20., 30., 40.]*4),
-                      'kd_wbc_real': 0.5*np.array([.3, .3, .3]*4),
-                      'ki_wbc_real': np.array([1.5, 1.5, 1.5]*4),
-                      'kp_lin_real': 0.5*np.array([300., 200., 350.]), #np.array([300., 300., 400.]), # x y z
-                      'kd_lin_real': 0.5*np.array([40., 40., 80.]), #np.array([30., 20., 60.]),
-                      'kp_ang_real': 0.5*np.array([40., 80., 40.]), # #np.array([30., 50., 30.]), # R P Y
-                      'kd_ang_real': 0.5*np.array([3., 5., 3.]), #np.array([2., 4., 2.]),
-                      # joint configuration
-                      #'q_0':  np.array([0.0, 0.78, -1.7,  0.0, 0.78, -1.7, -0.0, 0.78, -1.7, -0.0, 0.78, -1.7]),
-                        #star config
-                       #'q_0': np.array([-1.57, 1.5, -1.5, -1.57, 1.5, -1.5,  1.57, 1.5, -1.5, 1.57, 1.5, -1.5]),
+                       #star stance config
+                      #'q_0': np.array([-1.57, 1.5, -1.5, -1.57, 1.5, -1.5,  1.57, 1.5, -1.5, 1.57, 1.5, -1.5]),
                       # quadruped stance config
                       'q_0': np.array([0.7, 0.75, -1.5, 0.7, 0.75, -1.5, -0.7, 0.75, -1.5, -0.7, 0.75, -1.5]),
-                      'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
                       'joint_names': ['lf_hy_joint',  'lf_hp_joint', 'lf_kp_joint',
                                       'lh_hy_joint',  'lh_hp_joint', 'lh_kp_joint',
                                       'rf_hy_joint',  'rf_hp_joint', 'rf_kp_joint',
@@ -240,7 +214,6 @@ robot_params['mantis'] ={'dt': 0.001,
                       # ee params
                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
                       'force_th': 18.,
-                      'contact_th': 0.01,
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,
@@ -250,8 +223,6 @@ robot_params['mantis'] ={'dt': 0.001,
                       'spawn_Y': 0.0,
                       # use real robot or simulation
                       'real_robot': False} # note the frames are all aligned with base for joints = 0
-
-
 
 robot_params['jumpleg'] ={'dt': 0.001,
                        'kp': np.array([100, 100, 100, 10, 10, 10 ]),

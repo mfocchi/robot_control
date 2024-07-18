@@ -629,8 +629,8 @@ class BaseController(threading.Thread):
         new_time = ros.Time.now().to_sec()
         if  hasattr(self, 'ros_time'):
             self.loop_time = new_time-self.ros_time
-            #if  self.loop_time> conf.robot_params[self.robot_name]['dt']*1.05:
-                #print('Out of loop frequency')
+            if  self.loop_time> conf.robot_params[self.robot_name]['dt']*1.05:
+                print('Out of loop frequency')
         self.ros_time = new_time
 
     def setSimSpeed(self, dt_sim=0.001, max_update_rate=1000, iters=50):
@@ -657,40 +657,26 @@ def talker(p):
     p.startupProcedure()
 
     #loop frequency       
-    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt']) 
-    
-#    ros.sleep(0.1)
-#    p.resetGravity(True) 
-#    
-#    print ("Start flight phase")
-    
-#    p.time = 0.0
-#    RPM2RAD =2*np.pi/60.0
-#    omega = 5000*RPM2RAD
+    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
 
+    # use this if rostopic hz /command it gives frequency < rate
+    #p.setSimSpeed(max_update_rate=100)
     #control loop
     while not ros.is_shutdown():
         #update the kinematics
-        p.updateKinematics()    
+        p.updateKinematics()
 
-        # controller
+        # implement your own controller
         if p.use_torque_control:
+            p.pid.setPDs(0,0,0)
             p.tau_ffwd = conf.robot_params[p.robot_name]['kp'] * np.subtract(p.q_des,   p.q)  - conf.robot_params[p.robot_name]['kd']*p.qd + p.gravity_comp
             #p.tau_ffwd[12:] =0.01 * np.subtract(p.q_des[12:],   p.q[12:])  - 0.001*p.qd[12:]
         else:
             p.tau_ffwd = np.zeros(p.robot.na)
-        
-        
-        #        p.q_des[14] += omega *conf.robot_params[p.robot_name_]['dt']		
-#        p.q_des[15] += -omega *conf.robot_params[p.robot_name_]['dt']	    
 
-        #max torque
-#        p.tau_ffwd[14]= 0.21
-#        p.tau_ffwd[15] = -0.21
-        
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
           
-	   # log variables
+	    # log variables
         p.logData()    
         
         # plot actual (green) and desired (blue) contact forces 
@@ -698,15 +684,11 @@ def talker(p):
             p.ros_pub.add_arrow(p.W_contacts[leg], p.contact_state[leg]*p.u.getLegJointState(leg, p.grForcesW/(6*p.robot.robotMass)),"green")
             if (p.use_ground_truth_contacts):
                 p.ros_pub.add_arrow(p.W_contacts[leg], p.u.getLegJointState(leg, p.grForcesW_gt / (6 * p.robot.robotMass)), "red")
-        p.ros_pub.publishVisual()      				
-  
-#        if (p.time>0.5): 
-#            print ("pitch", p.basePoseW[p.u.sp_crd["AY"]])
-#            break;
+        p.ros_pub.publishVisual()
 
         #wait for synconization of the control loop
         rate.sleep()     
-        p.sync_check()
+        #p.sync_check()
         p.time = np.round(p.time + np.array([p.loop_time]), 3) # to avoid issues of dt 0.0009999
 
         if (p.apply_external_wrench and p.time > p.time_external_wrench):
