@@ -228,7 +228,8 @@ class QuadrupedJumpController(QuadrupedController):
                                         "l_expl_min": 0,
                                         "l_expl_max": 0.3})
         self.go0_conf = 'standDown'
-        self.qj_fold = conf.robot_params[self.robot_name]['q_fold']
+        self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
+        self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
     def initVars(self):
@@ -265,6 +266,9 @@ class QuadrupedJumpController(QuadrupedController):
         for leg in range(4):
             foot_lifted_off[leg] = self.W_contacts[leg][2] > 0.017
         if not self.detectedApexFlag and np.all(foot_lifted_off):
+            # Reducing gains for more complaint landing
+            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 4,
+                              conf.robot_params[p.robot_name]['kd'], np.zeros(p.robot.na))
             if self.real_robot:
                 if self.baseLinAccW[2] < threshold:
                     self.detectedApexFlag = True
@@ -608,7 +612,7 @@ if __name__ == '__main__':
                                            'go0_conf:='+p.go0_conf])
         # initialize data stucture to use them with desired values
         p.des_robot = RobotWrapper.BuildFromURDF(
-            os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf")
+            os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf", root_joint=pinocchio.JointModelFreeFlyer())
 
         if p.real_robot:
             p.startTrust = 20.
@@ -620,9 +624,11 @@ if __name__ == '__main__':
 
         ros.sleep(2.)
 
-        p.target_CoM = np.array([0.5, 0., 0.3])
-        # action = np.array([1, 1, -2, -2, 1, 0, 0, 0, 0, 0, 0, -5, -5])
-        action = np.array([1, 1, -2, -2, 1, 0, 0, 0, 0, 0, 0, -3, -1])
+        p.target_CoM = np.array([0.6, 0., 0.3])
+        action = np.array([-2.7202e-01,  1.9136e+00, -1.8142e+00, -3.0357e+00, -8.4845e-01,
+          3.4539e-02, -1.1952e+00, -2.4705e-02,  1.9945e-05,  1.7154e+00,
+         -4.9221e-02, -4.8772e+00, -2.7106e+00])
+
         p.jumpAgent.process_actions(action, p.target_CoM)
         # initial pose
         # linear
@@ -709,10 +715,7 @@ if __name__ == '__main__':
                         elapsed_time_apex = p.time - p.t_apex
                         elapsed_ratio_apex = np.clip(
                             elapsed_time_apex / p.lerp_time, 0, 1)
-                        # TODO: fix this, cause touchdown detection!
-                        # p.q_des = p.lerp(p.q_apex, p.qj_0, elapsed_ratio_apex).copy()
-                        p.q_des = p.lerp(p.q_apex, p.qj_fold,
-                                         elapsed_ratio).copy()
+                        p.q_des = p.lerp(p.q_apex, p.q_0_td, elapsed_ratio_apex).copy()
                         if p.detectTouchDown():
                             p.landing_position = p.u.linPart(p.basePoseW)
                             perc_err = 100. * \
@@ -725,7 +728,7 @@ if __name__ == '__main__':
                         elapsed_time = p.time - (p.startTrust + p.T_th_total)
                         elapsed_ratio = np.clip(
                             elapsed_time / p.lerp_time, 0, 1)
-                        p.q_des = p.lerp(p.q_t_th, p.qj_fold,
+                        p.q_des = p.lerp(p.q_t_th, p.q_0_lo,
                                          elapsed_ratio).copy()
 
             p.plotTrajectoryBezier()
@@ -766,6 +769,7 @@ if __name__ == '__main__':
             p.robot.na), np.zeros(p.robot.na))
         ros.signal_shutdown("killed")
         p.deregister_node()
+
 
     p.deregister_node()
     if conf.plotting:

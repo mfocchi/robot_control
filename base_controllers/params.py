@@ -176,13 +176,16 @@ robot_params['go1'] ={'dt': 0.002,
                       # joint configuration
                       'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
                       'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
+                      'q_0_td': np.array([0.1789, 1.2234, -2.2329, 0.1867, 1.4733, -2.1055, -0.1784, 1.2230, -2.2327, -0.1861, 1.4733, -2.1053]),
+                      'q_0_lo': np.array([0.3430, 1.5495, -2.6620, 0.3433, 1.9171, -2.4902, -0.3425, 1.5490, -2.6620, -0.3424, 1.9171, -2.4901]),
                       'joint_names': ['lf_haa_joint',  'lf_hfe_joint', 'lf_kfe_joint',
                                       'lh_haa_joint',  'lh_hfe_joint', 'lh_kfe_joint',
                                       'rf_haa_joint',  'rf_hfe_joint', 'rf_kfe_joint',
                                       'rh_haa_joint',  'rh_hfe_joint', 'rh_kfe_joint'],
                       # ee params
                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
-                      'force_th': 18.,
+                     #  'force_th': 18.,
+                      'force_th': 5.,
                       'contact_th': 0.01,
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
