@@ -266,9 +266,7 @@ class QuadrupedJumpController(QuadrupedController):
         for leg in range(4):
             foot_lifted_off[leg] = self.W_contacts[leg][2] > 0.017
         if not self.detectedApexFlag and np.all(foot_lifted_off):
-            # Reducing gains for more complaint landing
-            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 4,
-                              conf.robot_params[p.robot_name]['kd'], np.zeros(p.robot.na))
+
             if self.real_robot:
                 if self.baseLinAccW[2] < threshold:
                     self.detectedApexFlag = True
@@ -333,6 +331,7 @@ class QuadrupedJumpController(QuadrupedController):
             t = t_ - T_th
             t_0 = (t-0.002) / T_expl
             t_1 = np.clip(t / T_expl, 0, 1)
+
             com = self.lerp(self.jumpAgent.trunk_x_lo,
                             self.jumpAgent.trunk_x_exp, t_1)[0]
             comd = self.lerp(self.jumpAgent.trunk_xd_lo,
@@ -626,8 +625,8 @@ if __name__ == '__main__':
 
         p.target_CoM = np.array([0.6, 0., 0.3])
         action = np.array([-2.7202e-01,  1.9136e+00, -1.8142e+00, -3.0357e+00, -8.4845e-01,
-          3.4539e-02, -1.1952e+00, -2.4705e-02,  1.9945e-05,  1.7154e+00,
-         -4.9221e-02, -4.8772e+00, -2.7106e+00])
+                           3.4539e-02, -1.1952e+00, -2.4705e-02,  1.9945e-05,  1.7154e+00,
+                           -4.9221e-02, -4.8772e+00, -2.7106e+00])
 
         p.jumpAgent.process_actions(action, p.target_CoM)
         # initial pose
@@ -657,6 +656,7 @@ if __name__ == '__main__':
             print(f"Initial Joint Position is {p.q}")
             print(f"Initial Joint torques {p.tau_ffwd}")
             p.T_th = 5.
+            p.T_th_total = 5.
 
         p.computeHeuristicSolutionBezierLinear(com_0, com_lo, comd_lo, p.T_th)
         # p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th)
@@ -704,8 +704,17 @@ if __name__ == '__main__':
                         p.q_t_th = p.q.copy()
                         p.qd_des = np.zeros(12)
                         p.tau_ffwd = np.zeros(12)
-                        print(
-                            colored(f"thrust completed! at time {p.time}", "red"))
+                        print(colored(f"thrust completed! at time {p.time}", "red"))
+                        # Reducing gains for more complaint landing
+                        #TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
+                        if p.real_robot:
+                            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'] / 4,
+                                            conf.robot_params[p.robot_name]['kd_real'], conf.robot_params[p.robot_name]['ki_real'])
+                        else:
+                            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 4,
+                                            conf.robot_params[p.robot_name]['kd'], conf.robot_params[p.robot_name]['ki'])
+                        print(colored(f"pdi: {p.pid.joint_pid}"))
+
                         if p.DEBUG:
                             break
                 else:
@@ -715,7 +724,8 @@ if __name__ == '__main__':
                         elapsed_time_apex = p.time - p.t_apex
                         elapsed_ratio_apex = np.clip(
                             elapsed_time_apex / p.lerp_time, 0, 1)
-                        p.q_des = p.lerp(p.q_apex, p.q_0_td, elapsed_ratio_apex).copy()
+                        p.q_des = p.lerp(p.q_apex, p.q_0_td,
+                                         elapsed_ratio_apex).copy()
                         if p.detectTouchDown():
                             p.landing_position = p.u.linPart(p.basePoseW)
                             perc_err = 100. * \
@@ -726,8 +736,9 @@ if __name__ == '__main__':
                             break
                     else:
                         elapsed_time = p.time - (p.startTrust + p.T_th_total)
+                        # incread lerp time to have less torque
                         elapsed_ratio = np.clip(
-                            elapsed_time / p.lerp_time, 0, 1)
+                            elapsed_time / p.lerp_time*2, 0, 1)
                         p.q_des = p.lerp(p.q_t_th, p.q_0_lo,
                                          elapsed_ratio).copy()
 
@@ -769,7 +780,6 @@ if __name__ == '__main__':
             p.robot.na), np.zeros(p.robot.na))
         ros.signal_shutdown("killed")
         p.deregister_node()
-
 
     p.deregister_node()
     if conf.plotting:
