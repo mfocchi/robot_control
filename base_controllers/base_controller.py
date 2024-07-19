@@ -471,8 +471,9 @@ class BaseController(threading.Thread):
                 else:
                     self.contact_state[leg] = False
 
-    def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration):
+    def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration, link_name="base_link"):
         from geometry_msgs.msg import Wrench, Point
+
         wrench = Wrench()
         wrench.force.x = Fx
         wrench.force.y = Fy
@@ -483,7 +484,7 @@ class BaseController(threading.Thread):
         reference_frame = "world"  # you can apply forces only in this frame because this service is buggy, it will ignore any other frame
         reference_point = Point(x=0, y=0, z=0)
         try:
-            self.apply_body_wrench(body_name=self.robot_name+"::base_link", reference_frame=reference_frame,
+            self.apply_body_wrench(body_name=self.robot_name+"::"+link_name, reference_frame=reference_frame,
                                    reference_point=reference_point, wrench=wrench, duration=ros.Duration(duration))
         except:
             pass
