@@ -288,14 +288,15 @@ class BaseController(threading.Thread):
                 if self.joint_names[joint_idx] == msg.name[msg_idx]:
                     self.tau_fb[joint_idx] = msg.effort_pid[msg_idx]
 
-    def send_des_jstate(self, q_des, qd_des, tau_ffwd):
+    def send_des_jstate(self, q_des, qd_des, tau_ffwd, soft_limits = 0.9):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
          msg.name = self.joint_names
-         msg.position = q_des
-         msg.velocity = qd_des
-         msg.effort = tau_ffwd                
+         msg.position = np.clip(q_des,self.robot.model.lowerPositionLimit[-12:] * soft_limits ,self.robot.model.upperPositionLimit[-12:] * soft_limits)
+         msg.velocity = np.clip(qd_des, -self.robot.model.velocityLimit[-12:] * soft_limits ,self.robot.model.velocityLimit[-12:] * soft_limits)
+         msg.effort = np.clip(tau_ffwd, -self.robot.model.effortLimit[-12:] * soft_limits ,self.robot.model.effortLimit[-12:] * soft_limits)   
          self.pub_des_jstate.publish(msg)
+
 
     def deregister_node(self):
         print( "deregistering nodes"     )
