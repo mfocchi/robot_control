@@ -587,7 +587,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.pid = PidManager(self.joint_names)
         # set joint pdi gains
         self.pid.setPDjoints(conf.robot_params[self.robot_name]['kp'],
-                             conf.robot_params[self.robot_name]['kd'],  np.zeros(self.robot.na))
+                             conf.robot_params[self.robot_name]['kd'],  conf.robot_params[self.robot_name]['ki'])
         p.resetRobot(basePoseDes=np.array([0, 0, 0.3,  0., 0., 0.]))
         while self.time <= self.startTrust:
             self.updateKinematics()
@@ -633,7 +633,7 @@ if __name__ == '__main__':
 
         ros.sleep(2.)
 
-        p.target_CoM = np.array([0.6, 0., 0.3])
+        p.target_CoM = np.array([0.5, 0., 0.3])
         action = np.array([4.2817e+00,  5.2148e-01,  1.9682e+00, -1.4080e+00, -1.7346e+00,
                            -8.8685e-02, -6.4581e-01,  1.6460e-02, -4.4340e-02,  7.1318e-01,
                            3.2268e-03, -4.8818e+00, -4.5645e+00])
