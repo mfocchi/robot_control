@@ -49,7 +49,7 @@ from ros_impedance_controller.msg import EffortPid
 #dynamics
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
-robotName = "mantis"
+robotName = "solo"
 
 
 class BaseController(threading.Thread):
@@ -288,13 +288,18 @@ class BaseController(threading.Thread):
                 if self.joint_names[joint_idx] == msg.name[msg_idx]:
                     self.tau_fb[joint_idx] = msg.effort_pid[msg_idx]
 
-    def send_des_jstate(self, q_des, qd_des, tau_ffwd, soft_limits = 0.9):
+    def send_des_jstate(self, q_des, qd_des, tau_ffwd, soft_limits = 0.9, clip_commands = False):
          # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
          msg = JointState()
          msg.name = self.joint_names
-         msg.position = np.clip(q_des,self.robot.model.lowerPositionLimit[-12:] * soft_limits ,self.robot.model.upperPositionLimit[-12:] * soft_limits)
-         msg.velocity = np.clip(qd_des, -self.robot.model.velocityLimit[-12:] * soft_limits ,self.robot.model.velocityLimit[-12:] * soft_limits)
-         msg.effort = np.clip(tau_ffwd, -self.robot.model.effortLimit[-12:] * soft_limits ,self.robot.model.effortLimit[-12:] * soft_limits)   
+         if clip_commands:
+             msg.position = np.clip(q_des,self.robot.model.lowerPositionLimit[-self.robot.na:] * soft_limits ,self.robot.model.upperPositionLimit[-self.robot.na:] * soft_limits)
+             msg.velocity = np.clip(qd_des, -self.robot.model.velocityLimit[-self.robot.na:] * soft_limits ,self.robot.model.velocityLimit[-self.robot.na:] * soft_limits)
+             msg.effort = np.clip(tau_ffwd, -self.robot.model.effortLimit[-self.robot.na:] * soft_limits ,self.robot.model.effortLimit[-self.robot.na:] * soft_limits)
+         else:
+             msg.position = q_des
+             msg.velocity = qd_des
+             msg.effort = tau_ffwd
          self.pub_des_jstate.publish(msg)
 
 
@@ -676,7 +681,7 @@ def talker(p):
         else:
             p.tau_ffwd = np.zeros(p.robot.na)
 
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd, clip_commands=p.real_robot)
           
 	    # log variables
         p.logData()    
