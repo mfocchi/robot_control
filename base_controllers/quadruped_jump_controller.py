@@ -205,12 +205,12 @@ class QuadrupedJumpController(QuadrupedController):
                                         "t_th_max": 0.7,
                                         "x_theta_min": np.pi / 4,
                                         "x_theta_max": np.pi / 2,
-                                        "x_r_min": 0.2,
+                                        "x_r_min": 0.1,
                                         "x_r_max": 0.4,
                                         "xd_theta_min": np.pi / 6,
                                         "xd_theta_max": np.pi / 2,
                                         "xd_r_min": 0.1,
-                                        "xd_r_max": 3,
+                                        "xd_r_max": 5,
                                         "psi_min": -np.pi / 4,
                                         "psi_max": np.pi / 4,
                                         "theta_min": -np.pi / 4,
@@ -597,6 +597,16 @@ class QuadrupedJumpController(QuadrupedController):
     def lerp(self, start, end, weight):
         return start + weight * (end - start)
 
+    def cerp(self, start, end, weight, start_tangent: float = 1e-3, end_tangent: float = 1e-3):
+        # Hermite basis functions
+        h00 = (2 * weight**3) - (3 * weight**2) + 1
+        h10 = weight**3 - 2 * weight**2 + weight
+        h01 = (-2 * weight**3) + (3 * weight**2)
+        h11 = weight**3 - weight**2
+
+        # Interpolation
+        return (h00 * start) + (h10 * start_tangent) + (h01 * end) + (h11 * end_tangent)
+
 
 if __name__ == '__main__':
     p = QuadrupedJumpController('go1')
@@ -624,9 +634,9 @@ if __name__ == '__main__':
         ros.sleep(2.)
 
         p.target_CoM = np.array([0.6, 0., 0.3])
-        action = np.array([-2.7202e-01,  1.9136e+00, -1.8142e+00, -3.0357e+00, -8.4845e-01,
-                           3.4539e-02, -1.1952e+00, -2.4705e-02,  1.9945e-05,  1.7154e+00,
-                           -4.9221e-02, -4.8772e+00, -2.7106e+00])
+        action = np.array([4.2817e+00,  5.2148e-01,  1.9682e+00, -1.4080e+00, -1.7346e+00,
+                           -8.8685e-02, -6.4581e-01,  1.6460e-02, -4.4340e-02,  7.1318e-01,
+                           3.2268e-03, -4.8818e+00, -4.5645e+00])
 
         p.jumpAgent.process_actions(action, p.target_CoM)
         # initial pose
@@ -704,15 +714,16 @@ if __name__ == '__main__':
                         p.q_t_th = p.q.copy()
                         p.qd_des = np.zeros(12)
                         p.tau_ffwd = np.zeros(12)
-                        print(colored(f"thrust completed! at time {p.time}", "red"))
+                        print(
+                            colored(f"thrust completed! at time {p.time}", "red"))
                         # Reducing gains for more complaint landing
-                        #TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
+                        # TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
                         if p.real_robot:
                             p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'] / 4,
-                                            conf.robot_params[p.robot_name]['kd_real'], conf.robot_params[p.robot_name]['ki_real'])
+                                              conf.robot_params[p.robot_name]['kd_real'] / 4, conf.robot_params[p.robot_name]['ki_real'] / 4)
                         else:
                             p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 4,
-                                            conf.robot_params[p.robot_name]['kd'], conf.robot_params[p.robot_name]['ki'])
+                                              conf.robot_params[p.robot_name]['kd'] / 4, conf.robot_params[p.robot_name]['ki'] / 4)
                         print(colored(f"pdi: {p.pid.joint_pid}"))
 
                         if p.DEBUG:
@@ -724,7 +735,7 @@ if __name__ == '__main__':
                         elapsed_time_apex = p.time - p.t_apex
                         elapsed_ratio_apex = np.clip(
                             elapsed_time_apex / p.lerp_time, 0, 1)
-                        p.q_des = p.lerp(p.q_apex, p.q_0_td,
+                        p.q_des = p.cerp(p.q_apex, p.q_0_td,
                                          elapsed_ratio_apex).copy()
                         if p.detectTouchDown():
                             p.landing_position = p.u.linPart(p.basePoseW)
@@ -736,10 +747,9 @@ if __name__ == '__main__':
                             break
                     else:
                         elapsed_time = p.time - (p.startTrust + p.T_th_total)
-                        # incread lerp time to have less torque
                         elapsed_ratio = np.clip(
-                            elapsed_time / p.lerp_time*2, 0, 1)
-                        p.q_des = p.lerp(p.q_t_th, p.q_0_lo,
+                            elapsed_time / p.lerp_time, 0, 1)
+                        p.q_des = p.cerp(p.q_t_th, p.q_0_lo,
                                          elapsed_ratio).copy()
 
             p.plotTrajectoryBezier()
