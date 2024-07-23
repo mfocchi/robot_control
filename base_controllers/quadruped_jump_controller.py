@@ -24,7 +24,7 @@ np.set_printoptions(threshold=np.inf, precision=5,
                     linewidth=10000, suppress=True)
 np.set_printoptions(threshold=np.inf, precision=5,
                     linewidth=1000, suppress=True)
-
+from landing_controller.controller.landingManager import LandingManager
 
 class JumpAgent():
     def __init__(self, cfg: dict):
@@ -195,7 +195,7 @@ class JumpAgent():
 class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
-        self.use_gui = False
+        self.use_gui = True
         self.DEBUG = False
         self.ffwd_impulse = False
         self.jumpAgent = JumpAgent(cfg={"min_action": -5,
@@ -230,6 +230,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.go0_conf = 'standDown'
         self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
         self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
+        self.use_landing_controller = True
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
     def initVars(self):
@@ -685,6 +686,8 @@ if __name__ == '__main__':
 
         if not p.real_robot:
             p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
+        #p.setSimSpeed(dt_sim=0.001, max_update_rate=50, iters=1500)
+        p.lm = LandingManager(p)
 
         while not ros.is_shutdown():
             p.updateKinematics()
@@ -732,26 +735,33 @@ if __name__ == '__main__':
                 else:
                     p.detectApex()
                     if (p.detectedApexFlag):
-                        # set jump position (avoid collision in jumping)
-                        elapsed_time_apex = p.time - p.t_apex
-                        elapsed_ratio_apex = np.clip(
-                            elapsed_time_apex / p.lerp_time, 0, 1)
-                        p.q_des = p.cerp(p.q_apex, p.q_0_td,
-                                         elapsed_ratio_apex).copy()
-                        if p.detectTouchDown():
-                            p.landing_position = p.u.linPart(p.basePoseW)
-                            perc_err = 100. * \
-                                np.linalg.norm(
-                                    p.target_CoM - p.landing_position) / np.linalg.norm(com_0 - p.target_CoM)
-                            print(
-                                colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
-                            break
+                        if p.use_landing_controller:
+                            p.q_des, p.qd_des, p.tau_ffwd, finished = p.lm.runAtApex(p.basePoseW, p.baseTwistW, useIK=True, useWBC=True, naive=False)
+                            if finished:
+                                break
+                        else:
+                            # set jump position (avoid collision in jumping)
+                            elapsed_time_apex = p.time - p.t_apex
+                            elapsed_ratio_apex = np.clip(
+                                elapsed_time_apex / p.lerp_time, 0, 1)
+                            p.q_des = p.cerp(p.q_apex, p.q_0_td,
+                                             elapsed_ratio_apex).copy()
+                            if p.detectTouchDown():
+                                p.landing_position = p.u.linPart(p.basePoseW)
+                                perc_err = 100. * \
+                                    np.linalg.norm(
+                                        p.target_CoM - p.landing_position) / np.linalg.norm(com_0 - p.target_CoM)
+                                print(
+                                    colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
+                                break
                     else:
                         elapsed_time = p.time - (p.startTrust + p.T_th_total)
                         elapsed_ratio = np.clip(
                             elapsed_time / p.lerp_time, 0, 1)
-                        p.q_des = p.cerp(p.q_t_th, p.q_0_lo,
-                                         elapsed_ratio).copy()
+                        if p.use_landing_controller:
+                            p.q_des = p.cerp(p.q_t_th, p.qj_0, elapsed_ratio).copy()
+                        else:
+                            p.q_des = p.cerp(p.q_t_th, p.q_0_lo, elapsed_ratio).copy()
 
             p.plotTrajectoryBezier()
             p.plotTrajectoryFlight()
