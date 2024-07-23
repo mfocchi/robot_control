@@ -1,4 +1,19 @@
+import math
+
 import numpy as np
+from contact_patch import ContactPatch
+
+class TrackParams:
+    def __init__(self):
+        self.length = 0.5  #[m] track l.ength
+        self.width = 0.1  #[m] track width
+        self.sprocket_radius = 0.085 #[m]
+        self.A = self.length * self.width  # [m^2] contact area
+        self.parts_longitudinal = 60 
+        self.parts_lateral = 6 
+        self.d_longitudinal = self.length / self.parts_longitudinal 
+        self.d_lateral      = self.width / self.parts_lateral 
+        self.dA = self.d_longitudinal * self.d_lateral 
 
 class Track:
     def __init__(self, position, track_param, ground):
@@ -25,10 +40,10 @@ class Track:
         self.width  = track_param.width 
         self.sprocket_radius = track_param.sprocket_radius 
 
-        self.normal_stress = np.np.zeros(self.getSizePatches()) 
-        self.shear_displacement = np.np.zeros(self.getSizePatches()) 
+        self.normal_stress = np.zeros(self.getSizePatches())
+        self.shear_displacement = np.zeros(self.getSizePatches())
         #self.shear_velocity = np.np.zeros(self.getSizePatches())
-        self.shear_stress = np.np.zeros(self.getSizePatches()) 
+        self.shear_stress = np.zeros(self.getSizePatches())
             
         self.ground_param = ground
         d_longitudinal = self.length / self.parts_longitudinal
@@ -36,25 +51,27 @@ class Track:
 
         self.dA = d_longitudinal * d_lateral
         # populate the contact_patches
-        self.contact_patches = np.ones((1, self.parts_longitudinal * self.parts_lateral))
+        self.contact_patches = [None] * ( self.parts_longitudinal * self.parts_lateral)
 
         for i in range(self.parts_longitudinal):
             for j in range(self.parts_lateral):
                 patch_position = self.position + np.array([self.length/2 - (i-1/2) * d_longitudinal,      self.width/2 - (j-1/2) * d_lateral ])
                 index = self.getIndex(i,j)
-                self.contact_patches[index] = contact_patch_Biral(patch_position, d_lateral, d_longitudinal)
+                self.contact_patches[index] = ContactPatch(patch_position, d_lateral, d_longitudinal)
 
 
-    def index = getIndex(self, i, j):
+    def getIndex(self, i, j):
         # access a patch in a matrix-like indexing
         index = (i-1)*self.parts_lateral + j
+        return index
 
-    def getParam(self)
+    def getParam(self):
         class param:
             pass
         param.length = self.length
         param.width = self.width
         param.sprocket_radius = self.sprocket_radius
+        return param
 
     def computePatchesShearDisplacement(self, inputs, omega_sprocket):
         track_param = self.getParam()
@@ -62,7 +79,7 @@ class Track:
         for i in range(self.parts_longitudinal):
             for j  in range(self.parts_lateral):
                 index = (i-1)*self.parts_lateral + j
-                self.shear_displacement(i,j) = self.contact_patches{index}.computeShearDisplacement(inputs, omega_sprocket, track_param)
+                self.shear_displacement[i,j] = self.contact_patches[index].computeShearDisplacement(inputs, omega_sprocket, track_param)
 
     def computePatchesShearStress(self, inputs, omega_sprocket):
         track_param = self.getParam()
@@ -70,79 +87,132 @@ class Track:
         for i in range(self.parts_longitudinal):
             for j in range(self.parts_lateral):
                 index = self.getIndex(i,j)
-                sigma = self.normal_stress(i,j)
-                self.shear_stress(i,j) = self.contact_patches{index}.computeShearStressFirmGround(inputs, omega_sprocket, track_param, self.ground_param, sigma)
+                sigma = self.normal_stress[i,j]
+                self.shear_stress[i,j] = self.contact_patches[index].computeShearStressFirmGround(inputs, omega_sprocket, track_param, self.ground_param, sigma)
 
-        def computePatchesCosSinShearAngle(self, inputs, omega_sprocket)
-            cos_shear_angles = np.zeros(self.getSizePatches()) 
-            sin_shear_angles = np.zeros(self.getSizePatches()) 
-            track_param = self.getParam() 
+    def computePatchesCosSinShearAngle(self, inputs, omega_sprocket):
+        cos_shear_angles = np.zeros(self.getSizePatches())
+        sin_shear_angles = np.zeros(self.getSizePatches())
+        track_param = self.getParam()
 
-            for i in range(self.parts_longitudinal):
-                for j in range(self.parts_lateral):
-                    index = self.getIndex(i,j) 
-                    [cos_shear_angles(i,j), sin_shear_angles(i,j)] = ...
-                        self.contact_patches{index}.computeCosSinShearAngle(...
-                        inputs, omega_sprocket, track_param) 
-            return  cos_shear_angles, sin_shear_angles
+        for i in range(self.parts_longitudinal):
+            for j in range(self.parts_lateral):
+                index = self.getIndex(i,j)
+                cos_shear_angles[i,j], sin_shear_angles[i,j] = self.contact_patches[index].computeCosSinShearAngle(inputs, omega_sprocket, track_param)
+        return  cos_shear_angles, sin_shear_angles
 
-        def computeTractiveForce(self, inputs, omega_sprocket):
-            # compute the total tractive force that the track can apply on
-            # the ground given all the parameters and control inputs
+    def computeTractiveForce(self, inputs, omega_sprocket):
+        # compute the total tractive force that the track can apply on
+        # the ground given all the parameters and control inputs
 
-            [cos_shear_angles, sin_shear_angles] = self.computePatchesCosSinShearAngle(inputs, omega_sprocket) 
-            self.computePatchesShearStress(inputs, omega_sprocket) 
-            
-            dFx = -self.dA * self.shear_stress .* cos_shear_angles 
-            dFy = -self.dA * self.shear_stress .* sin_shear_angles 
-            
-            Fx = sum(dFx, "all") 
-            Fy = sum(dFy, "all") 
-            return Fx, Fy
+        [cos_shear_angles, sin_shear_angles] = self.computePatchesCosSinShearAngle(inputs, omega_sprocket)
+        self.computePatchesShearStress(inputs, omega_sprocket)
 
-        def computeResistiveTruningMoments(self, inputs, omega_sprocket)
-            # The moments of turning resistance Mr Ml due to the lateral shear
-            # forces acting on the track
+        dFx = -self.dA * np.multiply(self.shear_stress, cos_shear_angles)
+        dFy = -self.dA * np.multiply(self.shear_stress, sin_shear_angles)
 
-            cos_shear_angles, sin_shear_angles = self.computePatchesCosSinShearAngle(inputs, omega_sprocket)
-            self.computePatchesShearStress(inputs, omega_sprocket) 
+        Fx = sum(dFx, "all")
+        Fy = sum(dFy, "all")
+        return Fx, Fy
 
-            patches_y = self.getPatchesLongitudinalPosition() 
-            patches_x = self.getPatchesLateralPosition() 
-            
+    def computeResistiveTruningMoments(self, inputs, omega_sprocket):
+        # The moments of turning resistance Mr Ml due to the lateral shear
+        # forces acting on the track
 
-            dM_long = -self.dA * (patches_y) .* self.shear_stress .* cos_shear_angles 
-            dM_lat  = -self.dA * (patches_x) .* self.shear_stress .* sin_shear_angles 
-            
-            M_long = sum(dM_long, "all") 
-            M_lat  = sum(dM_lat, "all") 
-            return M_long, M_lat
+        cos_shear_angles, sin_shear_angles = self.computePatchesCosSinShearAngle(inputs, omega_sprocket)
+        self.computePatchesShearStress(inputs, omega_sprocket)
 
-        # SETTERS
-        def setNormalStress(self, sigma):
-            self.normal_stress = sigma 
+        patches_y = self.getPatchesLongitudinalPosition()
+        patches_x = self.getPatchesLateralPosition()
 
-        # GETTERS
 
-        def getPatchesLongitudinalPosition(self):
-            x = np.zeros(self.getSizePatches()) 
-            for i in range(self.parts_longitudinal):
-                for j in range(self.parts_lateral):
-                    index = self.getIndex(i,j) 
-                    x[i,j] = self.contact_patches{index}.getX()
-            return x
+        dM_long = -self.dA * (patches_y) * self.shear_stress * cos_shear_angles
+        dM_lat  = -self.dA * (patches_x) * self.shear_stress * sin_shear_angles
 
-        def getPatchesLateralPosition(self):
-            y = np.zeros(self.getSizePatches()) 
-            for i = 1:self.parts_longitudinal
-                for j = 1:self.parts_lateral
-                    index = self.getIndex(i,j) 
-                    y[i,j] = self.contact_patches{index}.getY()
-            return y
+        M_long = sum(dM_long, "all")
+        M_lat  = sum(dM_lat, "all")
+        return M_long, M_lat
 
-            
-        def getSizePatches(self):
-            cols = self.parts_lateral 
-            rows = self.parts_longitudinal 
-            size = [rows, cols] 
-            return size
+    # SETTERS
+    def setNormalStress(self, sigma):
+        self.normal_stress = sigma
+
+    # GETTERS
+
+    def getPatchesLongitudinalPosition(self):
+        x = np.zeros(self.getSizePatches())
+        for i in range(self.parts_longitudinal):
+            for j in range(self.parts_lateral):
+                index = self.getIndex(i,j)
+                x[i,j] = self.contact_patches[index].getX()
+        return x
+
+    def getPatchesLateralPosition(self):
+        y = np.zeros(self.getSizePatches())
+        for i in range(self.parts_longitudinal):
+            for j in range(self.parts_lateral):
+                index = self.getIndex(i,j)
+                y[i,j] = self.contact_patches[index].getY()
+        return y
+
+
+    def getSizePatches(self):
+        cols = self.parts_lateral
+        rows = self.parts_longitudinal
+        size = [rows, cols]
+        return size
+
+    def computeTerrainInteractions(self, state, omega_sprocket, track_param, sigma, ground, patch_pos_long_l, patch_pos_lat_l):
+        r = track_param.sprocket_radius
+        L = track_param.length
+        mu = ground.friction_coefficient
+        K  = ground.K
+        dA = track_param.dA
+
+        u = state[0]
+        v = state[1]
+        omega = state[2]
+
+        if ((u == 0.0) and (v == 0.0) and (omega == 0.0) and (omega_sprocket == 0.0)): # robot idle
+            M_long_l = 0.0
+            M_lat_l  = 0.0
+            Fx_l = 0.0
+            Fy_l = 0.0
+            return
+
+        x = patch_pos_long_l
+        y = patch_pos_lat_l
+
+        v_sprocket = omega_sprocket*r
+        theta = (omega*(L/2 - x))/(v_sprocket)
+        if(omega == 0.0 and omega_sprocket != 0.0):
+            j_x = (u - v_sprocket - omega * y) * (L/2 - x) / v_sprocket
+            j_y = (v * (L/2 - x) + (omega/2)*(math.pow(L,2)/4 - np.power(x,2))) / v_sprocket
+        elif(omega_sprocket == 0.0): # track is locked
+            j_x = np.ones(len(sigma)) * 1e5
+            j_y = np.ones(len(sigma)) * 1e5
+        else:
+            j_x = v_sprocket*x*np.cos(theta) - (L*v_sprocket)/2 - (v_sprocket*v)/omega + (v_sprocket*v*np.cos(theta))/omega + (v_sprocket*np.sin(theta)*(u - omega*y))/omega
+            j_y = (v_sprocket*(u - omega*y))/omega + v_sprocket*x*np.sin(theta) + (v_sprocket*v*np.sin(theta))/omega - (v_sprocket*np.cos(theta)*(u - omega*y))/omega
+
+        shear_velocitys_x = u - omega * y - v_sprocket
+        shear_velocitys_y = v + omega * x
+
+        shear_disp = np.sqrt(np.power(j_x,2) + np.power(j_y,2))
+        shear_velocitys = np.sqrt(np.power(shear_velocitys_x,2) + np.power(shear_velocitys_y,2))
+
+        shear_angles_sin = shear_velocitys_y / shear_velocitys
+        shear_angles_cos = shear_velocitys_x / shear_velocitys
+        shear_stress = sigma * mu * (1 - np.exp(-shear_disp / K))
+
+        dFx = -dA * shear_stress * shear_angles_cos
+        dFy = -dA * shear_stress * shear_angles_sin
+        dM_long = -y * dFx
+        dM_lat  = x * dFy
+        print(dM_long)
+        M_long_l = np.sum(dM_long)
+        M_lat_l  = np.sum(dM_lat)
+        Fx_l = np.sum(dFx)
+        Fy_l = np.sum(dFy)
+
+        return Fx_l, Fy_l, M_long_l, M_lat_l

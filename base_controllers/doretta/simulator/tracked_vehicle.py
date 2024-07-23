@@ -3,14 +3,19 @@ import numpy as np
 from track import Track
 
 class VehicleParam:
-
-
+    def __init__(self):
+        self.mass = 60; #[kg] vehicle mass
+        self.Izz = 4.5; #[kg m^2] vehicle inertia
+        self.width = 0.60; #[m]
+        self.height = 0.2; #[m]
+        self.weight  = self.mass * 9.81
 
 class TrackedVehicle:
     def __init__(self, vehicle_param, track_param, ground_param):
     # Simulates a tracked vehicle. Formulas are taken from "theory of
     # ground vehicles" of Wong.
-        self.vehicle_param = vehicle_param 
+        self.vehicle_param = vehicle_param
+        #using Biral model
         self.track_left  = Track([0.0, vehicle_param.width / 2], track_param, ground_param)
         self.track_right = Track([0.0,-vehicle_param.width / 2], track_param, ground_param)
         self.F_left =  np.array([0.0, 0.0])
@@ -55,17 +60,18 @@ class TrackedVehicle:
         self.M_long_left, self.M_lat_left  = self.track_left.computeResistiveTruningMoments() 
         self.M_long_right,self.M_lat_right = self.track_right.computeResistiveTruningMoments() 
 
-    def getLeftPatchesPositions(self, self):
+    #getters
+    def getLeftPatchesPositions(self):
         # compute the x,y position of each discretized patch on the track with respect to the track center
-        pataches_longitudinal_position = self.track_left.getPatchesLongitudinalPosition()
-        pataches_lateral_position      = self.track_left.getPatchesLateralPosition()
-        return pataches_longitudinal_position, pataches_lateral_position
+        patches_longitudinal_position = self.track_left.getPatchesLongitudinalPosition()
+        patches_lateral_position      = self.track_left.getPatchesLateralPosition()
+        return patches_longitudinal_position, patches_lateral_position
 
-    def getRightPatchesPositions(self, self):
+    def getRightPatchesPositions(self):
         # compute the x,y position of each discretized patch on the track with respect to the track center
-        pataches_longitudinal_position = self.track_right.getPatchesLongitudinalPosition()
-        pataches_lateral_position      = self.track_right.getPatchesLateralPosition()
-        return pataches_longitudinal_position, pataches_lateral_position
+        patches_longitudinal_position = self.track_right.getPatchesLongitudinalPosition()
+        patches_lateral_position      = self.track_right.getPatchesLateralPosition()
+        return patches_longitudinal_position, patches_lateral_position
 
     def getPatchesShearDisplacement(self):
         j_left  = self.track_left.shear_displacement 
@@ -73,16 +79,15 @@ class TrackedVehicle:
         return j_left,j_right
 
     def getPatchesShearStress(self):
-            tau_left  = self.track_left.shear_stress 
-            tau_right = self.track_right.shear_stress 
+        tau_left  = self.track_left.shear_stress
+        tau_right = self.track_right.shear_stress
+        return tau_left, tau_right
 
+    def printForces(self):
+        print("Tractive forces")
+        print(f"F_left [{self.F_left[0]}, {self.F_left[1]}], F_right [{self.F_left[0]}, {self.F_left[1]}]")
 
-    # def printForces(self):
-    #         disp("Tractive forces")
-    #         disp(strcat("F_{left} [ ", string(self.F_left(1)), " , ", string(self.F_left(2)),...
-    #             " ] F_{right} [ ", string(self.F_right(1)), " , ", string(self.F_right(2))))
-    #
-    # def printTurningMoments(self):
-    #         disp("Resistive turning moments")
-    #         disp(strcat("M_long_left: ", string(self.M_long_left), " M_long_right ", string(self.M_long_right)))
-    #         disp(strcat("M_lat_left: ", string(self.M_lat_left), " M_lat_right ", string(self.M_lat_right)))
+    def printTurningMoments(self):
+        print("Resistive turning moments")
+        print(f"M_long_left: {self.M_long_left}, M_long_right: {self.M_long_right}")
+        print(f"M_lat_left: {self.M_lat_left}, M_lat_right: {self.M_lat_right}")
