@@ -11,12 +11,14 @@ import threading
 import numpy as np
 import pinocchio as pin
 # utility functions
+###W
 from  scipy.linalg import block_diag
 from base_controllers.utils.pidManager import PidManager
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.math_tools import *
-from base_controllers.utils.optimTools import quadprog_solve_qp
 
+from base_controllers.components.whole_body_controller import WholeBodyController
+from base_controllers.utils.common_functions import *
 from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics
 from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
 from termcolor import colored
@@ -55,6 +57,8 @@ class QuadrupedController(BaseController):
         else:
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
+
+
     #####################
     # OVERRIDEN METHODS #
     #####################
@@ -225,7 +229,7 @@ class QuadrupedController(BaseController):
 
         self.basePoseW_legOdom = np.zeros(3) #* np.nan
         self.baseTwistW_legOdom = np.zeros(3) #* np.nan
-
+        ###W
         self.g_mag = np.linalg.norm(self.robot.model.gravity.vector)
 
         self.grForcesW_des = np.empty(3 * self.robot.nee) * np.nan
@@ -244,6 +248,7 @@ class QuadrupedController(BaseController):
         self.kd_j = conf.robot_params[self.robot_name].get('kd'+real_str, np.zeros(self.robot.na))
         self.ki_j = conf.robot_params[self.robot_name].get('ki'+real_str, np.zeros(self.robot.na))
 
+        ###W
         # virtual impedance wrench control
         self.kp_lin = np.diag(conf.robot_params[self.robot_name].get('kp_lin'+real_str, np.zeros(3)))
         self.kd_lin = np.diag(conf.robot_params[self.robot_name].get('kd_lin'+real_str, np.zeros(3)))
@@ -276,6 +281,9 @@ class QuadrupedController(BaseController):
         self.wrench_desW_log = np.full( (6, conf.robot_params[self.robot_name]['buffer_size'] ), np.nan)
 
         self.NEMatrix = np.zeros([6, 3*self.robot.nee]) # Newton-Euler matrix
+
+        ###W
+        self.wbc = WholeBodyController(conf.robot_params[self.robot_name], self.real_robot, self.robot)
 
         self.force_th = conf.robot_params[self.robot_name].get('force_th', 0.)
         self.contact_th = conf.robot_params[self.robot_name].get('contact_th', 0.)
@@ -409,11 +417,12 @@ class QuadrupedController(BaseController):
 
         self.baseLinTwistImuW_log[:, self.log_counter] = self.imu_utils.baseLinTwistImuW
 
+        ###W
         self.wrench_fbW_log[:, self.log_counter] = self.wrench_fbW
         self.wrench_ffW_log[:, self.log_counter] = self.wrench_ffW
         self.wrench_gW_log[:, self.log_counter] = self.wrench_gW
         self.wrench_desW_log[:, self.log_counter] = self.wrench_desW
-
+###W
 
         self.time_log[self.log_counter] = self.time
         self.loop_time_log[self.log_counter] = self.loop_time
@@ -1005,7 +1014,7 @@ class QuadrupedController(BaseController):
                     if alpha < 1:
                         alpha = GCTime/self.gravity_comp_duration
 
-                self.send_command(self.q_des, self.qd_des, alpha*self.gravityCompensation())
+                self.send_command(self.q_des, self.qd_des, alpha*self.wbc.gravityCompensation(self.W_contacts, self.h_joints, self.basePoseW, self.comPoseW))
 
             # IMU BIAS ESTIMATION
             if self.real_robot and self.robot_name == 'go1':
@@ -1357,7 +1366,7 @@ class QuadrupedController(BaseController):
 if __name__ == '__main__':
     p = QuadrupedController('go1')
     world_name = 'fast.world'
-    use_gui = True
+    use_gui = False
     try:
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
@@ -1380,7 +1389,7 @@ if __name__ == '__main__':
         ros.signal_shutdown("killed")
         p.deregister_node()
         
-    from base_controllers.utils.common_functions import *
+
 
     if conf.plotting:
         plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
