@@ -840,7 +840,7 @@ class QuadrupedController(BaseController):
         q = p0[1] - m * p0[0]
         return m, q
 
-    def send_command(self, q_des=None, qd_des=None, tau_ffwd=None):
+    def send_command(self, q_des=None, qd_des=None, tau_ffwd=None, log_data_in_send_command = False):
         # q_des, qd_des, and tau_ffwd have dimension 12
         # and are ordered as on the robot
 
@@ -861,6 +861,8 @@ class QuadrupedController(BaseController):
         #     self.APPLY_EXTERNAL_WRENCH = False
 
         # log variables
+        if log_data_in_send_command:
+            self.logData()
         self.rate.sleep()
         self.sync_check()
         self.time = np.round(self.time + self.dt, 3)#np.array([self.loop_time]), 3)
@@ -1374,6 +1376,7 @@ if __name__ == '__main__':
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
+
         p.startupProcedure()
 
         while not ros.is_shutdown():
