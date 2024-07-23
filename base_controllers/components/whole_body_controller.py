@@ -59,9 +59,9 @@ class WholeBodyController():
         self.wrench_gW_log[:, log_counter] = self.wrench_gW
         self.wrench_desW_log[:, log_counter] = self.wrench_desW
 
-    def gravityCompensation(self, W_contacts, h_joints, basePoseW, comPoseW):
+    def gravityCompensation(self, W_contacts, wJ, h_joints, basePoseW, comPoseW):
         # require the call to updateKinematics
-        return self.WBC(W_contacts, h_joints, basePoseW, comPoseW, baseTwistW = np.zeros(6), comTwistsW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
+        return self.computeWBC(W_contacts, wJ, h_joints, basePoseW, comPoseW, baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
 
     def WBCgainsInWorld(self, yaw):
@@ -74,7 +74,7 @@ class WholeBodyController():
         self.kd_angW = w_R_hf.T @ self.kd_ang @ w_R_hf
 
 
-    def virtualImpedanceWrench(self, basePoseW, comPoseW, baseTwistW, comTwistW, des_pose, des_twist, des_acc = None, comControlled = True):
+    def virtualImpedanceWrench(self, basePoseW, comPoseW, baseTwistW, comTwistW, des_pose, des_twist, des_acc = None, centroidalInertiaB = np.eye(6), comControlled = True):
         if not(des_pose is None or des_twist is None):
             if comControlled:
                 act_pose = comPoseW
@@ -100,14 +100,15 @@ class WholeBodyController():
             # faster
             start = time.time()
             w_R_des = pin.rpy.rpyToMatrix(self.u.angPart(des_pose))
+            b_R_w = pin.rpy.rpyToMatrix(self.u.angPart(basePoseW)).T
             # compute orientation error
-            b_R_des = self.b_R_w @ w_R_des
+            b_R_des = b_R_w @ w_R_des
             # express orientation error in angle-axis form
             aa_err = pin.AngleAxis(b_R_des)
             b_err = aa_err.angle * aa_err.axis
             # the orientation error is expressed in the base_frame so it should be rotated to have the wrench in the
             # world frame
-            w_err = self.b_R_w.T @ b_err
+            w_err = b_R_w.T @ b_err
 
             # Note we defined the angular part of the des twist as omega
             self.wrench_fbW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = self.kp_angW @ w_err + \
@@ -115,12 +116,12 @@ class WholeBodyController():
 
 
             # FEED-FORWARD WRENCH
-            if not (des_acc is None):
+            if (des_acc is not None):
                 # ---> linear part
                 self.wrench_ffW[self.u.sp_crd["LX"]:self.u.sp_crd["LX"] + 3] = self.robot.robotMass * self.u.linPart(des_acc)
                 # ---> angular part
                 # compute inertia in the world frame:  w_I = R' * B_I * R
-                w_I = self.b_R_w.T @ self.centroidalInertiaB @ self.b_R_w
+                w_I = b_R_w.T @ centroidalInertiaB @ b_R_w
 
                 self.wrench_ffW[self.u.sp_crd["AX"]:self.u.sp_crd["AX"] + 3] = w_I @ self.u.angPart(des_acc)
 
@@ -140,9 +141,9 @@ class WholeBodyController():
 
     # Whole body controller that includes ffwd wrench + fb wrench (Virtual PD) + gravity compensation
     # all vector is in the wf
-    def WBC(self, W_contacts, h_joints,  basePoseW= np.zeros(6), comPoseW= np.zeros(6), baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection', stance_legs=[True, True, True, True]):
+    def computeWBC(self, W_contacts, wJ, h_joints,  basePoseW= np.zeros(6), comPoseW= np.zeros(6), baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None,centroidalInertiaB = np.eye(6), comControlled = True,  type = 'projection', stance_legs=[True, True, True, True]):
         # does side effect on tau_ffwd
-        self.virtualImpedanceWrench(basePoseW, comPoseW, baseTwistW, comTwistW, des_pose, des_twist, des_acc, comControlled)
+        self.virtualImpedanceWrench(basePoseW, comPoseW, baseTwistW, comTwistW, des_pose, des_twist, des_acc, centroidalInertiaB, comControlled)
         if self.real_robot:
             self.wrench_desW = self.wrench_fbW + self.wrench_gW
             self.wrench_ffW[:] = 0
@@ -163,31 +164,29 @@ class WholeBodyController():
                 # all in a function
                 if comControlled:
                     self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1, start_col:end_col] = \
-                        pin.skew(self.W_contacts[leg] - self.u.linPart(comPoseW))
+                        pin.skew(W_contacts[leg] - self.u.linPart(comPoseW))
                 else:
                     self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1, start_col:end_col] = \
-                        pin.skew(self.W_contacts[leg] - self.u.linPart(basePoseW))
+                        pin.skew(W_contacts[leg] - self.u.linPart(basePoseW))
             else:
                 # clean the matrix (where there are zeros the grf will be zero and so the torques)
                 self.NEMatrix[:, start_col:end_col] = 0.
 
         # Map the desired wrench to grf
         if type == 'projection':
-            self.grForcesW_wbc = self.projectionWBC()
+            grForcesW_wbc = self.projectionWBC()
         elif type == 'qp':
-            self.grForcesW_wbc = self.qpWBC()
+            grForcesW_wbc = self.qpWBC()
+
+        tau_ffwd = np.zeros(self.robot.na)
+        grForcesW_wbc = np.zeros(self.robot.na)
 
         for leg in range(4):#(where there are zeros in the Matrix, the grf will be zero and so the torques, no need to check stance legs here)
             tau_leg = self.u.getLegJointState(leg, h_joints) - \
-                      self.wJ[leg].T @ self.u.getLegJointState(leg, self.grForcesW_wbc)
-            self.u.setLegJointState(leg, tau_leg, self.tau_ffwd)
+                      wJ[leg].T @ self.u.getLegJointState(leg, grForcesW_wbc)
+            self.u.setLegJointState(leg, tau_leg, tau_ffwd)
 
-        # wbc + joint pid
-        for leg in range(4):
-            grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  h_joints-self.tau_des ))
-            self.u.setLegJointState(leg, grf, self.grForcesW_des)
-
-        return self.tau_ffwd
+        return tau_ffwd, grForcesW_wbc
 
     def projectionWBC(self, tol=1e-6):
         # NEMatrix is 6 x 12

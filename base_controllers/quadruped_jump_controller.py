@@ -437,8 +437,9 @@ class QuadrupedJumpController(QuadrupedController):
                                                          ).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
 
         if not ffwd_impulse:
-            tau_ffwd = self.WBC(W_des_basePose, W_des_baseTwist, W_des_baseAcc,
-                                comControlled=False, type='projection', stance_legs=self.stance_legs)
+            tau_ffwd, self.grForcesW_wbc  = self.wbc.computeWBC( self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
+                                                       W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
+                                                       comControlled=False, type='projection', stance_legs=self.stance_legs)
             # OLD
             # tau_ffwd = self.gravityCompensation()
         else:

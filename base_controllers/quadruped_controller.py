@@ -1016,7 +1016,7 @@ class QuadrupedController(BaseController):
                     if alpha < 1:
                         alpha = GCTime/self.gravity_comp_duration
 
-                self.send_command(self.q_des, self.qd_des, alpha*self.wbc.gravityCompensation(self.W_contacts, self.h_joints, self.basePoseW, self.comPoseW))
+                self.send_command(self.q_des, self.qd_des, alpha*p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW))
 
             # IMU BIAS ESTIMATION
             if self.real_robot and self.robot_name == 'go1':
@@ -1187,7 +1187,7 @@ class QuadrupedController(BaseController):
                         self.comPoseW_des = pos(self.time - HStarttime)
                         self.comTwistW_des = vel(self.time - HStarttime)
                         self.Wcom2Joints_des()
-                        self.gravityCompensation()
+                        self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
 
                     else:
                         print(colored("[startupProcedure t: " + str(self.time[0]) + "s] desired height reached", "blue"))
@@ -1205,7 +1205,7 @@ class QuadrupedController(BaseController):
                         # enter
                         # if any of the joint velocities is larger than 0.02 or
                         # if the watchdog timer is not expired (0.5 sec)
-                        self.gravityCompensation()
+                        self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
@@ -1382,7 +1382,7 @@ if __name__ == '__main__':
         while not ros.is_shutdown():
             p.updateKinematics()
             p.visualizeContacts()
-            p.tau_ffwd = p.gravityCompensation()
+            p.tau_ffwd, p.grForcesW_wbc = p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW)
             p.logData()
             p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
 
