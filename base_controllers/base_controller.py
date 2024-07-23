@@ -117,7 +117,7 @@ class BaseController(threading.Thread):
         # send data to param server
         self.verbose = conf.verbose
         self.custom_locosim_launch_file = False
-        self.use_ground_truth_contacts = False
+        self.use_ground_truth_contacts = True
         self.apply_external_wrench = False
         self.time_external_wrench = 0.6
         self.broadcaster = tf.TransformBroadcaster()
@@ -468,7 +468,11 @@ class BaseController(threading.Thread):
         if self.use_ground_truth_contacts:
             for leg in range(4):
                 grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
-                grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
+                ##TODO for some reason in solo they are in lowerleg frame, in go1 aliengo in world frame
+                if self.robot_name == 'solo':
+                    grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
+                else:
+                    grf_gt = grfLocal_gt
                 self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
                 # contact state is computed using gt forces if use_ground_truth_contacts == True (previous computation is overridden)
                 if self.contact_normal[leg].dot(grf_gt) >= conf.robot_params[self.robot_name]['force_th']:
