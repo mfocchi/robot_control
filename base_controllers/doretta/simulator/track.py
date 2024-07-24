@@ -9,8 +9,8 @@ class TrackParams:
         self.width = 0.1  #[m] track width
         self.sprocket_radius = 0.085 #[m]
         self.A = self.length * self.width  # [m^2] contact area
-        self.parts_longitudinal = 60 
-        self.parts_lateral = 6 
+        self.parts_longitudinal = 60 #4
+        self.parts_lateral = 6 #2
         self.d_longitudinal = self.length / self.parts_longitudinal 
         self.d_lateral      = self.width / self.parts_lateral 
         self.dA = self.d_longitudinal * self.d_lateral 
@@ -55,14 +55,20 @@ class Track:
 
         for i in range(self.parts_longitudinal):
             for j in range(self.parts_lateral):
-                patch_position = self.position + np.array([self.length/2 - (i-1/2) * d_longitudinal,      self.width/2 - (j-1/2) * d_lateral ])
+                #matlab
+                #patch_position_in_track = np.array([self.length/2 - (i-1/2) * d_longitudinal,      self.width/2 - (j-1/2) * d_lateral ])
+                #python
+                patch_position_in_track = np.array([self.length / 2 - (i + 1 / 2) * d_longitudinal, self.width / 2 - (j + 1 / 2) * d_lateral])
+
+                patch_position = self.position +patch_position_in_track
                 index = self.getIndex(i,j)
                 self.contact_patches[index] = ContactPatch(patch_position, d_lateral, d_longitudinal)
 
 
-    def getIndex(self, i, j):
+    def getIndex(self, i, j): #i = 0 j = 0 index =0
         # access a patch in a matrix-like indexing
-        index = (i-1)*self.parts_lateral + j
+        #index = (i-1)*self.parts_lateral + j #matlab
+        index = i * self.parts_lateral + j  # PYTHON
         return index
 
     def getParam(self):
@@ -145,6 +151,7 @@ class Track:
             for j in range(self.parts_lateral):
                 index = self.getIndex(i,j)
                 x[i,j] = self.contact_patches[index].getX()
+
         return x
 
     def getPatchesLateralPosition(self):
@@ -162,7 +169,7 @@ class Track:
         size = [rows, cols]
         return size
 
-    def computeTerrainInteractions(self, state, omega_sprocket, track_param, sigma, ground, patch_pos_long_l, patch_pos_lat_l):
+    def computeTerrainInteractions(self, state, omega_sprocket, track_param, sigma, ground, patch_pos_long, patch_pos_lat):
         r = track_param.sprocket_radius
         L = track_param.length
         mu = ground.friction_coefficient
@@ -174,14 +181,14 @@ class Track:
         omega = state[2]
 
         if ((u == 0.0) and (v == 0.0) and (omega == 0.0) and (omega_sprocket == 0.0)): # robot idle
-            M_long_l = 0.0
-            M_lat_l  = 0.0
-            Fx_l = 0.0
-            Fy_l = 0.0
-            return
+            M_long = 0.0
+            M_lat  = 0.0
+            Fx = 0.0
+            Fy = 0.0
+            return Fx, Fy, M_long, M_lat
 
-        x = patch_pos_long_l
-        y = patch_pos_lat_l
+        x = patch_pos_long
+        y = patch_pos_lat
 
         v_sprocket = omega_sprocket*r
         theta = (omega*(L/2 - x))/(v_sprocket)
@@ -189,11 +196,12 @@ class Track:
             j_x = (u - v_sprocket - omega * y) * (L/2 - x) / v_sprocket
             j_y = (v * (L/2 - x) + (omega/2)*(math.pow(L,2)/4 - np.power(x,2))) / v_sprocket
         elif(omega_sprocket == 0.0): # track is locked
-            j_x = np.ones(len(sigma)) * 1e5
-            j_y = np.ones(len(sigma)) * 1e5
+            j_x = np.ones_like(sigma) * 1e5
+            j_y = np.ones_like(sigma) * 1e5
         else:
             j_x = v_sprocket*x*np.cos(theta) - (L*v_sprocket)/2 - (v_sprocket*v)/omega + (v_sprocket*v*np.cos(theta))/omega + (v_sprocket*np.sin(theta)*(u - omega*y))/omega
             j_y = (v_sprocket*(u - omega*y))/omega + v_sprocket*x*np.sin(theta) + (v_sprocket*v*np.sin(theta))/omega - (v_sprocket*np.cos(theta)*(u - omega*y))/omega
+
 
         shear_velocitys_x = u - omega * y - v_sprocket
         shear_velocitys_y = v + omega * x
@@ -209,10 +217,10 @@ class Track:
         dFy = -dA * shear_stress * shear_angles_sin
         dM_long = -y * dFx
         dM_lat  = x * dFy
-        print(dM_long)
-        M_long_l = np.sum(dM_long)
-        M_lat_l  = np.sum(dM_lat)
-        Fx_l = np.sum(dFx)
-        Fy_l = np.sum(dFy)
+        #print(dFx)
+        M_long = np.sum(dM_long)
+        M_lat  = np.sum(dM_lat)
+        Fx = np.sum(dFx)
+        Fy = np.sum(dFy)
 
-        return Fx_l, Fy_l, M_long_l, M_lat_l
+        return Fx, Fy, M_long, M_lat

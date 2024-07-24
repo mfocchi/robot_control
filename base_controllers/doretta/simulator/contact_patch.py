@@ -50,7 +50,7 @@ class ContactPatch:
 
         [shear_velocity_x, shear_velocity_y] = self.computeShearVelocity(inputs, omega_sprocket, track_param)
 
-        shear_velocity   = np.sqrt(shear_velocity_x^2 + shear_velocity_y^2)
+        shear_velocity   = np.sqrt(np.power(shear_velocity_x,2) + np.power(shear_velocity_y,2))
 
         shear_angle_sin = shear_velocity_y / shear_velocity
         shear_angle_cos = shear_velocity_x / shear_velocity
