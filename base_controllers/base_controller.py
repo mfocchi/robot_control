@@ -39,11 +39,8 @@ import tf
 from base_controllers.utils.ros_publish import RosPub
 from base_controllers.utils.pidManager import PidManager
 from base_controllers.utils.math_tools import *
-from numpy import nan
-import matplotlib.pyplot as plt
 from base_controllers.utils.common_functions import *
 import pinocchio as pin
-from base_controllers.utils.common_functions import getRobotModel
 from ros_impedance_controller.msg import EffortPid
 
 #dynamics
@@ -124,7 +121,7 @@ class BaseController(threading.Thread):
         self.use_torque_control = False
         self.real_robot = conf.robot_params[self.robot_name].get('real_robot', False)
         self.broadcast_world = broadcast_world
-
+        self.publish_contact_gt_in_wf = False
         print("Initialized basecontroller---------------------------------------------------------------")
 
     def startSimulator(self, world_name = None, launch_file = None, additional_args = None):
@@ -452,7 +449,7 @@ class BaseController(threading.Thread):
         self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(self.configuration)
 
     def estimateContactForces(self):           
-        # estimate ground reaxtion forces from tau 
+        # estimate ground reaction forces from tau
         for leg in range(4):
             grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  self.h_joints-self.tau ))
             self.u.setLegJointState(leg, grf, self.grForcesW)
@@ -468,11 +465,11 @@ class BaseController(threading.Thread):
         if self.use_ground_truth_contacts:
             for leg in range(4):
                 grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
-                ##TODO for some reason in solo they are in lowerleg frame, in go1 aliengo in world frame
-                if self.robot_name == 'solo':
-                    grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
-                else:
+                if self.publish_contact_gt_in_wf:#if you spawn a robot platform it starts ti publish in WF
                     grf_gt = grfLocal_gt
+                else:
+                    grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
+
                 self.u.setLegJointState(leg, grf_gt, self.grForcesW_gt)
                 # contact state is computed using gt forces if use_ground_truth_contacts == True (previous computation is overridden)
                 if self.contact_normal[leg].dot(grf_gt) >= conf.robot_params[self.robot_name]['force_th']:
@@ -609,7 +606,7 @@ class BaseController(threading.Thread):
         self.loop_time = conf.robot_params[self.robot_name]['dt']
         self.log_counter = 0
 
-        # order: lf rf lh rh
+        # order: lf lh rf rh
         if self.use_ground_truth_contacts:
             self.lowerleg_index = [0]*4
             self.lowerleg_frame_names = []
@@ -640,8 +637,8 @@ class BaseController(threading.Thread):
         new_time = ros.Time.now().to_sec()
         if  hasattr(self, 'ros_time'):
             self.loop_time = new_time-self.ros_time
-            if  self.loop_time> conf.robot_params[self.robot_name]['dt']*1.05:
-                print('Out of loop frequency')
+            # if  self.loop_time> conf.robot_params[self.robot_name]['dt']*1.05:
+            #     print('Out of loop frequency')
         self.ros_time = new_time
 
     def setSimSpeed(self, dt_sim=0.001, max_update_rate=1000, iters=50):

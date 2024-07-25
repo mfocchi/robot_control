@@ -250,6 +250,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.set_state = ros.ServiceProxy(
             '/gazebo/set_model_state', SetModelState)
         if not self.real_robot:
+            self.publish_contact_gt_in_wf = True #if you spawn it starts to publish gt in wf rather than in lowerleg frame
             spawnModel('go1_description', 'jump_platform')
 
         # TODO
