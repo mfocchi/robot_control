@@ -1,6 +1,7 @@
 import pinocchio as pin
 import numpy as np
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
+from base_controllers.utils.common_functions import getRobotModelFloating
 import os
 
 from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics
@@ -9,7 +10,7 @@ from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped imp
 #  array([ 0.16048, -0.1775 , -0.27398]), RF
 #  array([-0.21582, -0.17764, -0.27396])] RH
 
-robot = RobotWrapper.BuildFromURDF(os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/go1.urdf")
+robot = getRobotModelFloating("go1")
 
 legs = ['lf', 'lh', 'rf', 'rh']
 hips = ['HipDown'] * 4

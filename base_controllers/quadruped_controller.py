@@ -19,7 +19,8 @@ from base_controllers.utils.math_tools import *
 
 from base_controllers.components.whole_body_controller import WholeBodyController
 from base_controllers.utils.common_functions import *
-from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics
+from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics as AnalyticInverseKinematics
+from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics as PinocchioInverseKinematics
 from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
 from termcolor import colored
 
@@ -192,7 +193,9 @@ class QuadrupedController(BaseController):
         self.q_des = np.zeros_like(self.q)
 
         self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
-        self.IK = InverseKinematics(self.robot)
+        #pinocchio based
+        self.ikin = PinocchioInverseKinematics(self.robot, conf.robot_params[self.robot_name]['ee_frames'])
+        self.IK = AnalyticInverseKinematics(self.robot)
         self.leg_odom = LegOdometry(self.robot, self.real_robot)
         self.legConfig = {}
         if 'solo' in self.robot_name or  self.robot_name == 'hyq':  # either solo or solo_fw

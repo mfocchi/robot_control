@@ -169,20 +169,28 @@ def sendStaticTransform(parent, child, x_pos = np.zeros(3), quat=np.array([1,0,0
 def getRobotModelFloating(robot_name="hyq"):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n'
     path = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
+    if rosgraph.is_master_online():
+        try:
+            urdf = ros.get_param('/robot_description')
+            print("URDF generated_commons")
+            os.makedirs(path + "/robot_urdf/generated_urdf/", exist_ok=True)
+            urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
+            print(urdf_location)
+            text_file = open(urdf_location, "w")
+            text_file.write(urdf)
+            text_file.close()
+            robot = RobotWrapper.BuildFromURDF(urdf_location, root_joint=pinocchio.JointModelFreeFlyer())
+        except:
+            print('Issues in URDF generation for Pinocchio, did not succeed')
+    else: #this is used when you run stuff online (i.e. unit tests)
+        try:
+            urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
+            robot = RobotWrapper.BuildFromURDF(urdf_location, root_joint=pinocchio.JointModelFreeFlyer())
+        except:
+            print('you are running offline, urdf is not present in robot_urdf/generated_urdf folder')
 
-    try:
-        urdf = ros.get_param('/robot_description')
-        print("URDF generated_commons")
-        os.makedirs(path + "/robot_urdf/generated_urdf/", exist_ok=True)
-        urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
-        print(urdf_location)
-        text_file = open(urdf_location, "w")
-        text_file.write(urdf)
-        text_file.close()
-        robot = RobotWrapper.BuildFromURDF(urdf_location, root_joint=pinocchio.JointModelFreeFlyer())
-    except:
-        print('Issues in URDF generation for Pinocchio, did not succeed')
     return robot
+
 
 def getRobotModel(robot_name="hyq", generate_urdf=False, xacro_path=None, additional_urdf_args=None):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n'
