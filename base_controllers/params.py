@@ -190,7 +190,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
                      #  'force_th': 18.,
                       'force_th': 5.,
-                      'contact_th': 0.01,
+                      'contact_th': 0.01, # tolerance understand when /knee base is touching the ground
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,

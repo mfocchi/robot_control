@@ -272,7 +272,7 @@ class QuadrupedJumpController(QuadrupedController):
             if self.real_robot:
                 if self.baseLinAccW[2] < threshold:
                     self.detectedApexFlag = True
-                    print(colored("APEX detected", "red"))
+                    print(colored(f"APEX detected at t={self.time}", "red"))
                     self.q_apex = self.q.copy()
                     self.t_apex = self.time
             else:
@@ -282,7 +282,7 @@ class QuadrupedJumpController(QuadrupedController):
                     for i in range(10):
                         self.setJumpPlatformPosition(self.target_CoM, com_0)
                     self.unpause_physics_client()
-                    print(colored("APEX detected", "red"))
+                    print(colored(f"APEX detected at t={self.time}", "red"))
                     self.q_apex = self.q.copy()
                     self.t_apex = self.time
 
@@ -350,7 +350,7 @@ class QuadrupedJumpController(QuadrupedController):
         if self.DEBUG:
             freq = 0.5
             amp_lin = np.array([0., 0., 0.05])
-            amp_ang = np.array([0., 0.0, 0])
+            amp_ang = np.array([0., 0.1, 0])
             com = self.initial_com + \
                 np.multiply(amp_lin, np.sin(2*np.pi*freq * self.time))
             comd = np.multiply(2*np.pi*freq*amp_lin,
@@ -411,7 +411,7 @@ class QuadrupedJumpController(QuadrupedController):
             # this has better tracking
             # should use desired values to generate traj otherwise if it is unstable it detroys the ref signal
             self.W_feetRelPosDes[leg] = self.W_contacts_sampled[leg] - com
-            # now we can do Ik
+
             q_des[3 * leg:3 * (leg+1)], isFeasible = self.IK.ik_leg(w_R_b_des.T.dot(self.W_feetRelPosDes[leg]),
                                                                     self.leg_names[leg],
                                                                     self.legConfig[self.leg_names[leg]][0],
@@ -443,7 +443,7 @@ class QuadrupedJumpController(QuadrupedController):
                                                        W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
                                                        comControlled=False, type='projection', stance_legs=self.stance_legs)
             # OLD
-            # tau_ffwd = self.gravityCompensation()
+            # tau_ffwd = self.wbc.gravityCompensation()
         else:
             for leg in range(self.robot.nee):
                 # todo do for x and y as well
@@ -619,7 +619,7 @@ if __name__ == '__main__':
         # p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
                           use_ground_truth_pose=True,
-                          use_ground_truth_contacts=True,
+                          use_ground_truth_contacts=False,
                           additional_args=['gui:='+str(p.use_gui),
                                            'go0_conf:='+p.go0_conf])
         # initialize data stucture to use them with desired values
@@ -635,11 +635,26 @@ if __name__ == '__main__':
             p.customStartupProcedure()
 
         ros.sleep(2.)
+        #forward jump
+        # p.target_CoM = np.array([0.5, 0., 0.3])
+        # action = np.array([4.2817e+00,  5.2148e-01,  1.9682e+00, -1.4080e+00, -1.7346e+00,
+        #                    -8.8685e-02, -6.4581e-01,  1.6460e-02, -4.4340e-02,  7.1318e-01,
+        #                    3.2268e-03, -4.8818e+00, -4.5645e+00])
 
-        p.target_CoM = np.array([0.5, 0., 0.3])
-        action = np.array([4.2817e+00,  5.2148e-01,  1.9682e+00, -1.4080e+00, -1.7346e+00,
-                           -8.8685e-02, -6.4581e-01,  1.6460e-02, -4.4340e-02,  7.1318e-01,
-                           3.2268e-03, -4.8818e+00, -4.5645e+00])
+        # lateral jump 90
+        # p.target_CoM = np.array([0., 0.5, 0.3])
+        # action = np.array([2.9458, 0.6185, 1.4794, -1.5061, -2.5657, -0.6080,
+        # 0.4409, -0.2602, 1.2532, 0.1602, -1.4392, -4.5283, -2.3444])
+
+        # diagonal jump 45  with yaw = 45
+        # p.target_CoM = np.array([0.5, 0.3, 0.3])
+        # action = np.array([4.0699, 0.1201, 0.9912, -2.9089, -2.3803, 0.1817, 0.2341, 0.3231,
+        # 0.8877, 2.1961, 2.3351, -4.6342, -2.4634])
+
+        # # diagonal jump 45  with yaw = 0
+        p.target_CoM = np.array([0.5, 0.3, 0.3])
+        action = np.array([4.0784, 0.0545, 1.3710, -2.9031, -2.3909, 0.0298, -0.0860, -0.0443,
+        0.7643, 0.7166, -0.7945, -4.6163, -2.4987])
 
         p.jumpAgent.process_actions(action, p.target_CoM)
         # initial pose
@@ -687,7 +702,7 @@ if __name__ == '__main__':
 
         if not p.real_robot:
             p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
-        #p.setSimSpeed(dt_sim=0.001, max_update_rate=50, iters=1500)
+        p.setSimSpeed(dt_sim=0.001, max_update_rate=100, iters=1500)
         p.lm = LandingManager(p)
 
         while not ros.is_shutdown():
@@ -790,7 +805,7 @@ if __name__ == '__main__':
             p.visualizeContacts()
             p.logData()
 
-            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd, clip_commands=p.real_robot)
             # log variables
             p.rate.sleep()
             p.sync_check()
@@ -798,8 +813,8 @@ if __name__ == '__main__':
             p.time = np.round(p.time + p.dt, 3)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
-        p.pid.setPDjoints(np.zeros(p.robot.na), np.zeros(
-            p.robot.na), np.zeros(p.robot.na))
+        if p.real_robot:
+            p.pid.setPDjoints(np.zeros(p.robot.na), np.zeros( p.robot.na), np.zeros(p.robot.na))
         ros.signal_shutdown("killed")
         p.deregister_node()
 
