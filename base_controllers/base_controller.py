@@ -114,7 +114,7 @@ class BaseController(threading.Thread):
         # send data to param server
         self.verbose = conf.verbose
         self.custom_locosim_launch_file = False
-        self.use_ground_truth_contacts = True
+        self.use_ground_truth_contacts = False
         self.apply_external_wrench = False
         self.time_external_wrench = 0.6
         self.broadcaster = tf.TransformBroadcaster()

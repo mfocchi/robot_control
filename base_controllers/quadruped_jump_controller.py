@@ -243,7 +243,6 @@ class QuadrupedJumpController(QuadrupedController):
         self.rearingFlag = False
         self.ideal_landing = np.zeros(3)
         self.landing_position = np.zeros(3)
-        self.time = np.zeros(1)  # reset time for logging
 
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
@@ -636,10 +635,10 @@ if __name__ == '__main__':
 
         ros.sleep(2.)
         #forward jump
-        # p.target_CoM = np.array([0.5, 0., 0.3])
-        # action = np.array([4.2817e+00,  5.2148e-01,  1.9682e+00, -1.4080e+00, -1.7346e+00,
-        #                    -8.8685e-02, -6.4581e-01,  1.6460e-02, -4.4340e-02,  7.1318e-01,
-        #                    3.2268e-03, -4.8818e+00, -4.5645e+00])
+        p.target_CoM = np.array([0.5, 0., 0.3])
+        action = np.array([4.2817e+00,  5.2148e-01,  1.9682e+00, -1.4080e+00, -1.7346e+00,
+                           -8.8685e-02, -6.4581e-01,  1.6460e-02, -4.4340e-02,  7.1318e-01,
+                           3.2268e-03, -4.8818e+00, -4.5645e+00])
 
         # lateral jump 90
         # p.target_CoM = np.array([0., 0.5, 0.3])
@@ -652,9 +651,9 @@ if __name__ == '__main__':
         # 0.8877, 2.1961, 2.3351, -4.6342, -2.4634])
 
         # # diagonal jump 45  with yaw = 0
-        p.target_CoM = np.array([0.5, 0.3, 0.3])
-        action = np.array([4.0784, 0.0545, 1.3710, -2.9031, -2.3909, 0.0298, -0.0860, -0.0443,
-        0.7643, 0.7166, -0.7945, -4.6163, -2.4987])
+        # p.target_CoM = np.array([0.5, 0.3, 0.3])
+        # action = np.array([4.0784, 0.0545, 1.3710, -2.9031, -2.3909, 0.0298, -0.0860, -0.0443,
+        # 0.7643, 0.7166, -0.7945, -4.6163, -2.4987])
 
         p.jumpAgent.process_actions(action, p.target_CoM)
         # initial pose
