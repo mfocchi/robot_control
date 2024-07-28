@@ -35,6 +35,11 @@ import pinocchio as pin
 from base_controllers.components.coppelia_manager import CoppeliaManager
 from ros_impedance_controller.srv import optim, optimRequest
 
+from base_controllers.doretta.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
+from base_controllers.utils.ros_publish import RosPub
+from base_controllers.utils.common_functions import getRobotModelFloating
+from base_controllers.utils.common_functions import checkRosMaster
+
 robotName = "tractor" # needs to inherit BaseController
 
 class GenericSimulator(BaseController):
@@ -43,24 +48,30 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.GAZEBO = False
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia', 'biral'
+
+
+        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        # Parameters for open loop identification
         self.IDENT_TYPE = 'NONE' # 'V_OMEGA', 'NONE'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
         self.IDENT_WHEEL_L = 4.5  # -4.5:0.5:4.5
+
+        #target for matlab trajectory generation (dubins/optimization)
         self.xf = np.array([2., 2.5, 0.])
-        self.GRAVITY_COMPENSATION = True
+
+
+        self.GRAVITY_COMPENSATION = False
 
         self.SAVE_BAGS = False
         self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP', 'NONE'
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
-        self.frictionCoeff=0.3 #0.3 0.6
-        self.coppeliaModel=f'tractor_ros_{self.frictionCoeff}_slope.ttt'
-        #self.coppeliaModel = f'new_track.ttt'
 
-        if self.GAZEBO and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
+        self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
+
+        if self.SIMULATOR == 'gazebo' and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
             print(colored("Gazebo Model has no slippage, turn it off","red"))
             sys.exit()
 
@@ -152,12 +163,27 @@ class GenericSimulator(BaseController):
             super().logData()
 
     def startSimulator(self):
-        if self.GAZEBO:
-            world_name = 'ramps.world'
+        if self.SIMULATOR == 'gazebo':
+            world_name = None #'ramps.world'
             super().startSimulator(world_name=world_name, additional_args=['spawn_Y:=0.'])
-        else:
+        elif self.SIMULATOR == 'coppelia':
            self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
            self.coppeliaManager.startSimulator()
+        else: # Biral simulator
+            os.system("killall rosmaster rviz gzserver coppeliaSim")
+            # launch roscore
+            checkRosMaster()
+            ros.sleep(1.5)
+            # run robot state publisher + load robot description + rviz
+            launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
+            groundParams = Ground()
+            self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
+            self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0,0,0.0]), pose_init=np.array([0, 0.05, 0.1])) #TODO make this a parameter
+            self.robot = getRobotModelFloating(self.robot_name)
+            # instantiating additional publishers
+            self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
+            self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
+
 
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
@@ -175,19 +201,15 @@ class GenericSimulator(BaseController):
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
                 if p.IDENT_TYPE=='V_OMEGA':
-                    bag_name= f"ident_sim_friction_{self.frictionCoeff}_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.bag"
+                    bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.bag"
                 else:
-                    bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}_friction_{self.frictionCoeff}.bag"
+                    bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
             else:
                 bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
 
-        if not self.GAZEBO:
-            # I do this only to check frequency
-            self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState, callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
-            # self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
-            #                                queue_size=1, tcp_nodelay=True)
 
+    # This will be used instead of the basecontroller one, I do it just to check frequency
     def _receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
@@ -195,6 +217,7 @@ class GenericSimulator(BaseController):
                     self.q[joint_idx] = msg.position[msg_idx]
                     self.qd[joint_idx] = msg.velocity[msg_idx]
                     self.tau[joint_idx] = msg.effort[msg_idx]
+
         #check frequency
         if hasattr(self, 'check_time'):
             loop_time = ros.Time.now().to_sec() - self.check_time
@@ -204,31 +227,6 @@ class GenericSimulator(BaseController):
                 print(colored(f"freq mismatch beyond 10%: coppelia is running at {freq_coppelia} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
         self.check_time = ros.Time.now().to_sec()
 
-    # def _receive_pose(self, msg):
-    #     self.quaternion[0]=    msg.pose.pose.orientation.x
-    #     self.quaternion[1]=    msg.pose.pose.orientation.y
-    #     self.quaternion[2]=    msg.pose.pose.orientation.z
-    #     self.quaternion[3]=    msg.pose.pose.orientation.w
-    #     self.euler = np.array(euler_from_quaternion(self.quaternion))
-    #     #unwrap
-    #     self.euler, self.euler_old = unwrap_vector(self.euler, self.euler_old)
-    #     # compute orientation matrix
-    #     self.b_R_w = self.math_utils.rpyToRot(self.euler)
-    #
-    #     base_offset_wrt_chassis = np.array([-0.07,0,0])
-    #     self.basePoseW[:3] = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]) + self.b_R_w.T.dot(base_offset_wrt_chassis)
-    #     self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
-    #     self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
-    #     self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
-    #
-    #     omega = np.array([msg.twist.twist.angular.x, msg.twist.twist.angular.y,  msg.twist.twist.angular.z])
-    #     self.baseTwistW[:3] = np.array([msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z]) + omega.dot(self.b_R_w.T.dot(base_offset_wrt_chassis))
-    #     self.baseTwistW[3:] = omega
-    #
-    #     if self.broadcast_world:
-    #         self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
-    #                                    self.quaternion,
-    #                                    ros.Time.now(), '/base_link', '/world')
 
     def getTrajFromMatlab(self):
         ros.wait_for_service('optim')
@@ -253,20 +251,20 @@ class GenericSimulator(BaseController):
         self.omega_d = msg.angular.z
 
     def deregister_node(self):
-        if not self.GAZEBO:
+        if self.SIMULATOR == 'coppelia':
             self.coppeliaManager.simulationControl('stop')
         os.system("killall rosmaster rviz coppeliaSim")
         super().deregister_node()
 
 
     def startupProcedure(self):
-        if self.GAZEBO:
+        if self.SIMULATOR == 'gazebo':
             super().startupProcedure()
             if self.torque_control:
                 self.pid.setPDs(0.0, 0.0, 0.0)
             # loop frequency
             self.rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
-        else:
+        elif self.SIMULATOR == 'coppelia':
             # we need to broadcast the TF world baselink in coppelia not in base controller for synchro issues
             self.broadcast_world = False
             # start coppeliasim
@@ -277,6 +275,13 @@ class GenericSimulator(BaseController):
             self.slow_down_factor = 8
             # loop frequency
             self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
+        else:#Biral
+            self.basePoseW[2] = 0.25 #fixed height TODO change this when on slopes
+            self.broadcast_world = False
+            self.slow_down_factor = 1
+            # loop frequency
+            self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
+            pass
 
     def plotData(self):
         if conf.plotting:
@@ -329,7 +334,7 @@ class GenericSimulator(BaseController):
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
             plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
-            if not self.GAZEBO and not p.ControlType=='CLOSED_LOOP_UNICYCLE' and not p.ControlType=='OPEN_LOOP':
+            if self.SIMULATOR != 'gazebo' and not p.ControlType=='CLOSED_LOOP_UNICYCLE' and not p.ControlType=='OPEN_LOOP':
                 #slippage vars
                 plt.figure()
                 plt.subplot(4, 1, 1)
@@ -510,7 +515,8 @@ class GenericSimulator(BaseController):
             b_pos_track_left_i = np.array([b_pos_track_left_x[i], constants.b_left_track_start[1], constants.b_left_track_start[2]])
             grasp_matrix_left[:3,i*3:i*3+3] = np.eye(3)
             grasp_matrix_left[3:, i * 3:i * 3 + 3] = pin.skew( w_R_b.dot(b_pos_track_left_i))
-            self.ros_pub.add_arrow(p.basePoseW[:3], w_R_b.dot(b_pos_track_left_i), "red")
+            #debug
+            # self.ros_pub.add_arrow(p.basePoseW[:3], w_R_b.dot(b_pos_track_left_i), "red")
 
         for i in range(track_discretization):
             b_pos_track_right_i = np.array([b_pos_track_right_x[i], constants.b_right_track_start[1], constants.b_right_track_start[2]])
@@ -606,7 +612,33 @@ class GenericSimulator(BaseController):
         msg.position = q_des
         msg.velocity = qd_des
         msg.effort = tau_ffwd
-        self.pub_des_jstate.publish(msg)
+        self.pub_des_jstate.publish(msg) #publish in /commands
+
+        #trigger simulators
+        if self.SIMULATOR == 'biral': #TODO implement torque control
+
+            self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
+            pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
+            #fill in base state
+            self.basePoseW[:2] = pose[:2]
+            self.basePoseW[self.u.sp_crd["AZ"]] = pose[2]
+            self.euler = self.u.angPart(self.basePoseW)
+            self.baseTwistW[:2] = pose_der[:2]
+            self.baseTwistW[self.u.sp_crd["AZ"]] = pose_der[2]
+
+            self.quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.euler))
+            self.b_R_w = self.math_utils.rpyToRot(self.euler)
+            #publish TF for rviz
+            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                           self.quaternion,
+                                           ros.Time.now(), '/base_link', '/world')
+            self.pub_odom_msg(self.groundtruth_pub)
+            self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
+
+        if self.SIMULATOR == 'coppelia':
+            self.coppeliaManager.simulationControl('trigger_next_step')
+            self.unwrap()
+
 
         #this is for wolf navigation # gazebo publishes world, base controller publishes base link, we need to add two static transforms from world to odom and map
         if p.NAVIGATION:
@@ -614,24 +646,27 @@ class GenericSimulator(BaseController):
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/odom')
             sendStaticTransform("odom", "world", np.zeros(3), np.array([1, 0, 0, 0]))  # this is just to not  brake the locosim rviz that still wants world
-            msg = Odometry()
-            msg.pose.pose.orientation.x = self.quaternion[0]
-            msg.pose.pose.orientation.y = self.quaternion[1]
-            msg.pose.pose.orientation.z = self.quaternion[2]
-            msg.pose.pose.orientation.w = self.quaternion[3]
-            msg.pose.pose.position.x = self.basePoseW[self.u.sp_crd["LX"]]
-            msg.pose.pose.position.y = self.basePoseW[self.u.sp_crd["LY"]]
-            msg.pose.pose.position.z = self.basePoseW[self.u.sp_crd["LZ"]]
-            msg.twist.twist.linear.x= self.baseTwistW[self.u.sp_crd["LX"]]
-            msg.twist.twist.linear.y= self.baseTwistW[self.u.sp_crd["LY"]]
-            msg.twist.twist.linear.z= self.baseTwistW[self.u.sp_crd["LZ"]]
-            msg.twist.twist.angular.x= self.baseTwistW[self.u.sp_crd["AX"]]
-            msg.twist.twist.angular.y= self.baseTwistW[self.u.sp_crd["AY"]]
-            msg.twist.twist.angular.z= self.baseTwistW[self.u.sp_crd["AZ"]]
-            self.odom_pub.publish(msg)
+            self.pub_odom_msg(self.odom_pub)
 
         if np.mod(self.time,1) == 0:
             print(colored(f"TIME: {self.time}","red"))
+
+    def pub_odom_msg(self, odom_publisher):
+        msg = Odometry()
+        msg.pose.pose.orientation.x = self.quaternion[0]
+        msg.pose.pose.orientation.y = self.quaternion[1]
+        msg.pose.pose.orientation.z = self.quaternion[2]
+        msg.pose.pose.orientation.w = self.quaternion[3]
+        msg.pose.pose.position.x = self.basePoseW[self.u.sp_crd["LX"]]
+        msg.pose.pose.position.y = self.basePoseW[self.u.sp_crd["LY"]]
+        msg.pose.pose.position.z = self.basePoseW[self.u.sp_crd["LZ"]]
+        msg.twist.twist.linear.x = self.baseTwistW[self.u.sp_crd["LX"]]
+        msg.twist.twist.linear.y = self.baseTwistW[self.u.sp_crd["LY"]]
+        msg.twist.twist.linear.z = self.baseTwistW[self.u.sp_crd["LZ"]]
+        msg.twist.twist.angular.x = self.baseTwistW[self.u.sp_crd["AX"]]
+        msg.twist.twist.angular.y = self.baseTwistW[self.u.sp_crd["AY"]]
+        msg.twist.twist.angular.z = self.baseTwistW[self.u.sp_crd["AZ"]]
+        odom_publisher.publish(msg)
 
 def talker(p):
     p.start()
@@ -653,7 +688,7 @@ def talker(p):
     p.qd_des = np.zeros(2)
     p.tau_ffwd = np.zeros(2)
 
-    p.getTrajFromMatlab()
+    #p.getTrajFromMatlab()
 
     if p.SAVE_BAGS:
         p.recorder.start_recording_srv()
@@ -662,8 +697,10 @@ def talker(p):
         counter = 0
         if p.IDENT_TYPE=='NONE':
         # generic open loop test for comparison with matlab
-            vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
-            v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth() #velocity_straight
+            #vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
+            #v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth() #velocity_straight
+            v_ol = np.linspace(0.4, 0.4, np.int32(20./conf.robot_params[p.robot_name]['dt']))
+            omega_ol = np.linspace(0.2, 0.2, np.int32(20./conf.robot_params[p.robot_name]['dt']))
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'V_OMEGA':
             #identification repeat long_v = 0.05:0.05:0.4
@@ -672,6 +709,7 @@ def talker(p):
         if p.IDENT_TYPE == 'WHEELS':
             wheel_l_ol, wheel_r_ol  = p.generateWheelTraj(p.IDENT_WHEEL_L)
             traj_length = len(wheel_l_ol)
+        p.traj = Trajectory(ModelsList.UNICYCLE, 0, 0, 0, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
 
         while not ros.is_shutdown():
             if counter<traj_length:
@@ -701,14 +739,13 @@ def talker(p):
                 p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l / np.linalg.norm(p.F_l), "red")
                 p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r / np.linalg.norm(p.F_r), "red")
 
+            p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, p.v_dot_d, p.omega_dot_d, _ = p.traj.evalTraj(p.time)
             #note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             #senting it to be tracked from the impedance loop
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
-            if not p.GAZEBO:
-                p.coppeliaManager.simulationControl('trigger_next_step')
-                p.unwrap()
-                # log variables
+
+            # log variables
             p.logData()
             # wait for synconization of the control loop
             p.rate.sleep()
@@ -724,7 +761,9 @@ def talker(p):
         initial_des_x = 0.0
         initial_des_y = 0.0
         initial_des_theta = 0.0
-        p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, vel_gen.velocity_mir_smooth, conf.robot_params[p.robot_name]['dt'])
+        v_ol, omega_ol, v_dot_ol,omega_dot_ol, _ =  vel_gen.velocity_mir_smooth(v_max_ = 0.1, omega_max_ = 0.3)
+        p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
+                            v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
 
 
         # Lyapunov controller parameters
@@ -758,7 +797,7 @@ def talker(p):
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
-            if not p.ControlType=='CLOSED_LOOP_UNICYCLE' and p.LONG_SLIP_COMPENSATION is not 'NONE' and not traj_finished:
+            if not p.ControlType=='CLOSED_LOOP_UNICYCLE' and p.LONG_SLIP_COMPENSATION != 'NONE' and not traj_finished:
                 if p.LONG_SLIP_COMPENSATION=='NN':
                     p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensationNN(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
                 else:#exponential
@@ -776,10 +815,6 @@ def talker(p):
 
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
-
-            if not p.GAZEBO:
-                p.coppeliaManager.simulationControl('trigger_next_step')
-                p.unwrap()
 
             p.beta_l, p.beta_r, p.alpha = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
             # log variables
