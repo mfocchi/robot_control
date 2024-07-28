@@ -11,7 +11,7 @@ class ModelsList(Enum):
 
 
 class Trajectory:
-    def __init__(self, model, start_x, start_y, start_theta, velocity_generator=None, DT = 0.001,  v = None, o = None):
+    def __init__(self, model, start_x, start_y, start_theta, velocity_generator=None, DT = 0.001,  v = None, omega = None,  v_dot = None, omega_dot = None):
         self.x = [start_x]
         self.y = [start_y]
         self.theta = [start_theta]
@@ -28,9 +28,11 @@ class Trajectory:
             assert False, "Trajectory generator: model is not valid"
         if velocity_generator is not None:
             self.init_trajectory(velocity_generator)
-        if (v is not None) and (o is not None):
-            self.init_trajectory_with_user_vel(v, o)
-
+        if (v is not None) and (omega is not None):
+            if (v_dot is not None) and (omega_dot is not None):
+                self.init_trajectory_with_user_vel(v, omega, v_dot, omega_dot)
+            else:
+                self.init_trajectory_with_user_vel(v, omega)
     def set_initial_time(self, start_time):
         self.start_time = start_time
 
