@@ -1,5 +1,5 @@
 import unittest
-from base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams
+from base_controllers.tracked_robot.controllers.lyapunov import LyapunovController, LyapunovParams
 from scipy.optimize import fsolve
 import logging
 log = logging.getLogger(__name__)

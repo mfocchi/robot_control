@@ -20,10 +20,10 @@ from gazebo_msgs.srv import SetModelConfigurationRequest
 from numpy import nan
 from matplotlib import pyplot as plt
 from base_controllers.utils.math_tools import unwrap_angle
-from  base_controllers.doretta.utils import constants as constants
-from base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams, Robot
-from  base_controllers.doretta.environment.trajectory import Trajectory, ModelsList
-from base_controllers.doretta.velocity_generator import VelocityGenerator
+from  base_controllers.tracked_robot.utils import constants as constants
+from base_controllers.tracked_robot.controllers.lyapunov import LyapunovController, LyapunovParams, Robot
+from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
+from base_controllers.tracked_robot.velocity_generator import VelocityGenerator
 from termcolor import colored
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 from sensor_msgs.msg import JointState
@@ -35,8 +35,7 @@ import pinocchio as pin
 from base_controllers.components.coppelia_manager import CoppeliaManager
 from ros_impedance_controller.srv import optim, optimRequest
 
-from base_controllers.doretta.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
-from base_controllers.utils.ros_publish import RosPub
+from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
 
@@ -82,10 +81,10 @@ class GenericSimulator(BaseController):
         self.model = cb.CatBoostRegressor()
         # laod model
         try:
-            self.model_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/doretta/controllers/regressor/model_beta_l.cb')
-            self.model_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/doretta/controllers/regressor/model_beta_r.cb')
+            self.model_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/controllers/regressor/model_beta_l.cb')
+            self.model_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/controllers/regressor/model_beta_r.cb')
         except:
-            print(colored("need to generate the models with running doretta/controller/regressor/model_slippage_updated.py"))
+            print(colored("need to generate the models with running tracked_robot/controller/regressor/model_slippage_updated.py"))
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -229,8 +228,8 @@ class GenericSimulator(BaseController):
 
 
     def getTrajFromMatlab(self):
-        ros.wait_for_service('optim')
         try:
+            ros.wait_for_service('optim', timeout=3)
             self.optim_client = ros.ServiceProxy('optim', optim)
             request_optim = optimRequest()
             request_optim.xf= self.pf[0]
@@ -688,7 +687,7 @@ def talker(p):
     p.qd_des = np.zeros(2)
     p.tau_ffwd = np.zeros(2)
 
-    #p.getTrajFromMatlab()
+    p.getTrajFromMatlab()
 
     if p.SAVE_BAGS:
         p.recorder.start_recording_srv()

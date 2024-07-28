@@ -5,14 +5,14 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 
-from base_controllers.doretta.utils import constants as constants
-from base_controllers.doretta.environment.trajectory import Trajectory, ModelsList
-from base_controllers.doretta.models.unicycle import Unicycle
-from base_controllers.doretta.controllers.lyapunov import LyapunovController, LyapunovParams
-from base_controllers.doretta.controllers.lyapunov_zou import LyapunovControllerZou, LyapunovParamsZou
-from base_controllers.doretta.controllers.stanley import StanleyController, StanleyParams
+from base_controllers.tracked_robot.utils import constants as constants
+from base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
+from base_controllers.tracked_robot.models.unicycle import Unicycle
+from base_controllers.tracked_robot.controllers.lyapunov import LyapunovController, LyapunovParams
+from base_controllers.tracked_robot.controllers.lyapunov_zou import LyapunovControllerZou, LyapunovParamsZou
+from base_controllers.tracked_robot.controllers.stanley import StanleyController, StanleyParams
 
-import base_controllers.doretta.velocity_generator as vt
+import base_controllers.tracked_robot.velocity_generator as vt
 import sys
 print(sys.setrecursionlimit(3000))
 save = False
@@ -117,7 +117,7 @@ def main():
     # plot results and spinning forever
 
     home_path = str(Path.home())
-    my_path = home_path + "/ros2_ws/src/doretta"
+    my_path = home_path + "/ros2_ws/src/tracked_robot"
 
     # DEBUG
     # print("Time: " + str(self.draw_time))

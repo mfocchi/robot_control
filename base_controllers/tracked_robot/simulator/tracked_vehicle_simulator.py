@@ -1,9 +1,9 @@
 import numpy as np
-from base_controllers.doretta.simulator.tracked_vehicle import TrackedVehicle, VehicleParam
-from base_controllers.doretta.simulator.track import TrackParams
+from base_controllers.tracked_robot.simulator.tracked_vehicle import TrackedVehicle, VehicleParam
+from base_controllers.tracked_robot.simulator.track import TrackParams
 from numpy.testing import assert_almost_equal
 from matplotlib import pyplot as plt
-from  base_controllers.doretta.environment.trajectory import Trajectory, ModelsList
+from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 
 class Ground:
     def __init__(self):
