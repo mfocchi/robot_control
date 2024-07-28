@@ -705,7 +705,10 @@ if __name__ == '__main__':
         p.lm = LandingManager(p)
 
         while not ros.is_shutdown():
-            p.updateKinematics()
+            if p.lm.lc is not None:
+                p.updateKinematics(update_legOdom=p.lm.lc.lc_events.touch_down.detected)
+            else:
+                p.updateKinematics()
             if (p.time > p.startTrust):
                 # release base
                 if p.firstTime:
