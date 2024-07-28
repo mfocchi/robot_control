@@ -1,3 +1,6 @@
 [submodule "gazebo_controller/jet-leg"]
 	path = gazebo_controller/jet-leg
 	url = git@gitlab.advr.iit.it:rorsolino/jet-leg.git
+[submodule "base_controllers/tracked_robot/dubins_optimization"]
+	path = base_controllers/tracked_robot/dubins_optimization
+	url = git@github.com:mfocchi/dubins_optimization.git
