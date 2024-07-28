@@ -33,7 +33,7 @@ import numpy as np
 import catboost as cb
 import pinocchio as pin
 from base_controllers.components.coppelia_manager import CoppeliaManager
-from ros_impedance_controller.srv import optim, optimRequest
+from optim_interfaces.srv import Optim, OptimRequest
 
 from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
 from base_controllers.utils.common_functions import getRobotModelFloating
@@ -57,17 +57,18 @@ class GenericSimulator(BaseController):
         self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
         self.IDENT_WHEEL_L = 4.5  # -4.5:0.5:4.5
 
-        #target for matlab trajectory generation (dubins/optimization)
-        self.xf = np.array([2., 2.5, 0.])
+        # initial pose
+        self.p0 = np.array([0, 0.05, 0.1])
 
+        # target for matlab trajectory generation (dubins/optimization)
+        self.pf = np.array([2., 2.5, 0.])
+        self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
 
         self.GRAVITY_COMPENSATION = False
-
         self.SAVE_BAGS = False
         self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP', 'NONE'
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
-
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
 
         if self.SIMULATOR == 'gazebo' and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
@@ -164,7 +165,8 @@ class GenericSimulator(BaseController):
     def startSimulator(self):
         if self.SIMULATOR == 'gazebo':
             world_name = None #'ramps.world'
-            super().startSimulator(world_name=world_name, additional_args=['spawn_Y:=0.'])
+            additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2])]
+            super().startSimulator(world_name=world_name, additional_args=additional_args)
         elif self.SIMULATOR == 'coppelia':
            self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
            self.coppeliaManager.startSimulator()
@@ -177,7 +179,7 @@ class GenericSimulator(BaseController):
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             groundParams = Ground()
             self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
-            self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0,0,0.0]), pose_init=np.array([0, 0.05, 0.1])) #TODO make this a parameter
+            self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0,0,0.0]), pose_init=self.p0) #TODO make this a parameter
             self.robot = getRobotModelFloating(self.robot_name)
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
@@ -229,21 +231,26 @@ class GenericSimulator(BaseController):
 
     def getTrajFromMatlab(self):
         try:
-            ros.wait_for_service('optim', timeout=3)
-            self.optim_client = ros.ServiceProxy('optim', optim)
-            request_optim = optimRequest()
-            request_optim.xf= self.pf[0]
+            ros.wait_for_service('/optim', timeout=30)
+            self.optim_client = ros.ServiceProxy('/optim', Optim)
+            request_optim = OptimRequest()
+            request_optim.x0 = self.p0[0]
+            request_optim.y0 = self.p0[1]
+            request_optim.theta0 = self.p0[2]
+            request_optim.xf = self.pf[0]
             request_optim.yf = self.pf[1]
             request_optim.thetaf = self.pf[2]
-            request_optim.plan_type='dubins'
+            request_optim.plan_type = self.MATLAB_PLANNING
             response = self.optim_client(request_optim)
-            print(response.des_x)
-            print(response.des_y)
-            print(response.des_theta)
-            print(response.des_v)
-            print(response.des_omega)
+            print(colored("Planning with {request_optim.plan_type}", "red"))
+            # print(response.des_x[:20])
+            # print(response.des_y[:20])
+            # print(response.des_theta[:20])
+            # print(response.des_v[:20])
+            # print(response.des_omega[:20])
+            return response.des_x,response.des_y,response.des_theta,response.des_v, response.des_omega
         except:
-            print(colored("matlab service call not available"))
+            print(colored("Matlab service call /optim not available"), "red")
 
     def get_command_vel(self, msg):
         self.v_d = msg.linear.x
@@ -333,7 +340,7 @@ class GenericSimulator(BaseController):
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
             plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
-            if self.SIMULATOR != 'gazebo' and not p.ControlType=='CLOSED_LOOP_UNICYCLE' and not p.ControlType=='OPEN_LOOP':
+            if self.SIMULATOR != 'gazebo':
                 #slippage vars
                 plt.figure()
                 plt.subplot(4, 1, 1)
@@ -615,7 +622,6 @@ class GenericSimulator(BaseController):
 
         #trigger simulators
         if self.SIMULATOR == 'biral': #TODO implement torque control
-
             self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
             pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
             #fill in base state
@@ -631,7 +637,9 @@ class GenericSimulator(BaseController):
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/world')
-            self.pub_odom_msg(self.groundtruth_pub)
+            self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
+            self.q = q_des.copy()
+            self.qd = qd_des.copy()
             self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
 
         if self.SIMULATOR == 'coppelia':
@@ -687,7 +695,6 @@ def talker(p):
     p.qd_des = np.zeros(2)
     p.tau_ffwd = np.zeros(2)
 
-    p.getTrajFromMatlab()
 
     if p.SAVE_BAGS:
         p.recorder.start_recording_srv()
@@ -708,7 +715,13 @@ def talker(p):
         if p.IDENT_TYPE == 'WHEELS':
             wheel_l_ol, wheel_r_ol  = p.generateWheelTraj(p.IDENT_WHEEL_L)
             traj_length = len(wheel_l_ol)
-        p.traj = Trajectory(ModelsList.UNICYCLE, 0, 0, 0, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
+
+        if p.MATLAB_PLANNING == 'none':
+            p.traj = Trajectory(ModelsList.UNICYCLE, 0, 0, 0, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
+        else:
+            des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol=  p.getTrajFromMatlab()
+            p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
+            traj_length = len(v_ol)
 
         while not ros.is_shutdown():
             if counter<traj_length:
@@ -720,7 +733,7 @@ def talker(p):
                     p.qd_des = p.mapToWheels(p.v_d, p.omega_d )
                 counter+=1
             else:
-                print(colored("Identification test accomplished", "red"))
+                print(colored("Open loop test accomplished", "red"))
                 break
             #forward_speed = 1. #max speed is 4.56 rad/s
             #p.qd_des = forward_speed
@@ -744,6 +757,8 @@ def talker(p):
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
 
+            p.beta_l, p.beta_r, p.alpha = p.estimateSlippages(p.baseTwistW, p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
+
             # log variables
             p.logData()
             # wait for synconization of the control loop
@@ -760,9 +775,14 @@ def talker(p):
         initial_des_x = 0.0
         initial_des_y = 0.0
         initial_des_theta = 0.0
-        v_ol, omega_ol, v_dot_ol,omega_dot_ol, _ =  vel_gen.velocity_mir_smooth(v_max_ = 0.1, omega_max_ = 0.3)
-        p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
-                            v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
+
+        if p.MATLAB_PLANNING == 'none':
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.1, omega_max_=0.3)
+            p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
+                                v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
+        else:
+            des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol = p.getTrajFromMatlab()
+            p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
 
 
         # Lyapunov controller parameters
