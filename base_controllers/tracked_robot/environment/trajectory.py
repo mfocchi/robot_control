@@ -11,28 +11,42 @@ class ModelsList(Enum):
 
 
 class Trajectory:
-    def __init__(self, model, start_x, start_y, start_theta, velocity_generator=None, DT = 0.001,  v = None, omega = None,  v_dot = None, omega_dot = None):
-        self.x = [start_x]
-        self.y = [start_y]
-        self.theta = [start_theta]
-        self.des_theta_old = 0.
-        self.v = []
-        self.omega = []
-        self.v_dot = []
-        self.omega_dot = []
-        self.DT =DT
+    def __init__(self, model=None, start_x=None, start_y=None, start_theta=None, velocity_generator=None, DT = 0.001,  v = None, omega = None,  v_dot = None, omega_dot = None):
         self.start_time = 0.
-        if model is ModelsList.UNICYCLE:
-            self.ideal_unicycle = Unicycle(start_x, start_y, start_theta, DT)
-        else:
-            assert False, "Trajectory generator: model is not valid"
-        if velocity_generator is not None:
-            self.init_trajectory(velocity_generator)
-        if (v is not None) and (omega is not None):
-            if (v_dot is not None) and (omega_dot is not None):
-                self.init_trajectory_with_user_vel(v, omega, v_dot, omega_dot)
+        self.DT = DT
+        if model is not None and np.isscalar(start_x) and  np.isscalar(start_y) and np.isscalar(start_theta):
+            self.unwrap = True
+            self.x = [start_x]
+            self.y = [start_y]
+            self.theta = [start_theta]
+            self.des_theta_old = 0.
+            self.v = []
+            self.omega = []
+            self.v_dot = []
+            self.omega_dot = []
+            if model is ModelsList.UNICYCLE:
+                self.ideal_unicycle = Unicycle(start_x, start_y, start_theta, DT)
             else:
-                self.init_trajectory_with_user_vel(v, omega)
+                assert False, "Trajectory generator: model is not valid"
+            if velocity_generator is not None:
+                self.init_trajectory(velocity_generator)
+            if (v is not None) and (omega is not None):
+                if (v_dot is not None) and (omega_dot is not None):
+                    self.init_trajectory_with_user_vel(v, omega, v_dot, omega_dot)
+                else:
+                    self.init_trajectory_with_user_vel(v, omega)
+        else: #we are directly providing vectors from externally generated state trajectory start_x, start_y, start_theta are vectors
+            self.unwrap = False #no need is responsibility of the user to provide good inputs!
+            self.x = start_x
+            self.y = start_y
+            self.theta = start_theta
+            print(self.theta)
+            self.v = v
+            self.omega = omega
+            self.v_dot = np.zeros_like(v)
+            self.omega_dot = np.zeros_like(omega)
+            self.DT = DT
+
     def set_initial_time(self, start_time):
         self.start_time = start_time
 
@@ -96,7 +110,7 @@ class Trajectory:
         current_index = int(elapsed_time / self.DT)
 
         # quando arrivo all'indice dell'ultimo punto della traiettoria, la traiettoria è finita
-        if current_index >= len(self.v) - 1:
+        if current_index >= (len(self.v) - 1):
             # target is considered reached
             print("Lyapunov controller: trajectory finished")
             return 0, 0, 0, 0, 0, 0,0,True
@@ -105,7 +119,10 @@ class Trajectory:
 
         des_x = self.x[current_index]
         des_y = self.y[current_index]
-        des_theta, self.des_theta_old = unwrap_angle(self.theta[current_index], self.des_theta_old)
+        if self.unwrap:
+            des_theta, self.des_theta_old = unwrap_angle(self.theta[current_index], self.des_theta_old)
+        else:
+            des_theta = self.theta[current_index]
         v_d = self.v[current_index]
         omega_d = self.omega[current_index]
         v_dot_d = self.v_dot[current_index]
