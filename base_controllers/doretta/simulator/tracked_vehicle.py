@@ -1,14 +1,16 @@
 
 import numpy as np
-from track import Track
+from base_controllers.doretta.simulator.track import Track
+from  base_controllers.doretta.utils import constants as constants
 
 class VehicleParam:
     def __init__(self):
-        self.mass = 60; #[kg] vehicle mass
-        self.Izz = 4.5; #[kg m^2] vehicle inertia
-        self.width = 0.60; #[m]
-        self.height = 0.2; #[m]
+        self.mass = constants.mass; #[kg] vehicle mass
+        self.Izz = constants.inertia_moment; #[kg m^2] vehicle inertia
+        self.width = constants.TRACK_WIDTH; #[m]
+        self.height = 0.25; #[m]
         self.weight  = self.mass * 9.81
+
 
 class TrackedVehicle:
     def __init__(self, vehicle_param, track_param, ground_param):

@@ -1,13 +1,13 @@
 import math
-
 import numpy as np
-from contact_patch import ContactPatch
+from base_controllers.doretta.simulator.contact_patch import ContactPatch
+from  base_controllers.doretta.utils import constants as constants
 
 class TrackParams:
     def __init__(self):
         self.length = 0.5  #[m] track l.ength
         self.width = 0.1  #[m] track width
-        self.sprocket_radius = 0.085 #[m]
+        self.sprocket_radius = constants.SPROCKET_RADIUS #[m]
         self.A = self.length * self.width  # [m^2] contact area
         self.parts_longitudinal = 60 #4
         self.parts_lateral = 6 #2
