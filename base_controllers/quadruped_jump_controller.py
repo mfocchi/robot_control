@@ -1,4 +1,5 @@
 from __future__ import print_function
+from landing_controller.controller.landingManager import LandingManager
 import sys
 import os
 from gazebo_ros import gazebo_interface
@@ -15,6 +16,9 @@ import rospy as ros
 import numpy as np
 import rospkg
 import pinocchio as pin
+# onnx for policy loading
+import onnx
+import onnxruntime as ort
 # utility functions
 from base_controllers.utils.math_tools import *
 from termcolor import colored
@@ -24,12 +28,15 @@ np.set_printoptions(threshold=np.inf, precision=5,
                     linewidth=10000, suppress=True)
 np.set_printoptions(threshold=np.inf, precision=5,
                     linewidth=1000, suppress=True)
-from landing_controller.controller.landingManager import LandingManager
+
 
 class JumpAgent():
     def __init__(self, cfg: dict):
 
         self.cfg = cfg
+
+        self.model_path = self.cfg["model_path"]
+        self.model = ort.InferenceSession(self.model_path)
 
         self.min_action = self.cfg["min_action"]
         self.max_action = self.cfg["max_action"]
@@ -191,14 +198,49 @@ class JumpAgent():
                     t_exp: {self.t_exp}\n\
                     ")
 
+    def quat_from_euler_xyz(self, roll, pitch, yaw):
+
+        cy = np.cos(yaw * 0.5)
+        sy = np.sin(yaw * 0.5)
+        cr = np.cos(roll * 0.5)
+        sr = np.sin(roll * 0.5)
+        cp = np.cos(pitch * 0.5)
+        sp = np.sin(pitch * 0.5)
+        # compute quaternion
+        qw = cy * cr * cp + sy * sr * sp
+        qx = cy * sr * cp - sy * cr * sp
+        qy = cy * cr * sp + sy * sr * cp
+        qz = sy * cr * cp - cy * sr * sp
+
+        return np.stack([qw, qx, qy, qz], axis=-1)
+
+    def act(self, _position, _orientation):
+        # remove relative z
+        position = _position.copy()
+        orientation = _orientation.copy()
+
+        position[2] -= 0.3
+        quat_orientation = self.quat_from_euler_xyz(
+            orientation[..., 0], orientation[..., 1], orientation[..., 2])
+
+        # get processed target
+        target = np.concatenate((position, quat_orientation))
+        x = target.astype(np.float32)[None]
+        # run the model
+        action = self.model.run(None, {'obs': x})[0][0]
+
+        # call the action processing
+        self.process_actions(action, position)
+
 
 class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
-        self.use_gui = True
+        self.use_gui = False
         self.DEBUG = False
         self.ffwd_impulse = False
-        self.jumpAgent = JumpAgent(cfg={"min_action": -5,
+        self.jumpAgent = JumpAgent(cfg={"model_path": os.path.join(os.environ.get('LOCOSIM_DIR'), 'robot_control','base_controllers', 'jump_policy', 'policy.onnx'),
+                                        "min_action": -5,
                                         "max_action": 5,
                                         "lerp_time": 0.1,
                                         "t_th_min": 0.1,
@@ -214,7 +256,7 @@ class QuadrupedJumpController(QuadrupedController):
                                         "psi_min": -np.pi / 4,
                                         "psi_max": np.pi / 4,
                                         "theta_min": -np.pi / 4,
-                                        "theta_max": np.pi / 4,
+                                        "theta_max": 0,
                                         "phi_min": -np.pi,
                                         "phi_max": np.pi,
                                         "psid_min": -4,
@@ -249,7 +291,8 @@ class QuadrupedJumpController(QuadrupedController):
         self.set_state = ros.ServiceProxy(
             '/gazebo/set_model_state', SetModelState)
         if not self.real_robot:
-            self.publish_contact_gt_in_wf = True #if you spawn it starts to publish gt in wf rather than in lowerleg frame
+            # if you spawn it starts to publish gt in wf rather than in lowerleg frame
+            self.publish_contact_gt_in_wf = True
             spawnModel('go1_description', 'jump_platform')
 
         # TODO
@@ -279,7 +322,8 @@ class QuadrupedJumpController(QuadrupedController):
                     self.detectedApexFlag = True
                     self.pause_physics_client()
                     for i in range(10):
-                        self.setJumpPlatformPosition(self.target_CoM, com_0)
+                        self.setJumpPlatformPosition(
+                            self.target_position, com_0)
                     self.unpause_physics_client()
                     print(colored(f"APEX detected at t={self.time}", "red"))
                     self.q_apex = self.q.copy()
@@ -438,9 +482,9 @@ class QuadrupedJumpController(QuadrupedController):
                                                          ).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
 
         if not ffwd_impulse:
-            tau_ffwd, self.grForcesW_wbc  = self.wbc.computeWBC( self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
-                                                       W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
-                                                       comControlled=False, type='projection', stance_legs=self.stance_legs)
+            tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
+                                                               W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
+                                                               comControlled=False, type='projection', stance_legs=self.stance_legs)
             # OLD
             # tau_ffwd = self.wbc.gravityCompensation()
         else:
@@ -479,9 +523,10 @@ class QuadrupedJumpController(QuadrupedController):
                 blob * 1. / self.number_of_blobs, blob * 1. / self.number_of_blobs, blob * 1. / self.number_of_blobs],
                 radius=0.05)
 
-    def computeIdealLanding(self, com_lo, comd_lo, target_CoM):
+    def computeIdealLanding(self, com_lo, comd_lo, target_position):
         # get time of flight
-        arg = comd_lo[2] * comd_lo[2] - 2 * 9.81 * (target_CoM[2] - com_lo[2])
+        arg = comd_lo[2] * comd_lo[2] - 2 * \
+            9.81 * (target_position[2] - com_lo[2])
         if arg < 0:
             print(colored("Point Beyond Reach, tagret too high", "red"))
             return False
@@ -489,7 +534,7 @@ class QuadrupedJumpController(QuadrupedController):
             self.T_fl = (comd_lo[2] + math.sqrt(arg)) / \
                 9.81  # we take the highest value
             self.ideal_landing = np.hstack(
-                (com_lo[:2] + self.T_fl * comd_lo[:2], target_CoM[2]))
+                (com_lo[:2] + self.T_fl * comd_lo[:2], target_position[2]))
             t = np.linspace(0, self.T_fl, self.number_of_blobs)
             com = np.zeros(3)
             for blob in range(self.number_of_blobs):
@@ -618,7 +663,7 @@ if __name__ == '__main__':
         # p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
                           use_ground_truth_pose=True,
-                          use_ground_truth_contacts=False,
+                          use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(p.use_gui),
                                            'go0_conf:='+p.go0_conf])
         # initialize data stucture to use them with desired values
@@ -634,28 +679,13 @@ if __name__ == '__main__':
             p.customStartupProcedure()
 
         ros.sleep(2.)
-        #forward jump
-        p.target_CoM = np.array([0.5, 0., 0.3])
-        action = np.array([4.2817e+00,  5.2148e-01,  1.9682e+00, -1.4080e+00, -1.7346e+00,
-                           -8.8685e-02, -6.4581e-01,  1.6460e-02, -4.4340e-02,  7.1318e-01,
-                           3.2268e-03, -4.8818e+00, -4.5645e+00])
+        # forward jump
+        p.target_position = np.array([0.6, 0., 0.3])
+        p.target_orientation = np.array([0., 0., 0.])
 
-        # lateral jump 90
-        # p.target_CoM = np.array([0., 0.5, 0.3])
-        # action = np.array([2.9458, 0.6185, 1.4794, -1.5061, -2.5657, -0.6080,
-        # 0.4409, -0.2602, 1.2532, 0.1602, -1.4392, -4.5283, -2.3444])
+        p.jumpAgent.act(p.target_position, p.target_orientation)
 
-        # diagonal jump 45  with yaw = 45
-        # p.target_CoM = np.array([0.5, 0.3, 0.3])
-        # action = np.array([4.0699, 0.1201, 0.9912, -2.9089, -2.3803, 0.1817, 0.2341, 0.3231,
-        # 0.8877, 2.1961, 2.3351, -4.6342, -2.4634])
-
-        # # diagonal jump 45  with yaw = 0
-        # p.target_CoM = np.array([0.5, 0.3, 0.3])
-        # action = np.array([4.0784, 0.0545, 1.3710, -2.9031, -2.3909, 0.0298, -0.0860, -0.0443,
-        # 0.7643, 0.7166, -0.7945, -4.6163, -2.4987])
-
-        p.jumpAgent.process_actions(action, p.target_CoM)
+        print(p.target_position)
         # initial pose
         # linear
         com_lo = p.jumpAgent.trunk_x_lo[0]
@@ -706,7 +736,8 @@ if __name__ == '__main__':
 
         while not ros.is_shutdown():
             if p.lm.lc is not None:
-                p.updateKinematics(update_legOdom=p.lm.lc.lc_events.touch_down.detected)
+                p.updateKinematics(
+                    update_legOdom=p.lm.lc.lc_events.touch_down.detected)
             else:
                 p.updateKinematics()
             if (p.time > p.startTrust):
@@ -715,9 +746,10 @@ if __name__ == '__main__':
                     p.firstTime = False
                     p.trustPhaseFlag = True
                     p.T_fl = None
-                    # if (p.computeIdealLanding(com_lo, comd_lo, p.target_CoM)):
-                    if (p.computeIdealLanding(com_exp, comd_exp, p.target_CoM)):
-                        error = np.linalg.norm(p.ideal_landing - p.target_CoM)
+                    # if (p.computeIdealLanding(com_lo, comd_lo, p.target_position)):
+                    if (p.computeIdealLanding(com_exp, comd_exp, p.target_position)):
+                        error = np.linalg.norm(
+                            p.ideal_landing - p.target_position)
                     else:
                         break
                 # compute joint reference
@@ -740,12 +772,12 @@ if __name__ == '__main__':
                             colored(f"thrust completed! at time {p.time}", "red"))
                         # Reducing gains for more complaint landing
                         # TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
-                        if p.real_robot:
-                            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'] / 4,
-                                              conf.robot_params[p.robot_name]['kd_real'] / 4, conf.robot_params[p.robot_name]['ki_real'] / 4)
-                        else:
-                            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 4,
-                                              conf.robot_params[p.robot_name]['kd'] / 4, conf.robot_params[p.robot_name]['ki'] / 4)
+                        # if p.real_robot:
+                        #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'] / 5,
+                        #                       conf.robot_params[p.robot_name]['kd_real'] , conf.robot_params[p.robot_name]['ki_real'] )
+                        # else:
+                        #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 5,
+                        #                       conf.robot_params[p.robot_name]['kd'] , conf.robot_params[p.robot_name]['ki'] )
                         print(colored(f"pdi: {p.pid.joint_pid}"))
 
                         if p.DEBUG:
@@ -753,38 +785,42 @@ if __name__ == '__main__':
                 else:
                     p.detectApex()
                     if (p.detectedApexFlag):
+                        elapsed_time_apex = p.time - p.t_apex
+                        elapsed_ratio_apex = elapsed_time_apex / p.lerp_time
                         if p.use_landing_controller:
-                            p.q_des, p.qd_des, p.tau_ffwd, finished = p.lm.runAtApex(p.basePoseW, p.baseTwistW, useIK=True, useWBC=True, naive=False)
+                            # if elapsed_ratio_apex <= 1.0:
+                            #     p.q_des = p.cerp(p.q_apex, p.qj_0,
+                            #                      elapsed_ratio_apex).copy()
+                            # else:
+                            p.q_des, p.qd_des, p.tau_ffwd, finished = p.lm.runAtApex(
+                                p.basePoseW, p.baseTwistW, useIK=True, useWBC=True, naive=False)
                             if finished:
                                 break
                         else:
                             # set jump position (avoid collision in jumping)
-                            elapsed_time_apex = p.time - p.t_apex
                             elapsed_ratio_apex = np.clip(
-                                elapsed_time_apex / p.lerp_time, 0, 1)
+                                elapsed_ratio_apex, 0, 1)
                             p.q_des = p.cerp(p.q_apex, p.q_0_td,
                                              elapsed_ratio_apex).copy()
-                            if p.detectTouchDown():
-                                p.landing_position = p.u.linPart(p.basePoseW)
-                                perc_err = 100. * \
-                                    np.linalg.norm(
-                                        p.target_CoM - p.landing_position) / np.linalg.norm(com_0 - p.target_CoM)
-                                print(
-                                    colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
-                                break
+                        if p.detectTouchDown():
+                            p.landing_position = p.u.linPart(p.basePoseW)
+                            perc_err = 100. * \
+                                np.linalg.norm(
+                                    p.target_position - p.landing_position) / np.linalg.norm(com_0 - p.target_position)
+                            print(
+                                colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
+                            break
                     else:
                         elapsed_time = p.time - (p.startTrust + p.T_th_total)
                         elapsed_ratio = np.clip(
                             elapsed_time / p.lerp_time, 0, 1)
-                        if p.use_landing_controller:
-                            p.q_des = p.cerp(p.q_t_th, p.qj_0, elapsed_ratio).copy()
-                        else:
-                            p.q_des = p.cerp(p.q_t_th, p.q_0_lo, elapsed_ratio).copy()
+                        p.q_des = p.cerp(p.q_t_th, p.q_0_lo,
+                                         elapsed_ratio).copy()
 
             p.plotTrajectoryBezier()
             p.plotTrajectoryFlight()
             # plot target
-            p.ros_pub.add_marker(p.target_CoM, color="blue", radius=0.1)
+            p.ros_pub.add_marker(p.target_position, color="blue", radius=0.1)
 
             if p.DEBUG:
                 p.ros_pub.add_marker(
@@ -807,7 +843,8 @@ if __name__ == '__main__':
             p.visualizeContacts()
             p.logData()
 
-            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd, clip_commands=p.real_robot)
+            p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd,
+                              clip_commands=p.real_robot)
             # log variables
             p.rate.sleep()
             p.sync_check()
@@ -816,7 +853,8 @@ if __name__ == '__main__':
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         if p.real_robot:
-            p.pid.setPDjoints(np.zeros(p.robot.na), np.zeros( p.robot.na), np.zeros(p.robot.na))
+            p.pid.setPDjoints(np.zeros(p.robot.na), np.zeros(
+                p.robot.na), np.zeros(p.robot.na))
         ros.signal_shutdown("killed")
         p.deregister_node()
 
