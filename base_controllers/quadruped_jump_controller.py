@@ -243,8 +243,8 @@ class QuadrupedJumpController(QuadrupedController):
                                         "min_action": -5,
                                         "max_action": 5,
                                         "lerp_time": 0.1,
-                                        "t_th_min": 0.1,
-                                        "t_th_max": 0.7,
+                                        "t_th_min": 0.4,
+                                        "t_th_max": 0.8,
                                         "x_theta_min": np.pi / 4,
                                         "x_theta_max": np.pi / 2,
                                         "x_r_min": 0.1,
@@ -253,12 +253,12 @@ class QuadrupedJumpController(QuadrupedController):
                                         "xd_theta_max": np.pi / 2,
                                         "xd_r_min": 0.1,
                                         "xd_r_max": 5,
-                                        "psi_min": -np.pi / 4,
-                                        "psi_max": np.pi / 4,
-                                        "theta_min": -np.pi / 4,
-                                        "theta_max": 0,
-                                        "phi_min": -np.pi,
-                                        "phi_max": np.pi,
+                                        "psi_min": -np.pi / 6,
+                                        "psi_max": np.pi / 6,
+                                        "theta_min": -np.pi / 6,
+                                        "theta_max": np.pi / 6,
+                                        "phi_min": -np.pi / 4,
+                                        "phi_max": np.pi / 4,
                                         "psid_min": -4,
                                         "psid_max": 4,
                                         "thetad_min": -4,
@@ -272,7 +272,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.go0_conf = 'standDown'
         self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
         self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
-        self.use_landing_controller = True
+        self.use_landing_controller = False
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
     def initVars(self):
@@ -772,12 +772,13 @@ if __name__ == '__main__':
                             colored(f"thrust completed! at time {p.time}", "red"))
                         # Reducing gains for more complaint landing
                         # TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
-                        # if p.real_robot:
-                        #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'] / 5,
-                        #                       conf.robot_params[p.robot_name]['kd_real'] , conf.robot_params[p.robot_name]['ki_real'] )
-                        # else:
-                        #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 5,
-                        #                       conf.robot_params[p.robot_name]['kd'] , conf.robot_params[p.robot_name]['ki'] )
+                        if p.real_robot:
+                            pass
+                            # p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'],
+                            #                   conf.robot_params[p.robot_name]['kd_real'] , conf.robot_params[p.robot_name]['ki_real'] )
+                        else:
+                            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 5,
+                                              conf.robot_params[p.robot_name]['kd'] / 5, conf.robot_params[p.robot_name]['ki'] / 5)
                         print(colored(f"pdi: {p.pid.joint_pid}"))
 
                         if p.DEBUG:
@@ -786,30 +787,30 @@ if __name__ == '__main__':
                     p.detectApex()
                     if (p.detectedApexFlag):
                         elapsed_time_apex = p.time - p.t_apex
-                        elapsed_ratio_apex = elapsed_time_apex / p.lerp_time
+                        elapsed_ratio_apex = elapsed_time_apex / (p.lerp_time)
                         if p.use_landing_controller:
-                            # if elapsed_ratio_apex <= 1.0:
-                            #     p.q_des = p.cerp(p.q_apex, p.qj_0,
-                            #                      elapsed_ratio_apex).copy()
-                            # else:
-                            p.q_des, p.qd_des, p.tau_ffwd, finished = p.lm.runAtApex(
-                                p.basePoseW, p.baseTwistW, useIK=True, useWBC=True, naive=False)
-                            if finished:
-                                break
+                            if elapsed_ratio_apex <= 1.0:
+                                p.q_des = p.cerp(p.q_apex, p.qj_0,
+                                                 elapsed_ratio_apex).copy()
+                            else:
+                                p.q_des, p.qd_des, p.tau_ffwd, finished = p.lm.runAtApex(
+                                    p.basePoseW, p.baseTwistW, useIK=True, useWBC=True, naive=False)
+                                if finished:
+                                    break
                         else:
                             # set jump position (avoid collision in jumping)
                             elapsed_ratio_apex = np.clip(
                                 elapsed_ratio_apex, 0, 1)
-                            p.q_des = p.cerp(p.q_apex, p.q_0_td,
+                            p.q_des = p.cerp(p.q_apex, p.qj_0,
                                              elapsed_ratio_apex).copy()
-                        if p.detectTouchDown():
-                            p.landing_position = p.u.linPart(p.basePoseW)
-                            perc_err = 100. * \
-                                np.linalg.norm(
-                                    p.target_position - p.landing_position) / np.linalg.norm(com_0 - p.target_position)
-                            print(
-                                colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
-                            break
+                            if p.detectTouchDown():
+                                p.landing_position = p.u.linPart(p.basePoseW)
+                                perc_err = 100. * \
+                                    np.linalg.norm(
+                                        p.target_position - p.landing_position) / np.linalg.norm(com_0 - p.target_position)
+                                print(
+                                    colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
+                                break
                     else:
                         elapsed_time = p.time - (p.startTrust + p.T_th_total)
                         elapsed_ratio = np.clip(
