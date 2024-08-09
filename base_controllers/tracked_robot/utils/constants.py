@@ -23,13 +23,13 @@ MAXSPEED_RADS_PULLEY = MAXSPEED_RADS_MOTOR/GEARBOX_RATIO #4.55 rad/s
 # beta_slip_outer_coefficients_right =np.array([ 0.2970,   10.0432])
 
 #identified with v = 0.1
-side_slip_angle_coefficients = np.array([    0.9460,   -4.4316])
+side_slip_angle_coefficients = np.array([  -1.1280,   -8.2517])
 #this should be used only with positive radius!
-beta_slip_inner_coefficients_left =np.array([-0.1325 ,  -3.9040])
-beta_slip_outer_coefficients_left =np.array([ 0.2826 ,  -4.2355])
+beta_slip_inner_coefficients_left =np.array([-0.0476,   -1.8231])
+beta_slip_outer_coefficients_left =np.array([ 0.3244,   -9.3033])
 #this should be used only with negative radius!
-beta_slip_inner_coefficients_right =np.array([ -0.1311,    3.4685])
-beta_slip_outer_coefficients_right =np.array([ 0.2723,    4.8530])
+beta_slip_inner_coefficients_right =np.array([ -0.0477,    1.8240])
+beta_slip_outer_coefficients_right =np.array([ 0.3232 ,   9.2790])
 
 #com base brame
 mass = 61.05
