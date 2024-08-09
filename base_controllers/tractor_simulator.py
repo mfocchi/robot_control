@@ -52,10 +52,10 @@ class GenericSimulator(BaseController):
 
         self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'NONE' # 'V_OMEGA', 'NONE'
+        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'NONE'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
-        self.IDENT_WHEEL_L = 4.5  # -4.5:0.5:4.5
+        self.IDENT_WHEEL_L = 4.  # -4.5:0.5:4.5
 
         # initial pose
         self.p0 = np.array([0, 0.05, 0.1])
@@ -65,7 +65,7 @@ class GenericSimulator(BaseController):
         self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
 
         self.GRAVITY_COMPENSATION = False
-        self.SAVE_BAGS = False
+        self.SAVE_BAGS = True
         self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP', 'NONE'
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
@@ -284,7 +284,7 @@ class GenericSimulator(BaseController):
         else:#Biral
             self.basePoseW[2] = 0.25 #fixed height TODO change this when on slopes
             self.broadcast_world = False
-            self.slow_down_factor = 1
+            self.slow_down_factor = 4
             # loop frequency
             self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
             pass
@@ -394,6 +394,16 @@ class GenericSimulator(BaseController):
                 # #base position
                 # plotFrame('position', time_log=p.time_log, Pose_log=p.basePoseW_log,
                 #           title='Base', frame='W', sharex=True)
+
+    def mapFromWheels(self, wheel_l, wheel_r):
+        if not np.isscalar(wheel_l):
+            v = np.zeros_like(wheel_l)
+            omega = np.zeros_like(wheel_l)
+            for i in range(len(wheel_l)):
+                v[i] = constants.SPROCKET_RADIUS*(wheel_l[i] + wheel_r[i])/2
+                omega[i] = constants.SPROCKET_RADIUS/constants.TRACK_WIDTH*(wheel_r[i] -wheel_l[i])
+            return v, omega
+
 
     def mapToWheels(self, v_des,omega_des):
         #
@@ -714,6 +724,7 @@ def talker(p):
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'WHEELS':
             wheel_l_ol, wheel_r_ol  = p.generateWheelTraj(p.IDENT_WHEEL_L)
+            v_ol, omega_ol = p.mapFromWheels(wheel_l_ol, wheel_r_ol)
             traj_length = len(wheel_l_ol)
 
         if p.MATLAB_PLANNING == 'none':
