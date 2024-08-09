@@ -670,6 +670,7 @@ class GenericSimulator(BaseController):
 
     def pub_odom_msg(self, odom_publisher):
         msg = Odometry()
+        msg.header.stamp = ros.Time.from_sec(self.time)
         msg.pose.pose.orientation.x = self.quaternion[0]
         msg.pose.pose.orientation.y = self.quaternion[1]
         msg.pose.pose.orientation.z = self.quaternion[2]
