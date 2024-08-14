@@ -43,6 +43,9 @@ class TrackedVehicleSimulator:
         self.pose_log = np.full((3, self.number_of_steps), np.nan)
         self.time_log = np.full((self.number_of_steps), np.nan)
 
+    def setGround(self, ground):
+        self.ground = ground
+
     def dynamics(self, state, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, vehicle_param):
        # calculate the acceleration with the vehicle dynamical model
         m   = vehicle_param.mass
