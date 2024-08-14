@@ -5,16 +5,22 @@ from numpy.testing import assert_almost_equal
 from matplotlib import pyplot as plt
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 
-class Ground:
-    def __init__(self):
-        self.cohesion = 0.0001040 * 1e6  # [Pa]
-        # self.K = 0.025  # [m]
-        self.K = 0.001  # [m]
-        self.shear_resistance_angle = 20/180.*2*np.pi # [rad]
-        self.mu_t = 0.65 
-        self.g = 9.81 
-        self.fr = 0.6 
-        self.friction_coefficient = 0.1
+class Ground():
+    def __init__(self,
+                 cohesion=0.0001040 * 1e6,
+                 K=0.001,
+                 shear_resistance_angle=20/180.*2*np.pi,
+                 mu_t=0.65,
+                 g=9.81,
+                 fr=0.6,
+                 friction_coefficient=0.1):
+        self.cohesion = cohesion  # [Pa]
+        self.K = K  # [m]
+        self.shear_resistance_angle = shear_resistance_angle  # [rad]
+        self.mu_t = mu_t
+        self.g = g
+        self.fr = fr
+        self.friction_coefficient = friction_coefficient
         
 
 class TrackedVehicleSimulator:
