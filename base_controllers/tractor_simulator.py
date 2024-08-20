@@ -50,22 +50,22 @@ class GenericSimulator(BaseController):
         self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia', 'biral'
 
 
-        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'NONE'
+        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
         self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
         self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
         self.IDENT_WHEEL_L = 4.  # -4.5:0.5:4.5
 
         # initial pose
-        self.p0 = np.array([0, 0.05, 0.1])
+        self.p0 = np.array([0, 0.0, 0.])
 
         # target for matlab trajectory generation (dubins/optimization)
         self.pf = np.array([2., 2.5, 0.])
         self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
 
         self.GRAVITY_COMPENSATION = False
-        self.SAVE_BAGS = True
+        self.SAVE_BAGS = False
         self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP', 'NONE'
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
@@ -284,7 +284,7 @@ class GenericSimulator(BaseController):
         else:#Biral
             self.basePoseW[2] = 0.25 #fixed height TODO change this when on slopes
             self.broadcast_world = False
-            self.slow_down_factor = 4
+            self.slow_down_factor = 1
             # loop frequency
             self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
             pass
@@ -789,7 +789,7 @@ def talker(p):
         initial_des_theta = 0.0
 
         if p.MATLAB_PLANNING == 'none':
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.1, omega_max_=0.3)
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_turning(v_max_=0.1, omega_max_=0.2)
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
@@ -798,7 +798,7 @@ def talker(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=5., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
