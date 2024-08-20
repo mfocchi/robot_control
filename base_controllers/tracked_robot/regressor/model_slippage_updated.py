@@ -5,7 +5,8 @@ import catboost as cb
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
-
+import matplotlib
+matplotlib.use('TkAgg')
 # %% [markdown]
 # ## Load data
 

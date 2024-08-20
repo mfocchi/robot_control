@@ -15,12 +15,12 @@ class Ground():
                  g=9.81,
                  fr=0.6,
                  friction_coefficient=0.1):
-        self.cohesion = cohesion  # [Pa]
+        self.cohesion = cohesion  # [Pa] #not used
         self.K = K  # [m]
-        self.shear_resistance_angle = shear_resistance_angle  # [rad]
-        self.mu_t = mu_t
+        self.shear_resistance_angle = shear_resistance_angle  # [rad] #not used
+        self.mu_t = mu_t #not used
         self.g = g
-        self.fr = fr
+        self.fr = fr #not used
         self.friction_coefficient = friction_coefficient
         
 

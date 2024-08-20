@@ -79,13 +79,13 @@ class GenericSimulator(BaseController):
         super().initVars()
 
         # regressor
-        self.model = cb.CatBoostRegressor()
+        self.regressor = cb.CatBoostRegressor()
         # laod model
         try:
-            self.model_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/controllers/regressor/model_beta_l.cb')
-            self.model_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/controllers/regressor/model_beta_r.cb')
+            self.model_beta_l = self.regressor.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l.cb')
+            self.model_beta_r = self.regressor.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r.cb')
         except:
-            print(colored("need to generate the models with running tracked_robot/controller/regressor/model_slippage_updated.py"))
+            print(colored("need to generate the models with running tracked_robot/regressor/model_slippage_updated.py","red"))
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -284,7 +284,7 @@ class GenericSimulator(BaseController):
         else:#Biral
             self.basePoseW[2] = 0.25 #fixed height TODO change this when on slopes
             self.broadcast_world = False
-            self.slow_down_factor = 1
+            self.slow_down_factor = 4
             # loop frequency
             self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
             pass
@@ -593,6 +593,8 @@ class GenericSimulator(BaseController):
         qd_comp = np.zeros(2)
         qd_comp[0] = 1/constants.SPROCKET_RADIUS * v_enc_l
         qd_comp[1] = 1/constants.SPROCKET_RADIUS * v_enc_r
+
+
         return qd_comp, beta_l, beta_r, radius
 
     def computeLongSlipCompensationNN(self, v, omega, qd_des, constants):
@@ -789,7 +791,7 @@ def talker(p):
         initial_des_theta = 0.0
 
         if p.MATLAB_PLANNING == 'none':
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_turning(v_max_=0.1, omega_max_=0.2)
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.1, omega_max_=0.2)
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
