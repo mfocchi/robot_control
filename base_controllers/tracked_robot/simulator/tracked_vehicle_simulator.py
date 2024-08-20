@@ -4,6 +4,7 @@ from base_controllers.tracked_robot.simulator.track import TrackParams
 from numpy.testing import assert_almost_equal
 from matplotlib import pyplot as plt
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
+import base_controllers.tracked_robot.utils.constants as constants
 
 class Ground():
     def __init__(self,
@@ -25,6 +26,7 @@ class Ground():
 
 class TrackedVehicleSimulator:
     def __init__(self, dt=0.001, ground=None):
+        self.NO_SLIPPAGE = False
         self.dt = dt
         self.vehicle_param = VehicleParam()
         self.track_param = TrackParams()
@@ -75,6 +77,7 @@ class TrackedVehicleSimulator:
     def initSimulation(self, vbody_init, pose_init):
         self.state = vbody_init
         self.pose = pose_init
+        self.pose_der = np.zeros(3)
     
     def simulateOneStep(self, omega_left, omega_right):
         Fx_l, Fy_l, M_long_l, M_lat_l = self.tracked_robot.track_left.computeTerrainInteractions(self.state, omega_left, self.track_param,
@@ -82,7 +85,16 @@ class TrackedVehicleSimulator:
         Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(self.state, omega_right, self.track_param,
                                                                                    self.sigma, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
         self.state += self.dynamics(self.state, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param) * self.dt
-        self.pose, self.pose_der = self.integrateBodyVelocity(self.pose, self.state)
+
+        if self.NO_SLIPPAGE:
+            vel = constants.SPROCKET_RADIUS * (omega_left + omega_right) / 2
+            omega = constants.SPROCKET_RADIUS / constants.TRACK_WIDTH * (omega_right - omega_left)
+            self.pose_der[0] = vel * np.cos(self.pose[2])
+            self.pose_der[1] = vel * np.sin(self.pose[2])
+            self.pose_der[2] = omega
+            self.pose += self.pose_der * self.dt
+        else:
+            self.pose, self.pose_der = self.integrateBodyVelocity(self.pose, self.state)
 
     def simulate(self, omega_left_vec, omega_right_vec):
         self.time = 0.
