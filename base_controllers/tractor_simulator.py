@@ -177,9 +177,10 @@ class GenericSimulator(BaseController):
             ros.sleep(1.5)
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
-            groundParams = Ground()
+            groundParams = Ground(friction_coefficient=0.09041)
             self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
             self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0,0,0.0]), pose_init=self.p0) #TODO make this a parameter
+
             self.robot = getRobotModelFloating(self.robot_name)
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
@@ -282,9 +283,15 @@ class GenericSimulator(BaseController):
             # loop frequency
             self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
         else:#Biral
-            self.basePoseW[2] = 0.25 #fixed height TODO change this when on slopes
+
             self.broadcast_world = False
             self.slow_down_factor = 4
+            # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
+            self.basePoseW[self.u.sp_crd["LX"]] = self.p0[0]  # fixed height TODO change this when on slopes
+            self.basePoseW[self.u.sp_crd["LY"]] = self.p0[1]  # fixed height TODO change this when on slopes
+            self.basePoseW[self.u.sp_crd["LZ"]] = 0.25  # fixed height TODO change this when on slopes
+            self.basePoseW[self.u.sp_crd["AZ"]] = self.p0[2]  # fixed height TODO change this when on slopes
+
             # loop frequency
             self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
             pass
