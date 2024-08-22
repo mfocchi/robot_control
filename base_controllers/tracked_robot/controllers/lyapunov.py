@@ -41,7 +41,7 @@ class LyapunovController:
     def getErrors(self):
         return self.log_e_x, self.log_e_y,  self.log_e_theta
 
-    def control_unicycle(self, robot, current_time, des_x, des_y, des_theta, v_d, omega_d, traj_finished):
+    def control_unicycle(self, actual_state, current_time, des_x, des_y, des_theta, v_d, omega_d, traj_finished):
         """
         ritorna i valori di linear e angular velocity
         """
@@ -53,9 +53,9 @@ class LyapunovController:
             return 0.0, 0.0, 0., 0.
 
         # compute errors
-        ex = robot.x - des_x
-        ey = robot.y - des_y
-        theta,self.theta_old = unwrap_angle(robot.theta, self.theta_old)
+        ex = actual_state.x - des_x
+        ey = actual_state.y - des_y
+        theta,self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
         etheta = theta-des_theta
 
         #compute ausiliary variables
@@ -83,7 +83,7 @@ class LyapunovController:
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
         return v, omega,  V, V_dot
 
-    def control_alpha(self, robot, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, approx=False):
+    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, approx=False):
         """
         ritorna i valori di linear e angular velocity
         """
@@ -96,9 +96,9 @@ class LyapunovController:
             return 0.0, 0.0, 0., 0.,0., 0.
 
         # compute errors
-        ex = robot.x - des_x
-        ey = robot.y - des_y
-        theta, self.theta_old = unwrap_angle(robot.theta, self.theta_old)
+        ex = actual_state.x - des_x
+        ey = actual_state.y - des_y
+        theta, self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
         etheta = theta - des_theta
 
         # compute ausiliary variables

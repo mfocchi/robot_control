@@ -53,9 +53,9 @@ class GenericSimulator(BaseController):
         self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
-        self.IDENT_DIRECTION = 'left' #used only when OPEN_LOOP
-        self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4
-        self.IDENT_WHEEL_L = 4.  # -4.5:0.5:4.5
+        self.IDENT_MAX_WHEEL_SPEED = 7
+        self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
+        self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4 #used only when IDENT_TYPE = 'V_OMEGA'
 
         # initial pose
         self.p0 = np.array([0, 0.0, 0.])
@@ -177,7 +177,7 @@ class GenericSimulator(BaseController):
             ros.sleep(1.5)
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
-            groundParams = Ground(friction_coefficient=0.09041)
+            groundParams = Ground(friction_coefficient=0.1)
             self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
             self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0,0,0.0]), pose_init=self.p0) #TODO make this a parameter
 
@@ -442,11 +442,11 @@ class GenericSimulator(BaseController):
         wheel_l_vec = []
         wheel_r_vec = []
         change_interval = 3.
-        nsamples = 12
         if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
-            wheel_r = np.linspace(-constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY, nsamples)
+            wheel_r = np.linspace(-constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY, 12) #it if passes from 0 for some reason there is a non linear
+                #behaviour in the long slippage
         else:
-            wheel_r = np.linspace(constants.MAXSPEED_RADS_PULLEY, -constants.MAXSPEED_RADS_PULLEY, nsamples)
+            wheel_r =np.linspace(constants.MAXSPEED_RADS_PULLEY, -constants.MAXSPEED_RADS_PULLEY, 12)
         time = 0
         i = 0
         while True:
@@ -698,13 +698,22 @@ class GenericSimulator(BaseController):
 def talker(p):
     p.start()
     p.startSimulator()
+    if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
+        wheel_l = np.linspace(-constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY, 12)
+        for speed in range(len(wheel_l)):
+            p.IDENT_WHEEL_L = wheel_l[speed]
+            main_loop(p)
+    else:
+        main_loop(p)
+
+def main_loop(p):
+
     p.loadModelAndPublishers()
     p.robot.na = 2 #initialize properly vars for only 2 actuators (other 2 are caster wheels)
     p.initVars()
     p.q_old = np.zeros(2)
     p.initSubscribers()
     p.startupProcedure()
-
     #init joints
     p.q_des = np.copy(p.q_des_q0)
     p.q_old = np.zeros(2)
@@ -789,7 +798,7 @@ def talker(p):
 
         # CLOSE loop control
         # generate reference trajectory
-        vel_gen = VelocityGenerator(simulation_time=40.,    DT=conf.robot_params[p.robot_name]['dt'])
+        vel_gen = VelocityGenerator(simulation_time=4.,    DT=conf.robot_params[p.robot_name]['dt'])
         # initial_des_x = 0.1
         # initial_des_y = 0.1
         # initial_des_theta = 0.3
