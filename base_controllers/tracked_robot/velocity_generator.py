@@ -23,7 +23,7 @@ class VelocityGenerator:
         s = "straight"
         return v, o, v_dot, omega_dot, s
 
-    def velocity_mir_smooth(self, t1_perc = .1, t2_perc = .8, v_max_ = 0.1, omega_max_ = 0.3):
+    def velocity_mir_smooth(self, t1_perc = .1, t2_perc = .6, v_max_ = 0.1, omega_max_ = 0.3):
         t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
         v = []
         o = []
@@ -48,7 +48,7 @@ class VelocityGenerator:
                 omega_dot.append(-omega_max / (t2-t1))
             else:
                 v.append(v_max)
-                o.append(0)
+                o.append(-omega_max)
                 v_dot.append(0)
                 omega_dot.append(0)
         s = "mir_smooth"
@@ -78,7 +78,7 @@ class VelocityGenerator:
         s = "mir_smooth"
         return v, o, v_dot, omega_dot, s
 
-    # def velocity_mir_smooth(self):
+    # def velocity_chicane(self):
     #     t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
     #     v = []
     #     o = []
@@ -98,4 +98,4 @@ class VelocityGenerator:
     #             o.append(0.)
     #     s = "mir_smooth"
     #     return v, o, s
-
+    #
