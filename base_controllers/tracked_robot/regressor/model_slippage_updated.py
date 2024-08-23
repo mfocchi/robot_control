@@ -15,7 +15,8 @@ sim = True
 outdoor = False
 
 if sim:
-    data = 'ident_wheels_sim.csv'
+    data = 'ident_wheels_sim_alpha.csv'
+
 else:
     if outdoor:
         data = 'ident_wheels_real_outdoor.csv'
@@ -130,10 +131,11 @@ else:
     model_name_alpha = 'model_alpha.cbm'
     model_alpha.save_model(model_name_alpha,format="cbm")
 
-# %%
+# 2D plots of quality of results
 fig, ax = plt.subplots(1, 3, figsize=(20, 7))
 
 ax[0].set_ylabel("Predicted")
+ax[0].set_xlabel("True")
 ax[0].scatter(y_test[..., 0], preds_beta_l,
               color="blue", label="test", alpha=0.5)
 ax[0].scatter(y_train[..., 0], preds_train_beta_l,
@@ -143,6 +145,7 @@ ax[0].plot([y[..., 0].min(), y[..., 0].max()], [
 ax[0].set_title('beta_l')
 ax[0].legend()
 
+ax[1].set_ylabel("Predicted")
 ax[1].set_xlabel("True")
 ax[1].scatter(y_test[..., 1], preds_beta_r, color="blue", alpha=0.5)
 ax[1].scatter(y_train[..., 1], preds_train_beta_r, color="red", alpha=0.5)
@@ -150,12 +153,49 @@ ax[1].plot([y[..., 1].min(), y[..., 1].max()], [
            y[..., 1].min(), y[..., 1].max()], color="black")
 ax[1].set_title('beta_r')
 
-
+ax[2].set_ylabel("Predicted")
+ax[1].set_xlabel("True")
 ax[2].scatter(y_test[..., 2], preds_alpha, color="blue", alpha=0.5)
 ax[2].scatter(y_train[..., 2], preds_train_alpha, color="red", alpha=0.5)
 ax[2].plot([y[..., 2].min(), y[..., 2].max()], [
            y[..., 2].min(), y[..., 2].max()], color="black")
 ax[2].set_title('alpha')
+plt.show()
+
+
+#### 3D plots
+from mpl_toolkits import mplot3d
+fig = plt.figure(figsize=(10, 10))
+ax = plt.axes(projection='3d')
+ax.scatter(x[..., 0], x[..., 1], y[..., 0], label='groundtruth',  color='blue')
+ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_beta_l.reshape(-1, 1), label='predicted train',color='red')
+ax.scatter(x_test[..., 0], x_test[..., 1], preds_beta_l.reshape(-1, 1),label='predicted test', color='green')
+ax.set_xlabel('wheel_l')
+ax.set_ylabel('wheel_r')
+ax.set_zlabel("beta_l")
+ax.legend()
+plt.show()
+
+fig = plt.figure(figsize=(10, 10))
+ax = plt.axes(projection='3d')
+ax.scatter(x[..., 0], x[..., 1], y[..., 1], label='groundtruth', color='blue')
+ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_beta_r.reshape(-1,1), label='predicted train', color='red')
+ax.scatter(x_test[..., 0], x_test[..., 1], preds_beta_r.reshape(-1,1),label='predicted test', color='green')
+ax.set_xlabel('wheel_l')
+ax.set_ylabel('wheel_r')
+ax.set_zlabel("beta_r")
+ax.legend()
+plt.show()
+
+fig = plt.figure(figsize=(10, 10))
+ax = plt.axes(projection='3d')
+ax.scatter(x[..., 0], x[..., 1], y[..., 2],label='groundtruth', color='blue')
+ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_alpha.reshape(-1,1), label='predicted train',color='red')
+ax.scatter(x_test[..., 0], x_test[..., 1], preds_alpha.reshape(-1,1), label='predicted test', color='green')
+ax.set_xlabel('wheel_l')
+ax.set_ylabel('wheel_r')
+ax.set_zlabel("alpha")
+ax.legend()
 plt.show()
 
 
@@ -172,37 +212,7 @@ model.load_model(model_name_beta_r)
 beta_r =  model.predict(np.array([0.5, 0.3]))
 
 model.load_model(model_name_alpha)
-alpha = model.predict(np.array([0.5, 0.3]))
+alpha = model.predict(np.array([-3.44561, 4.52]))
+alpha = model.predict(np.array([4.5, -3.7]))
 
 print(f"Beta_l {beta_l}, Beta_r {beta_r}, alpha {alpha}")
-
-from mpl_toolkits import mplot3d
-fig = plt.figure(figsize=(10, 10))
-ax = plt.axes(projection='3d')
-ax.scatter(x[..., 0], x[..., 1], y[..., 0], color='blue')
-ax.scatter(x_train[..., 0], x_train[..., 1],
-           preds_train_beta_l.reshape(-1, 1), color='red')
-ax.scatter(x_test[..., 0], x_test[..., 1],
-           preds_beta_l.reshape(-1, 1), color='green')
-ax.set_xlabel('wheel_l')
-ax.set_ylabel('wheel_r')
-plt.show()
-
-fig = plt.figure(figsize=(10, 10))
-ax = plt.axes(projection='3d')
-ax.scatter(x[..., 0], x[..., 1], y[..., 1], color='blue')
-ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_beta_r.reshape(-1,1), color='red')
-ax.scatter(x_test[..., 0], x_test[..., 1], preds_beta_r.reshape(-1,1), color='green')
-ax.set_xlabel('wheel_l')
-ax.set_ylabel('wheel_r')
-plt.show()
-
-fig = plt.figure(figsize=(10, 10))
-ax = plt.axes(projection='3d')
-ax.scatter(x[..., 0], x[..., 1], y[..., 2], color='blue')
-ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_alpha.reshape(-1,1), color='red')
-ax.scatter(x_test[..., 0], x_test[..., 1], preds_alpha.reshape(-1,1), color='green')
-ax.set_xlabel('wheel_l')
-ax.set_ylabel('wheel_r')
-plt.show()
-
