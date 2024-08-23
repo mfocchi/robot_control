@@ -508,6 +508,17 @@ class GenericSimulator(BaseController):
         b_vel_xy = (w_R_b.T).dot(w_vel_xy)
         b_vel_x = b_vel_xy[0]
 
+        v = np.linalg.norm(b_vel_xy)
+
+        # compute turning radius for logging
+        # in the case radius is infinite, betas are zero (this is to avoid Nans)
+        if (abs(omega) < 1e-05) and (abs(v) > 1e-05):
+            radius = 1e08 * np.sign(v)
+        elif (abs(omega) < 1e-05) and (abs(v) < 1e-05):
+            radius = 1e8
+        else:
+            radius = v / (omega)
+
         # track velocity  from encoder
         v_enc_l = constants.SPROCKET_RADIUS *  wheel_L
         v_enc_r = constants.SPROCKET_RADIUS *  wheel_R
@@ -574,7 +585,7 @@ class GenericSimulator(BaseController):
         tau_g = np.array([F_lx*constants.SPROCKET_RADIUS, F_rx*constants.SPROCKET_RADIUS])
         return  tau_g, F_l, F_r
 
-    def computeLongSlipCompensation(self, v, omega, qd_des, constants):
+    def computeLongSlipCompensationExp(self, v, omega, qd_des, constants):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
 
         if (abs(omega) < 1e-05) and (abs(v) > 1e-05):
@@ -614,6 +625,7 @@ class GenericSimulator(BaseController):
         # compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
+        # predict the betas from NN
         beta_l = self.model_beta_l.predict(qd_des)
         beta_r = self.model_beta_r.predict(qd_des)
 
@@ -843,11 +855,11 @@ def main_loop(p):
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
-            if not p.ControlType=='CLOSED_LOOP_UNICYCLE' and p.LONG_SLIP_COMPENSATION != 'NONE' and not traj_finished:
+            if not p.ControlType=='CLOSED_LOOP_UNICYCLE'  and not traj_finished:
                 if p.LONG_SLIP_COMPENSATION=='NN':
                     p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationNN(p.qd_des, constants)
-                else:#exponential
-                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
+                if p.LONG_SLIP_COMPENSATION == 'EXP':
+                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationExp(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
     
             # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             # senting it to be tracked from the impedance loop
