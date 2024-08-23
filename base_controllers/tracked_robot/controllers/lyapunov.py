@@ -83,7 +83,7 @@ class LyapunovController:
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
         return v, omega,  V, V_dot
 
-    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, approx=False):
+    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, model_alpha, approx=False):
         """
         ritorna i valori di linear e angular velocity
         """
@@ -107,7 +107,7 @@ class LyapunovController:
         exy = math.sqrt(ex ** 2 + ey ** 2)
 
         #initial guess for alpha from des values
-        alpha_d = self.alpha_exp(v_d, omega_d)
+        alpha_d = self.alpha_exp(v_d, omega_d, model_alpha)
         alpha_dot_d = self.alpha_dot_exp(v_d, omega_d, v_dot_d, omega_dot_d)
 
         dv0 = -self.K_P * exy * math.cos(psi -  (alpha_d + theta))
@@ -143,17 +143,22 @@ class LyapunovController:
         eq3 = domega + v_d / math.cos((etheta + alpha) / 2) * exy * math.sin(psi - ((alpha + beta) / 2)) + self.K_THETA * math.sin(etheta + alpha_d) + alphadot_d
         return [eq1, eq2, eq3]
 
-    def alpha_exp(self, v, omega):
+    def alpha_exp(self, v, omega, model_alpha):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
         if abs(omega) < 1e-05:
             return  0.
 
         radius = v/(omega)
-
         if radius > 0:
             alpha = self.C1*np.exp(self.C2*radius)
         else:
             alpha = -self.C1*np.exp(-self.C2*radius)
+
+        qd_des = np.zeros(2)
+        qd_des[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
+        qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
+
+        alpha = model_alpha.predict(qd_des)
         return alpha
 
     def alpha_dot_exp(self, v, omega, v_dot, omega_dot):

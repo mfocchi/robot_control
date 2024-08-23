@@ -50,12 +50,12 @@ class GenericSimulator(BaseController):
         self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia', 'biral'
 
 
-        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
-        self.IDENT_MAX_WHEEL_SPEED = 7
+        self.IDENT_MAX_WHEEL_SPEED = 7 #used only when IDENT_TYPE = 'WHEELS'
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
-        self.IDENT_LONG_SPEED = 0.1 #0.05:0.05:0.4 #used only when IDENT_TYPE = 'V_OMEGA'
+        self.IDENT_LONG_SPEED = 0.2 #0.05:0.05:0.4 #used only when IDENT_TYPE = 'V_OMEGA'
 
         # initial pose
         self.p0 = np.array([0, 0.0, 0.])
@@ -66,7 +66,7 @@ class GenericSimulator(BaseController):
 
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
-        self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP', 'NONE'
+        self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
@@ -825,7 +825,7 @@ def main_loop(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=5., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
@@ -844,12 +844,12 @@ def main_loop(p):
                 if traj_finished:
                     break
             if p.ControlType=='CLOSED_LOOP_SLIP_0':
-                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, approx=True)
-                p.des_theta -=  p.controller.alpha_exp(p.v_d, p.omega_d)  # we track theta_d -alpha_d
+                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, p.model_alpha, approx=True)
+                p.des_theta -=  p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType == 'CLOSED_LOOP_SLIP':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,approx=False)
-                p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d)  # we track theta_d -alpha_d
+                p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
