@@ -79,11 +79,15 @@ class GenericSimulator(BaseController):
         super().initVars()
 
         # regressor
-        self.regressor = cb.CatBoostRegressor()
+        self.regressor_beta_l = cb.CatBoostRegressor()
+        self.regressor_beta_r = cb.CatBoostRegressor()
+        self.regressor_alpha = cb.CatBoostRegressor()
         # laod model
         try:
-            self.model_beta_l = self.regressor.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l.cb')
-            self.model_beta_r = self.regressor.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r.cb')
+            self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l.cb')
+            self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r.cb')
+            self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha.cb')
+
         except:
             print(colored("need to generate the models with running tracked_robot/regressor/model_slippage_updated.py","red"))
         ## add your variables to initialize here
@@ -285,7 +289,7 @@ class GenericSimulator(BaseController):
         else:#Biral
 
             self.broadcast_world = False
-            self.slow_down_factor = 4
+            self.slow_down_factor = 1
             # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
             self.basePoseW[self.u.sp_crd["LX"]] = self.p0[0]  # fixed height TODO change this when on slopes
             self.basePoseW[self.u.sp_crd["LY"]] = self.p0[1]  # fixed height TODO change this when on slopes
@@ -366,7 +370,7 @@ class GenericSimulator(BaseController):
                 plt.plot(self.time_log, self.alpha_log, "-b", label="real")
                 plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
                 plt.ylabel("alpha")
-                plt.ylim([-1, 1])
+                plt.ylim([-0.4, 0.4])
                 plt.grid(True)
                 plt.legend()
                 plt.subplot(4, 1, 4)
@@ -521,7 +525,7 @@ class GenericSimulator(BaseController):
         else:
             side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
 
-        return beta_l, beta_r, side_slip
+        return beta_l, beta_r, side_slip, radius
 
     def computeGravityCompensation(self, roll, pitch):
         W = np.array([0., 0., constants.mass*9.81, 0., 0., 0.])
@@ -602,17 +606,10 @@ class GenericSimulator(BaseController):
         qd_comp[1] = 1/constants.SPROCKET_RADIUS * v_enc_r
 
 
-        return qd_comp, beta_l, beta_r, radius
+        return qd_comp, beta_l, beta_r
 
-    def computeLongSlipCompensationNN(self, v, omega, qd_des, constants):
-        # in the case radius is infinite, betas are zero (this is to avoid Nans)
-        #
-        if (abs(omega) < 1e-05) and (abs(v) > 1e-05):
-            radius = 1e08 * np.sign(v)
-        elif (abs(omega) < 1e-05) and (abs(v) < 1e-05):
-            radius = 1e8
-        else:
-            radius = v / (omega)
+    def computeLongSlipCompensationNN(self,  qd_des, constants):
+
 
         # compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
@@ -627,7 +624,7 @@ class GenericSimulator(BaseController):
         qd_comp = np.zeros(2)
         qd_comp[0] = 1 / constants.SPROCKET_RADIUS * v_enc_l
         qd_comp[1] = 1 / constants.SPROCKET_RADIUS * v_enc_r
-        return qd_comp, beta_l, beta_r, radius
+        return qd_comp, beta_l, beta_r
     
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
@@ -787,7 +784,7 @@ def main_loop(p):
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
 
-            p.beta_l, p.beta_r, p.alpha = p.estimateSlippages(p.baseTwistW, p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
+            p.beta_l, p.beta_r, p.alpha, p.radius = p.estimateSlippages(p.baseTwistW, p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
 
             # log variables
             p.logData()
@@ -798,7 +795,7 @@ def main_loop(p):
 
         # CLOSE loop control
         # generate reference trajectory
-        vel_gen = VelocityGenerator(simulation_time=4.,    DT=conf.robot_params[p.robot_name]['dt'])
+        vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
         # initial_des_x = 0.1
         # initial_des_y = 0.1
         # initial_des_theta = 0.3
@@ -807,7 +804,7 @@ def main_loop(p):
         initial_des_theta = 0.0
 
         if p.MATLAB_PLANNING == 'none':
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.1, omega_max_=0.2)
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.3, omega_max_=0.4)
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
@@ -816,7 +813,7 @@ def main_loop(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=5., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
@@ -848,9 +845,9 @@ def main_loop(p):
 
             if not p.ControlType=='CLOSED_LOOP_UNICYCLE' and p.LONG_SLIP_COMPENSATION != 'NONE' and not traj_finished:
                 if p.LONG_SLIP_COMPENSATION=='NN':
-                    p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensationNN(p.ctrl_v, p.ctrl_omega,p.qd_des, constants)
+                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationNN(p.qd_des, constants)
                 else:#exponential
-                    p.qd_des, p.beta_l_control, p.beta_r_control, p.radius = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
+                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensation(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
     
             # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             # senting it to be tracked from the impedance loop
@@ -865,7 +862,7 @@ def main_loop(p):
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
 
-            p.beta_l, p.beta_r, p.alpha = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
+            p.beta_l, p.beta_r, p.alpha, p.radius = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
             # log variables
             p.logData()
             # wait for synconization of the control loop
