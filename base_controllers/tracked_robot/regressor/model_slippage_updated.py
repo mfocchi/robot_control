@@ -77,14 +77,12 @@ preds_beta_l = model_beta_l.predict(x_test)
 print(f'R2 metric train beta_l: {r2_score(y_train[...,0], preds_train_beta_l)}')
 print(f'R2 metric test beta_l: {r2_score(y_test[...,0], preds_beta_l)}')
 
-if sim:
-    # %% save the model python
-    model_name_beta_l = 'model_beta_l.cb'
-    model_beta_l.save_model(model_name_beta_l)
-else:
-    # %% save the model cpp binary
-    model_name_beta_l = 'model_beta_l.cbm'
-    model_beta_l.save_model(model_name_beta_l,format="cbm")
+
+# %% save the model python
+model_name_beta_l = 'model_beta_l.cb'
+model_beta_l.save_model(model_name_beta_l)
+model_name_beta_l = 'model_beta_l.cbm'
+model_beta_l.save_model(model_name_beta_l,format="cbm")
 # Save model to ONNX-ML format
 model_beta_l.save_model(
     "model_beta_l.onnx",
@@ -108,14 +106,12 @@ preds_beta_r = model_beta_r.predict(x_test)
 print(f'R2 metric train beta_r: {r2_score(y_train[...,1], preds_train_beta_r)}')
 print(f'R2 metric test beta_r: {r2_score(y_test[...,1], preds_beta_r)}')
 
-if sim:
-    # %% save the model python
-    model_name_beta_r = 'model_beta_r.cb'
-    model_beta_r.save_model(model_name_beta_r)
-else:
-    # %% save the model cpp binary
-    model_name_beta_r = 'model_beta_r.cbm'
-    model_beta_r.save_model(model_name_beta_r,format="cbm")
+# %% save the model python
+model_name_beta_r = 'model_beta_r.cb'
+model_beta_r.save_model(model_name_beta_r)
+# %% save the model cpp binary
+model_name_beta_r = 'model_beta_r.cbm'
+model_beta_r.save_model(model_name_beta_r,format="cbm")
 # Save model to ONNX-ML format
 model_beta_r.save_model(
     "model_beta_r.onnx",
@@ -142,14 +138,12 @@ print(f'R2 metric train alpha: {r2_score(y_train[...,2], preds_train_alpha)}')
 print(f'R2 metric test alpha: {r2_score(y_test[...,2], preds_alpha)}')
 
 # %%
-if sim:
-    # %% save the model python
-    model_name_alpha = 'model_alpha.cb'
-    model_alpha.save_model(model_name_alpha)
-else:
-    # %% save the model cpp binary
-    model_name_alpha = 'model_alpha.cbm'
-    model_alpha.save_model(model_name_alpha,format="cbm")
+# %% save the model python
+model_name_alpha = 'model_alpha.cb'
+model_alpha.save_model(model_name_alpha)
+# %% save the model cpp binary
+model_name_alpha = 'model_alpha.cbm'
+model_alpha.save_model(model_name_alpha,format="cbm")
 # Save model to ONNX-ML format
 model_alpha.save_model(
     "model_alpha.onnx",

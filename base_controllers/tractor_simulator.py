@@ -34,7 +34,7 @@ import catboost as cb
 import pinocchio as pin
 from base_controllers.components.coppelia_manager import CoppeliaManager
 from optim_interfaces.srv import Optim, OptimRequest
-
+import scipy.io.matlab as mio
 from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
@@ -383,7 +383,6 @@ class GenericSimulator(BaseController):
 
             if p.ControlType != 'OPEN_LOOP':
                 # tracking errors
-                self.log_e_x, self.log_e_y, self.log_e_theta = self.controller.getErrors()
                 plt.figure()
                 plt.subplot(2, 1, 1)
                 plt.plot(np.sqrt(np.power(self.log_e_x,2) +np.power(self.log_e_y,2)), "-b")
@@ -886,8 +885,17 @@ def main_loop(p):
             # wait for synconization of the control loop
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
+
+    p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
     if p.SAVE_BAGS:
         p.recorder.stop_recording_srv()
+        filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
+        mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
+                                'state': p.state_log, 'ex':p.log_e_x,'ey': p.log_e_y, 'etheta': p.log_e_theta,
+                                'v': p.ctrl_v_log, 'vd': p.v_d_log,'omega': p.ctrl_omega_log, 'omega_d': p.omega_d_log,
+                                'wheel_l': p.qd_log[0, :], 'wheel_r': p.qd_log[1, :],'beta_l': p.beta_l_log,
+                                'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
+                                'alpha': p.alpha_log, 'alpha_pred':p.alpha_control_log, 'radius':p.radius_log})
 
 if __name__ == '__main__':
     p = GenericSimulator(robotName)
