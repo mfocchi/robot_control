@@ -85,7 +85,17 @@ else:
     # %% save the model cpp binary
     model_name_beta_l = 'model_beta_l.cbm'
     model_beta_l.save_model(model_name_beta_l,format="cbm")
-
+# Save model to ONNX-ML format
+model_beta_l.save_model(
+    "model_beta_l.onnx",
+    format="onnx",
+    export_parameters={
+        'onnx_domain': 'ai.catboost',
+        'onnx_model_version': 1,
+        'onnx_doc_string': 'test model for Regression',
+        'onnx_graph_name': 'CatBoostModel_for_Regression'
+    }
+)
 
 # %% [markdown]
 # # %% create model of regressor Beta_r
@@ -106,7 +116,17 @@ else:
     # %% save the model cpp binary
     model_name_beta_r = 'model_beta_r.cbm'
     model_beta_r.save_model(model_name_beta_r,format="cbm")
-
+# Save model to ONNX-ML format
+model_beta_r.save_model(
+    "model_beta_r.onnx",
+    format="onnx",
+    export_parameters={
+        'onnx_domain': 'ai.catboost',
+        'onnx_model_version': 1,
+        'onnx_doc_string': 'test model for Regression',
+        'onnx_graph_name': 'CatBoostModel_for_Regression'
+    }
+)
 
 # regressor for Alpha (cannot
 model_alpha = cb.CatBoostRegressor(learning_rate=1e-3, max_depth=10, iterations=10000)
@@ -130,6 +150,18 @@ else:
     # %% save the model cpp binary
     model_name_alpha = 'model_alpha.cbm'
     model_alpha.save_model(model_name_alpha,format="cbm")
+# Save model to ONNX-ML format
+model_alpha.save_model(
+    "model_alpha.onnx",
+    format="onnx",
+    export_parameters={
+        'onnx_domain': 'ai.catboost',
+        'onnx_model_version': 1,
+        'onnx_doc_string': 'test model for Regression',
+        'onnx_graph_name': 'CatBoostModel_for_Regression'
+    }
+)
+
 
 # 2D plots of quality of results
 fig, ax = plt.subplots(1, 3, figsize=(20, 7))
