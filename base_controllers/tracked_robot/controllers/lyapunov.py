@@ -27,7 +27,7 @@ class LyapunovController:
 
         self.C1 = constants.side_slip_angle_coefficients[0]
         self.C2 = constants.side_slip_angle_coefficients[1]
-
+        self.SIDE_SLIP_COMPENSATION = 'NN'
         self.log_e_x = []
         self.log_e_y = []
         self.log_e_theta = []
@@ -36,7 +36,8 @@ class LyapunovController:
 
         self.params = params
 
-
+    def setSideSlipCompensationType(self, SIDE_SLIP_COMPENSATION):
+        self.SIDE_SLIP_COMPENSATION = SIDE_SLIP_COMPENSATION
 
     def getErrors(self):
         return self.log_e_x, self.log_e_y,  self.log_e_theta
@@ -55,6 +56,7 @@ class LyapunovController:
         # compute errors
         ex = actual_state.x - des_x
         ey = actual_state.y - des_y
+
         theta,self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
         etheta = theta-des_theta
 
@@ -75,6 +77,7 @@ class LyapunovController:
 
         #domega = - self.K_THETA * etheta - 2/etheta * v_d * np.sin(0.5 * etheta)* np.sin(psi - 0.5 * beta)
         # save errors for plotting
+
         self.log_e_x.append(ex)
         self.log_e_y.append(ey)
         self.log_e_theta.append(etheta)
@@ -83,7 +86,7 @@ class LyapunovController:
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
         return v, omega,  V, V_dot
 
-    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, model_alpha, approx=False):
+    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, model_alpha=None, approx=False):
         """
         ritorna i valori di linear e angular velocity
         """
@@ -108,17 +111,20 @@ class LyapunovController:
 
         #initial guess for alpha from des values
         alpha_d = self.alpha_exp(v_d, omega_d, model_alpha)
-        alpha_dot_d = self.alpha_dot_exp(v_d, omega_d, v_dot_d, omega_dot_d)
+
 
         dv0 = -self.K_P * exy * math.cos(psi -  (alpha_d + theta))
-        domega0 = -v_d / math.cos((etheta + alpha_d) / 2) * exy * math.sin(psi - ((alpha_d + beta) / 2)) - self.K_THETA * math.sin(etheta + alpha_d) -alpha_dot_d
 
         if approx:
+            domega0 = -v_d / math.cos((etheta + alpha_d) / 2) * exy * math.sin(psi - ((alpha_d + beta) / 2)) - self.K_THETA * math.sin(etheta + alpha_d)
             #compute the controls
             v =   (v_d + dv0) *np.cos(alpha_d)
             omega = omega_d + domega0
             alpha = alpha_d
         else:
+            alpha_dot_d = self.alpha_dot_exp(v_d, omega_d, v_dot_d, omega_dot_d)
+            domega0 = -v_d / math.cos((etheta + alpha_d) / 2) * exy * math.sin(psi - ((alpha_d + beta) / 2)) - self.K_THETA * math.sin(etheta + alpha_d) - alpha_dot_d
+
             params = ( psi, etheta, exy, theta, alpha_d, beta, v_d, omega_d, v_dot_d, omega_dot_d)
             alpha, dv, domega = fsolve(self.equations, (alpha_d, dv0, domega0), args=params)
             #print(f"alpha: {alpha}, dv: {dv},domega: {domega}")
@@ -143,22 +149,25 @@ class LyapunovController:
         eq3 = domega + v_d / math.cos((etheta + alpha) / 2) * exy * math.sin(psi - ((alpha + beta) / 2)) + self.K_THETA * math.sin(etheta + alpha_d) + alphadot_d
         return [eq1, eq2, eq3]
 
-    def alpha_exp(self, v, omega, model_alpha):
+    def alpha_exp(self, v, omega, model_alpha=None):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
-        if abs(omega) < 1e-05:
-            return  0.
 
-        radius = v/(omega)
-        if radius > 0:
-            alpha = self.C1*np.exp(self.C2*radius)
-        else:
-            alpha = -self.C1*np.exp(-self.C2*radius)
+        if self.SIDE_SLIP_COMPENSATION == 'EXP' or model_alpha is None:
+            if abs(omega) < 1e-05:
+                return  0.
 
-        qd_des = np.zeros(2)
-        qd_des[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
-        qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
+            radius = v/(omega)
+            if radius > 0:
+                alpha = self.C1*np.exp(self.C2*radius)
+            else:
+                alpha = -self.C1*np.exp(-self.C2*radius)
 
-        alpha = model_alpha.predict(qd_des)
+        elif self.SIDE_SLIP_COMPENSATION=='NN':
+            qd_des = np.zeros(2)
+            qd_des[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
+            qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
+            alpha = model_alpha.predict(qd_des)
+
         return alpha
 
     def alpha_dot_exp(self, v, omega, v_dot, omega_dot):
@@ -167,14 +176,14 @@ class LyapunovController:
         else:
             # deal with degenerate cases (I computed numerically the limits in situations that creatde Nans)
             if abs(omega)<0.0001:
-                alpha_dot = 0
+                alpha_dot = 0.
             else:
                 r = v / omega
                 if r > 0:
-                    alpha = self.C1*math.exp(self.C2*r);
+                    alpha = self.C1*math.exp(self.C2*r)
                     alpha_dot = alpha * math.log(alpha/(self.C1))*(v_dot/v - omega_dot/omega)
                 else:
-                    alpha = -self.C1*math.exp(-self.C2*r);
+                    alpha = -self.C1*math.exp(-self.C2*r)
                     alpha_dot = alpha * math.log(alpha/(-self.C1))*(v_dot/v - omega_dot/omega)
 
         return  alpha_dot

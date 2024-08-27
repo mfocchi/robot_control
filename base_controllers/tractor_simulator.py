@@ -49,8 +49,10 @@ class GenericSimulator(BaseController):
         print("Initialized tractor controller---------------------------------------------------------------")
         self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia', 'biral'
 
-
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP'
+        self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
+
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
         self.IDENT_MAX_WHEEL_SPEED = 7 #used only when IDENT_TYPE = 'WHEELS'
@@ -66,7 +68,7 @@ class GenericSimulator(BaseController):
 
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
-        self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
+
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
@@ -349,7 +351,7 @@ class GenericSimulator(BaseController):
 
             #states plot
             plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
-            plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
+            #plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
             if self.SIMULATOR != 'gazebo':
                 #slippage vars
@@ -379,13 +381,14 @@ class GenericSimulator(BaseController):
                 plt.ylabel("radius")
                 plt.grid(True)
 
-            if p.ControlType == 'CLOSED_LOOP':
+            if p.ControlType != 'OPEN_LOOP':
                 # tracking errors
                 self.log_e_x, self.log_e_y, self.log_e_theta = self.controller.getErrors()
                 plt.figure()
                 plt.subplot(2, 1, 1)
                 plt.plot(np.sqrt(np.power(self.log_e_x,2) +np.power(self.log_e_y,2)), "-b")
                 plt.ylabel("exy")
+                plt.title("tracking errors")
                 plt.grid(True)
                 plt.subplot(2, 1, 2)
                 plt.plot(self.log_e_theta, "-b")
@@ -620,8 +623,6 @@ class GenericSimulator(BaseController):
         return qd_comp, beta_l, beta_r
 
     def computeLongSlipCompensationNN(self,  qd_des, constants):
-
-
         # compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
@@ -650,6 +651,9 @@ class GenericSimulator(BaseController):
 
         #trigger simulators
         if self.SIMULATOR == 'biral': #TODO implement torque control
+
+            if np.any(qd_des > np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])) or np.any(qd_des < -np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])):
+                print(colored("wheel speed beyond limits, NN might do wrong predictions", "red"))
             self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
             pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
             #fill in base state
@@ -816,7 +820,7 @@ def main_loop(p):
         initial_des_theta = 0.0
 
         if p.MATLAB_PLANNING == 'none':
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3)
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.4)
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
@@ -827,6 +831,7 @@ def main_loop(p):
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
+        p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
             # update kinematics
@@ -844,15 +849,16 @@ def main_loop(p):
                 if traj_finished:
                     break
             if p.ControlType=='CLOSED_LOOP_SLIP_0':
-                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, p.model_alpha, approx=True)
+                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,p.model_alpha,approx=True)
                 p.des_theta -=  p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType == 'CLOSED_LOOP_SLIP':
-                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,approx=False)
+                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,p.model_alpha, approx=False)
                 p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
+
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
             if not p.ControlType=='CLOSED_LOOP_UNICYCLE'  and not traj_finished:

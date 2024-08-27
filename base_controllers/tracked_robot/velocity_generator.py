@@ -23,6 +23,37 @@ class VelocityGenerator:
         s = "straight"
         return v, o, v_dot, omega_dot, s
 
+    def velocity_mir_smooth2(self, t1_perc = .1, t2_perc = .6, v_max_ = 0.1, omega_max_ = 0.3):
+        t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
+        v = []
+        o = []
+        v_dot =[]
+        omega_dot = []
+        t1 = t1_perc*self.simulation_time
+        t2 =t2_perc*self.simulation_time
+        #v_max = 0.4
+        omega_max =omega_max_
+        v_max = v_max_
+        for i in range(t.shape[0]):
+            if (t[i] < t1):
+                v.append(v_max * t[i])
+                o.append(0.5*omega_max)
+                v_dot.append(v_max / t1)
+                omega_dot.append(omega_max/t1)
+            elif (t[i] < t2):
+                #v.append(t1 * v_max - t1 * v_max / (t2 - t1) * (t[i] - t1))
+                v.append(v_max)
+                o.append(omega_max)
+                v_dot.append(-v_max / (t2-t1))
+                omega_dot.append(-omega_max / (t2-t1))
+            else:
+                v.append(v_max)
+                o.append(-0.8*omega_max)
+                v_dot.append(0)
+                omega_dot.append(0)
+        s = "mir_smooth"
+        return v, o, v_dot, omega_dot, s
+
     def velocity_mir_smooth(self, t1_perc = .1, t2_perc = .6, v_max_ = 0.1, omega_max_ = 0.3):
         t = np.linspace(0., self.DT * self.n_samples, self.n_samples)
         v = []
