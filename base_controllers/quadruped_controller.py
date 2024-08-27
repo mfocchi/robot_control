@@ -204,7 +204,7 @@ class QuadrupedController(BaseController):
             self.legConfig['rf'] = ['HipDown', 'KneeInward']
             self.legConfig['rh'] = ['HipDown', 'KneeInward']
 
-        elif self.robot_name == 'aliengo' or self.robot_name == 'go1':
+        elif self.robot_name == 'aliengo' or self.robot_name == 'go1' or self.robot_name == 'go2':
             self.legConfig['lf'] = ['HipDown', 'KneeInward']
             self.legConfig['lh'] = ['HipDown', 'KneeOutward']
             self.legConfig['rf'] = ['HipDown', 'KneeInward']
@@ -1022,7 +1022,7 @@ class QuadrupedController(BaseController):
                 self.send_command(self.q_des, self.qd_des, alpha*p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW))
 
             # IMU BIAS ESTIMATION
-            if self.real_robot and self.robot_name == 'go1':
+            if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2'):
                 print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
                 # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
                 while self.imu_utils.counter < self.imu_utils.timeout:
@@ -1054,7 +1054,7 @@ class QuadrupedController(BaseController):
             if (i%3) != 0:
                 q_ref[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
         # IMU BIAS ESTIMATION
-        if self.real_robot and self.robot_name == 'go1':
+        if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2'):
             print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
             # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
             while self.imu_utils.counter < self.imu_utils.timeout:
@@ -1369,7 +1369,7 @@ class QuadrupedController(BaseController):
 
 
 if __name__ == '__main__':
-    p = QuadrupedController('go1')
+    p = QuadrupedController('go2')
     world_name = 'fast.world'
     use_gui = False
     try:
