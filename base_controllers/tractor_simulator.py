@@ -449,10 +449,10 @@ class GenericSimulator(BaseController):
         wheel_r_vec = []
         change_interval = 3.
         if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
-            wheel_r = np.linspace(-constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY, 12) #it if passes from 0 for some reason there is a non linear
+            wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 12) #it if passes from 0 for some reason there is a non linear
                 #behaviour in the long slippage
         else:
-            wheel_r =np.linspace(constants.MAXSPEED_RADS_PULLEY, -constants.MAXSPEED_RADS_PULLEY, 12)
+            wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 12)
         time = 0
         i = 0
         while True:
