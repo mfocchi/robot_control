@@ -55,7 +55,7 @@ class GenericSimulator(BaseController):
 
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
-        self.IDENT_MAX_WHEEL_SPEED = 7 #used only when IDENT_TYPE = 'WHEELS'
+        self.IDENT_MAX_WHEEL_SPEED = 25 #used only when IDENT_TYPE = 'WHEELS'
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
         self.IDENT_LONG_SPEED = 0.2 #0.05:0.05:0.4 #used only when IDENT_TYPE = 'V_OMEGA'
 
@@ -449,10 +449,10 @@ class GenericSimulator(BaseController):
         wheel_r_vec = []
         change_interval = 3.
         if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
-            wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 12) #it if passes from 0 for some reason there is a non linear
+            wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 24) #it if passes from 0 for some reason there is a non linear
                 #behaviour in the long slippage
         else:
-            wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 12)
+            wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 24)
         time = 0
         i = 0
         while True:
@@ -650,9 +650,9 @@ class GenericSimulator(BaseController):
 
         #trigger simulators
         if self.SIMULATOR == 'biral': #TODO implement torque control
-
-            if np.any(qd_des > np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])) or np.any(qd_des < -np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])):
-                print(colored("wheel speed beyond limits, NN might do wrong predictions", "red"))
+            if self.ControlType != 'OPEN_LOOP' and self.LONG_SLIP_COMPENSATION  != 'NONE':
+                if np.any(qd_des > np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])) or np.any(qd_des < -np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])):
+                    print(colored("wheel speed beyond limits, NN might do wrong predictions", "red"))
             self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
             pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
             #fill in base state
@@ -711,7 +711,7 @@ def talker(p):
     p.start()
     p.startSimulator()
     if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
-        wheel_l = np.linspace(-constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY, 12)
+        wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 24)
         for speed in range(len(wheel_l)):
             p.IDENT_WHEEL_L = wheel_l[speed]
             main_loop(p)
@@ -819,7 +819,7 @@ def main_loop(p):
         initial_des_theta = 0.0
 
         if p.MATLAB_PLANNING == 'none':
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.4)
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.1, omega_max_=0.3) # fast 0.2 0.4
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
@@ -886,9 +886,8 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
-    p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
-    if p.SAVE_BAGS:
-        p.recorder.stop_recording_srv()
+    if p.ControlType != 'OPEN_LOOP':
+        p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
         filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
         mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
                                 'state': p.state_log, 'ex':p.log_e_x,'ey': p.log_e_y, 'etheta': p.log_e_theta,
@@ -896,6 +895,10 @@ def main_loop(p):
                                 'wheel_l': p.qd_log[0, :], 'wheel_r': p.qd_log[1, :],'beta_l': p.beta_l_log,
                                 'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
                                 'alpha': p.alpha_log, 'alpha_pred':p.alpha_control_log, 'radius':p.radius_log})
+    if p.SAVE_BAGS:
+        p.recorder.stop_recording_srv()
+
+
 
 if __name__ == '__main__':
     p = GenericSimulator(robotName)
