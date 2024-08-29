@@ -50,8 +50,8 @@ class GenericSimulator(BaseController):
         self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia', 'biral'
 
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP'
-        self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
+        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
+        self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP(not used)', 'NONE'
 
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
@@ -67,7 +67,7 @@ class GenericSimulator(BaseController):
         self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
 
         self.GRAVITY_COMPENSATION = False
-        self.SAVE_BAGS = False
+        self.SAVE_BAGS = True
 
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
@@ -213,7 +213,7 @@ class GenericSimulator(BaseController):
                 else:
                     bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
             else:
-                bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}.bag"
+                bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
 
 
@@ -819,7 +819,7 @@ def main_loop(p):
         initial_des_theta = 0.0
 
         if p.MATLAB_PLANNING == 'none':
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.1, omega_max_=0.3) # fast 0.2 0.4
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3) #slow 0.2 0.3 / fast 0.3 0.4
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
@@ -828,7 +828,7 @@ def main_loop(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=15., K_THETA=5., DT=conf.robot_params[p.robot_name]['dt'])
         p.controller = LyapunovController(params=params)
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.traj.set_initial_time(start_time=p.time)
@@ -886,7 +886,7 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
-    if p.ControlType != 'OPEN_LOOP':
+    if p.ControlType != 'OPEN_LOOP' and p.SAVE_BAGS:
         p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
         filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
         mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
