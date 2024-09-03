@@ -67,13 +67,16 @@ class LyapunovController:
 
         dv = -self.K_P * exy * math.cos(psi - theta)
         # important ! the result is 15% different for the sinc function with python from matlab
-        domega = -self.K_THETA * etheta -v_d * np.sinc(0.5 * etheta) * exy * math.sin(psi - 0.5 * beta)
+        # domega = -self.K_THETA * etheta -v_d * np.sinc(0.5 * etheta) * exy * math.sin(psi - 0.5 * beta)
+        domega = -v_d * exy * (1/np.cos(etheta/2)) * np.sin(psi - (beta/2)) - self.K_THETA * np.sin(etheta)
 
         v = v_d + dv
         omega = omega_d + domega
 
-        V = 1 / 2 * (ex ** 2 + ey ** 2+ etheta**2)
-        V_dot = -self.K_THETA * etheta**2  - self.K_P * exy * math.pow(math.cos(psi - theta),2)
+        # V = 1 / 2 * (ex ** 2 + ey ** 2+ etheta**2)
+        # V_dot = -self.K_THETA * etheta**2  - self.K_P * exy * math.pow(math.cos(psi - theta),2)
+        V = 1 / 2 * (ex ** 2 + ey ** 2) + (1 - np.cos(etheta))
+        V_dot = -self.K_P * (exy ** 2) * (np.cos(theta - psi) ** 2) - self.K_THETA * (np.sin(etheta) ** 2)
 
         #domega = - self.K_THETA * etheta - 2/etheta * v_d * np.sin(0.5 * etheta)* np.sin(psi - 0.5 * beta)
         # save errors for plotting
