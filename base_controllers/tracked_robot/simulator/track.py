@@ -16,7 +16,7 @@ class TrackParams:
         self.dA = self.d_longitudinal * self.d_lateral 
 
 class Track:
-    def __init__(self, position, track_param, ground):
+    def __init__(self, position, track_param):
         # create and manages the array of contact_patch to simulate the interaction with the terrain
 
         # self.name
@@ -45,7 +45,6 @@ class Track:
         #self.shear_velocity = np.np.zeros(self.getSizePatches())
         self.shear_stress = np.zeros(self.getSizePatches())
             
-        self.ground_param = ground
         d_longitudinal = self.length / self.parts_longitudinal
         d_lateral      = self.width / self.parts_lateral
 
@@ -87,14 +86,14 @@ class Track:
                 index = (i-1)*self.parts_lateral + j
                 self.shear_displacement[i,j] = self.contact_patches[index].computeShearDisplacement(inputs, omega_sprocket, track_param)
 
-    def computePatchesShearStress(self, inputs, omega_sprocket):
+    def computePatchesShearStress(self, inputs, omega_sprocket, ground_param):
         track_param = self.getParam()
 
         for i in range(self.parts_longitudinal):
             for j in range(self.parts_lateral):
                 index = self.getIndex(i,j)
                 sigma = self.normal_stress[i,j]
-                self.shear_stress[i,j] = self.contact_patches[index].computeShearStressFirmGround(inputs, omega_sprocket, track_param, self.ground_param, sigma)
+                self.shear_stress[i,j] = self.contact_patches[index].computeShearStressFirmGround(inputs, omega_sprocket, track_param, ground_param, sigma)
 
     def computePatchesCosSinShearAngle(self, inputs, omega_sprocket):
         cos_shear_angles = np.zeros(self.getSizePatches())
@@ -107,12 +106,12 @@ class Track:
                 cos_shear_angles[i,j], sin_shear_angles[i,j] = self.contact_patches[index].computeCosSinShearAngle(inputs, omega_sprocket, track_param)
         return  cos_shear_angles, sin_shear_angles
 
-    def computeTractiveForce(self, inputs, omega_sprocket):
+    def computeTractiveForce(self, inputs, omega_sprocket, ground):
         # compute the total tractive force that the track can apply on
         # the ground given all the parameters and control inputs
 
         [cos_shear_angles, sin_shear_angles] = self.computePatchesCosSinShearAngle(inputs, omega_sprocket)
-        self.computePatchesShearStress(inputs, omega_sprocket)
+        self.computePatchesShearStress(inputs, omega_sprocket, ground)
 
         dFx = -self.dA * np.multiply(self.shear_stress, cos_shear_angles)
         dFy = -self.dA * np.multiply(self.shear_stress, sin_shear_angles)
@@ -121,12 +120,12 @@ class Track:
         Fy = sum(dFy, "all")
         return Fx, Fy
 
-    def computeResistiveTruningMoments(self, inputs, omega_sprocket):
+    def computeResistiveTruningMoments(self, inputs, omega_sprocket, ground):
         # The moments of turning resistance Mr Ml due to the lateral shear
         # forces acting on the track
 
         cos_shear_angles, sin_shear_angles = self.computePatchesCosSinShearAngle(inputs, omega_sprocket)
-        self.computePatchesShearStress(inputs, omega_sprocket)
+        self.computePatchesShearStress(inputs, omega_sprocket, ground)
 
         patches_y = self.getPatchesLongitudinalPosition()
         patches_x = self.getPatchesLateralPosition()
@@ -190,6 +189,7 @@ class Track:
         x = patch_pos_long
         y = patch_pos_lat
 
+        #compute shear displacements  in x y direction (TODO SHOUD BE DIFFERENT FOR LEFT RIGHT TRACK!)
         v_sprocket = omega_sprocket*r
         theta = (omega*(L/2 - x))/(v_sprocket)
         if(omega == 0.0 and omega_sprocket != 0.0):
@@ -202,22 +202,29 @@ class Track:
             j_x = v_sprocket*x*np.cos(theta) - (L*v_sprocket)/2 - (v_sprocket*v)/omega + (v_sprocket*v*np.cos(theta))/omega + (v_sprocket*np.sin(theta)*(u - omega*y))/omega
             j_y = (v_sprocket*(u - omega*y))/omega + v_sprocket*x*np.sin(theta) + (v_sprocket*v*np.sin(theta))/omega - (v_sprocket*np.cos(theta)*(u - omega*y))/omega
 
-
+        # compute shear velocities in x y direction
         shear_velocitys_x = u - omega * y - v_sprocket
         shear_velocitys_y = v + omega * x
 
+        #norm of shear displacement
         shear_disp = np.sqrt(np.power(j_x,2) + np.power(j_y,2))
+        # norm of shear velocity
         shear_velocitys = np.sqrt(np.power(shear_velocitys_x,2) + np.power(shear_velocitys_y,2))
 
         shear_angles_sin = shear_velocitys_y / shear_velocitys
         shear_angles_cos = shear_velocitys_x / shear_velocitys
+
+        #compute shear stress
         shear_stress = sigma * mu * (1 - np.exp(-shear_disp / K))
 
+        #compute tractive forces
         dFx = -dA * shear_stress * shear_angles_cos
         dFy = -dA * shear_stress * shear_angles_sin
+        #compute turning moments
         dM_long = -y * dFx
         dM_lat  = x * dFy
         #print(dFx)
+        #integrate tractive forces and moments
         M_long = np.sum(dM_long)
         M_lat  = np.sum(dM_lat)
         Fx = np.sum(dFx)

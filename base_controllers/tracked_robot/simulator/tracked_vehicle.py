@@ -18,8 +18,8 @@ class TrackedVehicle:
     # ground vehicles" of Wong.
         self.vehicle_param = vehicle_param
         #using Biral model
-        self.track_left  = Track([0.0, vehicle_param.width / 2], track_param, ground_param)
-        self.track_right = Track([0.0,-vehicle_param.width / 2], track_param, ground_param)
+        self.track_left  = Track([0.0, vehicle_param.width / 2], track_param)
+        self.track_right = Track([0.0,-vehicle_param.width / 2], track_param)
         self.F_left =  np.array([0.0, 0.0])
         self.F_right =  np.array([0.0, 0.0])
         self.M_long_left = 0.0
@@ -39,25 +39,29 @@ class TrackedVehicle:
         self.track_left.computePatchesShearDisplacement(inputs,  omega_l) 
         self.track_right.computePatchesShearDisplacement(inputs, omega_r) 
 
-
-    def computeShearStress(self):
+    #TODO this function is not implemented
+    def computeShearStress(self, ground):
         self.track_left.computePatchesShearStress()
         self.track_right.computePatchesShearStress()
 
+    #TODO this function is not implemented
     def computeShearVelocitys(self,  inputs):
         omega_l = inputs.omega_sprocket_left 
         omega_r = inputs.omega_sprocket_right 
         self.track_left.computeShearVelocitys(inputs,  omega_l) 
         self.track_right.computeShearVelocitys(inputs, omega_r) 
 
+    #TODO this function is not implemented
     def computeShearAngles(self):
         self.track_left.computeShearAngle() 
         self.track_right.computeShearAngle() 
 
-    def computeTractiveForces(self):
+    #TODO this function is not implemented
+    def computeTractiveForces(self, ground):
         self.F_left = self.track_left.computeTractiveForce() 
         self.F_right = self.track_right.computeTractiveForce() 
 
+    #TODO this function is not implemented
     def computeResistiveTurningMoments(self):
         self.M_long_left, self.M_lat_left  = self.track_left.computeResistiveTruningMoments() 
         self.M_long_right,self.M_lat_right = self.track_right.computeResistiveTruningMoments() 

@@ -30,7 +30,10 @@ class TrackedVehicleSimulator:
         self.dt = dt
         self.vehicle_param = VehicleParam()
         self.track_param = TrackParams()
-        self.ground = ground
+        if ground is not None:
+            self.ground = ground
+        else:
+            self.ground = ground()
         self.sigma = np.ones((self.track_param.parts_longitudinal, self.track_param.parts_lateral)) * self.vehicle_param.weight / (2 * self.track_param.A)
         self.tracked_robot = TrackedVehicle(self.vehicle_param, self.track_param,  self)
         self.patch_pos_long_l, self.patch_pos_lat_l = self.tracked_robot.getLeftPatchesPositions()
@@ -80,6 +83,7 @@ class TrackedVehicleSimulator:
         self.pose_der = np.zeros(3)
     
     def simulateOneStep(self, omega_left, omega_right):
+
         Fx_l, Fy_l, M_long_l, M_lat_l = self.tracked_robot.track_left.computeTerrainInteractions(self.state, omega_left, self.track_param,
                                                                                    self.sigma, self.ground, self.patch_pos_long_l, self.patch_pos_lat_l)
         Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(self.state, omega_right, self.track_param,
