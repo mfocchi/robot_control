@@ -54,10 +54,13 @@ class GenericSimulator(BaseController):
         self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP(not used)', 'NONE'
 
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
-        self.IDENT_MAX_WHEEL_SPEED = 25 #used only when IDENT_TYPE = 'WHEELS'
+        self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA', 'WHEELS', 'NONE'
+        self.IDENT_MAX_WHEEL_SPEED = 7 #used only when IDENT_TYPE = 'WHEELS' 7/25
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
         self.IDENT_LONG_SPEED = 0.2 #0.05:0.05:0.4 #used only when IDENT_TYPE = 'V_OMEGA'
+
+        #biral friction coeff
+        self.friction_coefficient = 0.13349 # 0.1/ 0.09041/ 0.13349 / 0.1568 /
 
         # initial pose
         self.p0 = np.array([0, 0.0, 0.])
@@ -183,7 +186,7 @@ class GenericSimulator(BaseController):
             ros.sleep(1.5)
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
-            groundParams = Ground(friction_coefficient=0.1)
+            groundParams = Ground(friction_coefficient=self.friction_coefficient)
             self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
             self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0,0,0.0]), pose_init=self.p0) #TODO make this a parameter
 
@@ -209,7 +212,7 @@ class GenericSimulator(BaseController):
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
                 if p.IDENT_TYPE=='V_OMEGA':
-                    bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.bag"
+                    bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}_fr_{p.friction_coefficient}.bag"
                 else:
                     bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
             else:
@@ -309,6 +312,7 @@ class GenericSimulator(BaseController):
             plt.plot(p.des_state_log[0, :], p.des_state_log[1, :], "-r", label="desired")
             plt.plot(p.state_log[0, :], p.state_log[1, :], "-b", label="real")
             plt.legend()
+            plt.title(f"Control: {p.ControlType}, Long: {p.LONG_SLIP_COMPENSATION} Side: {p.SIDE_SLIP_COMPENSATION}")
             plt.xlabel("x[m]")
             plt.ylabel("y[m]")
             plt.axis("equal")
@@ -320,6 +324,7 @@ class GenericSimulator(BaseController):
             plt.plot(p.time_log, p.ctrl_v_log, "-b", label="REAL")
             plt.plot(p.time_log, p.v_d_log, "-r", label="desired")
             plt.legend()
+            plt.title("v and omega")
             plt.ylabel("linear velocity[m/s]")
             plt.grid(True)
             plt.subplot(2, 1, 2)
@@ -819,7 +824,7 @@ def main_loop(p):
         initial_des_theta = 0.0
 
         if p.MATLAB_PLANNING == 'none':
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3) #slow 0.2 0.3 / fast 0.3 0.4
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3) #slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
@@ -828,7 +833,7 @@ def main_loop(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=15., K_THETA=5., DT=conf.robot_params[p.robot_name]['dt'])
+        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt']) #high gains 15 5 / low gains 10 1
         p.controller = LyapunovController(params=params)
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.traj.set_initial_time(start_time=p.time)
