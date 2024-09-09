@@ -33,7 +33,7 @@ class TrackedVehicleSimulator:
         if ground is not None:
             self.ground = ground
         else:
-            self.ground = ground()
+            self.ground = Ground()
         self.sigma = np.ones((self.track_param.parts_longitudinal, self.track_param.parts_lateral)) * self.vehicle_param.weight / (2 * self.track_param.A)
         self.tracked_robot = TrackedVehicle(self.vehicle_param, self.track_param,  self)
         self.patch_pos_long_l, self.patch_pos_lat_l = self.tracked_robot.getLeftPatchesPositions()

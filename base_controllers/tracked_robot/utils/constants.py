@@ -12,17 +12,7 @@ GEARBOX_RATIO = 34.45 #USED JUST TO COMPUTE MAX SPEED
 MAXSPEED_RADS_MOTOR = MAXSPEED_MOTOR_RPM*2*np.pi/60 #157 rad/s
 MAXSPEED_RADS_PULLEY = 7. #MAXSPEED_RADS_MOTOR/GEARBOX_RATIO #4.55 rad/s
 
-#friction coeff 0.3
-#identified with v = 0.05
-# side_slip_angle_coefficients = np.array([   0.8649,   -4.9221])
-# #this should be used only with positive radius!
-# beta_slip_inner_coefficients_left =np.array([-0.0508,   -2.2502])
-# beta_slip_outer_coefficients_left =np.array([0.2506 ,  -7.8051])
-# #this should be used only with negative radius!
-# beta_slip_inner_coefficients_right =np.array([ -0.0518,    2.0325])
-# beta_slip_outer_coefficients_right =np.array([ 0.2970,   10.0432])
-
-#identified with v = 0.1
+#identified with v = 0.2 friction coeff 0.1
 side_slip_angle_coefficients = np.array([  -1.1280,   -8.2517])
 #this should be used only with positive radius!
 beta_slip_inner_coefficients_left =np.array([-0.0476,   -1.8231])

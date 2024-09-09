@@ -14,8 +14,13 @@ matplotlib.use('TkAgg')
 sim = True
 outdoor = False
 
+
+
 if sim:
-    data = 'ident_wheels_sim_alpha.csv'
+    # full data also v<0
+    #data = 'ident_wheels_sim_0.1.csv'
+    # only data v>0
+    data = 'ident_wheels_sim_0.1_long_v_positive.csv'
 
 else:
     if outdoor:
@@ -30,12 +35,6 @@ y = df[['beta_l','beta_r','alpha']].values
 
 # %%compute input correlation
 df.corr()
-
-# %%
-x = df[['wheel_l', 'wheel_r']].values
-
-# %%
-y = df[['beta_l', 'beta_r', 'alpha']].values
 
 # %% plot histogram to see if input distribution is well behaved, to see if it is neeeded a scaling
 fig, ax = plt.subplots(1, 5, figsize=(20, 4))
@@ -230,15 +229,17 @@ plt.show()
 # ### Load Model
 import numpy as np
 import catboost as cb
-model = cb.CatBoostRegressor()
-model.load_model(model_name_beta_l)
-beta_l = model.predict(np.array([0.5, 0.3]))
+model_beta_l = cb.CatBoostRegressor()
+model_beta_l.load_model(model_name_beta_l)
+beta_l = model_beta_l.predict(np.array([0.5, 0.3]))
 
-model.load_model(model_name_beta_r)
-beta_r =  model.predict(np.array([0.5, 0.3]))
+model_beta_r = cb.CatBoostRegressor()
+model_beta_r.load_model(model_name_beta_r)
+beta_r =  model_beta_r.predict(np.array([0.5, 0.3]))
 
-model.load_model(model_name_alpha)
-alpha = model.predict(np.array([-3.44561, 4.52]))
-alpha = model.predict(np.array([4.5, -3.7]))
+model_alpha = cb.CatBoostRegressor()
+model_alpha.load_model(model_name_alpha)
+alpha = model_alpha.predict(np.array([-3.44561, 4.52]))
+alpha = model_alpha.predict(np.array([4.5, -3.7]))
 
 print(f"Beta_l {beta_l}, Beta_r {beta_r}, alpha {alpha}")

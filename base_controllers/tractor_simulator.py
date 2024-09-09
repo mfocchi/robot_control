@@ -538,7 +538,7 @@ class GenericSimulator(BaseController):
         # should be (desired) from encoder
         beta_l = v_enc_l-v_track_l
         beta_r = v_enc_r-v_track_r  
-        if (abs(b_vel_xy[1])<0.001) or (abs(b_vel_xy[0])<0.001):
+        if (abs(b_vel_xy[1])<0.00001) or (abs(b_vel_xy[0])<0.00001):
             side_slip = 0.
         else:
             side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
@@ -833,7 +833,7 @@ def main_loop(p):
 
 
         # Lyapunov controller parameters
-        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt']) #high gains 15 5 / low gains 10 1
+        params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt']) #high gains 15 5 / low gains 10 1 (default)
         p.controller = LyapunovController(params=params)
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.traj.set_initial_time(start_time=p.time)
