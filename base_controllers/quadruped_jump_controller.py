@@ -272,7 +272,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.go0_conf = 'standDown'
         self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
         self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
-        self.use_landing_controller = False
+        self.use_landing_controller = True
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
     def initVars(self):
@@ -485,8 +485,10 @@ class QuadrupedJumpController(QuadrupedController):
             tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
                                                                W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
                                                                comControlled=False, type='projection', stance_legs=self.stance_legs)
-            # OLD
-            # tau_ffwd = self.wbc.gravityCompensation()
+            #OLD
+            #tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW)
+
+
         else:
             for leg in range(self.robot.nee):
                 # todo do for x and y as well
@@ -494,9 +496,11 @@ class QuadrupedJumpController(QuadrupedController):
                 tau_leg = -w_J[leg].T.dot(grfDes)
                 self.u.setLegJointState(leg, grfDes, grf_ffwd)
                 self.u.setLegJointState(leg, tau_leg, tau_ffwd)
-            tau_ffwd += self.gravityCompensation()  # this also sets grForcesW_des
+            tau_wbc, self.grForcesW_des = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,
+                                                                        self.basePoseW, self.comPoseW)
+            tau_ffwd += tau_wbc # this also sets grForcesW_des
             # on top we add our ffwd
-            self.grForcesW_des += grf_ffwd
+            self.grForcesW_des = grf_ffwd + self.grForcesW_des
 
         # check unloading of front legs
         # grf_lf = self.u.getLegJointState(0, self.grForcesW)

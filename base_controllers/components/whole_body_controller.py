@@ -172,6 +172,8 @@ class WholeBodyController():
                 # clean the matrix (where there are zeros the grf will be zero and so the torques)
                 self.NEMatrix[:, start_col:end_col] = 0.
 
+        grForcesW_wbc = np.zeros(self.robot.na)
+
         # Map the desired wrench to grf
         if type == 'projection':
             grForcesW_wbc = self.projectionWBC()
@@ -179,7 +181,6 @@ class WholeBodyController():
             grForcesW_wbc = self.qpWBC()
 
         tau_ffwd = np.zeros(self.robot.na)
-        grForcesW_wbc = np.zeros(self.robot.na)
 
         for leg in range(4):#(where there are zeros in the Matrix, the grf will be zero and so the torques, no need to check stance legs here)
             tau_leg = self.u.getLegJointState(leg, h_joints) - \
