@@ -49,28 +49,29 @@ class GenericSimulator(BaseController):
         print("Initialized tractor controller---------------------------------------------------------------")
         self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia', 'biral'
 
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
-        self.LONG_SLIP_COMPENSATION = 'NONE'#'NN', 'EXP(not used)', 'NONE'
+        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'EXP'#'NN', 'EXP', 'NONE'
+        self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
 
+        self.ADD_NOISE = False #FOR PAPER
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA', 'WHEELS', 'NONE'
+        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
         self.IDENT_MAX_WHEEL_SPEED = 7 #used only when IDENT_TYPE = 'WHEELS' 7/25
+        self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' 0.2, 0.55 (riccardo)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
-        self.IDENT_LONG_SPEED = 0.2 #0.05:0.05:0.4 #used only when IDENT_TYPE = 'V_OMEGA'
 
         #biral friction coeff
-        self.friction_coefficient = 0.13349 # 0.1/ 0.09041/ 0.13349 / 0.1568 /
+        self.friction_coefficient = 0.1 # 0.1/ 0.09041/ 0.13349 / 0.1568 /
 
         # initial pose
-        self.p0 = np.array([0, 0.0, 0.])
+        self.p0 = np.array([0.0, 0.0, 0.0]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
 
         # target for matlab trajectory generation (dubins/optimization)
         self.pf = np.array([2., 2.5, 0.])
         self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
 
         self.GRAVITY_COMPENSATION = False
-        self.SAVE_BAGS = True
+        self.SAVE_BAGS = False
 
         self.NAVIGATION = False
         self.USE_GUI = True #false does not work in headless mode
@@ -202,6 +203,7 @@ class GenericSimulator(BaseController):
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
 
         if self.NAVIGATION:
+            print(colored("IMPORTANT: be sure you have cloned git@github.com:mfocchi/orchard_world.git and you are running the image mfocchi/trento_lab_framework:introrob_upgrade", "red"))
             self.nav_vel_sub = ros.Subscriber("/cmd_vel", Twist, self.get_command_vel)
             self.odom_pub = ros.Publisher("/odom", Odometry, queue_size=1, tcp_nodelay=True)
             self.broadcast_world = False # this prevents to publish baselink tf from world because we need baselink to odom
@@ -278,6 +280,7 @@ class GenericSimulator(BaseController):
             super().startupProcedure()
             if self.torque_control:
                 self.pid.setPDs(0.0, 0.0, 0.0)
+            self.slow_down_factor = 1
             # loop frequency
             self.rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
         elif self.SIMULATOR == 'coppelia':
@@ -478,7 +481,7 @@ class GenericSimulator(BaseController):
         # only around 0.3
         change_interval = 6.
         increment = increment
-        turning_radius_vec = np.arange(R_initial, R_final, increment)
+        turning_radius_vec = np.arange(R_final, R_initial, -increment)
         if direction=='left':
             ang_w = np.round(long_v / turning_radius_vec, 3)  # [rad/s]
         else:
@@ -870,7 +873,10 @@ def main_loop(p):
                     p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationNN(p.qd_des, constants)
                 if p.LONG_SLIP_COMPENSATION == 'EXP':
                     p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationExp(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
-    
+
+            if p.ADD_NOISE:
+                p.qd_des += np.random.normal(0, 0.02)
+
             # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             # senting it to be tracked from the impedance loop
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
@@ -880,6 +886,7 @@ def main_loop(p):
                 w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
                 p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l/np.linalg.norm(p.F_l), "red")
                 p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r/np.linalg.norm(p.F_r), "red")
+
 
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
