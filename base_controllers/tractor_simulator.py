@@ -47,13 +47,12 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia', 'biral'
+        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia'(deprecated), 'biral'
 
-        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'EXP'#'NN', 'EXP', 'NONE'
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
         self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
 
-        self.ADD_NOISE = False #FOR PAPER
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
         self.IDENT_MAX_WHEEL_SPEED = 7 #used only when IDENT_TYPE = 'WHEELS' 7/25
@@ -73,12 +72,13 @@ class GenericSimulator(BaseController):
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
 
-        self.NAVIGATION = False
+        self.NAVIGATION = 'none' # 'none', '2d' , '3d'
         self.USE_GUI = True #false does not work in headless mode
+        self.ADD_NOISE = False #FOR PAPER
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
 
         if self.SIMULATOR == 'gazebo' and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
-            print(colored("Gazebo Model has no slippage, turn it off","red"))
+            print(colored("Gazebo Model has no slippage, use self.SIMULATOR:=biral","red"))
             sys.exit()
 
     def initVars(self):
@@ -202,14 +202,28 @@ class GenericSimulator(BaseController):
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
 
-        if self.NAVIGATION:
-            print(colored("IMPORTANT: be sure you have cloned git@github.com:mfocchi/orchard_world.git and you are running the image mfocchi/trento_lab_framework:introrob_upgrade", "red"))
+        if self.NAVIGATION != 'none':
+            print(colored("IMPORTANT: be sure that you are running the image mfocchi/trento_lab_framework:introrob_upgrade", "red"))
             self.nav_vel_sub = ros.Subscriber("/cmd_vel", Twist, self.get_command_vel)
             self.odom_pub = ros.Publisher("/odom", Odometry, queue_size=1, tcp_nodelay=True)
             self.broadcast_world = False # this prevents to publish baselink tf from world because we need baselink to odom
             #launch orchard world
-            launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo')+"/launch/orchard_world.launch")
-            launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['launch_controller:=false', 'robot_model:=tractor','lidar_topic:=/lidar_points','base_frame:=base_link','stabilized_frame:=base_link','launch_odometry:=false','cmd_vel_topic:=/cmd_vel','max_vel_yaw:=1','max_vel_x:=0.5'])
+            launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo') + "/launch/orchard_world.launch")
+
+            # type: indoor: based on slam 2d (default: gmapping)
+            # type: outdoor: based on gps
+            # type: hybrid: EKF fusing slam with gps
+            # type: 3d: slam 3d (on pointcloud)
+            # slam:  default = "gmapping", gmapping/slam_toolbox/hector_mapping
+
+            #3D - TODO publish TF of the horizontal frame
+            #wolf gaezbo resource inspection.world export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:$(rospack find wolf_gazebo_resources)/models
+            launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db', 'type:='+self.NAVIGATION, 'launch_controller:=false',
+                                                                                                                   'robot_model:=tractor',
+                                                                                                                   'lidar_topic:=/lidar_points','base_frame:=base_link',
+                                                                                                                   'stabilized_frame:=base_link','launch_odometry:=false',
+                                                                                                                   'world_name:=inspection',
+                                                                                                                   'cmd_vel_topic:=/cmd_vel','max_vel_yaw:=1','max_vel_x:=0.5'])
 
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
@@ -687,7 +701,7 @@ class GenericSimulator(BaseController):
 
 
         #this is for wolf navigation # gazebo publishes world, base controller publishes base link, we need to add two static transforms from world to odom and map
-        if p.NAVIGATION:
+        if p.NAVIGATION != 'none':
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/odom')
@@ -848,7 +862,7 @@ def main_loop(p):
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
 
             # controllers
-            if p.NAVIGATION:
+            if p.NAVIGATION !='none':
                 p.des_x, p.des_y, p.des_theta = p.traj.getSingleUpdate(p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d)
                 traj_finished = None
             else:
@@ -898,17 +912,18 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
-    if p.ControlType != 'OPEN_LOOP' and p.SAVE_BAGS:
+    if p.ControlType != 'OPEN_LOOP':
         p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
-        filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
-        mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
-                                'state': p.state_log, 'ex':p.log_e_x,'ey': p.log_e_y, 'etheta': p.log_e_theta,
-                                'v': p.ctrl_v_log, 'vd': p.v_d_log,'omega': p.ctrl_omega_log, 'omega_d': p.omega_d_log,
-                                'wheel_l': p.qd_log[0, :], 'wheel_r': p.qd_log[1, :],'beta_l': p.beta_l_log,
-                                'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
-                                'alpha': p.alpha_log, 'alpha_pred':p.alpha_control_log, 'radius':p.radius_log})
+
     if p.SAVE_BAGS:
         p.recorder.stop_recording_srv()
+        filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
+        mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
+                               'state': p.state_log, 'ex': p.log_e_x, 'ey': p.log_e_y, 'etheta': p.log_e_theta,
+                               'v': p.ctrl_v_log, 'vd': p.v_d_log, 'omega': p.ctrl_omega_log, 'omega_d': p.omega_d_log,
+                               'wheel_l': p.qd_log[0, :], 'wheel_r': p.qd_log[1, :], 'beta_l': p.beta_l_log,
+                               'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
+                               'alpha': p.alpha_log, 'alpha_pred': p.alpha_control_log, 'radius': p.radius_log})
 
 
 

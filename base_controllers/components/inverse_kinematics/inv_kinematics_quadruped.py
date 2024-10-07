@@ -113,6 +113,7 @@ class InverseKinematics:
         self.DAMP = np.eye(3) * 1e-5
 
 
+    #This assumes HAA negative outwards
     def ik_leg(self, foot_pos, leg, hip=HIP_DOWN, knee=KNEE_INWARD, verbose = False):
         self.q[:] = 0
         isFeasible = False

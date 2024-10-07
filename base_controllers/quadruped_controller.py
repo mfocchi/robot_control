@@ -352,7 +352,7 @@ class QuadrupedController(BaseController):
         for id in self.robot.getEndEffectorsFrameId:
             self.robot_height += self.robot.data.oMf[id].translation[2]
         self.robot_height /= -4.
-
+        print(colored(f"Robot height is {self.robot_height}","red"))
         self.loop_time_log = np.full((conf.robot_params[self.robot_name]['buffer_size']), np.nan)
 
         half_lenght = self.robot.collision_model.geometryObjects[0].geometry.halfSide[0]
