@@ -47,9 +47,10 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia'(deprecated), 'biral'
+        self.SIMULATOR = 'gazebo'#, 'gazebo', 'coppelia'(deprecated), 'biral'
+        self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
 
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
         self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
 
@@ -72,7 +73,7 @@ class GenericSimulator(BaseController):
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
 
-        self.NAVIGATION = 'none' # 'none', '2d' , '3d'
+
         self.USE_GUI = True #false does not work in headless mode
         self.ADD_NOISE = False #FOR PAPER
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
@@ -216,14 +217,28 @@ class GenericSimulator(BaseController):
             # type: 3d: slam 3d (on pointcloud)
             # slam:  default = "gmapping", gmapping/slam_toolbox/hector_mapping
 
+            if self.NAVIGATION == '2d':
             #3D - TODO publish TF of the horizontal frame
             #wolf gaezbo resource inspection.world export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:$(rospack find wolf_gazebo_resources)/models
-            launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db', 'type:='+self.NAVIGATION, 'launch_controller:=false',
-                                                                                                                   'robot_model:=tractor',
-                                                                                                                   'lidar_topic:=/lidar_points','base_frame:=base_link',
-                                                                                                                   'stabilized_frame:=base_link','launch_odometry:=false',
-                                                                                                                   'world_name:=inspection',
-                                                                                                                   'cmd_vel_topic:=/cmd_vel','max_vel_yaw:=1','max_vel_x:=0.5'])
+                launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db',
+                                                                                                                       'type:=indoor',
+                                                                                                                       'launch_controller:=false',
+                                                                                                                       'robot_model:=tractor',
+                                                                                                                       'lidar_topic:=/lidar_points', 'base_frame:=base_link',
+                                                                                                                       'stabilized_frame:=base_link', 'launch_odometry:=false',
+                                                                                                                       'world_name:=inspection',
+                                                                                                                       'cmd_vel_topic:=/cmd_vel',
+                                                                                                                       'max_vel_yaw:=1', 'max_vel_x:=0.5'])
+            if self.NAVIGATION == '3d':
+                launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db',
+                                                                                                                       'type:=3d',
+                                                                                                                       'launch_controller:=false',
+                                                                                                                       'robot_model:=tractor',
+                                                                                                                       'lidar_topic:=/lidar_points', 'base_frame:=base_link',
+                                                                                                                       'stabilized_frame:=base_link', 'launch_odometry:=false',
+                                                                                                                       'world_name:=inspection',
+                                                                                                                       'cmd_vel_topic:=/cmd_vel',
+                                                                                                                       'max_vel_yaw:=1', 'max_vel_x:=0.5'])
 
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
