@@ -81,6 +81,10 @@ class GenericSimulator(BaseController):
         if self.SIMULATOR == 'gazebo' and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
             print(colored("Gazebo Model has no slippage, use self.SIMULATOR:=biral","red"))
             sys.exit()
+        if self.NAVIGATION !='none':
+            #add custom models from wolf, need to clone git@github.com:graiola/wolf_gazebo_resources.git
+            custom_models_path = rospkg.RosPack().get_path('wolf_gazebo_resources') + "/models/"
+            os.environ["GAZEBO_MODEL_PATH"] += ":" + custom_models_path
 
     def initVars(self):
         super().initVars()
@@ -216,26 +220,31 @@ class GenericSimulator(BaseController):
             # type: hybrid: EKF fusing slam with gps
             # type: 3d: slam 3d (on pointcloud)
             # slam:  default = "gmapping", gmapping/slam_toolbox/hector_mapping
-
-            if self.NAVIGATION == '2d':
-            #3D - TODO publish TF of the horizontal frame
-            #wolf gaezbo resource inspection.world export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:$(rospack find wolf_gazebo_resources)/models
+            print(colored("Starting wolf navigation", "red"))
+            if self.NAVIGATION=='2d':
                 launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db',
                                                                                                                        'type:=indoor',
                                                                                                                        'launch_controller:=false',
                                                                                                                        'robot_model:=tractor',
-                                                                                                                       'lidar_topic:=/lidar_points', 'base_frame:=base_link',
-                                                                                                                       'stabilized_frame:=base_link', 'launch_odometry:=false',
+                                                                                                                       'lidar_topic:=/lidar_points',
+                                                                                                                       'base_frame:=base_link',
+                                                                                                                       'stabilized_frame:=horizontal_frame',
+                                                                                                                       'launch_odometry:=false',
                                                                                                                        'world_name:=inspection',
                                                                                                                        'cmd_vel_topic:=/cmd_vel',
                                                                                                                        'max_vel_yaw:=1', 'max_vel_x:=0.5'])
-            if self.NAVIGATION == '3d':
+            if self.NAVIGATION=='3d':
+                #to set 3dNav goal: sx click + drag +right click to move up
                 launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db',
                                                                                                                        'type:=3d',
                                                                                                                        'launch_controller:=false',
-                                                                                                                       'robot_model:=tractor',
-                                                                                                                       'lidar_topic:=/lidar_points', 'base_frame:=base_link',
-                                                                                                                       'stabilized_frame:=base_link', 'launch_odometry:=false',
+                                                                                                                       'robot_model:=tractor', #loads planner params inside tractor description
+                                                                                                                       'lidar_topic:=/lidar_points',
+                                                                                                                       'slope_filter:= true',
+                                                                                                                       'global_planner:=wolf_3dnav_planner/Wolf3DNavPlanner',
+                                                                                                                       'base_frame:=base_link',
+                                                                                                                       'stabilized_frame:=horizontal_frame',
+                                                                                                                       'launch_odometry:=false',
                                                                                                                        'world_name:=inspection',
                                                                                                                        'cmd_vel_topic:=/cmd_vel',
                                                                                                                        'max_vel_yaw:=1', 'max_vel_x:=0.5'])
@@ -420,6 +429,7 @@ class GenericSimulator(BaseController):
 
             if p.ControlType != 'OPEN_LOOP':
                 # tracking errors
+                p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
                 plt.figure()
                 plt.subplot(2, 1, 1)
                 plt.plot(np.sqrt(np.power(self.log_e_x,2) +np.power(self.log_e_y,2)), "-b")
@@ -720,6 +730,11 @@ class GenericSimulator(BaseController):
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/odom')
+            #publish horizontal frame for stabilizer
+            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                           pin.Quaternion(pin.rpy.rpyToMatrix(np.array([0., 0., self.euler[2]]))),
+                                           ros.Time.now(), '/horizontal_frame', '/world')
+
             sendStaticTransform("odom", "world", np.zeros(3), np.array([1, 0, 0, 0]))  # this is just to not  brake the locosim rviz that still wants world
             self.pub_odom_msg(self.odom_pub)
 
