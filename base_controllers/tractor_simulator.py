@@ -67,7 +67,7 @@ class GenericSimulator(BaseController):
         self.friction_coefficient = 0.1 # 0.1/ 0.09041/ 0.13349 / 0.1568 /
 
         # initial pose
-        self.p0 = np.array([15.0, -1, 0.0]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
+        self.p0 = np.array([1.0, -1, 0.0]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
 
         # target for matlab trajectory generation (dubins/optimization)
         self.pf = np.array([2., 2.5, 0.])
@@ -326,7 +326,7 @@ class GenericSimulator(BaseController):
             super().startupProcedure()
             if self.torque_control:
                 self.pid.setPDs(0.0, 0.0, 0.0)
-            self.slow_down_factor = 4
+            self.slow_down_factor = 1
         elif self.SIMULATOR == 'coppelia':
             # we need to broadcast the TF world baselink in coppelia not in base controller for synchro issues
             self.broadcast_world = False
@@ -622,21 +622,31 @@ class GenericSimulator(BaseController):
         #get contact frame
         ty = w_R_b.dot(np.array([0, 1., 0.]))
         n = w_R_b.dot(np.array([0., 0., 1.]))
+        tx = np.cross(ty,n)
         #projection on tx
         # fill in projection/sum matrix
         proj_matrix = np.zeros((3, 3*track_discretization))
         sum_matrix = np.zeros((3, 3*track_discretization))
         for i in range(track_discretization):
-            #compute projections by outer product I-n*nt, project first on n-x plane then on x
-            proj_matrix[:3, i*3:i*3+3] = (np.eye(3) - np.multiply.outer(n.ravel(), n.ravel())).dot((np.eye(3) -  np.multiply.outer(ty.ravel(), ty.ravel())))
+            #compute projections by outer product I-n*nt, project first on plane n-x  then on x
+            proj_matrix[:3, i*3:i*3+3] = tx.dot((np.eye(3) -  np.multiply.outer(ty.ravel(), ty.ravel())))
             sum_matrix[:3, i*3:i*3+3] = np.eye(3)
 
         F_l = sum_matrix.dot(fi[:3*track_discretization])
         F_r = sum_matrix.dot(fi[3*track_discretization:])
-        F_lx = proj_matrix.dot(fi[:3*track_discretization])
-        F_rx = proj_matrix.dot(fi[3*track_discretization:])
 
-        tau_g = np.array([F_lx*constants.SPROCKET_RADIUS, F_rx*constants.SPROCKET_RADIUS])
+        #project each little force separately
+        # F_lx = proj_matrix.dot(fi[:3*track_discretization])
+        # F_rx = proj_matrix.dot(fi[3*track_discretization:])
+
+        # as an alternative directly project F_l F_r
+        # project first on plane n-x then onto nx
+        P_xn = np.eye(3) -  np.multiply.outer(ty.ravel(), ty.ravel())
+        F_lx = tx.dot(P_xn.dot(F_l))
+        F_rx = tx.dot(P_xn.dot(F_r))
+
+        tau_g = np.array([F_lx * constants.SPROCKET_RADIUS, F_rx * constants.SPROCKET_RADIUS])
+
         return  tau_g, F_l, F_r
 
     def computeLongSlipCompensationExp(self, v, omega, qd_des, constants):
@@ -854,7 +864,7 @@ def main_loop(p):
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
 
             if p.GRAVITY_COMPENSATION:
-                p.tau_g, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
+                p.tau_ffwd, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
                 #w_center_track_left = p.b_R_w.T.dot(0.5 * (constants.b_left_track_start + constants.b_left_track_end))
                 #w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
                 #p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l / np.linalg.norm(p.F_l), "red")
