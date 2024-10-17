@@ -51,6 +51,7 @@ class RosPub():
         self.id_arrow = 0
         self.id_polygon = 0
         self.id_fixed = 0
+        self.id_mesh = 0
 
         self.fixedBaseRobot = False
         self.visual_frame = visual_frame
@@ -217,6 +218,44 @@ class RosPub():
        marker.id = self.id_arrow
        self.id_arrow += 1
        self.markerArray_arrows.markers.append(marker)
+
+    def add_mesh(self, package, mesh_path, position = np.zeros(3), color = "green"):
+        marker = Marker()
+        if (color == "green"):
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+        if (color == "blue"):
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+        if (color == "red"):
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+        marker.color.a = 1.0
+
+        marker.header.frame_id = self.visual_frame
+        marker.type = marker.MESH_RESOURCE
+        marker.mesh_resource = "package://" + package + mesh_path
+        marker.mesh_use_embedded_materials = True  # Need this to use textures for mesh
+        marker.action = marker.ADD
+        marker.scale.x = 1
+        marker.scale.y = 1
+        marker.scale.z = 1
+        marker.lifetime = ros.Duration(0)
+        marker.pose.position.x = position[0]
+        marker.pose.position.y = position[1]
+        marker.pose.position.z = position[2]
+        marker.pose.orientation.x = 0.
+        marker.pose.orientation.y = 0.
+        marker.pose.orientation.z = 0.
+        marker.pose.orientation.w = 1.
+        marker.id = self.id_mesh
+        self.id_mesh += 1
+        self.markerArray_arrows.markers.append(marker)
+
+
 
     def add_polygon(self, points, color = "green", scale = 1., visual_frame = 'world'):
         # list of points to connect:
