@@ -811,7 +811,7 @@ def main_loop(p):
             traj_length = len(wheel_l_ol)
 
         if p.MATLAB_PLANNING == 'none':
-            p.traj = Trajectory(ModelsList.UNICYCLE, 0, 0, 0, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
+            p.traj = Trajectory(ModelsList.UNICYCLE, p.p0[0], p.p0[1], p.p0[2], DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
         else:
             des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol=  p.getTrajFromMatlab()
             p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
@@ -863,12 +863,12 @@ def main_loop(p):
         # CLOSE loop control
         # generate reference trajectory
         vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
-        # initial_des_x = 0.1
-        # initial_des_y = 0.1
-        # initial_des_theta = 0.3
-        initial_des_x = 0.0
-        initial_des_y = 0.0
-        initial_des_theta = 0.0
+        # initial_des_x = p.p0[0]+0.1
+        # initial_des_y = p.p0[1]+0.1
+        # initial_des_theta = p.p0[2]+0.3
+        initial_des_x = p.p0[0]
+        initial_des_y = p.p0[1]
+        initial_des_theta = p.p0[2]
 
         if p.MATLAB_PLANNING == 'none':
             v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3) #slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
