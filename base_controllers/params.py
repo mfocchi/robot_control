@@ -39,7 +39,7 @@ robot_params['tractor'] ={'dt': 0.01,
                         'ee_frames': ['front_left_wheel', 'front_right_wheel'],
                         'spawn_x': -0.,
                         'spawn_y': 0.0,
-                        'spawn_z': 1.0,
+                        'spawn_z': 1.5,
                         'buffer_size': 5000}
 
 robot_params['ur5'] ={'dt': 0.001,
