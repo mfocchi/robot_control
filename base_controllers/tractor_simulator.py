@@ -36,8 +36,10 @@ from base_controllers.components.coppelia_manager import CoppeliaManager
 from optim_interfaces.srv import Optim, OptimRequest
 import scipy.io.matlab as mio
 from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
+from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
+from base_controllers.utils.common_functions import spawnModel
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -49,6 +51,7 @@ class GenericSimulator(BaseController):
         print("Initialized tractor controller---------------------------------------------------------------")
         self.SIMULATOR = 'gazebo'#, 'gazebo', 'coppelia'(deprecated), 'biral'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
+        self.TERRAIN = False
 
         self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
@@ -64,7 +67,7 @@ class GenericSimulator(BaseController):
         self.friction_coefficient = 0.1 # 0.1/ 0.09041/ 0.13349 / 0.1568 /
 
         # initial pose
-        self.p0 = np.array([0.0, 0.0, 0.0]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
+        self.p0 = np.array([15.0, -1, 0.0]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
 
         # target for matlab trajectory generation (dubins/optimization)
         self.pf = np.array([2., 2.5, 0.])
@@ -180,8 +183,10 @@ class GenericSimulator(BaseController):
     def startSimulator(self):
         if self.SIMULATOR == 'gazebo':
             world_name = None #'ramps.world'
-            additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2])]
+            additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]), 'rviz_conf:=$(find tractor_description)/rviz/conf.rviz']
             super().startSimulator(world_name=world_name, additional_args=additional_args)
+            if self.TERRAIN:
+                spawnModel("tractor_description", "terrain", spawn_pos=np.array([0.,0.,0.]))
         elif self.SIMULATOR == 'coppelia':
            self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
            self.coppeliaManager.startSimulator()
@@ -202,11 +207,14 @@ class GenericSimulator(BaseController):
             self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
 
 
+
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
-
+        if self.TERRAIN:
+            self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0.,0.,0.0]), color="red")
+            self.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
         if self.NAVIGATION != 'none':
             print(colored("IMPORTANT: be sure that you are running the image mfocchi/trento_lab_framework:introrob_upgrade", "red"))
             self.nav_vel_sub = ros.Subscriber("/cmd_vel", Twist, self.get_command_vel)
@@ -318,9 +326,7 @@ class GenericSimulator(BaseController):
             super().startupProcedure()
             if self.torque_control:
                 self.pid.setPDs(0.0, 0.0, 0.0)
-            self.slow_down_factor = 1
-            # loop frequency
-            self.rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
+            self.slow_down_factor = 4
         elif self.SIMULATOR == 'coppelia':
             # we need to broadcast the TF world baselink in coppelia not in base controller for synchro issues
             self.broadcast_world = False
@@ -330,8 +336,7 @@ class GenericSimulator(BaseController):
             self.coppeliaManager.simulationControl('enable_sync_mode')
             #Coppelia Runs with increment of 0.01 but is not able to run at 100Hz but at 25 hz so I "slow down" ros, but still update time with dt = 0.01
             self.slow_down_factor = 8
-            # loop frequency
-            self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
+
         else:#Biral
 
             self.broadcast_world = False
@@ -342,9 +347,9 @@ class GenericSimulator(BaseController):
             self.basePoseW[self.u.sp_crd["LZ"]] = 0.25  # fixed height TODO change this when on slopes
             self.basePoseW[self.u.sp_crd["AZ"]] = self.p0[2]  # fixed height TODO change this when on slopes
 
-            # loop frequency
-            self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
-            pass
+        # loop frequency
+        self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
+
 
     def plotData(self):
         if conf.plotting:
@@ -710,7 +715,7 @@ class GenericSimulator(BaseController):
             self.baseTwistW[self.u.sp_crd["AZ"]] = pose_der[2]
 
             self.quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.euler))
-            self.b_R_w = self.math_utils.rpyToRot(self.euler)
+            self.b_R_w = self.math_utils.eul2Rot(self.euler).T
             #publish TF for rviz
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            self.quaternion,
@@ -738,8 +743,17 @@ class GenericSimulator(BaseController):
             sendStaticTransform("odom", "world", np.zeros(3), np.array([1, 0, 0, 0]))  # this is just to not  brake the locosim rviz that still wants world
             self.pub_odom_msg(self.odom_pub)
 
+        if self.TERRAIN:
+            eval_point, roll, pitch = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0.,0.,1.]))
+            w_R_terr = self.math_utils.eul2Rot(np.array([roll, pitch, self.euler[2]]))
+            w_normal = w_R_terr.dot(np.array([0,0,1]))
+
+            self.ros_pub.add_arrow(eval_point, w_normal, color="blue")
+            self.ros_pub.add_marker(eval_point, color="blue")
+
         if np.mod(self.time,1) == 0:
             print(colored(f"TIME: {self.time}","red"))
+
 
     def pub_odom_msg(self, odom_publisher):
         msg = Odometry()
@@ -773,6 +787,7 @@ def talker(p):
 def main_loop(p):
 
     p.loadModelAndPublishers()
+    p.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", color="red")
     p.robot.na = 2 #initialize properly vars for only 2 actuators (other 2 are caster wheels)
     p.initVars()
     p.q_old = np.zeros(2)
@@ -840,10 +855,10 @@ def main_loop(p):
 
             if p.GRAVITY_COMPENSATION:
                 p.tau_g, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
-                w_center_track_left = p.b_R_w.T.dot(0.5 * (constants.b_left_track_start + constants.b_left_track_end))
-                w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
-                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l / np.linalg.norm(p.F_l), "red")
-                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r / np.linalg.norm(p.F_r), "red")
+                #w_center_track_left = p.b_R_w.T.dot(0.5 * (constants.b_left_track_start + constants.b_left_track_end))
+                #w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
+                #p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l / np.linalg.norm(p.F_l), "red")
+                #p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r / np.linalg.norm(p.F_r), "red")
 
             p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, p.v_dot_d, p.omega_dot_d, _ = p.traj.evalTraj(p.time)
             #note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
@@ -926,10 +941,10 @@ def main_loop(p):
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
             if p.GRAVITY_COMPENSATION:
                 p.tau_g, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
-                w_center_track_left = p.b_R_w.T.dot(0.5*(constants.b_left_track_start+constants.b_left_track_end))
-                w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
-                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l/np.linalg.norm(p.F_l), "red")
-                p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r/np.linalg.norm(p.F_r), "red")
+                # w_center_track_left = p.b_R_w.T.dot(0.5*(constants.b_left_track_start+constants.b_left_track_end))
+                # w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
+                # p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l/np.linalg.norm(p.F_l), "red")
+                # p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r/np.linalg.norm(p.F_r), "red")
 
 
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)

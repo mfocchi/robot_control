@@ -125,6 +125,8 @@ def loadXacro(package_name, model_name):
     print(colored(f"Loading xacro for  {model_name} inside {package_name}", "blue"))
     # first generate robot description
     xacro_path = rospkg.RosPack().get_path(package_name) + '/robots/' + model_name + '.urdf.xacro'
+    if not os.path.isfile(xacro_path):
+        print(colored(f"Xacro file {model_name}.urdf.xacro does not exist!", "red"))
     command_string = "rosrun xacro xacro "+xacro_path
 
     try:
@@ -137,6 +139,7 @@ def loadXacro(package_name, model_name):
     ros.set_param('/'+model_name, robot_description_param)
 
 def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spawn_orient = np.array([0.,0.,0.]) ):
+    #loads the xacro of model in the parameter server
     loadXacro(package_name, model_name)
     print(colored(f"Spawning {model_name}", "blue"))
     package = 'gazebo_ros'

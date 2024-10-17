@@ -111,6 +111,7 @@ class Math:
     def compute_z_component_of_plane(self, xy_components, plane_normal, z_intercept):
         return -plane_normal[0]/plane_normal[2]*xy_components[0] - \
                plane_normal[1]/plane_normal[2]*xy_components[1] + z_intercept
+    #THIS SHOULD BE DEPRECATED use eul2Rot!!!!!
     # from the rpy angles into ZYX configuration returns b_R_w
     def rpyToRot(self, *args):
         if len(args) == 3:  # equivalent to rpyToRot(self, roll, pitch, yaw)
