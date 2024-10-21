@@ -67,17 +67,16 @@ class GenericSimulator(BaseController):
         self.friction_coefficient = 0.1 # 0.1/ 0.09041/ 0.13349 / 0.1568 /
 
         # initial pose
-        self.p0 = np.array([1.0, -1, 0.0]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
+        self.p0 = np.array([0., 0., 0.]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
 
-        # target for matlab trajectory generation (dubins/optimization)
-        self.pf = np.array([2., 2.5, 0.])
         self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
+        # target used only for matlab trajectory generation (dubins/optimization) #need to run dubins_optimization/ros/ros_node.m
+        self.pf = np.array([2., 2.5, -0.4])
 
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
 
-
-        self.USE_GUI = True #false does not work in headless mode
+        self.USE_GUI = False
         self.ADD_NOISE = False #FOR PAPER
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
 
@@ -186,6 +185,7 @@ class GenericSimulator(BaseController):
             additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]), 'rviz_conf:=$(find tractor_description)/rviz/conf.rviz']
             super().startSimulator(world_name=world_name, additional_args=additional_args)
             if self.TERRAIN:
+                #spawn the terrain model in gazebo
                 spawnModel("tractor_description", "terrain", spawn_pos=np.array([0.,0.,0.]))
         elif self.SIMULATOR == 'coppelia':
            self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
@@ -221,7 +221,7 @@ class GenericSimulator(BaseController):
             self.odom_pub = ros.Publisher("/odom", Odometry, queue_size=1, tcp_nodelay=True)
             self.broadcast_world = False # this prevents to publish baselink tf from world because we need baselink to odom
             #launch orchard world
-            launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo') + "/launch/orchard_world.launch")
+            #launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo') + "/launch/orchard_world.launch")
 
             # type: indoor: based on slam 2d (default: gmapping)
             # type: outdoor: based on gps
@@ -300,12 +300,12 @@ class GenericSimulator(BaseController):
             request_optim.thetaf = self.pf[2]
             request_optim.plan_type = self.MATLAB_PLANNING
             response = self.optim_client(request_optim)
-            print(colored("Planning with {request_optim.plan_type}", "red"))
-            # print(response.des_x[:20])
-            # print(response.des_y[:20])
-            # print(response.des_theta[:20])
-            # print(response.des_v[:20])
-            # print(response.des_omega[:20])
+            print(colored(f"Planning with {request_optim.plan_type}", "red"))
+            #print(response.des_x[-10:])
+            # print(response.des_y[-10:0])
+            # print(response.des_theta[-10:])
+            # print(response.des_v[-10:])
+            # print(response.des_omega[-10:])
             return response.des_x,response.des_y,response.des_theta,response.des_v, response.des_omega
         except:
             print(colored("Matlab service call /optim not available"), "red")
@@ -837,7 +837,7 @@ def main_loop(p):
 
         if p.MATLAB_PLANNING == 'none':
             p.traj = Trajectory(ModelsList.UNICYCLE, p.p0[0], p.p0[1], p.p0[2], DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
-        else:
+        else:#matlab planning
             des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol=  p.getTrajFromMatlab()
             p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
             traj_length = len(v_ol)
@@ -967,18 +967,17 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
 
-    if p.ControlType != 'OPEN_LOOP':
-        p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
-
     if p.SAVE_BAGS:
         p.recorder.stop_recording_srv()
         filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
-        mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
-                               'state': p.state_log, 'ex': p.log_e_x, 'ey': p.log_e_y, 'etheta': p.log_e_theta,
-                               'v': p.ctrl_v_log, 'vd': p.v_d_log, 'omega': p.ctrl_omega_log, 'omega_d': p.omega_d_log,
-                               'wheel_l': p.qd_log[0, :], 'wheel_r': p.qd_log[1, :], 'beta_l': p.beta_l_log,
-                               'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
-                               'alpha': p.alpha_log, 'alpha_pred': p.alpha_control_log, 'radius': p.radius_log})
+        if p.ControlType !='OPEN_LOOP':
+            p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
+            mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
+                                   'state': p.state_log, 'ex': p.log_e_x, 'ey': p.log_e_y, 'etheta': p.log_e_theta,
+                                   'v': p.ctrl_v_log, 'vd': p.v_d_log, 'omega': p.ctrl_omega_log, 'omega_d': p.omega_d_log,
+                                   'wheel_l': p.qd_log[0, :], 'wheel_r': p.qd_log[1, :], 'beta_l': p.beta_l_log,
+                                   'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
+                                   'alpha': p.alpha_log, 'alpha_pred': p.alpha_control_log, 'radius': p.radius_log})
 
 
 
