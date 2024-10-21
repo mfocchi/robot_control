@@ -12,10 +12,11 @@ from scipy.optimize import fsolve
 # ------------------------------------ #
 
 class LyapunovParams:
-    def __init__(self, K_P, K_THETA, DT=0.001):
+    def __init__(self, K_P, K_THETA, DT=0.001, ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = False):
         self.K_P = K_P
         self.K_THETA = K_THETA
         self.DT = DT
+        self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = ESTIMATE_ALPHA_WITH_ACTUAL_VALUES
 class Robot:
     pass
 
@@ -33,6 +34,8 @@ class LyapunovController:
         self.log_e_theta = []
         self.goal_reached = False
         self.theta_old = 0.
+        self.v_old = 0.
+        self.omega_old = 0.
 
         self.params = params
 
@@ -139,6 +142,9 @@ class LyapunovController:
         self.log_e_x.append(ex)
         self.log_e_y.append(ey)
         self.log_e_theta.append(etheta+alpha) #etheta should converge to -alpha
+        # save for the next loop computation of alpha from actual values
+        self.v_old = v
+        self.omega_old = omega
         return v, omega, V, V_dot, alpha
 
 
@@ -152,8 +158,14 @@ class LyapunovController:
         eq3 = domega + v_d / math.cos((etheta + alpha) / 2) * exy * math.sin(psi - ((alpha + beta) / 2)) + self.K_THETA * math.sin(etheta + alpha_d) + alphadot_d
         return [eq1, eq2, eq3]
 
-    def alpha_exp(self, v, omega, model_alpha=None):
+    def alpha_exp(self, v_in, omega_in, model_alpha=None):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
+        if self.params.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES:
+            v = self.v_old
+            omega = self.omega_old
+        else:
+            v = v_in
+            omega = omega_in
 
         if self.SIDE_SLIP_COMPENSATION == 'EXP' or model_alpha is None:
             if abs(omega) < 1e-05:
@@ -166,10 +178,10 @@ class LyapunovController:
                 alpha = -self.C1*np.exp(-self.C2*radius)
 
         elif self.SIDE_SLIP_COMPENSATION=='NN':
-            qd_des = np.zeros(2)
-            qd_des[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
-            qd_des[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
-            alpha = model_alpha.predict(qd_des)
+            qd = np.zeros(2)
+            qd[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
+            qd[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
+            alpha = model_alpha.predict(qd)
 
         return alpha
 
