@@ -59,7 +59,7 @@ class GenericSimulator(BaseController):
 
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
-        self.IDENT_MAX_WHEEL_SPEED = 7 #used only when IDENT_TYPE = 'WHEELS' 7/25
+        self.IDENT_MAX_WHEEL_SPEED = 12 #used only when IDENT_TYPE = 'WHEELS' 7/12
         self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' 0.2, 0.55 (riccardo)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
 

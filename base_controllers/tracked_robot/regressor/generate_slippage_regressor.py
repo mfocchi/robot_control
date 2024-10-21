@@ -5,28 +5,25 @@ import catboost as cb
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
+import os
+os.environ["MPLBACKEND"] = "TkAgg" #do it out side it export MPLBACKEND=TkAgg
 import matplotlib
 matplotlib.use('TkAgg')
+
 # %% [markdown]
 # ## Load data
 
 #wheel_l wheel_r
 sim = True
-outdoor = False
-
-
 
 if sim:
-    # full data also v<0
-    #data = 'ident_wheels_sim_0.1.csv'
-    # only data v>0
-    data = 'ident_wheels_sim_0.1_long_v_positive.csv'
-
+    # full data also long_v<0
+    #data = 'ident_wheels_sim_0.1_WLmax_4.5.csv'
+    # only data long_v>0
+    #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_4.5.csv'
+    data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_10.csv'
 else:
-    if outdoor:
-        data = 'ident_wheels_real_outdoor.csv'
-    else:
-        data = 'ident_wheels_real_indoor.csv'
+    data = 'ident_wheels_real_indoor.csv'
 
 df = pd.read_csv(data,header=None, names=['wheel_l','wheel_r','beta_l','beta_r','alpha'])
 x = df[['wheel_l','wheel_r']].values
@@ -231,15 +228,14 @@ import numpy as np
 import catboost as cb
 model_beta_l = cb.CatBoostRegressor()
 model_beta_l.load_model(model_name_beta_l)
-beta_l = model_beta_l.predict(np.array([0.5, 0.3]))
+beta_l = model_beta_l.predict(np.array([-3.4,3.4]))
 
 model_beta_r = cb.CatBoostRegressor()
 model_beta_r.load_model(model_name_beta_r)
-beta_r =  model_beta_r.predict(np.array([0.5, 0.3]))
+beta_r =  model_beta_r.predict(np.array([-3.4,3.4]))
 
 model_alpha = cb.CatBoostRegressor()
 model_alpha.load_model(model_name_alpha)
-alpha = model_alpha.predict(np.array([-3.44561, 4.52]))
-alpha = model_alpha.predict(np.array([4.5, -3.7]))
+alpha = model_alpha.predict(np.array([-3.4,3.4]))
 
-print(f"Beta_l {beta_l}, Beta_r {beta_r}, alpha {alpha}")
+print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")

@@ -10,7 +10,7 @@ SPROCKET_RADIUS = 0.0856
 MAXSPEED_MOTOR_RPM = 1500 #max speed of wheels (motors) is 1500 rpm and 157 rad /s => max omega is 1
 GEARBOX_RATIO = 34.45 #USED JUST TO COMPUTE MAX SPEED
 MAXSPEED_RADS_MOTOR = MAXSPEED_MOTOR_RPM*2*np.pi/60 #157 rad/s
-MAXSPEED_RADS_PULLEY = 7. #MAXSPEED_RADS_MOTOR/GEARBOX_RATIO #4.55 rad/s
+MAXSPEED_RADS_PULLEY = 10. #MAXSPEED_RADS_MOTOR/GEARBOX_RATIO #previously was 4.5
 
 #identified with v = 0.2 friction coeff 0.1
 side_slip_angle_coefficients = np.array([  -1.1280,   -8.2517])

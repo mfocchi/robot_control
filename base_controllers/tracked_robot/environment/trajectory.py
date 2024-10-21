@@ -40,7 +40,6 @@ class Trajectory:
             self.x = start_x
             self.y = start_y
             self.theta = start_theta
-            print(self.theta)
             self.v = v
             self.omega = omega
             self.v_dot = np.zeros_like(v)
