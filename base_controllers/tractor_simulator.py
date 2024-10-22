@@ -307,7 +307,7 @@ class GenericSimulator(BaseController):
             # print(response.des_theta[-10:])
             # print(response.des_v[-10:])
             # print(response.des_omega[-10:])
-            return response.des_x,response.des_y,response.des_theta,response.des_v, response.des_omega
+            return response.des_x,response.des_y,response.des_theta,response.des_v, response.des_omega, response.dt
         except:
             print(colored("Matlab service call /optim not available"), "red")
 
@@ -838,8 +838,8 @@ def main_loop(p):
         if p.MATLAB_PLANNING == 'none':
             p.traj = Trajectory(ModelsList.UNICYCLE, p.p0[0], p.p0[1], p.p0[2], DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
         else:#matlab planning
-            des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol=  p.getTrajFromMatlab()
-            p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
+            des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, matlab_dt=  p.getTrajFromMatlab()
+            p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
             traj_length = len(v_ol)
 
         while not ros.is_shutdown():
@@ -900,8 +900,8 @@ def main_loop(p):
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
-            des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol = p.getTrajFromMatlab()
-            p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
+            des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, matlab_dt = p.getTrajFromMatlab()
+            p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
 
 
         # Lyapunov controller parameters
