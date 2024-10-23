@@ -346,7 +346,7 @@ class GenericSimulator(BaseController):
             # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
             self.basePoseW[self.u.sp_crd["LX"]] = self.p0[0]  # fixed height TODO change this when on slopes
             self.basePoseW[self.u.sp_crd["LY"]] = self.p0[1]  # fixed height TODO change this when on slopes
-            self.basePoseW[self.u.sp_crd["LZ"]] = 0.25  # fixed height TODO change this when on slopes
+            self.basePoseW[self.u.sp_crd["LZ"]] = self.tracked_vehicle_simulator.tracked_robot.vehicle_param.height  # fixed height TODO change this when on slopes
             self.basePoseW[self.u.sp_crd["AZ"]] = self.p0[2]  # fixed height TODO change this when on slopes
 
         # loop frequency

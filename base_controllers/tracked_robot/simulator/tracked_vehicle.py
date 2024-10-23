@@ -5,12 +5,12 @@ from  base_controllers.tracked_robot.utils import constants as constants
 
 class VehicleParam:
     def __init__(self):
-        self.mass = constants.mass; #[kg] vehicle mass
-        self.Izz = constants.inertia_moment; #[kg m^2] vehicle inertia
-        self.width = constants.TRACK_WIDTH; #[m]
-        self.height = 0.25; #[m]
+        self.mass = constants.mass #[kg] vehicle mass
+        self.Izz = constants.inertia_moment #[kg m^2] vehicle inertia
+        self.width = constants.TRACK_WIDTH #[m]
+        self.height = 0.25 #[m] com height wrt ground
         self.weight  = self.mass * 9.81
-
+        self.bI = np.eye(3)*constants.inertia_moment #assuming homogeneous density TODO change
 
 class TrackedVehicle:
     def __init__(self, vehicle_param, track_param, ground_param):
