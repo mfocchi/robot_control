@@ -40,6 +40,7 @@ from base_controllers.tracked_robot.simulator.terrain_manager import TerrainMana
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
 from base_controllers.utils.common_functions import spawnModel
+import pandas as pd
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -53,6 +54,7 @@ class GenericSimulator(BaseController):
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
         self.TERRAIN = False
 
+        self.STATISTICAL_ANALYSIS = True
         self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
         self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
@@ -129,7 +131,8 @@ class GenericSimulator(BaseController):
         self.radius = 0.
         self.beta_l_control = 0.
         self.beta_r_control = 0.
-
+        self.log_exy = []
+        self.log_e_theta = []
         self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.beta_l_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
@@ -200,14 +203,11 @@ class GenericSimulator(BaseController):
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             groundParams = Ground(friction_coefficient=self.friction_coefficient)
             self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
-            self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0,0,0.0]), pose_init=self.p0) #TODO make this a parameter
 
             self.robot = getRobotModelFloating(self.robot_name)
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
             self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
-
-
 
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
@@ -308,6 +308,7 @@ class GenericSimulator(BaseController):
             # print(response.des_v[-10:])
             # print(response.des_omega[-10:])
             return response.des_x,response.des_y,response.des_theta,response.des_v, response.des_omega, response.dt
+
         except:
             print(colored("Matlab service call /optim not available"), "red")
 
@@ -339,7 +340,7 @@ class GenericSimulator(BaseController):
             self.slow_down_factor = 8
 
         else:#Biral
-
+            self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0, 0, 0.0]), pose_init=self.p0)
             self.broadcast_world = False
             self.slow_down_factor = 1
             # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
@@ -763,7 +764,8 @@ class GenericSimulator(BaseController):
             self.ros_pub.add_marker(eval_point, color="blue")
 
         if np.mod(self.time,1) == 0:
-            print(colored(f"TIME: {self.time}","red"))
+            if not self.STATISTICAL_ANALYSIS:
+                print(colored(f"TIME: {self.time}","red"))
 
 
     def pub_odom_msg(self, odom_publisher):
@@ -784,6 +786,12 @@ class GenericSimulator(BaseController):
         msg.twist.twist.angular.z = self.baseTwistW[self.u.sp_crd["AZ"]]
         odom_publisher.publish(msg)
 
+    def genRandomTarget(self, radius_min, radius_max):
+        radius = radius_min + radius_max * np.random.uniform(low=0, high=1, size=1)
+        phi = np.random.uniform(low=0, high=2*np.pi, size=1)
+        theta = np.random.uniform(low=0, high=2*np.pi, size=1)
+        return np.array([radius.item()*np.cos(phi).item(), radius.item()*np.sin(phi).item(), theta.item()])
+
 def talker(p):
     p.start()
     p.startSimulator()
@@ -792,11 +800,18 @@ def talker(p):
         for speed in range(len(wheel_l)):
             p.IDENT_WHEEL_L = wheel_l[speed]
             main_loop(p)
+    elif p.STATISTICAL_ANALYSIS:
+        print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
+        columns = [ 'test', 'target_x','target_y','target_z', 'exy', 'etheta']
+        p.df = pd.DataFrame(columns=columns)
+        for p.test in range(100):
+            p.p0 = np.zeros(3)
+            p.pf = p.genRandomTarget(1., 4.)
+            main_loop(p)
     else:
         main_loop(p)
 
 def main_loop(p):
-
     p.loadModelAndPublishers()
     p.robot.na = 2 #initialize properly vars for only 2 actuators (other 2 are caster wheels)
     p.initVars()
@@ -888,14 +903,14 @@ def main_loop(p):
         # CLOSE loop control
         # generate reference trajectory
         vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
-        # initial_des_x = p.p0[0]+0.1
-        # initial_des_y = p.p0[1]+0.1
-        # initial_des_theta = p.p0[2]+0.3
-        initial_des_x = p.p0[0]
-        initial_des_y = p.p0[1]
-        initial_des_theta = p.p0[2]
 
         if p.MATLAB_PLANNING == 'none':
+            # initial_des_x = p.p0[0]+0.1
+            # initial_des_y = p.p0[1]+0.1
+            # initial_des_theta = p.p0[2]+0.3
+            initial_des_x = p.p0[0]
+            initial_des_y = p.p0[1]
+            initial_des_theta = p.p0[2]
             v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3) #slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
             p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
@@ -979,7 +994,16 @@ def main_loop(p):
                                    'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
                                    'alpha': p.alpha_log, 'alpha_pred': p.alpha_control_log, 'radius': p.radius_log})
 
-
+    if p.STATISTICAL_ANALYSIS:
+        p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
+        e_xy = np.sqrt(np.power(p.log_e_x, 2) + np.power(p.log_e_y, 2))
+        rmse_xy = np.sqrt(np.mean(e_xy ** 2))
+        rmse_theta = np.sqrt(np.mean(np.array(p.log_e_theta) ** 2))
+        print(colored(f"Target: {p.pf.reshape(1,3)}, e_xy: {rmse_xy} e_theta {rmse_theta}","red"))
+        dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_z': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta}
+        df_dict = pd.DataFrame([dict])
+        p.df = pd.concat([p.df, df_dict], ignore_index=True)
+        p.df.to_csv(f'statistic_{p.ControlType}_Matlab_{p.MATLAB_PLANNING}.csv', index=None)
 
 if __name__ == '__main__':
     p = GenericSimulator(robotName)
