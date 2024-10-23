@@ -147,7 +147,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'buffer_size': 5001, # 120 seconds
                       # simulation gains
                       # stand alone joint pid
-                      'kp': np.array([15., 15., 15.]*4),
+                      'kp': 2*np.array([15., 15., 15.]*4),
                       'kd': np.array([3., 3., 3.]*4),
                       'ki': np.array([0., 0., 0.]*4),
                       # joint pid + wbc (optional)
@@ -162,11 +162,11 @@ robot_params['go1'] ={'dt': 0.002,
                       # real robot gains
                       # stand alone joint pid
                       'kp_real': np.array([30., 30.,30.]*4),
-                      'kd_real': 0.5*np.array([.3, .3, .3]*4),
+                      'kd_real': np.array([.3, .3, .3]*4),
                       'ki_real': np.array([1.5, 1.5, 1.5]*4),
                       # joint pid + wbc (optional)
                       'kp_wbc_real': np.array([20., 30., 40.]*4),
-                      'kd_wbc_real': 0.5*np.array([.3, .3, .3]*4),
+                      'kd_wbc_real': np.array([.3, .3, .3]*4),
                       'ki_wbc_real': np.array([1.5, 1.5, 1.5]*4),
                       # virtual impedance wrench control
                       # 'kp_lin_real': np.array([300, 300., 300.]), # x y z
@@ -178,12 +178,12 @@ robot_params['go1'] ={'dt': 0.002,
                       'kp_ang_real': 0.5*np.array([40., 80., 40.]), # #np.array([30., 50., 30.]), # R P Y
                       'kd_ang_real': 0.5*np.array([3., 5., 3.]), #np.array([2., 4., 2.]),
                       # joint configuration
-                      #'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
+                      'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
                       #orbit
-                      'q_0':  np.array([0.1, 0.8, -1.5,#lf
-                                        0.1, 1.0, -1.5,#lh
-                                        -0.1, 0.8, -1.5,#rf
-                                        -0.1, 1.0, -1.5]),#rh
+                      # 'q_0':  np.array([0.1, 0.8, -1.5,#lf
+                      #                   0.1, 1.0, -1.5,#lh
+                      #                   -0.1, 0.8, -1.5,#rf
+                      #                   -0.1, 1.0, -1.5]),#rh
                       'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
                       'q_0_td': np.array([0.1789, 1.2234, -2.2329, 0.1867, 1.4733, -2.1055, -0.1784, 1.2230, -2.2327, -0.1861, 1.4733, -2.1053]),
                       'q_0_lo': np.array([0.3430, 1.5495, -2.6620, 0.3433, 1.9171, -2.4902, -0.3425, 1.5490, -2.6620, -0.3424, 1.9171, -2.4901]),
@@ -204,7 +204,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
                       # use real robot or simulation
-                      'real_robot': False} # note the frames are all aligned with base for joints = 0
+                      'real_robot': True} # note the frames are all aligned with base for joints = 0
 
 robot_params['go2'] ={'dt': 0.002,
                       'buffer_size': 5001, # 120 seconds
