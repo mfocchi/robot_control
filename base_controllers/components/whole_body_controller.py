@@ -63,6 +63,42 @@ class WholeBodyController():
         # require the call to updateKinematics
         return self.computeWBC(W_contacts, wJ, h_joints, basePoseW, comPoseW, baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
 
+    def gravityCompensationBase(self, B_contacts, wJ, h_joints, basePoseW, stance_legs=[True, True, True, True]):
+        self.wrench_gW = np.zeros(6)
+        self.wrench_gW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
+        w_R_b = pin.rpy.rpyToMatrix(self.u.angPart(basePoseW))
+        # wrench = NEMatrix @ grfs
+        for leg in range(self.robot.nee):
+            start_col = 3 * leg
+            end_col = 3 * (leg + 1)
+            if stance_legs[leg]:  # self.contact_state[leg]:
+                # ---> linear part
+                # identity matrix (I avoid to rewrite zeros)
+                self.NEMatrix[self.u.sp_crd["LX"], start_col] = 1.
+                self.NEMatrix[self.u.sp_crd["LY"], start_col + 1] = 1.
+                self.NEMatrix[self.u.sp_crd["LZ"], start_col + 2] = 1.
+                # ---> angular part
+                # all in a function
+                self.NEMatrix[self.u.sp_crd["AX"]:self.u.sp_crd["AZ"] + 1, start_col:end_col] =  pin.skew(w_R_b.dot(B_contacts[leg]))
+            else:
+                # clean the matrix (where there are zeros the grf will be zero and so the torques)
+                self.NEMatrix[:, start_col:end_col] = 0.
+
+        grForcesW_wbc = np.zeros(self.robot.na)
+
+        grForcesW_wbc = self.projectionWBC()
+
+        tau_ffwd = np.zeros(self.robot.na)
+
+        for leg in range(
+                4):  # (where there are zeros in the Matrix, the grf will be zero and so the torques, no need to check stance legs here)
+            tau_leg = self.u.getLegJointState(leg, h_joints) - \
+                      wJ[leg].T @ self.u.getLegJointState(leg, grForcesW_wbc)
+            self.u.setLegJointState(leg, tau_leg, tau_ffwd)
+
+        return tau_ffwd, grForcesW_wbc
+
+
 
     def WBCgainsInWorld(self, yaw):
         # this function is equivalent to execute R.T @ K @ R, but faster

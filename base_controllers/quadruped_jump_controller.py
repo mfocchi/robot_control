@@ -238,7 +238,7 @@ class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
-        self.DEBUG = True
+        self.DEBUG = False
         self.ffwd_impulse = False
         self.jumpAgent = JumpAgent(cfg={"model_path": os.path.join(os.environ.get('LOCOSIM_DIR'), 'robot_control','base_controllers', 'jump_policy', 'policy.onnx'),
                                         "min_action": -5,
@@ -483,11 +483,11 @@ class QuadrupedJumpController(QuadrupedController):
                                                          ).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
 
         if not ffwd_impulse:
-            tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
-                                                               W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
-                                                               comControlled=False, type='projection', stance_legs=self.stance_legs)
+            # tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
+            #                                                    W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
+            #                                                    comControlled=False, type='projection', stance_legs=self.stance_legs)
             #OLD
-            #tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW)
+            tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
 
 
         else:
@@ -648,8 +648,10 @@ class QuadrupedJumpController(QuadrupedController):
         p.resetRobot(basePoseDes=np.array([0, 0, 0.3,  0., 0., 0.]))
         while self.time <= self.startTrust:
             self.updateKinematics()
-            self.tau_ffwd = p.gravityCompensation()
-            self.send_command(p.q_des, p.qd_des, p.tau_ffwd)
+            self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,
+                                                                        self.basePoseW, self.comPoseW)
+
+            self.send_command(self.q_des, self.qd_des,self.tau_ffwd)
 
     def lerp(self, start, end, weight):
         return start + weight * (end - start)
@@ -825,10 +827,12 @@ if __name__ == '__main__':
                                 print(
                                     colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
                                 #break
-                                tau_ffwd, p.grForcesW_wbc = p.wbc.gravityCompensation(p.W_contacts, p.wJ,
-                                                                                            p.h_joints,
-                                                                                            p.basePoseW,
-                                                                                            p.comPoseW)
+                                p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
+                                                                                                     p.wJ,
+                                                                                                     p.h_joints,
+                                                                                                     p.basePoseW)
+
+                               
                     else:
                         pass
                         # Interpolate for retraction
