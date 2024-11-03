@@ -9,9 +9,10 @@ sys.path.append(dir_path+"/../../")
 sys.path.append(dir_path+"/../../../")
 
 pid = os.getpid()
-# todo: fix this for rt
-# os.system(f'sudo renice -n -21 -p {str(pid)}')
-# os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
+
+# NOTE: run the script in lab-root
+os.system(f'sudo renice -n -21 -p {str(pid)}')
+os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
 
 from landing_controller.controller.landingManager import LandingManager
 
@@ -252,7 +253,7 @@ class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
-        self.DEBUG = False
+        self.DEBUG = True
         self.ffwd_impulse = False
         self.jumpAgent = JumpAgent(cfg={"model_path": os.path.join(os.environ.get('LOCOSIM_DIR'), 'robot_control','base_controllers', 'jump_policy', 'policy.onnx'),
                                         "min_action": -5,
@@ -377,7 +378,7 @@ class QuadrupedJumpController(QuadrupedController):
         # for leg in range(4):
         #     contact[leg] = np.linalg.norm(self.grForcesW)>self.force_th
         if np.all(self.contact_state):
-            print(colored("TOUCHDOWN detected", "red"))
+            # print(colored("TOUCHDOWN detected", "red"))
             return True
         else:
             return False
@@ -741,6 +742,7 @@ if __name__ == '__main__':
 
 
         ros.sleep(2.)
+        p.touchdown_detected = False
         # forward jump
         p.target_position = np.array([0., 0., 0.4])
         p.target_orientation = np.array([0., 0., 0.])
@@ -877,13 +879,17 @@ if __name__ == '__main__':
                                              elapsed_ratio_apex).copy()
                             p.qd_des = p.cerp(p.qd_apex, np.zeros_like(p.qd_apex),
                                              elapsed_ratio_apex).copy()
-                            if p.detectTouchDown():
-                                p.landing_position = p.u.linPart(p.basePoseW)
-                                perc_err = 100. * \
-                                    np.linalg.norm(
-                                        p.target_position - p.landing_position) / np.linalg.norm(com_0 - p.target_position)
-                                print(
-                                    colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
+                            if not p.touchdown_detected:
+                                p.touchdown_detected = p.detectTouchDown()
+                                if p.touchdown_detected:
+                                    p.landing_position = p.u.linPart(p.basePoseW)
+                                    perc_err = 100. * \
+                                        np.linalg.norm(
+                                            p.target_position - p.landing_position) / np.linalg.norm(com_0 - p.target_position)
+                                    print(colored("TOUCHDOWN detected", "red"))
+                                    print(
+                                        colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
+                            else:
                                 # break
                                 p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
                                                                                                      p.wJ,
