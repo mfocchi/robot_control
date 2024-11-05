@@ -257,8 +257,7 @@ class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
-        self.DEBUG = True
-        self.ffwd_impulse = False
+        self.DEBUG = False
         self.jumpAgent = JumpAgent(cfg={"model_path": os.path.join(os.environ.get('LOCOSIM_DIR'), 'robot_control','base_controllers', 'jump_policy', 'policy.onnx'),
                                         "min_action": -5,
                                         "max_action": 5,
@@ -481,7 +480,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.bezier_weights_ang[:, 2] = eul_lo - (euld_lo*(T_th/3.))
         self.bezier_weights_ang[:, 3] = eul_lo
 
-    def evalBezier(self, t_, T_th, T_expl, ffwd_impulse=False, a_z=np.zeros((4))):
+    def evalBezier(self, t_, T_th, T_expl, a_z=np.zeros((4))):
         T_th_total = T_th + T_expl
 
         if t_ < T_th:
@@ -549,17 +548,6 @@ class QuadrupedJumpController(QuadrupedController):
         W_feetRelVelDes = -Jb.dot(W_des_baseTwist)
         w_R_b_des = self.math_utils.eul2Rot(eul)
 
-        if ffwd_impulse:
-            # compute ffwd torques
-            self.bezier_weights_impulze_z = np.zeros((4))
-            self.bezier_weights_impulze_z[0] = 0
-            # this is to have the initial unloading
-            self.bezier_weights_impulze_z[1] = -1
-            self.bezier_weights_impulze_z[2] = 1.7
-            self.bezier_weights_impulze_z[3] = 1  # this is to end up pushing
-            impulse_z = np.array(self.Bezier3(
-                self.bezier_weights_impulze_z, t_, T_th))
-
         grf_ffwd = np.zeros(12)
         tau_ffwd = np.zeros(12)
         qd_des = np.zeros(12)
@@ -601,27 +589,12 @@ class QuadrupedJumpController(QuadrupedController):
             qd_des[3 * leg:3 * (leg+1)] = np.linalg.pinv(w_J[leg]
                                                          ).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
 
+        # tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
+        #                                                    W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
+        #                                                    comControlled=False, type='projection', stance_legs=self.stance_legs)
+        #OLD
+        tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
 
-        if not ffwd_impulse:
-            # tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
-            #                                                    W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
-            #                                                    comControlled=False, type='projection', stance_legs=self.stance_legs)
-            #OLD
-            tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
-
-        else:
-
-            for leg in range(self.robot.nee):
-                # todo do for x and y as well
-                grfDes = np.array([0., 0., impulse_z * a_z[leg]])
-                tau_leg = -w_J[leg].T.dot(grfDes)
-                self.u.setLegJointState(leg, grfDes, grf_ffwd)
-                self.u.setLegJointState(leg, tau_leg, tau_ffwd)
-            tau_wbc, self.grForcesW_des = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,
-                                                                        self.basePoseW, self.comPoseW)
-            tau_ffwd += tau_wbc # this also sets grForcesW_des
-            # on top we add our ffwd
-            self.grForcesW_des = grf_ffwd + self.grForcesW_des
 
 
         # check unloading of front legs
@@ -872,7 +845,7 @@ if __name__ == '__main__':
 
         while not ros.is_shutdown():
             if p.lm.lc is not None:
-                p.updateKittnematics(
+                p.updateKinematics(
                     update_legOdom=p.lm.lc.lc_events.touch_down.detected)
             else:
                 p.updateKinematics()
@@ -897,11 +870,8 @@ if __name__ == '__main__':
                 # compute joint reference
                 if (p.trustPhaseFlag):
                     t = p.time - p.startTrust
-                    # TODO: compute this with explosive part
-                    # p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(
-                    #     t, p.T_th, p.ffwd_impulse, p.a_z)
                     p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(
-                        t, p.T_th, p.T_exp, p.ffwd_impulse, p.a_z)
+                        t, p.T_th, p.T_exp, p.a_z)
 
                     # if p.time >= (p.startTrust + p.T_th):
                     if p.time >= (p.startTrust + p.T_th_total):
@@ -941,7 +911,11 @@ if __name__ == '__main__':
                                 p.q_des, p.qd_des, p.tau_ffwd, finished = p.lm.runAtApex(
                                     p.basePoseW, p.baseTwistW, useIK=True, useWBC=True, naive=False)
                                 if finished:
-                                    break
+                                    # break
+                                    p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
+                                                                                                     p.wJ,
+                                                                                                     p.h_joints,
+                                                                                                     p.basePoseW)
                         else:
                             # Simple landing strategy, interploate to extension
                             # set jump position (avoid collision in jumping)
@@ -970,13 +944,18 @@ if __name__ == '__main__':
 
                                
                     else:
-                        pass
                         # Interpolate for retraction
-                        # elapsed_time = p.time - (p.startTrust + p.T_th_total)
-                        # elapsed_ratio = np.clip(
-                        #     elapsed_time / p.lerp_time, 0, 1)
+                        elapsed_time = p.time - (p.startTrust + p.T_th_total)
+                        elapsed_ratio = np.clip(
+                            elapsed_time / p.lerp_time, 0, 1)
                         # p.q_des = p.cerp(p.q_t_th, p.q_0_lo,
                         #                  elapsed_ratio).copy()
+                        # NOTE: this is temporary made to swich immediatly to q0
+                        # needed also for the landing controller
+                        p.q_des = p.cerp(p.q_t_th, p.qj_0,
+                                                 elapsed_ratio).copy()
+                        p.qd_des = p.cerp(p.q_t_th, np.zeros_like(p.q_t_th),
+                                            elapsed_ratio).copy()
 
             p.plotTrajectoryBezier()
             p.plotTrajectoryFlight()
