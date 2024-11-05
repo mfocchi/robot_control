@@ -26,6 +26,8 @@ from gazebo_msgs.srv import SetModelStateRequest
 from base_controllers.utils.common_functions import *
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 
+import tkinter as tk
+from tkinter import ttk
 import threading
 import scipy.io.matlab as mio
 import rospy as ros
@@ -33,6 +35,8 @@ import numpy as np
 import rospkg
 import pinocchio as pin
 import time
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # onnx for policy loading
 import onnx
 import onnxruntime as ort
@@ -290,32 +294,100 @@ class QuadrupedJumpController(QuadrupedController):
         self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
         self.use_landing_controller = False
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
+        
+        if self.real_robot:
+            # Load initial PID values from configuration
+            self.initial_kp = conf.robot_params[self.robot_name]['kp_real'][0]
+            self.initial_kd = conf.robot_params[self.robot_name]['kd_real'][0]
+            self.initial_ki = conf.robot_params[self.robot_name]['ki_real'][0]
+            self.initial_kp_wbc = conf.robot_params[self.robot_name]['kp_wbc_real'][0]
+            self.initial_kd_wbc = conf.robot_params[self.robot_name]['kd_wbc_real'][0]
+            self.initial_ki_wbc = conf.robot_params[self.robot_name]['ki_wbc_real'][0]
+        else:
+            # Load initial PID values from configuration
+            self.initial_kp = conf.robot_params[self.robot_name]['kp'][0]
+            self.initial_kd = conf.robot_params[self.robot_name]['kd'][0]
+            self.initial_ki = conf.robot_params[self.robot_name]['ki'][0]
+            self.initial_kp_wbc = conf.robot_params[self.robot_name]['kp_wbc'][0]
+            self.initial_kd_wbc = conf.robot_params[self.robot_name]['kd_wbc'][0]
+            self.initial_ki_wbc = conf.robot_params[self.robot_name]['ki_wbc'][0]
 
         if self.DEBUG:
-            thread_pid = threading.Thread(target=self.pid_tuning)
+            thread_pid = threading.Thread(target=self.init_pid_tuning_ui)
             thread_pid.daemon = True
             thread_pid.start()
 
-    def pid_tuning(self):
-        while True:
-            string_kp = input('kp >>')
-            string_kd = input('kd >>')
-            string_ki = input('ki >>')
+    def init_pid_tuning_ui(self):
+        # Initialize tkinter window for PID tuning
+        self.root = tk.Tk()
+        self.root.title("PID Tuning")
+        
+        # Set window size and padding
+        self.root.geometry("450x400")
+        self.root.minsize(450, 400)  # Minimum size
+        self.root.configure(padx=20, pady=20)  # Padding around edges
 
-            try:
+        # Label font style
+        label_font = ("Helvetica", 12, "bold")
 
-                kp = np.full((12), np.clip(float(string_kp),0.,60.))
-                kd = np.full((12), np.clip(float(string_kd),0.,2.))
-                ki = np.full((12), np.clip(float(string_ki),0.,5.))
+        # Create sliders for kp, kd, ki with labels and initial values
+        ttk.Label(self.root, text="KP", font=label_font).grid(row=0, column=0, sticky="e", padx=10, pady=10)
+        self.kp_slider = tk.Scale(self.root, from_=0, to=60, resolution=0.1, orient="horizontal", length=250)
+        self.kp_slider.set(self.initial_kp)
+        self.kp_slider.grid(row=0, column=1)
 
-                print(kp, conf.robot_params[self.robot_name]['kp_real'])
+        ttk.Label(self.root, text="KD", font=label_font).grid(row=1, column=0, sticky="e", padx=10, pady=10)
+        self.kd_slider = tk.Scale(self.root, from_=0, to=2, resolution=0.01, orient="horizontal", length=250)
+        self.kd_slider.set(self.initial_kd)
+        self.kd_slider.grid(row=1, column=1)
 
-                self.pid.setPDjoints(kp,kd,ki)
-                print('pid changed!')
-                print(colored(f"pdi stand: {p.pid.joint_pid}"))
-               
-            except:
-                print('erro in pid')
+        ttk.Label(self.root, text="KI", font=label_font).grid(row=2, column=0, sticky="e", padx=10, pady=10)
+        self.ki_slider = tk.Scale(self.root, from_=0, to=5, resolution=0.1, orient="horizontal", length=250)
+        self.ki_slider.set(self.initial_ki)
+        self.ki_slider.grid(row=2, column=1)
+
+        ttk.Label(self.root, text="KP WBC", font=label_font).grid(row=3, column=0, sticky="e", padx=10, pady=10)
+        self.kp_wbc_slider = tk.Scale(self.root, from_=0, to=60, resolution=0.1, orient="horizontal", length=250)
+        self.kp_wbc_slider.set(self.initial_kp_wbc)
+        self.kp_wbc_slider.grid(row=3, column=1)
+
+        ttk.Label(self.root, text="KD WBC", font=label_font).grid(row=4, column=0, sticky="e", padx=10, pady=10)
+        self.kd_wbc_slider = tk.Scale(self.root, from_=0, to=2, resolution=0.01, orient="horizontal", length=250)
+        self.kd_wbc_slider.set(self.initial_kd_wbc)
+        self.kd_wbc_slider.grid(row=4, column=1)
+
+        ttk.Label(self.root, text="KI WBC", font=label_font).grid(row=5, column=0, sticky="e", padx=10, pady=10)
+        self.ki_wbc_slider = tk.Scale(self.root, from_=0, to=5, resolution=0.1, orient="horizontal", length=250)
+        self.ki_wbc_slider.set(self.initial_ki_wbc)
+        self.ki_wbc_slider.grid(row=5, column=1)
+
+        # Button to apply PID changes
+        self.update_button = ttk.Button(self.root, text="Update PID", command=self.update_pid_values)
+        self.update_button.grid(row=6, column=0, columnspan=2, pady=20)
+
+        # Run tkinter loop
+        self.root.mainloop()
+
+    def update_pid_values(self):
+        # Get values from sliders
+        kp = np.clip(self.kp_slider.get(), 0., 60.)
+        kd = np.clip(self.kd_slider.get(), 0., 2.)
+        ki = np.clip(self.ki_slider.get(), 0., 5.)
+
+        kp_wbc = np.clip(self.kp_wbc_slider.get(), 0., 60.)
+        kd_wbc = np.clip(self.kd_wbc_slider.get(), 0., 2.)
+        ki_wbc = np.clip(self.ki_wbc_slider.get(), 0., 5.)
+
+        # Apply PID gains as arrays for each joint
+        kp_array = np.full((12), kp)
+        kd_array = np.full((12), kd)
+        ki_array = np.full((12), ki)
+
+        # Set the PID values on the robot's controller
+        self.pid.setPDjoints(kp_array, kd_array, ki_array)
+        print("PID updated:", kp, kd, ki)
+
+        # TODO: apply pid_wbc
 
     def initVars(self):
         super().initVars()
