@@ -157,8 +157,8 @@ robot_params['go1'] ={'dt': 0.002,
                       # virtual impedance wrench control
                       'kp_lin': np.array([800, 500., 900.]),  # x y z
                       'kd_lin': np.array([100, 100., 100.]),
-                      'kp_ang': np.array([100, 100., 100.]),  # R P Y
-                      'kd_ang': np.array([10., 10., 10.]),
+                      'kp_ang': np.array([40., 40., 40.]),  # R P Y
+                      'kd_ang': np.array([1.51, 1.51, 1.51]),                      
                       # real robot gains
                       # stand alone joint pid
                       'kp_real': np.array([30., 30.,30.]*4),
@@ -176,10 +176,10 @@ robot_params['go1'] ={'dt': 0.002,
                       # 'kd_lin_real': np.array([30., 30., 30.]),
                       # 'kp_ang_real': np.array([50, 50., 50.]), # R P Y
                       # 'kd_ang_real': np.array([10., 10., 10.]),
-                      'kp_lin_real': 0.5*np.array([300., 200., 350.]), #np.array([300., 300., 400.]), # x y z
-                      'kd_lin_real': 0.5*np.array([40., 40., 80.]), #np.array([30., 20., 60.]),
-                      'kp_ang_real': 0.5*np.array([40., 80., 40.]), # #np.array([30., 50., 30.]), # R P Y
-                      'kd_ang_real': 0.5*np.array([3., 5., 3.]), #np.array([2., 4., 2.]),
+                      'kp_lin_real': np.array([150., 150., 150.]), #np.array([300., 300., 400.]), # x y z
+                      'kd_lin_real': np.array([40., 40., 40.]), #np.array([30., 20., 60.]),
+                      'kp_ang_real': np.array([40., 40., 40.]), # #np.array([30., 50., 30.]), # R P Y
+                      'kd_ang_real': np.array([1.5, 1.5, 1.5]), #np.array([2., 4., 2.]),
                       # joint configuration
                       'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
                       #orbit
@@ -207,7 +207,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
                       # use real robot or simulation
-                      'real_robot': False} # note the frames are all aligned with base for joints = 0
+                      'real_robot': True} # note the frames are all aligned with base for joints = 0
 
 robot_params['go2'] ={'dt': 0.002,
                       'buffer_size': 5001, # 120 seconds

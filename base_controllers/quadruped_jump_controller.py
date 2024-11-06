@@ -11,6 +11,7 @@ sys.path.append(dir_path+"/../../../")
 pid = os.getpid()
 
 # NOTE: run the script in lab-root
+# chrt -r 99 command 
 os.system(f'sudo renice -n -21 -p {str(pid)}')
 os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
 
@@ -257,7 +258,7 @@ class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
-        self.DEBUG = False
+        self.DEBUG = True
         self.jumpAgent = JumpAgent(cfg={"model_path": os.path.join(os.environ.get('LOCOSIM_DIR'), 'robot_control','base_controllers', 'jump_policy', 'policy.onnx'),
                                         "min_action": -5,
                                         "max_action": 5,
@@ -293,28 +294,6 @@ class QuadrupedJumpController(QuadrupedController):
         self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
         self.use_landing_controller = False
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
-        
-        if self.real_robot:
-            # Load initial PID values from configuration
-            self.initial_kp = conf.robot_params[self.robot_name]['kp_real'][0]
-            self.initial_kd = conf.robot_params[self.robot_name]['kd_real'][0]
-            self.initial_ki = conf.robot_params[self.robot_name]['ki_real'][0]
-            self.initial_kp_wbc = conf.robot_params[self.robot_name]['kp_wbc_real'][0]
-            self.initial_kd_wbc = conf.robot_params[self.robot_name]['kd_wbc_real'][0]
-            self.initial_ki_wbc = conf.robot_params[self.robot_name]['ki_wbc_real'][0]
-        else:
-            # Load initial PID values from configuration
-            self.initial_kp = conf.robot_params[self.robot_name]['kp'][0]
-            self.initial_kd = conf.robot_params[self.robot_name]['kd'][0]
-            self.initial_ki = conf.robot_params[self.robot_name]['ki'][0]
-            self.initial_kp_wbc = conf.robot_params[self.robot_name]['kp_wbc'][0]
-            self.initial_kd_wbc = conf.robot_params[self.robot_name]['kd_wbc'][0]
-            self.initial_ki_wbc = conf.robot_params[self.robot_name]['ki_wbc'][0]
-
-        if self.DEBUG:
-            thread_pid = threading.Thread(target=self.init_pid_tuning_ui)
-            thread_pid.daemon = True
-            thread_pid.start()
 
     def init_pid_tuning_ui(self):
         # Initialize tkinter window for PID tuning
@@ -345,24 +324,29 @@ class QuadrupedJumpController(QuadrupedController):
         self.ki_slider.set(self.initial_ki)
         self.ki_slider.grid(row=2, column=1)
 
-        ttk.Label(self.root, text="KP WBC", font=label_font).grid(row=3, column=0, sticky="e", padx=10, pady=10)
-        self.kp_wbc_slider = tk.Scale(self.root, from_=0, to=60, resolution=0.1, orient="horizontal", length=250)
-        self.kp_wbc_slider.set(self.initial_kp_wbc)
-        self.kp_wbc_slider.grid(row=3, column=1)
+        ttk.Label(self.root, text="KP LIN", font=label_font).grid(row=3, column=0, sticky="e", padx=10, pady=10)
+        self.kp_lin_slider = tk.Scale(self.root, from_=0, to=1000, resolution=0.1, orient="horizontal", length=250)
+        self.kp_lin_slider.set(self.initial_kp_lin)
+        self.kp_lin_slider.grid(row=3, column=1)
 
-        ttk.Label(self.root, text="KD WBC", font=label_font).grid(row=4, column=0, sticky="e", padx=10, pady=10)
-        self.kd_wbc_slider = tk.Scale(self.root, from_=0, to=2, resolution=0.01, orient="horizontal", length=250)
-        self.kd_wbc_slider.set(self.initial_kd_wbc)
-        self.kd_wbc_slider.grid(row=4, column=1)
+        ttk.Label(self.root, text="KD LIN", font=label_font).grid(row=4, column=0, sticky="e", padx=10, pady=10)
+        self.kd_lin_slider = tk.Scale(self.root, from_=0, to=100, resolution=0.01, orient="horizontal", length=250)
+        self.kd_lin_slider.set(self.initial_kd_lin)
+        self.kd_lin_slider.grid(row=4, column=1)
 
-        ttk.Label(self.root, text="KI WBC", font=label_font).grid(row=5, column=0, sticky="e", padx=10, pady=10)
-        self.ki_wbc_slider = tk.Scale(self.root, from_=0, to=5, resolution=0.1, orient="horizontal", length=250)
-        self.ki_wbc_slider.set(self.initial_ki_wbc)
-        self.ki_wbc_slider.grid(row=5, column=1)
+        ttk.Label(self.root, text="KP ANG", font=label_font).grid(row=5, column=0, sticky="e", padx=10, pady=10)
+        self.kp_ang_slider = tk.Scale(self.root, from_=0, to=200, resolution=0.1, orient="horizontal", length=250)
+        self.kp_ang_slider.set(self.initial_kp_ang)
+        self.kp_ang_slider.grid(row=5, column=1)
+
+        ttk.Label(self.root, text="KD ANG", font=label_font).grid(row=6, column=0, sticky="e", padx=10, pady=10)
+        self.kd_ang_slider = tk.Scale(self.root, from_=0, to=10, resolution=0.01, orient="horizontal", length=250)
+        self.kd_ang_slider.set(self.initial_kd_ang)
+        self.kd_ang_slider.grid(row=6, column=1)
 
         # Button to apply PID changes
         self.update_button = ttk.Button(self.root, text="Update PID", command=self.update_pid_values)
-        self.update_button.grid(row=6, column=0, columnspan=2, pady=20)
+        self.update_button.grid(row=7, column=0, columnspan=2, pady=20)
 
         # Run tkinter loop
         self.root.mainloop()
@@ -373,18 +357,32 @@ class QuadrupedJumpController(QuadrupedController):
         kd = np.clip(self.kd_slider.get(), 0., 2.)
         ki = np.clip(self.ki_slider.get(), 0., 5.)
 
-        kp_wbc = np.clip(self.kp_wbc_slider.get(), 0., 60.)
-        kd_wbc = np.clip(self.kd_wbc_slider.get(), 0., 2.)
-        ki_wbc = np.clip(self.ki_wbc_slider.get(), 0., 5.)
+        kp_lin = np.clip(self.kp_lin_slider.get(), 0., 1000.)
+        kd_lin = np.clip(self.kd_lin_slider.get(), 0., 100.)
+        kp_ang = np.clip(self.kp_ang_slider.get(), 0., 200.)
+        kd_ang = np.clip(self.kd_ang_slider.get(), 0., 10.)
+
+        # 'kp_lin_real': 0.5*np.array([300., 200., 350.]), #np.array([300., 300., 400.]), # x y z
+        # 'kd_lin_real': 0.5*np.array([40., 40., 80.]), #np.array([30., 20., 60.]),
+        # 'kp_ang_real': 0.5*np.array([40., 80., 40.]), # #np.array([30., 50., 30.]), # R P Y
+        # 'kd_ang_real': 0.5*np.array([3., 5., 3.]), #np.array([2., 4., 2.]),
 
         # Apply PID gains as arrays for each joint
         kp_array = np.full((12), kp)
         kd_array = np.full((12), kd)
         ki_array = np.full((12), ki)
 
+        kp_lin_array = np.full((3), kp_lin)
+        kd_lin_array = np.full((3), kd_lin)
+        kp_ang_array = np.full((3), kp_ang)
+        kd_ang_array = np.full((3), kd_ang)
+
         # Set the PID values on the robot's controller
         self.pid.setPDjoints(kp_array, kd_array, ki_array)
+        self.wbc.setGains(kp_lin_array, kd_lin_array, kp_ang_array, kd_ang_array)
+
         print("PID updated:", kp, kd, ki)
+        print("PID lin ang updated:", kp_lin, kd_lin, kp_ang, kd_ang)
 
         # TODO: apply pid_wbc
 
@@ -416,6 +414,32 @@ class QuadrupedJumpController(QuadrupedController):
         #     'JumplegAgent/get_target', get_target)
         # self.reward_service = ros.ServiceProxy(
         #     'JumplegAgent/set_reward', set_reward)
+
+        if self.real_robot:
+            # Load initial PID values from configuration
+            self.initial_kp = conf.robot_params[self.robot_name]['kp_real'][0]
+            self.initial_kd = conf.robot_params[self.robot_name]['kd_real'][0]
+            self.initial_ki = conf.robot_params[self.robot_name]['ki_real'][0]
+            self.initial_kp_lin = conf.robot_params[self.robot_name]['kp_lin_real'][0]
+            self.initial_kd_lin = conf.robot_params[self.robot_name]['kd_lin_real'][0]
+            self.initial_kp_ang = conf.robot_params[self.robot_name]['kp_ang_real'][0]
+            self.initial_kd_ang = conf.robot_params[self.robot_name]['kd_ang_real'][0]
+
+        else:
+            # Load initial PID values from configuration
+            self.initial_kp = conf.robot_params[self.robot_name]['kp'][0]
+            self.initial_kd = conf.robot_params[self.robot_name]['kd'][0]
+            self.initial_ki = conf.robot_params[self.robot_name]['ki'][0]
+            self.initial_kp_lin = conf.robot_params[self.robot_name]['kp_lin'][0]
+            self.initial_kd_lin = conf.robot_params[self.robot_name]['kd_lin'][0]
+            self.initial_kp_ang = conf.robot_params[self.robot_name]['kp_ang'][0]
+            self.initial_kd_ang = conf.robot_params[self.robot_name]['kd_ang'][0]
+
+        if self.DEBUG:
+            self.stop_thread = False
+            self.thread_pid = threading.Thread(target=self.init_pid_tuning_ui)
+            self.thread_pid.daemon = True
+            self.thread_pid.start()
 
     def detectApex(self, threshold=-3):
         # foot tradius is 0.015
@@ -589,11 +613,11 @@ class QuadrupedJumpController(QuadrupedController):
             qd_des[3 * leg:3 * (leg+1)] = np.linalg.pinv(w_J[leg]
                                                          ).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
 
-        # tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
-        #                                                    W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
-        #                                                    comControlled=False, type='projection', stance_legs=self.stance_legs)
+        tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
+                                                           W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
+                                                           comControlled=False, type='projection', stance_legs=self.stance_legs)
         #OLD
-        tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
+        #tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
 
 
 
@@ -966,7 +990,8 @@ if __name__ == '__main__':
                 p.ros_pub.add_marker(
                     p.ideal_landing, color="purple", radius=0.1)
 
-            p.visualizeContacts()
+            #if not p.real_robot:
+                #p.visualizeContacts()
             p.logData()
 
             # # Limit error between actual and reference joint positions using np.where
@@ -1000,6 +1025,7 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
+  
 
     finally:
         filename = f'quadruped_jump.mat'
@@ -1011,6 +1037,7 @@ if __name__ == '__main__':
 
     print("end control!!")
     p.deregister_node()
+ 
     if conf.plotting:
         plotJoint('position', time_log=p.time_log, q_log=p.q_log,
                   q_des_log=p.q_des_log, sharex=True, sharey=False, start=0, end=-1)
