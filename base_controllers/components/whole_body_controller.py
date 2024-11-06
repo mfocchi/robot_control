@@ -53,6 +53,12 @@ class WholeBodyController():
 
         self.NEMatrix = np.zeros([6, 3 * self.robot.nee])  # Newton-Euler matrix
 
+    def setGains(self, kp_lin, kd_lin, kp_ang, kd_ang):
+        self.kp_lin = np.diag(kp_lin)
+        self.kd_lin = np.diag(kd_lin)
+        self.kp_ang = np.diag(kp_ang)
+        self.kd_ang = np.diag(kd_ang)
+
     def logData(self, log_counter):
         self.wrench_fbW_log[:, log_counter] = self.wrench_fbW
         self.wrench_ffW_log[:, log_counter] = self.wrench_ffW
