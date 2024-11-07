@@ -941,12 +941,22 @@ if __name__ == '__main__':
                             p.touchdown_detected = p.detectTouchDown()
                             if p.touchdown_detected:
                                 p.landing_position = p.u.linPart(p.basePoseW)
-                                perc_err = 100. * \
-                                    np.linalg.norm(
-                                        p.target_position - p.landing_position) / np.linalg.norm(com_0 - p.target_position)
+                                p.landing_orientation = p.u.angPart(p.basePoseW)                              
+                                p.landing_error = p.target_position - p.landing_position
+                                p.orient_error = p.target_orientation -  p.landing_orientation
+                                #it does not make sense to compute perc error considering variable Z either succeed or not
+                                perc_err_xy = 100. *  np.linalg.norm(p.landing_error[:2]) / np.linalg.norm(com_0 - p.target_position)
+                                perc_err_orient = 100. * np.linalg.norm(p.orient_error) / np.linalg.norm(eul_0 - p.target_orientation)
                                 print(colored("TOUCHDOWN detected", "red"))
-                                print(
-                                    colored(f"landed at {p.basePoseW} with perc.  error {perc_err}", "green"))
+                                print(colored(f"landed at {p.basePoseW} with  perc.  error xy {perc_err_xy} and perc orient_error {perc_err_orient}", "green"))
+                                print(colored(f"started at {com_0} and orient {eul_0}", "green"))
+                                print(colored(f"target at {p.target_position}, {p.target_orientation}", "green"))
+                                if p.real_robot:
+                                    p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'],
+                                                    conf.robot_params[p.robot_name]['kd_real'], 
+                                                    conf.robot_params[p.robot_name]['ki_real'] )
+                            
+                                print(colored(f"pdi: {p.pid.joint_pid}"))
                         else:
                             # break
                             p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
@@ -956,18 +966,19 @@ if __name__ == '__main__':
 
                             
                 else:
+                    pass
                     # Interpolate for retraction
-                    elapsed_time = p.time - (p.startTrust + p.T_th_total)
-                    elapsed_ratio = np.clip(
-                        elapsed_time / p.lerp_time, 0, 1)
+                    # elapsed_time = p.time - (p.startTrust + p.T_th_total)
+                    # elapsed_ratio = np.clip(
+                    #     elapsed_time / p.lerp_time, 0, 1)
                     # p.q_des = p.cerp(p.q_t_th, p.q_0_lo,
                     #                  elapsed_ratio).copy()
                     # NOTE: this is temporary made to swich immediatly to q0
                     # needed also for the landing controller
-                    p.q_des = p.cerp(p.q_t_th, p.qj_0,
-                                                elapsed_ratio).copy()
-                    p.qd_des = p.cerp(p.q_t_th, np.zeros_like(p.q_t_th),
-                                        elapsed_ratio).copy()
+                    # p.q_des = p.lerp(p.q_t_th, p.qj_0,
+                    #                             elapsed_ratio).copy()
+                    # p.qd_des = p.lerp(p.q_t_th, np.zeros_like(p.q_t_th),
+                    #                     elapsed_ratio).copy()
 
             if not p.real_robot:
                 p.plotTrajectoryBezier()
@@ -1018,23 +1029,33 @@ if __name__ == '__main__':
 
     finally:
         filename = f'quadruped_jump.mat'
-        mio.savemat(filename, {'time': p.time_log, 'q': p.q_log, 'q_des': p.q_des_log,
+        mio.savemat(filename, {'time': p.time_log, 
+                               'q': p.q_log, 'q_des': p.q_des_log,
+                               'qd': p.qd_log, 'qd_des': p.qd_des_log,
                                'tau': p.tau_log, 'tau_des': p.tau_des_log, 'tau_ffw':p.tau_ffwd_log,
                                'basePoseW': p.basePoseW_log, 'basePoseW_des': p.basePoseW_des_log,
                                'baseTwistW': p.baseTwistW_log, 'baseTwistW_des': p.baseTwistW_des_log,
-                               'grf': p.grForcesW_log, 'grf_des': p.grForcesW_des_log, 'contact': p.contact_state_log})
+                               'grf': p.grForcesW_log, 'grf_des': p.grForcesW_des_log, 
+                               'contact': p.contact_state_log,
+                               'landing_position': p.landing_position,
+                                'landing_orientation': p.landing_orientation,       
+                                'landing_error': p.landing_error,
+                                'orient_error': p.orient_error})
 
     print("end control!!")
     p.deregister_node()
  
     if conf.plotting:
-        plotJoint('position', time_log=p.time_log, q_log=p.q_log,
-                  q_des_log=p.q_des_log, sharex=True, sharey=False, start=0, end=-1)
-        # plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log, sharex=True, sharey=False,   start=0, end=-1)
-        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_log,
-                  tau_des_log=p.tau_des_log, sharex=True, sharey=False, start=0, end=-1)
-        plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
-                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log)
+        plotJoint('velocity', time_log=p.time_log, qd_log=p.qd_log, qd_des_log=p.qd_des_log)
+        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_log,   tau_des_log=p.tau_des_log)
+        
+
+
+        plotJoint('torque', time_log=p.time_log, tau_log=p.tau_log, tau_ffwd_log=p.tau_ffwd_log)
+
+        #COM
+        plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,  title='Base', frame='W')
         plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log,
                   Twist_log=p.baseTwistW_log,  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
         plotContacts('GRFs', time_log=p.time_log, des_Forces_log=p.grForcesW_des_log,
