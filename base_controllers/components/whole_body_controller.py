@@ -65,9 +65,9 @@ class WholeBodyController():
         self.wrench_gW_log[:, log_counter] = self.wrench_gW
         self.wrench_desW_log[:, log_counter] = self.wrench_desW
 
-    def gravityCompensation(self, W_contacts, wJ, h_joints, basePoseW, comPoseW):
+    def gravityCompensation(self, W_contacts, wJ, h_joints, basePoseW, comPoseW, comControlled = False):
         # require the call to updateKinematics
-        return self.computeWBC(W_contacts, wJ, h_joints, basePoseW, comPoseW, baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
+        return self.computeWBC(W_contacts, wJ, h_joints, basePoseW, comPoseW, baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = comControlled, type = 'projection')
 
     def gravityCompensationBase(self, B_contacts, wJ, h_joints, basePoseW, stance_legs=[True, True, True, True]):
         self.wrench_gW = np.zeros(6)
