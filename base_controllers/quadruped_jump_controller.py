@@ -329,6 +329,11 @@ class QuadrupedJumpController(QuadrupedController):
         self.kd_lin_sliders = create_triple_slider("KD LIN", 4, self.initial_kd_lin, 100, 0.01)
         self.kp_ang_sliders = create_triple_slider("KP ANG", 5, self.initial_kp_ang, 200, 0.1)
         self.kd_ang_sliders = create_triple_slider("KD ANG", 6, self.initial_kd_ang, 10, 0.01)
+        
+        ttk.Label(self.root, text='freq', font=label_font).grid(row=7, column=0, sticky="e", padx=10, pady=10)
+        self.freq_slider = tk.Scale(self.root, from_=0.25, to=2, resolution=0.1, orient="horizontal", length=150)
+        self.freq_slider.set(1)
+        self.freq_slider.grid(row=7, column=0)
 
         # Button to apply PID changes
         self.update_button = ttk.Button(self.root, text="Update PID", command=self.update_pid_values)
@@ -357,6 +362,8 @@ class QuadrupedJumpController(QuadrupedController):
         kd_lin_array = get_slider_values(self.kd_lin_sliders, 100.)
         kp_ang_array = get_slider_values(self.kp_ang_sliders, 200.)
         kd_ang_array = get_slider_values(self.kd_ang_sliders, 10.)
+
+        self.debug_freq = self.freq_slider.get()
 
         # Set the PID values on the robot's controller
         self.pid.setPDjoints(kp_array, kd_array, ki_array)
@@ -393,6 +400,8 @@ class QuadrupedJumpController(QuadrupedController):
         #     'JumplegAgent/get_target', get_target)
         # self.reward_service = ros.ServiceProxy(
         #     'JumplegAgent/set_reward', set_reward)
+
+        self.debug_freq = 0.5
 
         if self.real_robot:
             # Load initial PID values from configuration
