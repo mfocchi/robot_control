@@ -446,11 +446,12 @@ class QuadrupedJumpController(QuadrupedController):
             else:
                 if self.baseTwistW[2] < 0.0:
                     self.detectedApexFlag = True
-                    # self.pause_physics_client()
-                    # for i in range(10):
-                    #     self.setJumpPlatformPosition(
-                    #         self.target_position, com_0)
-                    # self.unpause_physics_client()
+                    # if not self.real_robot:
+                    #     self.pause_physics_client()
+                    #     for i in range(10):
+                    #         self.setJumpPlatformPosition(
+                    #             self.target_position, com_0)
+                    #     self.unpause_physics_client()
                     print(colored(f"APEX detected at t={self.time}", "red"))
                     self.q_apex = self.q.copy()
                     self.qd_apex = self.qd.copy()
@@ -900,16 +901,24 @@ if __name__ == '__main__':
                         print('time is over: ',p.time, 'tot_time:', p.startTrust + p.T_th_total)
                         break
             else:
+
+                elapsed_time = p.time - (p.startTrust + p.T_th_total)
+                elapsed_ratio = np.clip(
+                        elapsed_time / p.lerp_time, 0, 1)
+                p.q_des = p.lerp(p.q_t_th, p.qj_0,  elapsed_ratio).copy()
+                p.qd_des = p.lerp(p.q_t_th, np.zeros_like(p.q_t_th), elapsed_ratio).copy()
+                
                 p.detectApex()
                 if (p.detectedApexFlag):
                     elapsed_time_apex = p.time - p.t_apex
                     elapsed_ratio_apex = elapsed_time_apex / (p.lerp_time)
                     if p.use_landing_controller:
                         if elapsed_ratio_apex <= 1.0:
-                            p.q_des = p.cerp(p.q_apex, p.qj_0,
-                                                elapsed_ratio_apex).copy()
-                            p.qd_des = p.cerp(p.qd_apex, np.zeros_like(p.qd_apex),
-                                                elapsed_ratio_apex).copy()
+                            pass
+                            # p.q_des = p.lerp(p.q_apex, p.qj_0,
+                            #                     elapsed_ratio_apex).copy()
+                            # p.qd_des = p.lerp(p.qd_apex, np.zeros_like(p.qd_apex),
+                            #                     elapsed_ratio_apex).copy()
                         else:
                             p.q_des, p.qd_des, p.tau_ffwd, finished = p.lm.runAtApex(
                                 p.basePoseW, p.baseTwistW, useIK=True, useWBC=True, naive=False)
@@ -922,12 +931,12 @@ if __name__ == '__main__':
                     else:
                         # Simple landing strategy, interploate to extension
                         # set jump position (avoid collision in jumping)
-                        elapsed_ratio_apex = np.clip(
-                            elapsed_ratio_apex, 0, 1)
-                        p.q_des = p.cerp(p.q_apex, p.qj_0,
-                                            elapsed_ratio_apex).copy()
-                        p.qd_des = p.cerp(p.qd_apex, np.zeros_like(p.qd_apex),
-                                            elapsed_ratio_apex).copy()
+                        # elapsed_ratio_apex = np.clip(
+                        #     elapsed_ratio_apex, 0, 1)
+                        # p.q_des = p.lerp(p.q_apex, p.qj_0,
+                        #                     elapsed_ratio_apex).copy()
+                        # p.qd_des = p.lerp(p.qd_apex, np.zeros_like(p.qd_apex),
+                        #                     elapsed_ratio_apex).copy()
                         if not p.touchdown_detected:
                             p.touchdown_detected = p.detectTouchDown()
                             if p.touchdown_detected:
