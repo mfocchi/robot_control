@@ -173,8 +173,8 @@ robot_params['go1'] ={'dt': 0.002,
                       # 'kd_lin_real': np.array([30., 30., 30.]),
                       # 'kp_ang_real': np.array([50, 50., 50.]), # R P Y
                       # 'kd_ang_real': np.array([10., 10., 10.]),
-                      'kp_lin_real': np.array([300., 300., 300.]), #np.array([300., 300., 400.]), # x y z
-                      'kd_lin_real': np.array([40., 40., 40.]), #np.array([30., 20., 60.]),
+                      'kp_lin_real': np.array([300., 300., 450.]), #np.array([300., 300., 400.]), # x y z
+                      'kd_lin_real': np.array([40., 40., 60.]), #np.array([30., 20., 60.]),
                       'kp_ang_real': np.array([20., 20., 20.]), # #np.array([30., 50., 30.]), # R P Y
                       'kd_ang_real': np.array([1.5, 1.5, 1.5]), #np.array([2., 4., 2.]),
                       # joint configuration

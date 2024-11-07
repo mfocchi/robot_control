@@ -524,9 +524,7 @@ class QuadrupedJumpController(QuadrupedController):
                                np.cos(2 * np.pi * freq * t_))
             euldd = np.multiply(
                 np.power(2 * np.pi * freq * amp_ang, 2), -np.sin(2 * np.pi * freq * t_))
-            # eul =  np.array([0., 0.0, 0])
-            # euld =  np.array([0., 0.0, 0])
-            # euldd =  np.array([0., 0.0, 0])
+    
 
         Jb = p.computeJcb(self.W_contacts_sampled, com, self.stance_legs)
 
@@ -825,6 +823,7 @@ if __name__ == '__main__':
             print(f"Initial Com Position is {p.initial_com}")
             print(f"Initial Joint Position is {p.q}")
             print(f"Initial Joint torques {p.tau_ffwd}")
+            print(colored(f"IMPORTANT: you cannot control both pitch and Z and expect 0 error on comX, only on base, because it is an impossible task!","red"))
             p.T_th = np.inf
             p.T_th_total = np.inf
 
