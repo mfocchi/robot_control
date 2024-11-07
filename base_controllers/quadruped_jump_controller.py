@@ -330,14 +330,16 @@ class QuadrupedJumpController(QuadrupedController):
         self.kp_ang_sliders = create_triple_slider("KP ANG", 5, self.initial_kp_ang, 200, 0.1)
         self.kd_ang_sliders = create_triple_slider("KD ANG", 6, self.initial_kd_ang, 10, 0.01)
         
-        ttk.Label(self.root, text='freq', font=label_font).grid(row=7, column=0, sticky="e", padx=10, pady=10)
-        self.freq_slider = tk.Scale(self.root, from_=0.25, to=2, resolution=0.1, orient="horizontal", length=150)
-        self.freq_slider.set(1)
-        self.freq_slider.grid(row=7, column=0)
+        # Add a separate row for the frequency slider
+        ttk.Label(self.root, text="Freq", font=label_font).grid(row=7, column=0, sticky="e", padx=10, pady=10)
+        self.freq_slider = tk.Scale(self.root, from_=0.25, to=2, resolution=0.1, orient="horizontal", length=250)
+        self.freq_slider.set(self.debug_freq)
+        self.freq_slider.grid(row=7, column=1, columnspan=3)  # Align with the other sliders
+
 
         # Button to apply PID changes
         self.update_button = ttk.Button(self.root, text="Update PID", command=self.update_pid_values)
-        self.update_button.grid(row=7, column=0, columnspan=4, pady=20)
+        self.update_button.grid(row=8, column=0, columnspan=4, pady=20)
 
         # Run tkinter loop
         self.root.mainloop()

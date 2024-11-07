@@ -204,7 +204,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
                       # use real robot or simulation
-                      'real_robot': True} # note the frames are all aligned with base for joints = 0
+                      'real_robot': False} # note the frames are all aligned with base for joints = 0
 
 robot_params['go2'] ={'dt': 0.002,
                       'buffer_size': 5001, # 120 seconds
