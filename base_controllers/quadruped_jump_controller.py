@@ -240,7 +240,7 @@ class JumpAgent():
         position = _position.copy()
         orientation = _orientation.copy()
 
-        position[2] -= 0.3
+    
         quat_orientation = self.quat_from_euler_xyz(
             orientation[..., 0], orientation[..., 1], orientation[..., 2])
 
@@ -492,7 +492,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.bezier_weights_ang[:, 2] = eul_lo - (euld_lo*(T_th/3.))
         self.bezier_weights_ang[:, 3] = eul_lo
 
-    def evalBezier(self, t_, T_th, T_expl, a_z=np.zeros((4))):
+    def evalBezier(self, t_, T_th, T_expl, com_lo, comd_lo, com_exp, comd_exp):
         T_th_total = T_th + T_expl
         
         if t_ < T_th:
@@ -501,25 +501,21 @@ class QuadrupedJumpController(QuadrupedController):
             comdd = np.array(self.Bezier1(self.bezier_weights_lin, t_, T_th))
         else:
             t = t_ - T_th
-            t_0 = (t-0.002) / T_expl
+            t_0 = (t-self.dt) / T_expl
             t_1 = np.clip(t / T_expl, 0, 1)
 
-            com = self.lerp(self.jumpAgent.trunk_x_lo,
-                            self.jumpAgent.trunk_x_exp, t_1)[0]
-            comd = self.lerp(self.jumpAgent.trunk_xd_lo,
-                             self.jumpAgent.trunk_xd_exp, t_1)[0]
-            comd_p = self.lerp(self.jumpAgent.trunk_xd_lo,
-                               self.jumpAgent.trunk_xd_exp, t_0)[0]
-            # TODO: do not harcode time division
-            comdd = (comd-comd_p)/0.002
+            com = self.lerp(com_lo, com_exp, t_1)
+            comd = self.lerp(comd_lo, comd_exp, t_1)
+            comd_p = self.lerp(comd_lo, comd_exp, t_0)
+            comdd = (comd-comd_p)/self.dt
 
         eul = np.array(self.Bezier3(self.bezier_weights_ang, t_, T_th_total))
         euld = np.array(self.Bezier2(self.bezier_weights_ang, t_, T_th_total))
         euldd = np.array(self.Bezier1(self.bezier_weights_ang, t_, T_th_total))
 
         if self.DEBUG:
-            freq = 0.5
-            amp_lin = np.array([0., 0., 0.05])
+            freq = self.debug_freq
+            amp_lin = np.array([0., 0., 0.1])
             amp_ang = np.array([0., 0.1, 0])
             com = self.initial_com + \
                 np.multiply(amp_lin, np.sin(2*np.pi*freq * t_))
@@ -754,7 +750,6 @@ class QuadrupedJumpController(QuadrupedController):
             self.updateKinematics()
             self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,
                                                                         self.basePoseW, self.comPoseW)
-
             self.send_command(self.q_des, self.qd_des,self.tau_ffwd)
 
     def lerp(self, start, end, weight):
@@ -794,36 +789,39 @@ if __name__ == '__main__':
         else:
             p.startTrust = 5.
             p.customStartupProcedure()
-            # p.startupProcedure()
-
-        if not p.real_robot:
-            ros.sleep(2.)
+           
+        # if not p.real_robot:
+        #     ros.sleep(2.)
         p.touchdown_detected = False
-        # forward jump
-        p.target_position = np.array([0., 0., 0.4])
-        p.target_orientation = np.array([0., 0., 0.])
 
-        p.jumpAgent.act(p.target_position, p.target_orientation)
-
-        print(p.target_position)
         # initial pose
-        # linear
-        com_lo = p.jumpAgent.trunk_x_lo[0]
-        comd_lo = p.jumpAgent.trunk_xd_lo[0]
-        com_exp = p.jumpAgent.trunk_x_exp[0]
-        comd_exp = p.jumpAgent.trunk_xd_exp[0]
         com_0 = p.basePoseW[:3].copy()
-        # angular
         eul_0 = p.basePoseW[3:].copy()
-        eul_lo = p.jumpAgent.trunk_o_lo
+        
+        # forward jump
+        p.jumpDeltaStep = np.array([0.15 , 0., 0.])
+        p.jumpDeltaOrient = np.array([0.0 , 0., 0.])
+   
+        p.target_position = com_0 + p.jumpDeltaStep
+        p.target_orientation =  eul_0 + p.jumpDeltaOrient 
+        p.jumpAgent.act(p.jumpDeltaStep, p.jumpDeltaOrient)
+
+        default_start = np.array([0., 0., 0.3])
+
+        # extract liftoff position orientation from action
+        # linear
+        p.com_lo =  (com_0-default_start) + p.jumpAgent.trunk_x_lo[0]
+        p.comd_lo = p.jumpAgent.trunk_xd_lo[0]
+        p.com_exp = (com_0-default_start) + p.jumpAgent.trunk_x_exp[0]
+        p.comd_exp = p.jumpAgent.trunk_xd_exp[0]
+        
+        # angular
+        eul_lo =  p.jumpAgent.trunk_o_lo
         euld_lo = p.jumpAgent.trunk_od_lo
         # t_th
         p.T_th = p.jumpAgent.t_th[0].item()
         p.T_exp = p.jumpAgent.t_exp[0].item()
         p.T_th_total = p.jumpAgent.t_th_total[0].item()
-
-        # impulse bezier
-        p.a_z = np.array([25, 25, 25, 25])  # LF LH RF RH
 
         p.lerp_time = 0.1
 
@@ -836,10 +834,9 @@ if __name__ == '__main__':
             p.T_th = np.inf
             p.T_th_total = np.inf
 
-        p.computeHeuristicSolutionBezierLinear(com_0, com_lo, comd_lo, p.T_th)
+        p.computeHeuristicSolutionBezierLinear(com_0, p.com_lo, p.comd_lo, p.T_th)
         # p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th)
-        p.computeHeuristicSolutionBezierAngular(
-            eul_0, eul_lo, euld_lo, p.T_th_total)
+        p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th_total)
 
         # this is for visualization
         # p.computeTrajectoryBezier(p.T_th)
@@ -850,8 +847,8 @@ if __name__ == '__main__':
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
         p.W_contacts_sampled = np.copy(p.W_contacts)
 
-        # if not p.real_robot:
-        #     p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
+        if not p.real_robot:
+            p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
 
         p.lm = LandingManager(p)
 
@@ -879,7 +876,7 @@ if __name__ == '__main__':
             # compute joint reference
             if (p.trustPhaseFlag):
                 t = p.time - p.startTrust
-                p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(t, p.T_th, p.T_exp, p.a_z)
+                p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.evalBezier(t, p.T_th, p.T_exp, p.com_lo, p.comd_lo, p.com_exp, p.comd_exp)
 
                 # if p.time >= (p.startTrust + p.T_th):
                 if p.time >= (p.startTrust + p.T_th_total):
@@ -893,12 +890,10 @@ if __name__ == '__main__':
                     # Reducing gains for more complaint landing
                     # TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
                     # if p.real_robot:
-                    #     pass
-                    #     # p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'],
-                    #     #                   conf.robot_params[p.robot_name]['kd_real'] , conf.robot_params[p.robot_name]['ki_real'] )
-                    # else:
-                    #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp'] / 5,
-                    #                       conf.robot_params[p.robot_name]['kd'] / 5, conf.robot_params[p.robot_name]['ki'] / 5)
+                    #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real']*0.5,
+                    #                       conf.robot_params[p.robot_name]['kd_real']*0.5, 
+                    #                       conf.robot_params[p.robot_name]['ki_real']*0.5 )
+                 
                     print(colored(f"pdi: {p.pid.joint_pid}"))
 
                     if p.DEBUG:
