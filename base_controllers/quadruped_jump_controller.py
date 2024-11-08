@@ -899,11 +899,12 @@ if __name__ == '__main__':
                         colored(f"thrust completed! at time {p.time}", "red"))
                     # Reducing gains for more complaint landing
                     # TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
-                    # if p.real_robot:
-                    #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real']*0.5,
-                    #                       conf.robot_params[p.robot_name]['kd_real']*0.5, 
-                    #                       conf.robot_params[p.robot_name]['ki_real']*0.5 )
-                 
+                    if p.real_robot:
+                        p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real_swing'],
+                                            conf.robot_params[p.robot_name]['kd_real_swing'], 
+                                            conf.robot_params[p.robot_name]['ki_real_swing'])
+
+                
                     print(colored(f"pdi: {p.pid.joint_pid}"))
 
                     if p.DEBUG:
