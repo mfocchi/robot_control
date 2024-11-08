@@ -161,9 +161,9 @@ robot_params['go1'] ={'dt': 0.002,
                       'kd_ang': np.array([1.51, 1.51, 1.51]),                      
                       # real robot gains
                       # stand alone joint pid
-                      'kp_real': np.array([20., 20.,20.]*4),
-                      'kd_real': np.array([.14, .25, .3]*4),
-                      'ki_real': np.array([1, 1, 1]*4),
+                      'kp_real': np.array([30., 30.,30.]*4),
+                      'kd_real': np.array([.15, .1, .15]*4),
+                      'ki_real': np.array([2., 2., 2.]*4),
                       'kp_real_swing':  np.array([30., 7.,4.6]*4),
                       'kd_real_swing':  np.array([.2, .2, .24]*4),
                       'ki_real_swing':  np.array([2., 2., 2.]*4),
@@ -179,12 +179,14 @@ robot_params['go1'] ={'dt': 0.002,
                       # 'kd_lin_real': np.array([30., 30., 30.]),
                       # 'kp_ang_real': np.array([50, 50., 50.]), # R P Y
                       # 'kd_ang_real': np.array([10., 10., 10.]),
-                      'kp_lin_real': np.array([300., 300., 450.]), #np.array([300., 300., 400.]), # x y z
-                      'kd_lin_real': np.array([40., 40., 60.]), #np.array([30., 20., 60.]),
-                      'kp_ang_real': np.array([20., 40., 20.]), # #np.array([30., 50., 30.]), # R P Y
+                      'kp_lin_real': np.array([650., 300., 450.]), #np.array([300., 300., 400.]), # x y z
+                      'kd_lin_real': np.array([40., 40., 40.]), #np.array([30., 20., 60.]),
+                      'kp_ang_real': np.array([20., 35., 20.]), # #np.array([30., 50., 30.]), # R P Y
                       'kd_ang_real': np.array([1.5, 2.5, 1.5]), #np.array([2., 4., 2.]),
                       # joint configuration
                       'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
+                      'q_land':  np.array([0.1, 0.6, -1.8,  0.1, 0.6, -1.8, -0.1, 0.6, -1.8, -0.1, 0.6, -1.8]),
+                      'q_final':  np.array([0.1, 0.9, -1.8,  0.1, 0.9, -1.8, -0.1, 0.5, -1.8, -0.1, 0.9, -1.8]),
                       #orbit
                      #  'q_0':  np.array([0.1, 0.8, -1.5,#lf
                      #                    0.1, 1.0, -1.5,#lh
@@ -200,7 +202,7 @@ robot_params['go1'] ={'dt': 0.002,
                       # ee params
                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot','rh_foot'],
                      #  'force_th': 18.,
-                      'force_th': 5.,
+                      'force_th': 7.,
                       'contact_th': 0.01, # tolerance understand when /knee base is touching the ground
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
