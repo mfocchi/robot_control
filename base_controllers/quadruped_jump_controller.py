@@ -384,6 +384,11 @@ class QuadrupedJumpController(QuadrupedController):
         self.rearingFlag = False
         self.ideal_landing = np.zeros(3)
         self.landing_position = np.zeros(3)
+        self.landing_orientation = np.zeros(3)
+        self.landing_error = 0.
+        self.orient_error = 0.
+        self.switch_on = False
+        self.t0 = None
 
         self.reset_joints = ros.ServiceProxy(
             '/gazebo/set_model_configuration', SetModelConfiguration)
