@@ -14,6 +14,7 @@ import rospy as ros
 import threading
 from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import JointState
+
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
@@ -211,6 +212,10 @@ class BaseController(threading.Thread):
             self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
                                                  callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
+
+
+        
+        
 
     def _receive_contact_lf(self, msg):
         grf = np.zeros(3)
@@ -454,7 +459,7 @@ class BaseController(threading.Thread):
             grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  self.h_joints-self.tau ))
             self.u.setLegJointState(leg, grf, self.grForcesW)
 
-            if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
+            if self.contact_normal[leg].dot(grf) >= self.force_th:
                 self.contact_state[leg] = True
 
             else:
@@ -605,6 +610,8 @@ class BaseController(threading.Thread):
         self.time = np.zeros(1)
         self.loop_time = conf.robot_params[self.robot_name]['dt']
         self.log_counter = 0
+
+        self.force_th = conf.robot_params[self.robot_name]['force_th']
 
         # order: lf lh rf rh
         if self.use_ground_truth_contacts:
