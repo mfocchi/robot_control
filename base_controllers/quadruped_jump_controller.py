@@ -974,11 +974,15 @@ if __name__ == '__main__':
                                 print(colored(f"pdi: {p.pid.joint_pid}"))
                         else:
                             # break
-                            p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
-                                                                                                    p.wJ,
-                                                                                                    p.h_joints,
-                                                                                                    p.basePoseW)
-
+                            p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts, 
+                                                                                        p.wJ,
+                                                                                        p.h_joints,
+                                                                                        p.basePoseW)
+                            if p.real_robot:
+                                elapsed_time = p.time - p.time_td
+                                elapsed_ratio = np.clip(elapsed_time / 0.4, 0, 1)
+                                p.q_des = p.cerp(p.qdes_td, conf.robot_params[p.robot_name]['q_final'],  elapsed_ratio).copy()                            
+                                                                                                
                             
                 else:
                     pass
