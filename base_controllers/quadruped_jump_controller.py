@@ -911,13 +911,13 @@ if __name__ == '__main__':
                         print('time is over: ',p.time, 'tot_time:', p.startTrust + p.T_th_total)
                         break
             else:
-
-                elapsed_time = p.time - (p.startTrust + p.T_th_total)
-                elapsed_ratio = np.clip(
-                        elapsed_time / p.lerp_time, 0, 1)
-                p.q_des = p.lerp(p.q_t_th, p.qj_0,  elapsed_ratio).copy()
-                p.qd_des = p.lerp(p.q_t_th, np.zeros_like(p.q_t_th), elapsed_ratio).copy()
-                
+                if not p.touchdown_detected:    
+                    elapsed_time = p.time - (p.startTrust + p.T_th_total)
+                    elapsed_ratio = np.clip(
+                            elapsed_time / p.lerp_time, 0, 1)
+                    p.q_des = p.cerp(p.q_t_th, conf.robot_params[p.robot_name]['q_land'],  elapsed_ratio).copy()
+                    p.qd_des = p.cerp(p.qd_t_th, np.zeros_like(p.qd_t_th), elapsed_ratio).copy()
+                    
                 p.detectApex()
                 if (p.detectedApexFlag):
                     elapsed_time_apex = p.time - p.t_apex
