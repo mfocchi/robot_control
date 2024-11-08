@@ -446,10 +446,11 @@ class QuadrupedJumpController(QuadrupedController):
             if self.real_robot:
                 if self.baseLinAccW[2] < threshold:
                     self.detectedApexFlag = True
-                    print(colored(f"APEX detected at t={self.time}", "red"))
-                    self.q_apex = self.q.copy()
-                    self.qd_apex = self.qd.copy()
+                    print(colored(f"APEX detected at t={self.time} setting new treshold", "red"))
+                    self.q_apex = self.q_des.copy()
+                    self.qd_apex = self.qd_des.copy()
                     self.t_apex = self.time
+                    self.force_th = 50.
             else:
                 if self.baseTwistW[2] < 0.0:
                     self.detectedApexFlag = True
@@ -460,8 +461,8 @@ class QuadrupedJumpController(QuadrupedController):
                     #             self.target_position, com_0)
                     #     self.unpause_physics_client()
                     print(colored(f"APEX detected at t={self.time}", "red"))
-                    self.q_apex = self.q.copy()
-                    self.qd_apex = self.qd.copy()
+                    self.q_apex = self.q_des.copy()
+                    self.qd_apex = self.qd_des.copy()
                     self.t_apex = self.time
 
     def detectTouchDown(self):
@@ -890,8 +891,9 @@ if __name__ == '__main__':
                 if p.time >= (p.startTrust + p.T_th_total):
                     p.trustPhaseFlag = False
                     # we se this here to have enough retraction (important)
-                    p.q_t_th = p.q.copy()
-                    p.qd_des = np.zeros(12)
+                    p.q_t_th = p.q_des.copy()
+                    p.qd_t_th = p.qd_des.copy()
+                    #p.qd_des = np.zeros(12)
                     p.tau_ffwd = np.zeros(12)
                     print(
                         colored(f"thrust completed! at time {p.time}", "red"))
