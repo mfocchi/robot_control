@@ -949,6 +949,11 @@ if __name__ == '__main__':
                         if not p.touchdown_detected:
                             p.touchdown_detected = p.detectTouchDown()
                             if p.touchdown_detected:
+                                if p.real_robot:
+                                    p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real_land'],
+                                                    conf.robot_params[p.robot_name]['kd_real_land'], 
+                                                    conf.robot_params[p.robot_name]['ki_real_land'] )
+                                    print(colored(f"pdi: {p.pid.joint_pid}"))
                                 p.landing_position = p.u.linPart(p.basePoseW)
                                 p.landing_orientation = p.u.angPart(p.basePoseW)                              
                                 p.landing_error = p.target_position - p.landing_position
