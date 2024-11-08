@@ -23,7 +23,7 @@ from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped imp
 from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics as PinocchioInverseKinematics
 from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
 from termcolor import colored
-
+from std_msgs.msg import Float64MultiArray
 import base_controllers.params as conf
 
 from scipy.io import savemat
@@ -105,6 +105,11 @@ class QuadrupedController(BaseController):
                 self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
                                                      callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
                                                      tcp_nodelay=True)
+        
+        # if self.real_robot:
+        #     self.sub_contact_force_z = ros.Subscriber("/" + self.robot_name + "/contact_force_z", Float64MultiArray,
+        #                             callback=self._receive_contact_force_real, queue_size=1, tcp_nodelay=True)
+           
 
     def _receive_imu_acc_real(self, msg):
         # baseLinAccB is with gravity
@@ -154,6 +159,15 @@ class QuadrupedController(BaseController):
         self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
+
+
+    # def _receive_contact_force_real(self, msg):
+    #     #53.0, 82.0, 87.0, 78.0
+    #     self.contact_state[0] = msg.data[0] > 73
+    #     self.contact_state[1] = msg.data[1] > 102
+    #     self.contact_state[2] = msg.data[2] > 107
+    #     self.contact_state[3] = msg.data[3] > 98
+    #     #print(self.contact_state)
 
 
     def _receive_pose_real(self, msg):
