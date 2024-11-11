@@ -15,6 +15,7 @@ import time
 import pinocchio as pin
 import rospy as ros
 import tf
+from termcolor import colored
 
 class Ground3D():
     def __init__(self,
@@ -139,9 +140,9 @@ class TrackedVehicleSimulator3D:
         b_omega_dot = np.linalg.inv(bI).dot(b_Mt + b_Mg)#-NL_ang)
 
         w_twist_dot = np.concatenate((w_R_b.dot(b_vc_dot), w_R_b.dot(b_omega_dot)))
-        print("b_Ft",b_Ft)
-        print("b_Fgrav",b_Fgrav)
-        print("b_Fg", b_Fg)
+        #print("b_Ft",b_Ft)
+        # print("b_Fgrav",b_Fgrav)
+        # print("b_Fg", b_Fg)
         return w_twist_dot
 
     def integrateTwist(self, pose, twist):
@@ -154,6 +155,7 @@ class TrackedVehicleSimulator3D:
 
     def initSimulation(self, twist_init=np.zeros(6), pose_init =np.zeros(6)):
         self.twist = twist_init
+        self.twist = twist_init
         self.pose = pose_init
         #self.pose[2] = self.vehicle_param.height
 
@@ -162,8 +164,10 @@ class TrackedVehicleSimulator3D:
         w_R_b = self.math_utils.eul2Rot(self.pose[3:])
 
         #get states in base frame b_v_c
-        b_v_c = w_R_b.T.dot(self.twist[3:])
+        b_v_c = w_R_b.T.dot(self.twist[:3])
         state2D = np.array([b_v_c[0],b_v_c[1], self.twist[5]])
+
+
         Fx_l, Fy_l, M_long_l, M_lat_l = self.tracked_robot.track_left.computeTerrainInteractions(state2D, omega_left, self.track_param,
                                                                                    self.sigma, self.ground, self.patch_pos_long_l, self.patch_pos_lat_l)
         Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(state2D, omega_right, self.track_param,
@@ -193,7 +197,9 @@ class TrackedVehicleSimulator3D:
         sim_counter = 0
         terrain_roll = np.linspace(0.0, 0.0, p.number_of_steps)
         terrain_pitch = np.linspace(0.0, -0.3, p.number_of_steps)
+
         while self.time < self.t_end:
+            #print(colored(f"time {p.time}", "red"))
             pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch[sim_counter])])
 
             #updates pose and twist
@@ -254,7 +260,7 @@ if __name__ == '__main__':
     # simulation with internal while loop
     p.simulate(omega_left, omega_right)
 
-
+    #TODO
     # assert_almost_equal(p.pose_log[0, -1], -1.02009 , decimal=2)
     # assert_almost_equal(p.pose_log[1, -1], 4.41854 , decimal=2)
     # assert_almost_equal(p.pose_log[2, -1], 3.54506, decimal=2)
@@ -309,4 +315,4 @@ if __name__ == '__main__':
     plt.plot(p.time_log[:-1], p.pose_des_log[5, :-1], linestyle='-', lw=3, color='red')
     plt.xlabel("Time [s]")
     plt.grid()
-    plt.ylim([-0.5,0.5])
+    plt.ylim([-1.5,1.5])

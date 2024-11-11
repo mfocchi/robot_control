@@ -50,15 +50,15 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'gazebo'#, 'gazebo', 'coppelia'(deprecated), 'biral'
+        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia'(deprecated), 'biral'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
         self.TERRAIN = False
 
-        self.STATISTICAL_ANALYSIS = True
-        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP', 'NONE'
+        self.STATISTICAL_ANALYSIS = False
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
         self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
-        self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = False # makes difference for v >= 0.4
+        self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
         # Parameters for open loop identification
         self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
@@ -72,9 +72,9 @@ class GenericSimulator(BaseController):
         # initial pose
         self.p0 = np.array([0., 0., 0.]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
 
-        self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
         # target used only for matlab trajectory generation (dubins/optimization) #need to run dubins_optimization/ros/ros_node.m
         self.pf = np.array([2., 2.5, -0.4])
+        self.MATLAB_PLANNING = 'optim' # 'none', 'dubins' , 'optim'
 
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
@@ -342,7 +342,7 @@ class GenericSimulator(BaseController):
         else:#Biral
             self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0, 0, 0.0]), pose_init=self.p0)
             self.broadcast_world = False
-            self.slow_down_factor = 1
+            self.slow_down_factor = 2
             # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
             self.basePoseW[self.u.sp_crd["LX"]] = self.p0[0]  # fixed height TODO change this when on slopes
             self.basePoseW[self.u.sp_crd["LY"]] = self.p0[1]  # fixed height TODO change this when on slopes

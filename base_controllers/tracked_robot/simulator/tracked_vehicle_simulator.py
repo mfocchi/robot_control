@@ -5,6 +5,7 @@ from numpy.testing import assert_almost_equal
 from matplotlib import pyplot as plt
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 import base_controllers.tracked_robot.utils.constants as constants
+from termcolor import colored
 
 class Ground():
     def __init__(self,
@@ -61,6 +62,7 @@ class TrackedVehicleSimulator:
 
         u_dot = (Fx_l + Fx_r) / m + Omega * v
         v_dot = (Fy_l + Fy_r) / m - Omega * u
+
         Omega_dot = (M_long_l + M_lat_l + M_long_r + M_lat_r) / Izz
         v_body_dot = np.array([u_dot, v_dot, Omega_dot])
         return v_body_dot
@@ -83,12 +85,16 @@ class TrackedVehicleSimulator:
         self.pose_der = np.zeros(3)
     
     def simulateOneStep(self, omega_left, omega_right):
-
         Fx_l, Fy_l, M_long_l, M_lat_l = self.tracked_robot.track_left.computeTerrainInteractions(self.state, omega_left, self.track_param,
                                                                                    self.sigma, self.ground, self.patch_pos_long_l, self.patch_pos_lat_l)
         Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(self.state, omega_right, self.track_param,
                                                                                    self.sigma, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
+
+
+
         self.state += self.dynamics(self.state, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param) * self.dt
+
+
 
         if self.NO_SLIPPAGE:
             vel = constants.SPROCKET_RADIUS * (omega_left + omega_right) / 2
@@ -104,6 +110,7 @@ class TrackedVehicleSimulator:
         self.time = 0.
         sim_counter = 0
         while self.time < self.t_end:
+            #print(colored(f"time {p.time}","red"))
             self.simulateOneStep(omega_left_vec[sim_counter], omega_right_vec[sim_counter])
             pose, pose_der = self.getRobotState()
             #get des pos
@@ -113,6 +120,7 @@ class TrackedVehicleSimulator:
             self.pose_des_log[:, sim_counter] = np.array([des_x, des_y, des_theta])
             self.pose_log[:, sim_counter] = self.pose
             self.time_log[sim_counter] = self.time
+
 
             sim_counter +=1
             self.time = np.round(self.time + self.dt, 3)
