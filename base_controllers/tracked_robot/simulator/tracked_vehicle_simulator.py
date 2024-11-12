@@ -79,7 +79,7 @@ class TrackedVehicleSimulator:
         pose_der = velocities_world
         return pose, pose_der
 
-    def initSimulation(self, vbody_init, pose_init):
+    def initSimulation(self, pose_init, vbody_init):
         self.state = vbody_init
         self.pose = pose_init
         self.pose_der = np.zeros(3)

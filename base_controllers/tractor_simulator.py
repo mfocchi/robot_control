@@ -36,6 +36,7 @@ from base_controllers.components.coppelia_manager import CoppeliaManager
 from optim_interfaces.srv import Optim, OptimRequest
 import scipy.io.matlab as mio
 from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
+from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator3d import  TrackedVehicleSimulator3D, Ground3D
 from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
@@ -50,9 +51,9 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia'(deprecated), 'biral'
-        self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
-        self.TERRAIN = False
+        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia'(deprecated), 'biral' 'biral3d'
+        self.NAVIGATION = '3d'  # 'none', '2d' , '3d'
+        self.TERRAIN = True
 
         self.STATISTICAL_ANALYSIS = False
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
@@ -201,13 +202,22 @@ class GenericSimulator(BaseController):
             ros.sleep(1.5)
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
-            groundParams = Ground(friction_coefficient=self.friction_coefficient)
-            self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
+            if self.SIMULATOR == 'biral3d':
+                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt and buffer_size", "red"))
+                print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
+                self.friction_coefficient = 0.7
+                conf.robot_params[self.robot_name]['buffer_size'] *= 5
+                conf.robot_params[p.robot_name]['dt'] = 0.001
+                groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
+                self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
+            else:
+                groundParams = Ground(friction_coefficient=self.friction_coefficient)
+                self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
 
             self.robot = getRobotModelFloating(self.robot_name)
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
-            self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
+            #self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
 
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
@@ -339,14 +349,26 @@ class GenericSimulator(BaseController):
             self.slow_down_factor = 8
 
         else:#Biral
-            self.tracked_vehicle_simulator.initSimulation(vbody_init=np.array([0, 0, 0.0]), pose_init=self.p0)
+            if self.SIMULATOR=='biral3d':
+                pose_init=np.array([self.p0[0], self.p0[1], 0, 0, 0, 0])
+                if self.TERRAIN:
+                    start_position, start_roll, start_pitch = p.terrainManager.project_on_mesh(point=pose_init[:2], direction=np.array([0., 0., 1.]))
+                    pose_init[:3] = start_position.copy()
+                    pose_init[3] = start_roll
+                    pose_init[4] = start_pitch
+                self.tracked_vehicle_simulator.initSimulation(pose_init=pose_init, twist_init=np.zeros(6), ros_pub = self.ros_pub)
+                # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
+                self.basePoseW = pose_init
+            else:
+                self.tracked_vehicle_simulator.initSimulation(pose_init=self.p0, vbody_init=np.array([0, 0, 0.0]))
+                # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
+                self.basePoseW[self.u.sp_crd["LX"]] = self.p0[0]
+                self.basePoseW[self.u.sp_crd["LY"]] = self.p0[1]
+                self.basePoseW[self.u.sp_crd["LZ"]] = self.tracked_vehicle_simulator.tracked_robot.vehicle_param.height  # fixed height TODO change this when on slopes
+                self.basePoseW[self.u.sp_crd["AZ"]] = self.p0[2]
+
             self.broadcast_world = False
             self.slow_down_factor = 2
-            # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
-            self.basePoseW[self.u.sp_crd["LX"]] = self.p0[0]  # fixed height TODO change this when on slopes
-            self.basePoseW[self.u.sp_crd["LY"]] = self.p0[1]  # fixed height TODO change this when on slopes
-            self.basePoseW[self.u.sp_crd["LZ"]] = self.tracked_vehicle_simulator.tracked_robot.vehicle_param.height  # fixed height TODO change this when on slopes
-            self.basePoseW[self.u.sp_crd["AZ"]] = self.p0[2]  # fixed height TODO change this when on slopes
 
         # loop frequency
         self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
@@ -712,26 +734,43 @@ class GenericSimulator(BaseController):
         self.pub_des_jstate.publish(msg) #publish in /commands
 
         #trigger simulators
-        if self.SIMULATOR == 'biral': #TODO implement torque control
+        if self.SIMULATOR == 'biral' or self.SIMULATOR == 'biral3d': #TODO implement torque control
             if self.ControlType != 'OPEN_LOOP' and self.LONG_SLIP_COMPENSATION  != 'NONE':
                 if np.any(qd_des > np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])) or np.any(qd_des < -np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])):
                     print(colored("wheel speed beyond limits, NN might do wrong predictions", "red"))
-            self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
-            pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
-            #fill in base state
-            self.basePoseW[:2] = pose[:2]
-            self.basePoseW[self.u.sp_crd["AZ"]] = pose[2]
-            self.euler = self.u.angPart(self.basePoseW)
-            self.baseTwistW[:2] = pose_der[:2]
-            self.baseTwistW[self.u.sp_crd["AZ"]] = pose_der[2]
 
+            if self.SIMULATOR=='biral3d':
+                if self.TERRAIN:
+                    pg, terrain_roll, terrain_pitch = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0., 0., 1.]))
+                    w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, self.basePoseW[5]]))
+                    w_normal = w_R_terr.dot(np.array([0, 0, 1]))
+                    self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=0.9)
+                    self.ros_pub.add_arrow(pg, w_normal * 0.5, color="white")
+                    self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
+                else:
+                    terrain_roll = 0.
+                    terrain_pitch = 0.
+                    pg = np.array([self.basePoseW[0], self.basePoseW[1], 0.])
+                self.tracked_vehicle_simulator.simulateOneStep(pg, terrain_roll, terrain_pitch, qd_des[0], qd_des[1])
+                self.basePoseW, self.baseTwistW = self.tracked_vehicle_simulator.getRobotState()
+
+            else:
+                self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
+                pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
+                #fill in base state
+                self.basePoseW[:2] = pose[:2]
+                self.basePoseW[self.u.sp_crd["AZ"]] = pose[2]
+                self.baseTwistW[:2] = pose_der[:2]
+                self.baseTwistW[self.u.sp_crd["AZ"]] = pose_der[2]
+
+            self.euler = self.u.angPart(self.basePoseW)
             self.quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.euler))
             self.b_R_w = self.math_utils.eul2Rot(self.euler).T
             #publish TF for rviz
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/world')
-            self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
+            #self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
             self.q = q_des.copy()
             self.qd = qd_des.copy()
             self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
@@ -754,14 +793,6 @@ class GenericSimulator(BaseController):
             sendStaticTransform("odom", "world", np.zeros(3), np.array([1, 0, 0, 0]))  # this is just to not  brake the locosim rviz that still wants world
             self.pub_odom_msg(self.odom_pub)
 
-        if self.TERRAIN:
-            eval_point, roll, pitch = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0.,0.,1.]))
-            w_R_terr = self.math_utils.eul2Rot(np.array([roll, pitch, self.euler[2]]))
-            w_normal = w_R_terr.dot(np.array([0,0,1]))
-
-            self.ros_pub.add_arrow(eval_point, w_normal, color="white")
-            self.ros_pub.add_marker(eval_point, color="white")
-            self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0.,0.,0.0]), color="red")
         if np.mod(self.time,1) == 0:
             if not self.STATISTICAL_ANALYSIS:
                 print(colored(f"TIME: {self.time}","red"))
@@ -933,6 +964,8 @@ def main_loop(p):
             # controllers
             if p.NAVIGATION !='none':
                 p.des_x, p.des_y, p.des_theta = p.traj.getSingleUpdate(p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d)
+                p.v_dot_d = 0.
+                p.omega_dot_d = 0.
                 traj_finished = None
             else:
                 p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, p.v_dot_d, p.omega_dot_d, traj_finished = p.traj.evalTraj(p.time)

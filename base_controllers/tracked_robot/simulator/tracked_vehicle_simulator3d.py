@@ -43,6 +43,9 @@ class TrackedVehicleSimulator3D:
     def __init__(self, dt=0.001, ground=None):
         self.NO_SLIPPAGE = False
         self.USE_MESH = False
+
+
+
         self.dt = dt
         self.vehicle_param = VehicleParam()
         self.track_param = TrackParams()
@@ -156,10 +159,14 @@ class TrackedVehicleSimulator3D:
         pose[3:] +=rpy_dot* self.dt
         return pose
 
-    def initSimulation(self,pose_init =np.zeros(6),  twist_init=np.zeros(6)):
+    def initSimulation(self,pose_init =np.zeros(6),  twist_init=np.zeros(6), ros_pub = None):
         self.pose = pose_init
         self.twist = twist_init
         #self.pose[2] = self.vehicle_param.height
+        if ros_pub is None:
+            self.ros_pub = RosPub('tractor', only_visual=True)
+        else:
+            self.ros_pub =ros_pub
 
     def simulateOneStep(self,pg, terrain_roll, terrain_pitch, omega_left, omega_right):
         # compute base orientation
@@ -266,7 +273,6 @@ if __name__ == '__main__':
 
     # to debug
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
-    p.ros_pub = RosPub('tractor', only_visual=True)
     p.broadcaster = tf.TransformBroadcaster()
 
     if p.USE_MESH:
