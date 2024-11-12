@@ -23,11 +23,11 @@ class Ground3D():
                  K=0.001,
                  shear_resistance_angle=20/180.*2*np.pi,
                  g=9.81,
-                 friction_coefficient=0.1,
+                 friction_coefficient=0.1, # 0.1 is very low and on slopes it slips!
                  terrain_stiffness = 1e06,
-                 terrain_damping = 1e01,
-                 terrain_torsional_stiffness=1e04,
-                 terrain_torsional_damping=4e01):
+                 terrain_damping = 1e04,
+                 terrain_torsional_stiffness=1e05,
+                 terrain_torsional_damping=1e03):
         self.cohesion = cohesion  # [Pa] #not used
         self.K = K  # [m]
         self.shear_resistance_angle = shear_resistance_angle  # [rad] #not used
