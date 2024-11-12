@@ -199,6 +199,7 @@ class BaseController(threading.Thread):
                                              callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
         self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose,
                                        queue_size=1, tcp_nodelay=True)
+
         if self.use_ground_truth_contacts:
             self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
                                                  callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
@@ -459,7 +460,7 @@ class BaseController(threading.Thread):
             grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  self.h_joints-self.tau ))
             self.u.setLegJointState(leg, grf, self.grForcesW)
 
-            if self.contact_normal[leg].dot(grf) >= self.force_th:
+            if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
                 self.contact_state[leg] = True
 
             else:
@@ -611,7 +612,6 @@ class BaseController(threading.Thread):
         self.loop_time = conf.robot_params[self.robot_name]['dt']
         self.log_counter = 0
 
-        self.force_th = conf.robot_params[self.robot_name]['force_th']
 
         # order: lf lh rf rh
         if self.use_ground_truth_contacts:

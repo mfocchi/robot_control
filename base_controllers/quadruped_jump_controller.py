@@ -450,7 +450,6 @@ class QuadrupedJumpController(QuadrupedController):
                     self.q_apex = self.q_des.copy()
                     self.qd_apex = self.qd_des.copy()
                     self.t_apex = self.time
-                    self.force_th = 50.
             else:
                 if self.baseTwistW[2] < 0.0:
                     self.detectedApexFlag = True
