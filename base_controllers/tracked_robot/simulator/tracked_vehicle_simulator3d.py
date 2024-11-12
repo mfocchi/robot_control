@@ -57,8 +57,8 @@ class TrackedVehicleSimulator3D:
 
         #these are just for the unit test
         self.t_end = 20.  # [s]
-        self.twist_init = [0, 0.0, 0,0,0,0]  # in WF
         self.pose_init = [0, 0.0, 0.0,0,0,0]  # position in WF, rpy angles
+        self.twist_init = [0, 0.0, 0,0,0,0]  # in WF
         self.number_of_steps = np.int32(self.t_end / self.dt)
         self.pose_des_log = np.full((6, self.number_of_steps), np.nan)
         self.pose_log = np.full((6, self.number_of_steps), np.nan)
@@ -67,8 +67,8 @@ class TrackedVehicleSimulator3D:
 
         self.q_des = np.zeros(2)
         self.qd_des = np.zeros(2)
-
-
+        self.pose_des = np.zeros(3)
+        self.orient_des = np.zeros(3)
 
     def computeGroundForcesMoments(self,pose, twist, w_R_b, pg, roll, pitch):
         pc = pose[:3]
@@ -129,21 +129,23 @@ class TrackedVehicleSimulator3D:
         NL_ang = np.cross(b_omega,  bI.dot(b_omega))
 
         #debug
-        w_Ft = w_R_b.dot(b_Ft)
-        w_Mg = w_R_b.dot(b_Mg)
-        w_Fgrav = w_R_b.dot(b_Fgrav)
-        self.ros_pub.add_arrow(self.pose[:3], w_Ft / np.linalg.norm(w_Ft), "red")
-        self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / np.linalg.norm(w_Fgrav), "blue")
-        #self.ros_pub.add_arrow(self.pose[:3], w_Fg / np.linalg.norm(w_Fg), "green")
-        self.ros_pub.add_arrow(self.pose[:3], w_Mg / np.linalg.norm(w_Mg), "green") #should be purely lateral flipping back forth
+        w_Ft = w_R_b.dot(b_Ft) #traction force
+        w_Fg = w_R_b.dot(b_Fg) # terrain linear
+        w_Mg = w_R_b.dot(b_Mg) # terrain moment
+        w_Fgrav = w_R_b.dot(b_Fgrav) #gravity force
 
-        b_vc_dot =  1/m*(b_Ft + b_Fgrav + b_Fg)# -NL_lin)
-        b_omega_dot = np.linalg.inv(bI).dot(b_Mt + b_Mg)#-NL_ang)
+        self.ros_pub.add_arrow(self.pose[:3], w_Ft / 100., "red")
+        self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / 1000., "blue")
+        self.ros_pub.add_arrow(self.pose[:3], w_Fg / 1000., "green")
+        self.ros_pub.add_arrow(self.pose[:3], w_Mg / np.linalg.norm(w_Mg), "green") #should be purely lateral flipping back forth on ramp with only pitch
+
+        b_vc_dot =  1/m*(b_Ft + b_Fgrav + b_Fg-NL_lin)
+        b_omega_dot = np.linalg.inv(bI).dot(b_Mt + b_Mg-NL_ang)
 
         w_twist_dot = np.concatenate((w_R_b.dot(b_vc_dot), w_R_b.dot(b_omega_dot)))
-        #print("b_Ft",b_Ft)
+        # print("b_Ft",b_Ft)
         # print("b_Fgrav",b_Fgrav)
-        # print("b_Fg", b_Fg)
+        #print("b_Mg", b_Mg)
         return w_twist_dot
 
     def integrateTwist(self, pose, twist):
@@ -195,12 +197,11 @@ class TrackedVehicleSimulator3D:
     def simulate(self, omega_left_vec, omega_right_vec):
         self.time = 0.
         sim_counter = 0
-
-        terrain_roll_vec = np.linspace(0.0, 0.0, p.number_of_steps)
-        terrain_pitch_vec = np.linspace(0.0, -0.3, p.number_of_steps)
+        self.rate = ros.Rate(1 /  (p.dt))
 
         while self.time < self.t_end:
-            #print(colored(f"time {p.time}", "red"))
+            if np.mod(self.time, 1) == 0:
+                print(colored(f"TIME: {self.time}","red"))
 
             # get des pos
             des_x, des_y, des_theta, _, _, _, _, _ = self.traj.evalTraj(self.time)
@@ -213,11 +214,16 @@ class TrackedVehicleSimulator3D:
                 w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, self.pose[5]]))
                 w_normal = w_R_terr.dot(np.array([0, 0, 1]))
 
-                self.ros_pub.add_arrow(pg, w_normal, color="black")
-                self.ros_pub.add_marker(pg, color="blue")
+                #for debug
+                # print("pose ", self.pose[:3])
+                # print("pg ", pg)
+                self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=0.9)
+                self.ros_pub.add_arrow(pg, w_normal*0.5, color="white")
+                self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha = 1.)
             else:
-                terrain_roll = terrain_roll_vec[sim_counter]
-                terrain_pitch = terrain_pitch_vec[sim_counter]
+                terrain_roll = self.terrain_roll_vec[sim_counter]
+                terrain_pitch = self.terrain_pitch_vec[sim_counter]
+
                 pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch)])
                 self.pose_des = np.array([des_x, des_y, self.computeZcomponent(des_x, des_y, terrain_pitch)])
                 self.orient_des = np.array([terrain_roll, terrain_pitch, des_theta])
@@ -238,7 +244,8 @@ class TrackedVehicleSimulator3D:
 
             #debug
             #time.sleep(0.2)
-            ros.sleep(self.dt)
+            #ros.sleep(self.dt)
+            self.rate.sleep()
             self.euler = self.pose[3:]
             self.quaternion = pin.Quaternion(self.math_utils.eul2Rot(self.euler))
             self.broadcaster.sendTransform(self.pose[:3],
@@ -262,13 +269,22 @@ if __name__ == '__main__':
 
     if p.USE_MESH:
         from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
-        p.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red")
         p.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
+        #start the robot on the mesh
+        start_position, start_roll, start_pitch = p.terrainManager.project_on_mesh(point=p.pose_init[:2], direction=np.array([0., 0., 1.]))
+        p.pose_init[:3] = start_position.copy()
+        p.pose_init[3] = start_roll
+        p.pose_init[4] = start_pitch
+    else:
+        p.terrain_roll_vec = np.linspace(0.0, 0.0, p.number_of_steps)
+        p.terrain_pitch_vec = np.linspace(0.0, -0.3, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
 
     #gen traj
     v = np.linspace(0.4, 0.4, p.number_of_steps)
-    omega = np.linspace(0., 0., p.number_of_steps)
-    p.traj = Trajectory(ModelsList.UNICYCLE, 0, 0, 0, DT=p.dt, v=v, omega=omega)
+    omega = np.linspace(0., 0.0, p.number_of_steps)
+    p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.pose_init[0],
+                        start_y= p.pose_init[1], start_theta=p.pose_init[5],
+                        DT=p.dt, v=v, omega=omega)
 
     #convert to wheels
     r = p.track_param.sprocket_radius
@@ -309,6 +325,7 @@ if __name__ == '__main__':
     plt.plot(p.time_log[:-1], p.pose_log[1, :-1], linestyle='-',  lw=3, color='blue')
     plt.plot(p.time_log[:-1], p.pose_des_log[1, :-1], linestyle='-', lw=3, color='red')
     plt.grid()
+    plt.ylim([-10, 10])
     plt.subplot(3, 1, 3)
     plt.ylabel("Z")
     plt.plot(p.time_log[:-1], p.pose_log[2, :-1], linestyle='-',  lw=3, color='blue')
@@ -337,4 +354,4 @@ if __name__ == '__main__':
     plt.plot(p.time_log[:-1], p.pose_des_log[5, :-1], linestyle='-', lw=3, color='red')
     plt.xlabel("Time [s]")
     plt.grid()
-    plt.ylim([-1.5,1.5])
+    plt.ylim([-2,2])
