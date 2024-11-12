@@ -11,7 +11,7 @@ from base_controllers.utils.math_tools import Math
 from base_controllers.utils.common_functions import  launchFileGeneric
 from base_controllers.utils.ros_publish import RosPub
 import rospkg
-import time
+import os
 import pinocchio as pin
 import rospy as ros
 import tf
@@ -254,6 +254,8 @@ class TrackedVehicleSimulator3D:
             self.ros_pub.publishVisual(delete_markers=False)
             if ros.is_shutdown():
                 break
+        os.system("rosnode kill rviz")
+        os.system("pkill rosmaster")
 
     def getRobotState(self):
         return self.pose, self.twist
@@ -277,7 +279,8 @@ if __name__ == '__main__':
         p.pose_init[4] = start_pitch
     else:
         p.terrain_roll_vec = np.linspace(0.0, 0.0, p.number_of_steps)
-        p.terrain_pitch_vec = np.linspace(0.0, -0.3, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
+        p.terrain_pitch_vec = np.linspace(0.0, -0.1, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
+        p.terrain_pitch_vec = np.linspace(0.0, -0.1, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
 
     #gen traj
     v = np.linspace(0.4, 0.4, p.number_of_steps)
