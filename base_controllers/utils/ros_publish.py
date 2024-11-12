@@ -38,6 +38,7 @@ class RosPub():
         self.marker_pub = ros.Publisher('/vis' , MarkerArray, queue_size=1)
         self.arrow_pub = ros.Publisher('/arrow', MarkerArray, queue_size=1)
         self.polygon_pub = ros.Publisher('/support_polygon', MarkerArray, queue_size=1)
+        self.mesh_pub = ros.Publisher('/mesh', MarkerArray, queue_size=1)
         self.marker_fixed_pub = ros.Publisher('/point_fixed', MarkerArray, queue_size=1)
         self.markerArray = MarkerArray()
         self.markerArray.markers = []
@@ -47,6 +48,8 @@ class RosPub():
         self.markerArray_arrows.markers = []
         self.markerArrayFixed = MarkerArray()
         self.markerArrayFixed.markers = []
+        self.markerArray_mesh = MarkerArray()
+        self.markerArray_mesh.markers = []
         self.id = 0
         self.id_arrow = 0
         self.id_polygon = 0
@@ -105,12 +108,17 @@ class RosPub():
             self.markerArrayFixed.markers.clear()
             self.id_fixed = 0
 
+        if len(self.markerArray_mesh.markers) > 0:
+            self.mesh_pub.publish(self.markerArray_mesh)
+            # reset the marker array making it ready for another round
+            self.markerArray_mesh.markers.clear()
+            self.id_mesh = 0
 
 
         if delete_markers:
             self.delete_all_markers()
 
-    def add_marker(self, pos, radius = 0.1, color = "red"):
+    def add_marker(self, pos, radius = 0.1, color = "red", alpha = 0.5):
         marker = Marker()
         marker.header.frame_id = self.visual_frame
         marker.type = marker.SPHERE
@@ -135,6 +143,11 @@ class RosPub():
             marker.color.r = 0.7
             marker.color.g = 0.0
             marker.color.b = 1.0
+        if (color == "white"):
+            marker.color.r = 1.
+            marker.color.g = 1.
+            marker.color.b = 1.
+        marker.color.a = alpha
         marker.pose.orientation.x = 0.
         marker.pose.orientation.y = 0.
         marker.pose.orientation.z = 0.
@@ -197,6 +210,10 @@ class RosPub():
            marker.color.g = 0.0
            marker.color.b = 0.0
        if (color == "black"):
+           marker.color.r = 0.0
+           marker.color.g = 0.0
+           marker.color.b = 0.0
+       if (color == "white"):
            marker.color.r = 1.0
            marker.color.g = 1.0
            marker.color.b = 1.0
@@ -219,7 +236,7 @@ class RosPub():
        self.id_arrow += 1
        self.markerArray_arrows.markers.append(marker)
 
-    def add_mesh(self, package, mesh_path, position = np.zeros(3), color = "green"):
+    def add_mesh(self, package, mesh_path, position = np.zeros(3), color = "green", alpha = 1.):
         marker = Marker()
         if (color == "green"):
             marker.color.r = 0.0
@@ -233,7 +250,7 @@ class RosPub():
             marker.color.r = 1.0
             marker.color.g = 0.0
             marker.color.b = 0.0
-        marker.color.a = 1.0
+        marker.color.a = alpha
 
         marker.header.frame_id = self.visual_frame
         marker.type = marker.MESH_RESOURCE
@@ -253,7 +270,7 @@ class RosPub():
         marker.pose.orientation.w = 1.
         marker.id = self.id_mesh
         self.id_mesh += 1
-        self.markerArray_arrows.markers.append(marker)
+        self.markerArray_mesh.markers.append(marker)
 
 
 
@@ -303,7 +320,10 @@ class RosPub():
         marker.id = 0
         marker.action = Marker.DELETEALL
         marker_array_msg.markers.append(marker)
+        self.marker_pub.publish(marker_array_msg)
         self.arrow_pub.publish(marker_array_msg)
+        self.polygon_pub.publish(marker_array_msg)
+        self.mesh_pub.publish(marker_array_msg)
 
     def add_cone(self,  origin, normal, friction_coeff, height=0.05, color = "green"):
 
