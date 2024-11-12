@@ -42,6 +42,7 @@ class Ground3D():
 class TrackedVehicleSimulator3D:
     def __init__(self, dt=0.001, ground=None):
         self.NO_SLIPPAGE = False
+        self.USE_MESH = False
         self.dt = dt
         self.vehicle_param = VehicleParam()
         self.track_param = TrackParams()
@@ -195,21 +196,36 @@ class TrackedVehicleSimulator3D:
     def simulate(self, omega_left_vec, omega_right_vec):
         self.time = 0.
         sim_counter = 0
-        terrain_roll = np.linspace(0.0, 0.0, p.number_of_steps)
-        terrain_pitch = np.linspace(0.0, -0.3, p.number_of_steps)
+
+        terrain_roll_vec = np.linspace(0.0, 0.0, p.number_of_steps)
+        terrain_pitch_vec = np.linspace(0.0, -0.3, p.number_of_steps)
 
         while self.time < self.t_end:
             #print(colored(f"time {p.time}", "red"))
-            pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch[sim_counter])])
-
-            #updates pose and twist
-            self.simulateOneStep(pg, terrain_roll[sim_counter], terrain_pitch[sim_counter],omega_left_vec[sim_counter], omega_right_vec[sim_counter])
 
             # get des pos
             des_x, des_y, des_theta, _, _, _, _, _ = self.traj.evalTraj(self.time)
 
-            self.pose_des = np.array([des_x, des_y, self.computeZcomponent(des_x, des_y, terrain_pitch[sim_counter])])
-            self.orient_des = np.array([terrain_roll[sim_counter], terrain_pitch[sim_counter], des_theta])
+            if self.USE_MESH:
+                pg, terrain_roll, terrain_pitch = self.terrainManager.project_on_mesh(point=self.pose[:2], direction=np.array([0., 0., 1.]))
+                self.pose_des,terrain_roll_des,terrain_pitch_des = self.terrainManager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
+                self.orient_des = np.array([terrain_roll_des, terrain_pitch_des, des_theta])
+
+                w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, self.pose[5]]))
+                w_normal = w_R_terr.dot(np.array([0, 0, 1]))
+
+                self.ros_pub.add_arrow(pg, w_normal, color="black")
+                self.ros_pub.add_marker(pg, color="blue")
+            else:
+                terrain_roll = terrain_roll_vec[sim_counter]
+                terrain_pitch = terrain_pitch_vec[sim_counter]
+                pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch)])
+                self.pose_des = np.array([des_x, des_y, self.computeZcomponent(des_x, des_y, terrain_pitch)])
+                self.orient_des = np.array([terrain_roll, terrain_pitch, des_theta])
+
+            #updates pose and twist
+            self.simulateOneStep(pg, terrain_roll, terrain_pitch,omega_left_vec[sim_counter], omega_right_vec[sim_counter])
+
 
             #log
             self.pose_des_log[:3, sim_counter] = self.pose_des
@@ -245,10 +261,17 @@ if __name__ == '__main__':
     p.ros_pub = RosPub('tractor', only_visual=True)
     p.broadcaster = tf.TransformBroadcaster()
 
+    if p.USE_MESH:
+        from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
+        p.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red")
+        p.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
+
+    #gen traj
     v = np.linspace(0.4, 0.4, p.number_of_steps)
     omega = np.linspace(0., 0., p.number_of_steps)
     p.traj = Trajectory(ModelsList.UNICYCLE, 0, 0, 0, DT=p.dt, v=v, omega=omega)
 
+    #convert to wheels
     r = p.track_param.sprocket_radius
     B = p.vehicle_param.width
     omega_left = (v - omega * B / 2.0) / r
