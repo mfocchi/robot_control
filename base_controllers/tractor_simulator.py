@@ -74,7 +74,7 @@ class GenericSimulator(BaseController):
 
         # target used only for matlab trajectory generation (dubins/optimization) #need to run dubins_optimization/ros/ros_node.m
         self.pf = np.array([2., 2.5, -0.4])
-        self.MATLAB_PLANNING = 'optim' # 'none', 'dubins' , 'optim'
+        self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
 
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
@@ -213,8 +213,7 @@ class GenericSimulator(BaseController):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
-        if self.TERRAIN:
-            self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0.,0.,0.0]), color="red")
+        if self.TERRAIN: #this works both for gazebo and biral
             self.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
         if self.NAVIGATION != 'none':
             print(colored("IMPORTANT: be sure that you are running the image mfocchi/trento_lab_framework:introrob_upgrade", "red"))
@@ -290,7 +289,7 @@ class GenericSimulator(BaseController):
 
     def getTrajFromMatlab(self):
         try:
-            ros.wait_for_service('/optim', timeout=30)
+            ros.wait_for_service('/optim', timeout=5)
             self.optim_client = ros.ServiceProxy('/optim', Optim)
             request_optim = OptimRequest()
             request_optim.x0 = self.p0[0]
@@ -310,7 +309,7 @@ class GenericSimulator(BaseController):
             return response.des_x,response.des_y,response.des_theta,response.des_v, response.des_omega, response.dt
 
         except:
-            print(colored("Matlab service call /optim not available"), "red")
+            print(colored("Matlab service call /optim not available", "red"))
 
     def get_command_vel(self, msg):
         self.v_d = msg.linear.x
@@ -760,9 +759,9 @@ class GenericSimulator(BaseController):
             w_R_terr = self.math_utils.eul2Rot(np.array([roll, pitch, self.euler[2]]))
             w_normal = w_R_terr.dot(np.array([0,0,1]))
 
-            self.ros_pub.add_arrow(eval_point, w_normal, color="blue")
-            self.ros_pub.add_marker(eval_point, color="blue")
-
+            self.ros_pub.add_arrow(eval_point, w_normal, color="white")
+            self.ros_pub.add_marker(eval_point, color="white")
+            self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0.,0.,0.0]), color="red")
         if np.mod(self.time,1) == 0:
             if not self.STATISTICAL_ANALYSIS:
                 print(colored(f"TIME: {self.time}","red"))
