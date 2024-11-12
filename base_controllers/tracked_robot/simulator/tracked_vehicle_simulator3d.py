@@ -123,7 +123,7 @@ class TrackedVehicleSimulator3D:
         b_Mt = np.zeros(3)
         b_Mt[2] = M_long_l + M_lat_l + M_long_r + M_lat_r
         #compute gravity force
-        b_Fgrav = w_R_b.T.dot(np.array([0.,0.,-self.ground.g]))
+        b_Fgrav = w_R_b.T.dot(m*np.array([0.,0.,-self.ground.g]))
         #compute non linear terms
         NL_lin = m*(np.cross(b_omega,b_vc))
         NL_ang = np.cross(b_omega,  bI.dot(b_omega))
