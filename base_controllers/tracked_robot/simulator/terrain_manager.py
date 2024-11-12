@@ -30,21 +30,23 @@ class TerrainManager:
     def __init__(self, mesh_path = "terrain.stl" ):
         self.mesh =  o3d.io.read_triangle_mesh(mesh_path)
         self.triangle_mesh = o3d.t.geometry.TriangleMesh.from_legacy(self.mesh)
-        self.baseline = 10
+        self.baseline = -10 # is the Z level from which we cast rays
+        # define scene
+        self.scene = o3d.t.geometry.RaycastingScene()
+        # returns the ID for the added geometry
+        self.scene.add_triangles(self.triangle_mesh)
 
     def project_on_mesh(self, point, direction, debug=False):
         # SUGGESTED BY https://github.com/matteodv99tn
-        # define scene
-        scene = o3d.t.geometry.RaycastingScene()
-        # returns the ID for the added geometry
-        scene.add_triangles(self.triangle_mesh)
 
-        point = np.append(point, -self.baseline)
+
+
+        point = np.append(point, self.baseline)
         # use open3d ray casting to compute distance from point to surface
         ray = o3d.core.Tensor([np.concatenate((point, direction))], dtype=o3d.core.Dtype.Float32)
 
         #The result contains information about a possible intersection with the geometry in the scene.
-        ans = scene.cast_rays(ray)
+        ans = self.scene.cast_rays(ray)
 
         # self.logger.info(f"Distance from pelvis joint to surface: {ans}")
         # self.logger.info(f"Vertex ID: {ans['primitive_ids']}")
