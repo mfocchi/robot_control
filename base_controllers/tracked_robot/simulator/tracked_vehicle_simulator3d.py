@@ -154,10 +154,9 @@ class TrackedVehicleSimulator3D:
         pose[3:] +=rpy_dot* self.dt
         return pose
 
-    def initSimulation(self, twist_init=np.zeros(6), pose_init =np.zeros(6)):
-        self.twist = twist_init
-        self.twist = twist_init
+    def initSimulation(self,pose_init =np.zeros(6),  twist_init=np.zeros(6)):
         self.pose = pose_init
+        self.twist = twist_init
         #self.pose[2] = self.vehicle_param.height
 
     def simulateOneStep(self,pg, terrain_roll, terrain_pitch, omega_left, omega_right):
