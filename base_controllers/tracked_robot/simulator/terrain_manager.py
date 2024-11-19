@@ -38,9 +38,6 @@ class TerrainManager:
 
     def project_on_mesh(self, point, direction, debug=False):
         # SUGGESTED BY https://github.com/matteodv99tn
-
-
-
         point = np.append(point, self.baseline)
         # use open3d ray casting to compute distance from point to surface
         ray = o3d.core.Tensor([np.concatenate((point, direction))], dtype=o3d.core.Dtype.Float32)
@@ -57,9 +54,17 @@ class TerrainManager:
         eval_point = point + z_coord
         normal = ans['primitive_normals'][0].cpu().numpy()
 
+        #first compute yaw to solve ambiguity, because we are reasoning in the world frame, we consider yaw the angle between the projection
+        #of the normal vector onto the XY plane n_xy =(nx, ny, 0) and the base X axis (rx,ry,0)
+        yaw = math.atan2(normal[1], normal[0])
+
+        #then I rotate n to undo the yaw and get n_ = [sin(pitch)*cos(roll); -sint(roll), cos(pitch)*cos(roll)])
+        Rz = np.array([[math.cos(yaw), -math.sin(yaw), 0],[math.sin(yaw), math.cos(yaw), 0],[0, 0, 1] ])
+        n_ =Rz.T.dot(normal)
+
         #compute roll/pitch
-        pitch = math.atan2(normal[0], normal[2])
-        roll = math.atan2(-normal[1]*np.sin(pitch), normal[0])
+        pitch = math.atan2(n_[0], n_[2])
+        roll = math.atan2(-n_[1]*np.sin(pitch), n_[0])
         #to have it in the range between  -pi/2 and pi/2
         if roll > np.pi/2:
             roll-=np.pi
@@ -79,7 +84,7 @@ class TerrainManager:
             print("normal is: ", normal)
             print("eval point is ",eval_point)
 
-        return eval_point, roll, pitch
+        return eval_point, roll, pitch, yaw
 
     def draw_line(self, start, length, direction, colors =  [[1,0,0]]):
         end = start + length * direction
