@@ -1383,7 +1383,7 @@ class QuadrupedController(BaseController):
 
 
 if __name__ == '__main__':
-    p = QuadrupedController('go2')
+    p = QuadrupedController('go1')
     world_name = 'fast.world'
     use_gui = False
     try:

@@ -8,13 +8,6 @@ sys.path.append(dir_path+"/../")
 sys.path.append(dir_path+"/../../")
 sys.path.append(dir_path+"/../../../")
 
-pid = os.getpid()
-
-# NOTE: run the script in lab-root
-# chrt -r 99 command 
-os.system(f'sudo renice -n -21 -p {str(pid)}')
-os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
-
 from landing_controller.controller.landingManager import LandingManager
 
 from gazebo_ros import gazebo_interface
@@ -258,7 +251,7 @@ class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
-        self.DEBUG = True
+        self.DEBUG = False
         self.jumpAgent = JumpAgent(cfg={"model_path": os.path.join(os.environ.get('LOCOSIM_DIR'), 'robot_control','base_controllers', 'jump_policy', 'policy.onnx'),
                                         "min_action": -5,
                                         "max_action": 5,
@@ -293,6 +286,12 @@ class QuadrupedJumpController(QuadrupedController):
         self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
         self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
         self.use_landing_controller = False
+
+        if self.real_robot:
+            pid = os.getpid()
+            os.system(f'sudo renice -n -21 -p {str(pid)}') #need to launch docker as root
+            os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup') #need to launch docker as root
+            print(colored("Real robot TRUE: you should launch your lab alias with xhost +; lab -u root"))
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
     def init_pid_tuning_ui(self):
@@ -387,6 +386,8 @@ class QuadrupedJumpController(QuadrupedController):
         self.landing_orientation = np.zeros(3)
         self.landing_error = 0.
         self.orient_error = 0.
+        self.touchdown_detected = False
+        #for debug
         self.switch_on = False
         self.t0 = None
 
@@ -465,11 +466,7 @@ class QuadrupedJumpController(QuadrupedController):
                     self.t_apex = self.time
 
     def detectTouchDown(self):
-        # contact = np.array([False,False,False,False])
-        # for leg in range(4):
-        #     contact[leg] = np.linalg.norm(self.grForcesW)>self.force_th
         if np.all(self.contact_state):
-            # print(colored("TOUCHDOWN detected", "red"))
             return True
         else:
             return False
@@ -791,29 +788,26 @@ if __name__ == '__main__':
             os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf", root_joint=pinocchio.JointModelFreeFlyer())
 
         if p.real_robot:
-            p.startTrust = 15. #the startup procedure should be shortet than this! otherwise the time is wrong
+            p.startTrust = 15. #the startup procedure should be shorter than this! otherwise the time is wrong
             p.startupProcedure()
-            p.updateKinematics()  # neeeded to cal legodom to have an initial estimate of com position
+            p.updateKinematics()  # neeeded to call legodom to have an initial estimate of com position
         else:
             p.startTrust = 5.
             p.customStartupProcedure()
-           
-        # if not p.real_robot:
-        #     ros.sleep(2.)
-        p.touchdown_detected = False
 
         # initial pose
         com_0 = p.basePoseW[:3].copy()
         eul_0 = p.basePoseW[3:].copy()
         
         # forward jump
-        p.jumpDeltaStep = np.array([0.15 , 0., 0.])
+        p.jumpDeltaStep = np.array([0.2 , 0., 0.])
         p.jumpDeltaOrient = np.array([0.0 , 0., 0.])
    
         p.target_position = com_0 + p.jumpDeltaStep
         p.target_orientation =  eul_0 + p.jumpDeltaOrient 
         p.jumpAgent.act(p.jumpDeltaStep, p.jumpDeltaOrient)
 
+        #we have to do this because the training was done for height 0.3 TODO
         default_start = np.array([0., 0., 0.3])
 
         # extract liftoff position orientation from action
@@ -843,14 +837,12 @@ if __name__ == '__main__':
             p.T_th_total = np.inf
 
         p.computeHeuristicSolutionBezierLinear(com_0, p.com_lo, p.comd_lo, p.T_th)
-        # p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th)
-        p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th_total)
+        p.computeHeuristicSolutionBezierAngular(eul_0, eul_lo, euld_lo, p.T_th_total) #we have the explosive part only for the lineat part
 
         # this is for visualization
-        # p.computeTrajectoryBezier(p.T_th)
         p.computeTrajectoryBezier(p.T_th, p.T_th_total)
         p.stance_legs = [True, True, True, True]
-        # print(p.computeJcb(p.W_contacts, com_0))
+
         # reset integration of feet
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
         p.W_contacts_sampled = np.copy(p.W_contacts)
@@ -870,7 +862,6 @@ if __name__ == '__main__':
             # release base
             if p.firstTime:
                 print(colored(f'Start of the control loop {p.time}'))
-
                 p.firstTime = False
                 p.trustPhaseFlag = True
                 p.T_fl = None
@@ -894,17 +885,13 @@ if __name__ == '__main__':
                     p.qd_t_th = p.qd_des.copy()
                     #p.qd_des = np.zeros(12)
                     p.tau_ffwd = np.zeros(12)
-                    print(
-                        colored(f"thrust completed! at time {p.time}", "red"))
-                    # Reducing gains for more complaint landing
-                    # TODO: ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
+                    print(colored(f"thrust completed! at time {p.time}", "red"))
+                    # Reducing gains for more complaint landing  ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
                     if p.real_robot:
                         p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real_swing'],
                                             conf.robot_params[p.robot_name]['kd_real_swing'], 
                                             conf.robot_params[p.robot_name]['ki_real_swing'])
-
-                
-                    print(colored(f"pdi: {p.pid.joint_pid}"))
+                        print(colored(f"pdi: {p.pid.joint_pid}"))
 
                     if p.DEBUG:
                         print('time is over: ',p.time, 'tot_time:', p.startTrust + p.T_th_total)
@@ -912,8 +899,7 @@ if __name__ == '__main__':
             else:
                 if not p.touchdown_detected:    
                     elapsed_time = p.time - (p.startTrust + p.T_th_total)
-                    elapsed_ratio = np.clip(
-                            elapsed_time / p.lerp_time, 0, 1)
+                    elapsed_ratio = np.clip(elapsed_time / p.lerp_time, 0, 1)
                     p.q_des = p.cerp(p.q_t_th, conf.robot_params[p.robot_name]['q_land'],  elapsed_ratio).copy()
                     p.qd_des = p.cerp(p.qd_t_th, np.zeros_like(p.qd_t_th), elapsed_ratio).copy()
                     
@@ -969,8 +955,7 @@ if __name__ == '__main__':
                                     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'],
                                                     conf.robot_params[p.robot_name]['kd_real'], 
                                                     conf.robot_params[p.robot_name]['ki_real'] )
-                            
-                                print(colored(f"pdi: {p.pid.joint_pid}"))
+                                    print(colored(f"pdi: {p.pid.joint_pid}"))
                         else:
                             # break
                             p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts, 
