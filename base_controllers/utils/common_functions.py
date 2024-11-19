@@ -99,7 +99,6 @@ def launchFileNode(package,launch_file, additional_args=None):
     parent.start()
 
 def launchFileGeneric(launch_file):
-    # run robot state publisher + load robot description + rviz
     uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
     roslaunch.configure_logging(uuid)
     launch = roslaunch.parent.ROSLaunchParent(uuid, [launch_file])
@@ -651,7 +650,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
     return fig
 
 def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc_log=None, Acc_log=None,
-              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=False, start=0, end=-1):
+              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=False, start=0, end=-1, custom_labels=None):
     plot_var_log = None
     plot_var_des_log = None
     labels = ["", "", ""]
@@ -712,6 +711,9 @@ def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_
                 plot_var_des_log = des_Wrench_log
     else:
        print("wrong choice")
+
+    if custom_labels is not None:
+        labels = custom_labels
 
     if title is None:
         title = name
