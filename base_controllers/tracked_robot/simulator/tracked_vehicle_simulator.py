@@ -193,7 +193,7 @@ if __name__ == '__main__':
     omega_right = (v + omega * B / 2.0) / r
 
     # init vars
-    p.initSimulation(p.state_init, p.pose_init)
+    p.initSimulation(p.pose_init, p.state_init)
 
     # simulation with internal while loop
     p.simulate(omega_left, omega_right)

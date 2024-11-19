@@ -39,32 +39,6 @@ class TrackedVehicle:
         self.track_left.computePatchesShearDisplacement(inputs,  omega_l) 
         self.track_right.computePatchesShearDisplacement(inputs, omega_r) 
 
-    #TODO this function is not implemented
-    def computeShearStress(self, ground):
-        self.track_left.computePatchesShearStress()
-        self.track_right.computePatchesShearStress()
-
-    #TODO this function is not implemented
-    def computeShearVelocitys(self,  inputs):
-        omega_l = inputs.omega_sprocket_left 
-        omega_r = inputs.omega_sprocket_right 
-        self.track_left.computeShearVelocitys(inputs,  omega_l) 
-        self.track_right.computeShearVelocitys(inputs, omega_r) 
-
-    #TODO this function is not implemented
-    def computeShearAngles(self):
-        self.track_left.computeShearAngle() 
-        self.track_right.computeShearAngle() 
-
-    #TODO this function is not implemented
-    def computeTractiveForces(self, ground):
-        self.F_left = self.track_left.computeTractiveForce() 
-        self.F_right = self.track_right.computeTractiveForce() 
-
-    #TODO this function is not implemented
-    def computeResistiveTurningMoments(self):
-        self.M_long_left, self.M_lat_left  = self.track_left.computeResistiveTruningMoments() 
-        self.M_long_right,self.M_lat_right = self.track_right.computeResistiveTruningMoments() 
 
     #getters
     def getLeftPatchesPositions(self):

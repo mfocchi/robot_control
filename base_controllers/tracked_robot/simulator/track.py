@@ -18,22 +18,7 @@ class TrackParams:
 class Track:
     def __init__(self, position, track_param):
         # create and manages the array of contact_patch to simulate the interaction with the terrain
-
-        # self.name
-        # self.parts_longitudinal
-        # self.parts_lateral
-        # self.contact_patches
-        # self.position
-        # self.dA
-        # self.length
-        # self.width
-        # self.sprocket_radius
-        # self.normal_stress
-        # self.shear_displacement
-        # self.shear_stress
-
-
-        self.parts_longitudinal = track_param.parts_longitudinal 
+        self.parts_longitudinal = track_param.parts_longitudinal
         self.parts_lateral = track_param.parts_lateral 
         self.position = position 
         self.length =  track_param.length 
@@ -58,7 +43,6 @@ class Track:
                 #patch_position_in_track = np.array([self.length/2 - (i-1/2) * d_longitudinal,      self.width/2 - (j-1/2) * d_lateral ])
                 #python
                 patch_position_in_track = np.array([self.length / 2 - (i + 1 / 2) * d_longitudinal, self.width / 2 - (j + 1 / 2) * d_lateral])
-
                 patch_position = self.position +patch_position_in_track
                 index = self.getIndex(i,j)
                 self.contact_patches[index] = ContactPatch(patch_position, d_lateral, d_longitudinal)
@@ -143,7 +127,6 @@ class Track:
         self.normal_stress = sigma
 
     # GETTERS
-
     def getPatchesLongitudinalPosition(self):
         x = np.zeros(self.getSizePatches())
         for i in range(self.parts_longitudinal):
