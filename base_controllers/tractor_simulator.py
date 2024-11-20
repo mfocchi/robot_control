@@ -10,7 +10,7 @@ import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from base_controllers.base_controller import BaseController
-from base_controllers.utils.common_functions import plotFrameLinear, plotJoint, sendStaticTransform, launchFileGeneric, launchFileNode
+from base_controllers.utils.common_functions import plotFrameLinear, plotFrame,  plotJoint, sendStaticTransform, launchFileGeneric
 import params as conf
 import os
 import sys
@@ -134,8 +134,13 @@ class GenericSimulator(BaseController):
         self.beta_r_control = 0.
         self.log_exy = []
         self.log_e_theta = []
+        self.euler = np.zeros(3)
+        self.basePoseW_des = np.zeros(6) * np.nan
+
         self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
+        self.basePoseW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+
         self.beta_l_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.beta_r_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.alpha_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
@@ -174,6 +179,8 @@ class GenericSimulator(BaseController):
                 self.state_log[1, self.log_counter] = self.basePoseW[self.u.sp_crd["LY"]]
                 self.state_log[2, self.log_counter] =  self.basePoseW[self.u.sp_crd["AZ"]]
 
+                self.basePoseW_des_log[:, self.log_counter] = self.basePoseW_des #basepose is logged in base controller
+
                 self.alpha_log[self.log_counter] = self.alpha
                 self.beta_l_log[self.log_counter] = self.beta_l
                 self.beta_r_log[self.log_counter] = self.beta_r
@@ -203,11 +210,11 @@ class GenericSimulator(BaseController):
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'biral3d':
-                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt and buffer_size", "red"))
+                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.0005 and increased 5x buffer_size", "red"))
                 print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
                 self.friction_coefficient = 0.7
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
-                conf.robot_params[p.robot_name]['dt'] = 0.001
+                conf.robot_params[p.robot_name]['dt'] = 0.0005
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
             else:
@@ -350,15 +357,16 @@ class GenericSimulator(BaseController):
 
         else:#Biral
             if self.SIMULATOR=='biral3d':
-                pose_init=np.array([self.p0[0], self.p0[1], 0, 0, 0, 0])
+                self.terrain_consistent_pose_init=np.array([self.p0[0], self.p0[1], 0, 0, 0, 0])
                 if self.TERRAIN:
-                    start_position, start_roll, start_pitch = p.terrainManager.project_on_mesh(point=pose_init[:2], direction=np.array([0., 0., 1.]))
-                    pose_init[:3] = start_position.copy()
-                    pose_init[3] = start_roll
-                    pose_init[4] = start_pitch
-                self.tracked_vehicle_simulator.initSimulation(pose_init=pose_init, twist_init=np.zeros(6), ros_pub = self.ros_pub)
+                    start_position, start_roll, start_pitch, start_yaw = p.terrainManager.project_on_mesh(point=self.terrain_consistent_pose_init[:2], direction=np.array([0., 0., 1.]))
+                    self.terrain_consistent_pose_init[:3] = start_position.copy()
+                    self.terrain_consistent_pose_init[3] = start_roll
+                    self.terrain_consistent_pose_init[4] = start_pitch
+                    self.terrain_consistent_pose_init[5] = start_yaw
+                self.tracked_vehicle_simulator.initSimulation(pose_init=self.terrain_consistent_pose_init, twist_init=np.zeros(6), ros_pub = self.ros_pub)
                 # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
-                self.basePoseW = pose_init
+                self.basePoseW = self.terrain_consistent_pose_init.copy()
             else:
                 self.tracked_vehicle_simulator.initSimulation(pose_init=self.p0, vbody_init=np.array([0, 0, 0.0]))
                 # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
@@ -423,9 +431,13 @@ class GenericSimulator(BaseController):
             plt.ylabel("WHEEL_R")
             plt.grid(True)
 
+
             #states plot
-            plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log)
-            #plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
+            if self.SIMULATOR == 'biral3d': #not the roll and pitch are not meaningful because we are not tracking the yaw of the terrain so they are assosiated to a different yaw
+                plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log, title='states', frame='W')
+            else:
+                plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log, custom_labels=(["X","Y","THETA"]))
+                #plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
             if self.SIMULATOR != 'gazebo':
                 #slippage vars
@@ -498,6 +510,14 @@ class GenericSimulator(BaseController):
         # # SAFE CHECK -> clipping velocities
         # v = np.clip(v, -constants.MAX_LINEAR_VELOCITY, constants.MAX_LINEAR_VELOCITY)
         # o = np.clip(o, -constants.MAX_ANGULAR_VELOCITY, constants.MAX_ANGULAR_VELOCITY)
+        if self.SIMULATOR=='biral3d':
+            self.w_R_b = self.math_utils.eul2Rot(self.euler)
+            self.hf_R_b = self.math_utils.eul2Rot(np.array([self.euler[0],self.euler[1], 0.]))
+            # project v_des which is in Horizontal frame onto hf_x_b
+            v_des = self.hf_R_b[0].dot(np.array([v_des, 0., 0.]))
+            # project omega_des which is in WF  onto w_z_b
+            omega_des = self.w_R_b[2].dot(np.array([0., 0.,omega_des]))
+
         qd_des = np.zeros(2)
         qd_des[0] = (v_des - omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
         qd_des[1] = (v_des + omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
@@ -739,21 +759,25 @@ class GenericSimulator(BaseController):
                 if np.any(qd_des > np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])) or np.any(qd_des < -np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])):
                     print(colored("wheel speed beyond limits, NN might do wrong predictions", "red"))
 
+
             if self.SIMULATOR=='biral3d':
                 if self.TERRAIN:
-                    pg, terrain_roll, terrain_pitch = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0., 0., 1.]))
-                    w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, self.basePoseW[5]]))
+                    pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0., 0., 1.]))
+                    pose_des, terrain_roll_des, terrain_pitch_des, terrain_yaw_des = self.terrainManager.project_on_mesh(point=np.array([self.des_x, self.des_y]), direction=np.array([0., 0., 1.]))
+                    w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
                     w_normal = w_R_terr.dot(np.array([0, 0, 1]))
-                    self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=0.9)
                     self.ros_pub.add_arrow(pg, w_normal * 0.5, color="white")
                     self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
+                    self.basePoseW_des = np.concatenate((pose_des, np.array([terrain_roll_des, terrain_pitch_des, self.des_theta])))
+
                 else:
                     terrain_roll = 0.
                     terrain_pitch = 0.
                     pg = np.array([self.basePoseW[0], self.basePoseW[1], 0.])
-                self.tracked_vehicle_simulator.simulateOneStep(pg, terrain_roll, terrain_pitch, qd_des[0], qd_des[1])
-                self.basePoseW, self.baseTwistW = self.tracked_vehicle_simulator.getRobotState()
+                    self.basePoseW_des = np.concatenate((np.array([p.des_x, p.des_y, pg[2]]), np.array([0, 0, self.des_theta])))
 
+                self.b_eox, self.b_eoy =self.tracked_vehicle_simulator.simulateOneStep(pg,  terrain_roll,  terrain_pitch, terrain_yaw, qd_des[0], qd_des[1])
+                self.basePoseW, self.baseTwistW = self.tracked_vehicle_simulator.getRobotState()
             else:
                 self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
                 pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
@@ -881,8 +905,16 @@ def main_loop(p):
             traj_length = len(wheel_l_ol)
 
         if p.MATLAB_PLANNING == 'none':
-            p.traj = Trajectory(ModelsList.UNICYCLE, p.p0[0], p.p0[1], p.p0[2], DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
-        else:#matlab planning
+            if p.SIMULATOR == 'biral3d':
+                p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
+                p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
+                p.des_theta = p.terrain_consistent_pose_init[5]  # +0.1
+            else:
+                p.des_x = p.p0[0]  # +0.1
+                p.des_y = p.p0[1]  # +0.1
+                p.des_theta = p.p0[2]  # +0.1
+            p.traj = Trajectory(ModelsList.UNICYCLE, p.des_x, p.des_y, p.des_theta, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
+        else: #matlab planning
             des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, matlab_dt=  p.getTrajFromMatlab()
             p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
             traj_length = len(v_ol)
@@ -935,16 +967,18 @@ def main_loop(p):
         vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
 
         if p.MATLAB_PLANNING == 'none':
-            # initial_des_x = p.p0[0]+0.1
-            # initial_des_y = p.p0[1]+0.1
-            # initial_des_theta = p.p0[2]+0.3
-            initial_des_x = p.p0[0]
-            initial_des_y = p.p0[1]
-            initial_des_theta = p.p0[2]
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3) #slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
-            p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta, DT=conf.robot_params[p.robot_name]['dt'],
+            if p.SIMULATOR=='biral3d':
+                p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
+                p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
+                p.des_theta = p.terrain_consistent_pose_init[5]  # +0.1
+            else:
+                p.des_x = p.p0[0] #+0.1
+                p.des_y = p.p0[1] #+0.1
+                p.des_theta = p.p0[2] # +0.1
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3)  # slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
+            p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
-        else:
+        else: #matlab planning
             des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, matlab_dt = p.getTrajFromMatlab()
             p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
 
