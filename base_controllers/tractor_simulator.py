@@ -40,8 +40,11 @@ from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator3d import
 from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
-from base_controllers.utils.common_functions import spawnModel
+from base_controllers.utils.common_functions import spawnModel, launchFileNode
 import pandas as pd
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.srv import SetModelStateRequest
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -62,7 +65,7 @@ class GenericSimulator(BaseController):
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA', 'WHEELS', 'NONE'
+        self.IDENT_TYPE = 'NONE' # 'V_OMEGA', 'WHEELS', 'NONE'
         self.IDENT_MAX_WHEEL_SPEED = 12 #used only when IDENT_TYPE = 'WHEELS' 7/12
         self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' 0.2, 0.55 (riccardo)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
@@ -162,6 +165,22 @@ class GenericSimulator(BaseController):
         self.reset_joints_client(req_reset_joints)
         print(colored(f"---------Resetting Joints to: "+str(q0), "blue"))
 
+    def setModelState(self, model_name='', position=np.zeros(3), orientation=np.array([0,0,0,1])):
+        # create the message
+        set_position = SetModelStateRequest()
+        # create model state
+        model_state = ModelState()
+        model_state.model_name = model_name
+        model_state.pose.position.x = position[0]
+        model_state.pose.position.y = position[1]
+        model_state.pose.position.z = position[2]
+        model_state.pose.orientation.x = orientation[0]
+        model_state.pose.orientation.y = orientation[1]
+        model_state.pose.orientation.z = orientation[2]
+        model_state.pose.orientation.w = orientation[3]
+        set_position.model_state = model_state
+        # send request and get response (in this case none)
+        self.set_state(set_position)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -196,9 +215,6 @@ class GenericSimulator(BaseController):
             world_name = None #'ramps.world'
             additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]), 'rviz_conf:=$(find tractor_description)/rviz/conf.rviz']
             super().startSimulator(world_name=world_name, additional_args=additional_args)
-            if self.TERRAIN:
-                #spawn the terrain model in gazebo
-                spawnModel("tractor_description", "terrain", spawn_pos=np.array([0.,0.,0.]))
         elif self.SIMULATOR == 'coppelia':
            self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
            self.coppeliaManager.startSimulator()
@@ -225,6 +241,15 @@ class GenericSimulator(BaseController):
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
             #self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
+
+            if self.NAVIGATION!='none' and self.TERRAIN: #need to launch empty gazebo to emulate the lidar
+                launchFileNode(package='gazebo_ros', launch_file='empty_world.launch', additional_args = ['use_sim_time:=true','gui:=false','paused:=false'])
+                spawnModel(package_name='tractor_description', model_name='lidar')
+                self.set_state = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
+
+        if self.TERRAIN:
+            # spawn the terrain model in gazebo
+            spawnModel("tractor_description", "terrain", spawn_pos=np.array([0., 0., 0.]))
 
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
@@ -273,6 +298,7 @@ class GenericSimulator(BaseController):
                                                                                                                        'world_name:=inspection',
                                                                                                                        'cmd_vel_topic:=/cmd_vel',
                                                                                                                        'max_vel_yaw:=1', 'max_vel_x:=0.5'])
+
 
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
@@ -335,7 +361,7 @@ class GenericSimulator(BaseController):
     def deregister_node(self):
         if self.SIMULATOR == 'coppelia':
             self.coppeliaManager.simulationControl('stop')
-        os.system("killall rosmaster rviz coppeliaSim")
+        os.system("killall rosmaster gzserver gzclient rviz coppeliaSim")
         super().deregister_node()
 
 
@@ -799,9 +825,15 @@ class GenericSimulator(BaseController):
             self.qd = qd_des.copy()
             self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
 
+            if self.NAVIGATION!='none' and self.SIMULATOR!='gazebo': #for biral models set the lidar position in gazebo consistent with the robot motion
+                self.setModelState('lidar', self.u.linPart(self.basePoseW), self.quaternion)
+
+        if self.TERRAIN: #this is published to show mesh in rviz
+            self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
+
         if self.SIMULATOR == 'coppelia':
             self.coppeliaManager.simulationControl('trigger_next_step')
-            self.unwrap()
+            self.unwrap() #coppelia joints requires unwrap
 
 
         #this is for wolf navigation # gazebo publishes world, base controller publishes base link, we need to add two static transforms from world to odom and map
@@ -812,7 +844,7 @@ class GenericSimulator(BaseController):
             #publish horizontal frame for stabilizer
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            pin.Quaternion(pin.rpy.rpyToMatrix(np.array([0., 0., self.euler[2]]))),
-                                           ros.Time.now(), '/horizontal_frame', '/world')
+                                           ros.Time.now(), '/horizontal_frame', '/world') #for 3d nav
 
             sendStaticTransform("odom", "world", np.zeros(3), np.array([1, 0, 0, 0]))  # this is just to not  brake the locosim rviz that still wants world
             self.pub_odom_msg(self.odom_pub)
@@ -981,7 +1013,6 @@ def main_loop(p):
         else: #matlab planning
             des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, matlab_dt = p.getTrajFromMatlab()
             p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
-
 
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'], ESTIMATE_ALPHA_WITH_ACTUAL_VALUES=p.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES) #high gains 15 5 / low gains 10 1 (default)
