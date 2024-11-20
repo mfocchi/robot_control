@@ -27,7 +27,7 @@ class Ground3D():
                  terrain_stiffness = 1e06,
                  terrain_damping = 1e04,
                  terrain_torsional_stiffness=1e05,
-                 terrain_torsional_damping=1e03):
+                 terrain_torsional_damping=1e04):
         self.cohesion = cohesion  # [Pa] #not used
         self.K = K  # [m]
         self.shear_resistance_angle = shear_resistance_angle  # [rad] #not used
@@ -45,7 +45,6 @@ class TrackedVehicleSimulator3D:
         self.USE_MESH = USE_MESH
         self.DEBUG = DEBUG
 
-
         self.dt = dt
         self.vehicle_param = VehicleParam()
         self.track_param = TrackParams()
@@ -60,7 +59,7 @@ class TrackedVehicleSimulator3D:
 
         #these are just for the unit test
         self.t_end = 20.  # [s]
-        self.pose_init = [0., 0.0, 0.0,0,0,0]  # position in WF, rpy angles
+        self.pose_init = [0., 0., 0.0,0,0,0]  # position in WF, rpy angles
         self.twist_init = [0, 0.0, 0,0,0,0]  # in WF
         self.number_of_steps = np.int32(self.t_end / self.dt)
         self.pose_des_log = np.full((6, self.number_of_steps), np.nan)
@@ -104,11 +103,15 @@ class TrackedVehicleSimulator3D:
         #compute projector on tx, ty contact plane
         N = np.eye(3) -  np.multiply.outer(self.terrain_normal.ravel(), self.terrain_normal.ravel())
         w_e_o =   computeOrientationError(w_R_b, w_R_terr)
+        b_e_o = w_R_b.T.dot(w_e_o)
+        #this projection is fundamental
         w_Mg = N.dot(self.ground.Kt_theta.dot(w_e_o) - self.ground.Dt_theta.dot(w_omega))
+
         #map to base frame
         b_Fg = w_R_b.T.dot(w_Fg)
         b_Mg = w_R_b.T.dot(w_Mg)
-        return b_Fg, b_Mg
+
+        return b_Fg, b_Mg, w_e_o[0],b_e_o[1]
 
     def dynamics3D(self, twist, w_R_b, b_Fg,b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, vehicle_param):
         # calculate the acceleration with the vehicle dynamical model
@@ -168,7 +171,7 @@ class TrackedVehicleSimulator3D:
         else:
             self.ros_pub =ros_pub
 
-    def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terr_yaw, omega_left, omega_right):
+    def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right):
         # compute base orientation
         w_R_b = self.math_utils.eul2Rot(self.pose[3:])
 
@@ -184,7 +187,7 @@ class TrackedVehicleSimulator3D:
 
 
         # compute ground peneration
-        b_Fg, b_Mg = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terr_yaw)
+        b_Fg, b_Mg, b_eox, b_eoy = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
 
         if self.NO_SLIPPAGE:
             #extension of unicycle to 3d
@@ -196,32 +199,40 @@ class TrackedVehicleSimulator3D:
             #update twist from dynamics
             self.twist += self.dynamics3D(self.twist, w_R_b, b_Fg, b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param) * self.dt
         self.pose  = self.integrateTwist(self.pose, self.twist)
+        return b_eox, b_eoy
 
     def computeZcomponent(self, x, y, pitch):#TODO use mesh
         return x * np.tan(-pitch)
 
 
-    def simulate(self, omega_left_vec, omega_right_vec):
+    def simulate(self, hf_v, w_omega_z):
         self.time = 0.
         sim_counter = 0
-        self.rate = ros.Rate(1 /  (p.dt))
+        self.rate = ros.Rate(1 /  (self.dt))
 
         while self.time < self.t_end:
             if np.mod(self.time, 1) == 0:
                 print(colored(f"TIME: {self.time}","red"))
 
+            #get actual orient
+            self.euler = self.pose[3:]
+            self.w_R_b = self.math_utils.eul2Rot(self.euler)
+            self.hf_R_b = self.math_utils.eul2Rot(np.array([self.euler[0],self.euler[1], 0.]))
             # get des pos
             des_x, des_y, des_theta, _, _, _, _, _ = self.traj.evalTraj(self.time)
 
             if self.USE_MESH:
                 #base_x_axis = self.math_utils.eul2Rot(self.pose[3:])[:, 0]
-                pg, terrain_roll, terrain_pitch, terr_yaw = self.terrainManager.project_on_mesh(point=self.pose[:2],  direction=np.array([0., 0., 1.]))
-                self.pose_des,terrain_roll_des,terrain_pitch_des, _ = self.terrainManager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
-                self.orient_des = np.array([terrain_roll_des, terrain_pitch_des, des_theta])
+                pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrainManager.project_on_mesh(point=self.pose[:2],  direction=np.array([0., 0., 1.]))
 
-                w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terr_yaw]))
+                self.pose_des,terrain_roll_des,terrain_pitch_des, terrain_yaw_des = self.terrainManager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
+                self.orient_des = np.array([0, 0, des_theta]) #first two elements are the expected values of b_eox, b_eoy
+
+                w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
                 w_normal = w_R_terr.dot(np.array([0, 0, 1]))
 
+                # print("pose ", self.pose[:3])
+                # print("pg ", pg)
                 #for debug
                 # print("pose ", self.pose[:3])
                 # print("pg ", pg)
@@ -232,36 +243,48 @@ class TrackedVehicleSimulator3D:
             else:
                 terrain_roll = self.terrain_roll_vec[sim_counter]
                 terrain_pitch = self.terrain_pitch_vec[sim_counter]
-                terr_yaw =  self.terrain_yaw_vec[sim_counter]
+                terrain_yaw =  self.terrain_yaw_vec[sim_counter]
                 pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch)])
                 self.pose_des = np.array([des_x, des_y, self.computeZcomponent(des_x, des_y, terrain_pitch)])
-                self.orient_des = np.array([terrain_roll, terrain_pitch, des_theta])
+                self.orient_des = np.array([0, 0, des_theta])
+
+            #project hf_v onto hf_x_b
+            b_v = self.hf_R_b[0].dot(np.array([hf_v[sim_counter], 0., 0.]))
+            #project w_omega_z onto w_z_b
+            b_omega = self.w_R_b[2].dot(np.array([0.,0., w_omega_z[sim_counter]]))
+
+            # convert to wheels
+            r = self.track_param.sprocket_radius
+            B = self.vehicle_param.width
+            omega_left = (b_v - b_omega * B / 2.0) / r
+            omega_right = (b_v + b_omega * B / 2.0) / r
 
             #updates pose and twist
-            self.simulateOneStep(pg, terrain_roll, terrain_pitch, terr_yaw, omega_left_vec[sim_counter], omega_right_vec[sim_counter])
-
+            b_eox, b_eoy = self.simulateOneStep(pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right)
 
             #log
             self.pose_des_log[:3, sim_counter] = self.pose_des
             self.pose_des_log[3:, sim_counter] = self.orient_des
+            self.pose_log[:, sim_counter] = np.concatenate((self.pose[:3], np.array([b_eox, b_eoy, self.pose[5]])))
 
-            self.pose_log[:, sim_counter] = self.pose
             self.time_log[sim_counter] = self.time
 
 
             sim_counter +=1
-            self.time = np.round(self.time + self.dt, 3)
+
+            self.time = np.round(self.time + self.dt, 4)
 
             #debug
             #time.sleep(0.2)
             #ros.sleep(self.dt)
-            self.rate.sleep()
             self.euler = self.pose[3:]
-            self.quaternion = pin.Quaternion(self.math_utils.eul2Rot(self.euler))
+            self.quaternion = pin.Quaternion(self.w_R_b)
             self.broadcaster.sendTransform(self.pose[:3],
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/world')
             self.ros_pub.publishVisual(delete_markers=False)
+
+            self.rate.sleep()
             if ros.is_shutdown():
                 break
         os.system("rosnode kill rviz")
@@ -272,7 +295,7 @@ class TrackedVehicleSimulator3D:
 
 if __name__ == '__main__':
     groundParams = Ground3D()
-    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams,USE_MESH=False, DEBUG=True)
+    p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams,USE_MESH=False, DEBUG=True)
 
     # to debug
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -293,33 +316,31 @@ if __name__ == '__main__':
         p.terrain_yaw_vec = np.linspace(0.0, -0.0, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
 
     #gen traj
-    v = np.linspace(0.4, 0.4, p.number_of_steps)
-    omega = np.linspace(0.0, 0.0, p.number_of_steps)
+    hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
+    w_omega_z = np.linspace(0.0, 0.0, p.number_of_steps)
+    #w_omega_z = np.linspace(0.4, 0.4, p.number_of_steps)
+
+    #the trajectory is in the WF
     p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.pose_init[0],
                         start_y= p.pose_init[1], start_theta=p.pose_init[5],
-                        DT=p.dt, v=v, omega=omega)
+                        DT=p.dt, v=hf_v, omega=w_omega_z)
 
-    #convert to wheels
-    r = p.track_param.sprocket_radius
-    B = p.vehicle_param.width
-    omega_left = (v - omega * B / 2.0) / r
-    omega_right = (v + omega * B / 2.0) / r
+
 
     # init vars
     p.initSimulation(p.pose_init, p.twist_init)
 
     # simulation with internal while loop
-    p.simulate(omega_left, omega_right)
-
+    p.simulate(hf_v, w_omega_z)
 
     if not p.USE_MESH:#unit test
         print(p.pose_log[:,-1])
-        assert_almost_equal(p.pose_log[0, -1], 7.74182 , decimal=2)
-        assert_almost_equal(p.pose_log[1, -1],0 , decimal=2)
-        assert_almost_equal(p.pose_log[2, -1],     0.77621, decimal=2)
-        assert_almost_equal(p.pose_log[0, -1], 0, decimal=2)
-        assert_almost_equal(p.pose_log[1, -1],  - 0.09995 , decimal=2)
-        assert_almost_equal(p.pose_log[2, -1], 0, decimal=2)
+        assert_almost_equal(p.pose_log[0, -1], 7.729048908314892 , decimal=2)
+        assert_almost_equal(p.pose_log[1, -1],0. , decimal=2)
+        assert_almost_equal(p.pose_log[2, -1],     0.77491, decimal=2)
+        assert_almost_equal(p.pose_log[3, -1], 0., decimal=2)
+        assert_almost_equal(p.pose_log[4, -1],  -0.0005 , decimal=2)
+        assert_almost_equal(p.pose_log[5, -1], 0., decimal=2)
 
 
     # xy plot
@@ -373,4 +394,4 @@ if __name__ == '__main__':
     plt.plot(p.time_log[:-1], p.pose_des_log[5, :-1], linestyle='-', lw=3, color='red')
     plt.xlabel("Time [s]")
     plt.grid()
-    plt.ylim([-2,2])
+    plt.ylim([-5,5])

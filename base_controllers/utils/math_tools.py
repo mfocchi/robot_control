@@ -232,7 +232,7 @@ class Math:
 
         # Tomega_dot = np.array([[ -np.cos(yaw)*np.sin(pitch)*pitchd - np.cos(pitch)*np.sin(yaw)*yawd,  -np.cos(yaw)*yawd, 0],
         #                       [ np.cos(yaw)*np.cos(pitch)*yawd - np.sin(yaw)*np.sin(pitch)*pitchd,    -np.sin(yaw)*yawd, 0  ],
-        #                       [ -np.cos(pitch)*pitchd,  0, 0 ]])
+        #                       [ -np.cos(pitch)*pitchd,                                                                0, 0 ]])
         #
         #
         # return Tomega_dot
@@ -284,6 +284,7 @@ class Math:
         sp = np.sin(pitch)
         cy = np.cos(yaw)
         sy = np.sin(yaw)
+
         self._Tomega_mat[0, 0] = cp * cy
         self._Tomega_mat[1, 0] = cp * sy
         self._Tomega_mat[2, 0] = -sp

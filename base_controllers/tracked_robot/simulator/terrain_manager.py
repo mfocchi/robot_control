@@ -65,6 +65,8 @@ class TerrainManager:
         #compute roll/pitch
         pitch = math.atan2(n_[0], n_[2])
         roll = math.atan2(-n_[1]*np.sin(pitch), n_[0])
+        #as an alternative
+        #roll = math.asin(-n_[1])
         #to have it in the range between  -pi/2 and pi/2
         if roll > np.pi/2:
             roll-=np.pi
