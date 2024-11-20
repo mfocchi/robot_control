@@ -1331,7 +1331,7 @@ def talker(p):
 
             # send commands to gazebo
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
-            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),3)  # to avoid issues of dt 0.0009999
+            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),4)  # to avoid issues of dt 0.0009999
             if (p.time > p.start_logging):
                 p.logData()
             # wait for synconization of the control loop

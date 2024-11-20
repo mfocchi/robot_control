@@ -710,7 +710,7 @@ def talker(p):
 
             # to avoid issues of dt 0.0009999
             p.time = np.round(
-                p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3)
+                p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 4)
 
         # send reward with state = 1
         p.evalTotalReward(1)

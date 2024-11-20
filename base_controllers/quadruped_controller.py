@@ -882,7 +882,7 @@ class QuadrupedController(BaseController):
             self.logData()
         self.rate.sleep()
         self.sync_check()
-        self.time = np.round(self.time + self.dt, 3)#np.array([self.loop_time]), 3)
+        self.time = np.round(self.time + self.dt, 4)#np.array([self.loop_time]), 3)
 
 
     def visualizeContacts(self):

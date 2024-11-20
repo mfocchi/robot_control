@@ -704,7 +704,7 @@ def talker(p):
         #wait for synconization of the control loop
         rate.sleep()     
         #p.sync_check()
-        p.time = np.round(p.time + np.array([p.loop_time]), 3) # to avoid issues of dt 0.0009999
+        p.time = np.round(p.time + np.array([p.loop_time]), 4) # to avoid issues of dt 0.0009999
 
         if (p.apply_external_wrench and p.time > p.time_external_wrench):
             print("START APPLYING EXTERNAL WRENCH")

@@ -531,7 +531,7 @@ class GenericSimulator(BaseController):
         time = 0
         i = 0
         while True:
-            time = np.round(time + conf.robot_params[p.robot_name]['dt'], 3)
+            time = np.round(time + conf.robot_params[p.robot_name]['dt'], 4)
             wheel_l_vec.append(wheel_l)
             wheel_r_vec.append(wheel_r[i])
             # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
@@ -927,7 +927,7 @@ def main_loop(p):
             p.logData()
             # wait for synconization of the control loop
             p.rate.sleep()
-            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
+            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  4)  # to avoid issues of dt 0.0009999
     else:
 
         # CLOSE loop control
@@ -1012,7 +1012,7 @@ def main_loop(p):
             p.logData()
             # wait for synconization of the control loop
             p.rate.sleep()
-            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 3) # to avoid issues of dt 0.0009999
+            p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 4) # to avoid issues of dt 0.0009999
 
     if p.SAVE_BAGS:
         p.recorder.stop_recording_srv()

@@ -1023,7 +1023,7 @@ if __name__ == '__main__':
             p.rate.sleep()
             p.sync_check()
             # np.array([self.loop_time]), 3)
-            p.time = np.round(p.time + p.dt, 3)
+            p.time = np.round(p.time + p.dt, 4)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
