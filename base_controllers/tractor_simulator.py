@@ -226,11 +226,11 @@ class GenericSimulator(BaseController):
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'biral3d':
-                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.0005 and increased 5x buffer_size", "red"))
+                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
                 print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
                 self.friction_coefficient = 0.7
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
-                conf.robot_params[p.robot_name]['dt'] = 0.0005
+                conf.robot_params[p.robot_name]['dt'] = 0.001
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
             else:

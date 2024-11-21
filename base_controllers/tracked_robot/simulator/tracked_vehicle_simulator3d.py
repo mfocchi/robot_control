@@ -16,6 +16,7 @@ import pinocchio as pin
 import rospy as ros
 import tf
 from termcolor import colored
+from base_controllers.utils.math_tools import RK4_step, backward_euler_step
 
 class Ground3D():
     def __init__(self,
@@ -26,8 +27,8 @@ class Ground3D():
                  friction_coefficient=0.1, # 0.1 is very low and on slopes it slips!
                  terrain_stiffness = 1e06,
                  terrain_damping = 1e04,
-                 terrain_torsional_stiffness=1e05,
-                 terrain_torsional_damping=1e04):
+                 terrain_torsional_stiffness=1e04, #1e05 requires dt = 0.0005
+                 terrain_torsional_damping=1e03): #1e04 requires dt = 0.0005
         self.cohesion = cohesion  # [Pa] #not used
         self.K = K  # [m]
         self.shear_resistance_angle = shear_resistance_angle  # [rad] #not used
@@ -40,10 +41,12 @@ class Ground3D():
 
 
 class TrackedVehicleSimulator3D:
-    def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False):
+    def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER', enable_visuals=True):
         self.NO_SLIPPAGE = False
         self.USE_MESH = USE_MESH
         self.DEBUG = DEBUG
+        self.enable_visuals=enable_visuals
+        self.int_method = int_method
 
         self.dt = dt
         self.vehicle_param = VehicleParam()
@@ -60,6 +63,9 @@ class TrackedVehicleSimulator3D:
         #these are just for the unit test
         self.t_end = 20.  # [s]
         self.pose_init = [0., 0., 0.0,0,0,0]  # position in WF, rpy angles
+        #critical test
+        #self.pose_init = [24., 7., 0.0, 0, 0, 0]  # position in WF, rpy angles
+
         self.twist_init = [0, 0.0, 0,0,0,0]  # in WF
         self.number_of_steps = np.int32(self.t_end / self.dt)
         self.pose_des_log = np.full((6, self.number_of_steps), np.nan)
@@ -121,7 +127,7 @@ class TrackedVehicleSimulator3D:
         #map everything to BF
         b_vc = w_R_b.T.dot(twist[:3])
         b_omega = w_R_b.T.dot(twist[3:])
-
+        #print(b_vc)
         #compute traction forces and moments
         b_Ft = np.zeros(3)
         b_Ft[0] = Fx_l + Fx_r
@@ -138,8 +144,9 @@ class TrackedVehicleSimulator3D:
         w_Ft = w_R_b.dot(b_Ft) #traction force
         w_Fg = w_R_b.dot(b_Fg) # terrain linear
         w_Mg = w_R_b.dot(b_Mg) # terrain moment
+
         w_Fgrav = w_R_b.dot(b_Fgrav) #gravity force
-        if self.DEBUG:
+        if self.enable_visuals and self.DEBUG:
             self.ros_pub.add_arrow(self.pose[:3], w_Ft / 100., "red")
             self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / 1000., "blue")
             self.ros_pub.add_arrow(self.pose[:3], w_Fg / 1000., "green")
@@ -165,11 +172,13 @@ class TrackedVehicleSimulator3D:
     def initSimulation(self,pose_init =np.zeros(6),  twist_init=np.zeros(6), ros_pub = None):
         self.pose = pose_init
         self.twist = twist_init
+        #TODO
         #self.pose[2] = self.vehicle_param.height
-        if ros_pub is None:
-            self.ros_pub = RosPub('tractor', only_visual=True)
-        else:
-            self.ros_pub =ros_pub
+        if self.enable_visuals:
+            if ros_pub is None:
+                self.ros_pub = RosPub('tractor', only_visual=True)
+            else:
+                self.ros_pub =ros_pub
 
     def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right):
         # compute base orientation
@@ -197,7 +206,19 @@ class TrackedVehicleSimulator3D:
             self.twist[3:] = w_R_b.dot(np.array([0, 0, omega]))
         else:
             #update twist from dynamics
-            self.twist += self.dynamics3D(self.twist, w_R_b, b_Fg, b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param) * self.dt
+            if self.int_method=='FORWARD_EULER':
+                self.twist += self.dynamics3D(self.twist, w_R_b, b_Fg, b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param) * self.dt
+            elif self.int_method=='RK4':
+                self.twist = RK4_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
+                                  Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
+                                  M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
+            elif self.int_method=='BACKWARD_EULER':
+                self.twist = backward_euler_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
+                                  Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
+                                  M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
+
+            else:
+                print("wrong integration method")
         self.pose  = self.integrateTwist(self.pose, self.twist)
         return b_eox, b_eoy
 
@@ -236,7 +257,7 @@ class TrackedVehicleSimulator3D:
                 #for debug
                 # print("pose ", self.pose[:3])
                 # print("pg ", pg)
-                if self.DEBUG:
+                if self.enable_visuals:
                     self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
                     self.ros_pub.add_arrow(pg, w_normal*0.5, color="white")
                     self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha = 1.)
@@ -265,14 +286,14 @@ class TrackedVehicleSimulator3D:
             #log
             self.pose_des_log[:3, sim_counter] = self.pose_des
             self.pose_des_log[3:, sim_counter] = self.orient_des
-            self.pose_log[:, sim_counter] = np.concatenate((self.pose[:3], np.array([b_eox, b_eoy, self.pose[5]])))
+            self.pose_log[:, sim_counter] = self.pose
 
             self.time_log[sim_counter] = self.time
 
-
+            self.time = np.round(self.time + self.dt, 4)
             sim_counter +=1
 
-            self.time = np.round(self.time + self.dt, 4)
+
 
             #debug
             #time.sleep(0.2)
@@ -295,7 +316,11 @@ class TrackedVehicleSimulator3D:
 
 if __name__ == '__main__':
     groundParams = Ground3D()
-    p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams,USE_MESH=False, DEBUG=True)
+    p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams, USE_MESH=False, DEBUG=False, int_method='FORWARD_EULER')
+
+    # critical test
+    # groundParams = Ground3D(friction_coefficient=0.7, terrain_torsional_stiffness=1e04,  terrain_torsional_damping=1e03)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=False, int_method='FORWARD_EULER')
 
     # to debug
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -318,6 +343,7 @@ if __name__ == '__main__':
     #gen traj
     hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
     w_omega_z = np.linspace(0.0, 0.0, p.number_of_steps)
+    # critical test
     #w_omega_z = np.linspace(0.4, 0.4, p.number_of_steps)
 
     #the trajectory is in the WF
@@ -339,7 +365,7 @@ if __name__ == '__main__':
         assert_almost_equal(p.pose_log[1, -1],0. , decimal=2)
         assert_almost_equal(p.pose_log[2, -1],     0.77491, decimal=2)
         assert_almost_equal(p.pose_log[3, -1], 0., decimal=2)
-        assert_almost_equal(p.pose_log[4, -1],  -0.0005 , decimal=2)
+        assert_almost_equal(p.pose_log[4, -1], -0.0995 , decimal=2)
         assert_almost_equal(p.pose_log[5, -1], 0., decimal=2)
 
 
@@ -379,13 +405,13 @@ if __name__ == '__main__':
     plt.subplot(3, 1, 1)
     plt.ylabel("roll")
     plt.plot(p.time_log[:-1], p.pose_log[3, :-1], linestyle='-',  lw=3, color='blue')
-    plt.plot(p.time_log[:-1], p.pose_des_log[3, :-1], linestyle='-', lw=3, color='red')
+    #plt.plot(p.time_log[:-1], p.pose_des_log[3, :-1], linestyle='-', lw=3, color='red')
     plt.grid()
     plt.ylim([-0.5,0.5])
     plt.subplot(3, 1, 2)
     plt.ylabel("pitch")
     plt.plot(p.time_log[:-1], p.pose_log[4, :-1], linestyle='-',  lw=3, color='blue')
-    plt.plot(p.time_log[:-1], p.pose_des_log[4, :-1], linestyle='-', lw=3, color='red')
+    #plt.plot(p.time_log[:-1], p.pose_des_log[4, :-1], linestyle='-', lw=3, color='red')
     plt.grid()
     plt.ylim([-0.5,0.5])
     plt.subplot(3, 1, 3)

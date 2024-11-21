@@ -915,3 +915,163 @@ def wrapTo2pi(theta):
     return theta
 
 
+def forward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
+    """
+       Performs a single Backward Euler step with Newton's method for solving the implicit equation.
+
+       Parameters:
+           func : callable
+               The ODE function (dy/dt = f(y, t, *args, **kwargs)).
+           y : array-like
+               Current state at time t.
+           t : float
+               Current time.
+           h : float
+               Time step size.
+           *args : tuple
+               Additional positional arguments for the dynamics function.
+           **kwargs : dict
+               Additional keyword arguments for the dynamics function.
+
+       Returns:
+           y_next : array-like
+               The state at time t + h (next state).
+       """
+    # Define a tolerance for Newton's method
+    y_next = y + h * func(y, *args, **kwargs)
+
+    if t is not None:
+        t_next = t + h
+        return t_next, y_next
+    else:
+        return y_next
+
+def backward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
+    # 1) The y_next value is updated implicitly using an iterative method
+    # (Newton's method) to solve the implicit equation y_next = y + h * f(y_next).
+    # Jacobian Approximation: We approximate the Jacobian matrix (derivative of the function with respect to the state y)
+    # using finite differences, which is common in solving implicit equations numerically.
+    """
+    Performs a single Backward Euler step with Newton's method for solving the implicit equation.
+
+    Parameters:
+        func : callable
+            The ODE function (dy/dt = f(y, t, *args, **kwargs)).
+        y : array-like
+            Current state at time t.
+        t : float
+            Current time.
+        h : float
+            Time step size.
+        *args : tuple
+            Additional positional arguments for the dynamics function.
+        **kwargs : dict
+            Additional keyword arguments for the dynamics function.
+
+    Returns:
+        y_next : array-like
+            The state at time t + h (next state).
+    """
+    # Define a tolerance for Newton's method
+    tol = 1e-6
+    max_iter = 50
+    damping_factor = 1e-6  # Regularization factor (small value to stabilize)
+
+    # Initialize the guess for y_next (start with y as the initial guess)
+    y_next = np.copy(y)
+
+    for i in range(max_iter):
+        # Compute the residual (implicit equation)
+        residual = y_next - y - h * func(y_next, *args, **kwargs)
+
+        # Initialize Jacobian matrix
+        jacobian = np.zeros((len(y), len(y)))
+
+        # Compute the Jacobian of the function (derivative w.r.t. y_next)
+        # Approximate the Jacobian using finite differences
+        #This requires the Jacobian to be a matrix where each element J[i, j]
+        #represents the partial derivative of the i-th component of the output with respect to the j-th state variable.
+        
+        epsilon = 1e-6
+        for j in range(len(y)):
+
+            # Perturb the j-th component of y_next
+            y_next_perturbed = np.copy(y_next)
+            dx = np.zeros_like(y_next)
+            dx[j] = epsilon
+            # print("1",func(y_next_perturbed, *args, **kwargs))
+            # print("2",func(y_next, *args, **kwargs))
+            y_next_perturbed += dx
+
+            # Compute the difference in the function values
+            df = func(y_next_perturbed, *args, **kwargs) - func(y_next, *args, **kwargs)
+            #print(f"{j} : {df} ")
+            # Store the derivative in the Jacobian matrix
+            jacobian[:, j] = df / epsilon  # Divide by epsilon to get the derivative
+
+        #print("J", jacobian)
+        # Regularization: Add a small value to the diagonal of the Jacobian matrix
+        #jacobian += np.eye(len(y)) * damping_factor
+
+        Fprime = np.eye(len(y))-h*jacobian
+
+
+        # Solve the implicit equation
+        try:
+            y_next = y_next - np.linalg.solve(Fprime, residual)  # Solve for the next state
+        except np.linalg.LinAlgError:
+            print("Jacobian matrix is singular, trying again with a higher damping factor.")
+            damping_factor *= 10  # Increase the damping factor and try again
+            continue
+        # Check if residual is small enough to stop iterating
+        if np.linalg.norm(residual) < tol:
+            break
+
+    if t is not None:
+        t_next = t + h
+        return t_next, y_next
+    else:
+        return y_next
+
+
+def RK4_step(func, y, t=None, h=0.001, *args,  **kwargs):
+    """
+    Performs a single Runge-Kutta 4th-order integration step.
+
+    Parameters:
+        func : callable
+            The ODE function dy/dt = f(y, *args, **kwargs), where y is the dependent variable.
+        y : float or array-like
+            Current value of the dependent variable y.
+        h : float
+            Step size.
+        *args : tuple
+            Additional positional arguments to pass to func.
+        **kwargs : dict
+            Additional keyword arguments to pass to func.
+
+    Returns:
+        y_next : float or array-like
+            The value of y after a single RK4 step.
+    """
+    y = np.asarray(y)  # Ensure y is a NumPy array
+
+    if t is not None:
+        # Iterate over each time step
+        k1 = h * func(t, y, *args,  **kwargs)
+        k2 = h * func(t + h / 2, y + k1 / 2, *args,  **kwargs)
+        k3 = h * func(t + h / 2, y + k2 / 2, *args,  **kwargs)
+        k4 = h * func(t + h, y + k3, *args)
+    else:
+        k1 = h * func(y, *args,  **kwargs)
+        k2 = h * func(y + k1 / 2, *args,  **kwargs)
+        k3 = h * func(y + k2 / 2, *args,  **kwargs)
+        k4 = h * func(y + k3, *args,  **kwargs)
+
+    y_next = y + (k1 + 2 * k2 + 2 * k3 + k4) / 6
+
+    if t is not None:
+        t_next = t + h
+        return t_next, y_next
+    else:
+        return y_next
