@@ -1,4 +1,9 @@
 import numpy as np
+from termcolor import colored
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib import pyplot as plt #need to import as last to avoid issues with qt
+np.set_printoptions(threshold=np.inf, precision = 9, linewidth = 10000, suppress = True)
 
 
 class RungeKuttaStep:
@@ -19,11 +24,11 @@ class RungeKuttaStep:
         self.m_R_tol = 1e-4  # Relative tolerance
         self.m_order = 4  # Order of the method
         self.m_fac =0.9 #Safety factor for adaptive step.
-        self.m_fac_max = 1.5  # Maximum safety factor for adaptive step.
+        self.m_fac_max = 3.5  # Maximum safety factor for adaptive step.
         self.m_fac_min = 0.2  #Minimum safety factor for adaptive step.
         self.m_ode = m_ode  # ODE system object with methods f (explicit evaluation)
 
-    def stepRKF45(self, x_k, x_dot_k, t_k, d_t):
+    def stepRKF45(self, x_k,  t_k, d_t):
         """
         Perform a single integration step.
 
@@ -54,15 +59,12 @@ class RungeKuttaStep:
         # Perform the step and obtain x_k+1
         x_out = x_k + d_t * K @ self.m_b
 
-        # Extract x_dot_k+1 from K (last column of K)
-        x_dot_out = K[:, -1]
-
         # Adapt next time step
         if self.m_adaptive_step and self.m_b_e is not None:
             x_e = x_k + d_t * K @ self.m_b_e
             d_t_star = self.adapt_step(x_out, x_e, d_t_star)
 
-        return x_out, x_dot_out, d_t_star
+        return x_out,  d_t_star
 
     def step_node(self, i, x_k, K, d_t):
         """
@@ -109,7 +111,6 @@ class RungeKuttaStep:
             # Compute the node state
             x_i = self.step_node(i, x_k, K, d_t)
             # Explicit case: directly compute K[:, i]
-            print(self.m_ode.f(x_i, t_k + self.m_c[i] * d_t))
             K[:, i] = self.m_ode.f(x_i, t_k + self.m_c[i] * d_t)
         return K
 
@@ -138,19 +139,57 @@ class RungeKuttaStep:
 class MyODE:
 
     def f(self, x, t):
-        return -np.sin(x)  # Example ODE function
-
+        a = 4
+        c = 1
+        x_next = np.zeros(2)
+        x_next[0] = x[0] * (a - x[1])
+        x_next[1] = x[1] * (c * x[0] - x[1])
+        return x_next
 
 
 if __name__ == '__main__':
 
     # Example instantiation
-    rk = RungeKuttaStep( m_ode=MyODE(),   adaptive_step=False)
+    rk = RungeKuttaStep( m_ode=MyODE(),   adaptive_step=True)
 
-    x_k = np.array([1.0, 2.0])
-    x_dot_k = np.array([0.0, 0.0])
-    t_k = 0.0
-    d_t = 0.1
+    # x_k = np.array([1.0, 2.0])
+    # x_dot_k = np.array([0.0, 0.0])
+    # t_k = 0.0
+    # d_t = 0.1
 
-    x_out, x_dot_out, d_t_star = rk.stepRKF45(x_k, x_dot_k, t_k, d_t)
-    print(f"x_out: {x_out}, x_dot_out: {x_dot_out}, d_t_star: {d_t_star}")
+    # x_out, x_dot_out, d_t_star = rk.stepRKF45(x_k, t_k, d_t)
+    # print(f"x_out: {x_out}, x_dot_out: {x_dot_out}, d_t_star: {d_t_star}")
+
+
+    dt = 0.01
+    d_t_star = dt
+    t_end = 10.
+    pose_init = np.array([2., 1.])
+    number_of_steps = np.int32(t_end / dt)
+
+    time = 0.
+    sim_counter = 0
+    pose_log = np.full((2, 20000), np.nan)
+    time_log = np.full((20000), np.nan)
+    x = pose_init
+    while time < t_end:
+        if np.mod(time, 1) == 0:
+            print(colored(f"TIME: {time}", "red"))
+        x, d_t_star = rk.stepRKF45(x, time, d_t_star)
+        time = np.round(time + d_t_star, 4)
+        time_log[sim_counter] = time
+        pose_log[:,sim_counter] = x
+        sim_counter += 1
+
+
+    fig = plt.figure()
+    fig.suptitle("lin states", fontsize=20)
+    plt.subplot(2, 1, 1)
+    plt.ylabel("X")
+    plt.plot(time_log[:-1], pose_log[0, :-1], "o", lw=3, color='blue')
+    plt.grid()
+    plt.subplot(2, 1, 2)
+    plt.ylabel("Y")
+    plt.plot(time_log[:-1], pose_log[1, :-1], "o", lw=3, color='blue')
+    plt.grid()
+    plt.ylim([-10, 10])
