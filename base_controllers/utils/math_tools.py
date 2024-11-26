@@ -937,13 +937,12 @@ def forward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
            y_next : array-like
                The state at time t + h (next state).
        """
-    # Define a tolerance for Newton's method
-    y_next = y + h * func(y, *args, **kwargs)
-
     if t is not None:
+        y_next = y + h * func(y,t, *args, **kwargs)
         t_next = t + h
         return t_next, y_next
     else:
+        y_next = y + h * func(y, *args, **kwargs)
         return y_next
 
 def backward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
@@ -982,8 +981,10 @@ def backward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
 
     for i in range(max_iter):
         # Compute the residual (implicit equation)
-        residual = y_next - y - h * func(y_next, *args, **kwargs)
-
+        if t is not None:
+            residual = y_next - y - h * func(y_next, t,  *args, **kwargs)
+        else:
+            residual = y_next - y - h * func(y_next, *args, **kwargs)
         # Initialize Jacobian matrix
         jacobian = np.zeros((len(y), len(y)))
 
@@ -1004,7 +1005,10 @@ def backward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
             y_next_perturbed += dx
 
             # Compute the difference in the function values
-            df = func(y_next_perturbed, *args, **kwargs) - func(y_next, *args, **kwargs)
+            if t is not None:
+                df = func(y_next_perturbed,t, *args, **kwargs) - func(y_next,t, *args, **kwargs)
+            else:
+                df = func(y_next_perturbed, *args, **kwargs) - func(y_next, *args, **kwargs)
             #print(f"{j} : {df} ")
             # Store the derivative in the Jacobian matrix
             jacobian[:, j] = df / epsilon  # Divide by epsilon to get the derivative

@@ -17,6 +17,7 @@ import rospy as ros
 import tf
 from termcolor import colored
 from base_controllers.utils.math_tools import RK4_step, backward_euler_step
+from base_controllers.utils.rk45F_integrator import RK45F_step
 
 class Ground3D():
     def __init__(self,
@@ -60,6 +61,9 @@ class TrackedVehicleSimulator3D:
         self.patch_pos_long_l, self.patch_pos_lat_l = self.tracked_robot.getLeftPatchesPositions()
         self.patch_pos_long_r, self.patch_pos_lat_r = self.tracked_robot.getRightPatchesPositions()
 
+        self.patch_pos_l = np.zeros((2, self.track_param.parts_longitudinal*self.track_param.parts_lateral))
+        self.patch_pos_r = np.zeros((2, self.track_param.parts_longitudinal * self.track_param.parts_lateral))
+
         #these are just for the unit test
         self.t_end = 20.  # [s]
         self.pose_init = [0., 0., 0.0,0,0,0]  # position in WF, rpy angles
@@ -77,6 +81,8 @@ class TrackedVehicleSimulator3D:
         self.qd_des = np.zeros(2)
         self.pose_des = np.zeros(3)
         self.orient_des = np.zeros(3)
+        self.rk45F = RK45F_step(self.dynamics3D, adaptive_step=True)
+
 
     def computeGroundForcesMoments(self,pose, twist, w_R_b, pg, terr_roll, terr_pitch, terr_yaw):
         pc = pose[:3]
@@ -149,6 +155,8 @@ class TrackedVehicleSimulator3D:
         if self.enable_visuals and self.DEBUG:
             self.ros_pub.add_arrow(self.pose[:3], w_Ft / 100., "red")
             self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / 1000., "blue")
+            #N = np.eye(3) - np.multiply.outer(self.terrain_normal.ravel(), self.terrain_normal.ravel())
+            #self.ros_pub.add_arrow(self.pose[:3], N.dot(w_Fgrav) / 100., "blue")
             self.ros_pub.add_arrow(self.pose[:3], w_Fg / 1000., "green")
             self.ros_pub.add_arrow(self.pose[:3], w_Mg / np.linalg.norm(w_Mg), "green") #should be purely lateral flipping back forth on ramp with only pitch
 
@@ -214,6 +222,10 @@ class TrackedVehicleSimulator3D:
                                   M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
             elif self.int_method=='BACKWARD_EULER':
                 self.twist = backward_euler_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
+                                  Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
+                                  M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
+            elif self.int_method=='RK45F':
+                self.twist, self.dt = self.rk45F.step(x_k=self.twist, d_t=self.dt, w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
                                   Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
                                   M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
 
@@ -315,12 +327,13 @@ class TrackedVehicleSimulator3D:
         return self.pose, self.twist
 
 if __name__ == '__main__':
+    #unit test
     groundParams = Ground3D()
-    p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams, USE_MESH=False, DEBUG=False, int_method='FORWARD_EULER')
+    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=False, DEBUG=False, int_method='FORWARD_EULER')
 
     # critical test
-    # groundParams = Ground3D(friction_coefficient=0.7, terrain_torsional_stiffness=1e04,  terrain_torsional_damping=1e03)
-    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=False, int_method='FORWARD_EULER')
+    # groundParams = Ground3D(friction_coefficient=0.7, terrain_torsional_stiffness=1e05,  terrain_torsional_damping=1e04)
+    # p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER')
 
     # to debug
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -340,7 +353,7 @@ if __name__ == '__main__':
         p.terrain_pitch_vec = np.linspace(0.0, -0.1, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
         p.terrain_yaw_vec = np.linspace(0.0, -0.0, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
 
-    #gen traj
+    #gen traj unit test
     hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
     w_omega_z = np.linspace(0.0, 0.0, p.number_of_steps)
     # critical test
@@ -360,7 +373,7 @@ if __name__ == '__main__':
     p.simulate(hf_v, w_omega_z)
 
     if not p.USE_MESH:#unit test
-        print(p.pose_log[:,-1])
+        #print(p.pose_log[:,-1])
         assert_almost_equal(p.pose_log[0, -1], 7.729048908314892 , decimal=2)
         assert_almost_equal(p.pose_log[1, -1],0. , decimal=2)
         assert_almost_equal(p.pose_log[2, -1],     0.77491, decimal=2)
