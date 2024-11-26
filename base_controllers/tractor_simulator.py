@@ -874,11 +874,33 @@ class GenericSimulator(BaseController):
         msg.twist.twist.angular.z = self.baseTwistW[self.u.sp_crd["AZ"]]
         odom_publisher.publish(msg)
 
-    def genRandomTarget(self, radius_min, radius_max):
+    def genUniformRandomTarget(self, radius_min, radius_max):
         radius = radius_min + radius_max * np.random.uniform(low=0, high=1, size=1)
         phi = np.random.uniform(low=0, high=2*np.pi, size=1)
         theta = np.random.uniform(low=0, high=2*np.pi, size=1)
         return np.array([radius.item()*np.cos(phi).item(), radius.item()*np.sin(phi).item(), theta.item()])
+
+    def genQuasiMontecarloRandomTarget(self, radius_min, radius_max):
+        if not hasattr(self, 'sampler'):
+            from scipy.stats import qmc
+            self.sampler = qmc.Halton(d=3, scramble=True, seed=0)
+            # since we are going to remove the samples out of the circle I need to generate a bit more samples
+            n_samples = int(np.floor(100 * math.sqrt(2)))
+            self.sample = self.sampler.random(n=n_samples)
+            xy = radius_max * (2 * self.sample[:, :2] - 1)
+            self.sample_in_circ = []
+            self.phi = []
+            # remove sample out of the circle
+            for i in range(self.sample.shape[0]):
+                radius = np.linalg.norm(xy[i, :])
+                if (radius > radius_min) and (radius < radius_max):
+                    self.sample_in_circ.append(xy[i, :])
+                    self.phi.append(self.sample[i, 2] * 2 * np.pi)
+        xy_sample = self.sample_in_circ.pop(0)
+        phi_sample = self.phi.pop(0)
+        return np.array([xy_sample[0], xy_sample[1], phi_sample])
+
+
 
 def talker(p):
     p.start()
@@ -892,9 +914,11 @@ def talker(p):
         print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
         columns = [ 'test', 'target_x','target_y','target_z', 'exy', 'etheta']
         p.df = pd.DataFrame(columns=columns)
+        np.random.seed(0) #create always the same random sequence
         for p.test in range(100):
             p.p0 = np.zeros(3)
-            p.pf = p.genRandomTarget(1., 4.)
+            # p.pf = p.genUniformRandomTarget(1., 4.)
+            p.pf = p.genQuasiMontecarloRandomTarget(1., 4.)
             main_loop(p)
     else:
         main_loop(p)
@@ -1093,7 +1117,7 @@ def main_loop(p):
                                    'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
                                    'alpha': p.alpha_log, 'alpha_pred': p.alpha_control_log, 'radius': p.radius_log})
 
-    if p.STATISTICAL_ANALYSIS:
+    if p.STATISTICAL_ANALYSIS and not p.ControlType=='OPEN_LOOP':
         p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
         e_xy = np.sqrt(np.power(p.log_e_x, 2) + np.power(p.log_e_y, 2))
         rmse_xy = np.sqrt(np.mean(e_xy ** 2))
