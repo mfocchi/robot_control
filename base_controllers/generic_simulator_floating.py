@@ -13,7 +13,7 @@ from base_controllers.base_controller import BaseController
 from base_controllers.utils.common_functions import plotFrame, plotJoint
 
 import params as conf
-robotName = "mantis" # needs to inherit BaseController
+robotName = "myrobot" # needs to inherit BaseController
 
 class GenericSimulator(BaseController):
     

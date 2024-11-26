@@ -2,14 +2,14 @@
 import pandas as pd
 import numpy as np
 import catboost as cb
-import matplotlib.pyplot as plt
+
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 import os
 os.environ["MPLBACKEND"] = "TkAgg" #do it out side it export MPLBACKEND=TkAgg
 import matplotlib
 matplotlib.use('TkAgg')
-
+import matplotlib.pyplot as plt #do as last import
 # %% [markdown]
 # ## Load data
 
@@ -21,7 +21,9 @@ if sim:
     #data = 'ident_wheels_sim_0.1_WLmax_4.5.csv'
     # only data long_v>0
     #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_4.5.csv'
-    data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_10.csv'
+    #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_10.csv'
+    data = 'ident_wheels_sim_0.4_long_v_positive_WLmax_18.csv'
+    friction_coeff = data.split("_")[3]
 else:
     data = 'ident_wheels_real_indoor.csv'
 
@@ -75,13 +77,13 @@ print(f'R2 metric test beta_l: {r2_score(y_test[...,0], preds_beta_l)}')
 
 
 # %% save the model python
-model_name_beta_l = 'model_beta_l.cb'
+model_name_beta_l = 'model_beta_l'+friction_coeff+'.cb'
 model_beta_l.save_model(model_name_beta_l)
-model_name_beta_l = 'model_beta_l.cbm'
+model_name_beta_l = 'model_beta_l'+friction_coeff+'.cbm'
 model_beta_l.save_model(model_name_beta_l,format="cbm")
 # Save model to ONNX-ML format
 model_beta_l.save_model(
-    "model_beta_l.onnx",
+    'model_beta_l'+friction_coeff+'.onnx',
     format="onnx",
     export_parameters={
         'onnx_domain': 'ai.catboost',
@@ -103,14 +105,14 @@ print(f'R2 metric train beta_r: {r2_score(y_train[...,1], preds_train_beta_r)}')
 print(f'R2 metric test beta_r: {r2_score(y_test[...,1], preds_beta_r)}')
 
 # %% save the model python
-model_name_beta_r = 'model_beta_r.cb'
+model_name_beta_r = 'model_beta_r'+friction_coeff+'.cb'
 model_beta_r.save_model(model_name_beta_r)
 # %% save the model cpp binary
-model_name_beta_r = 'model_beta_r.cbm'
+model_name_beta_r = 'model_beta_r'+friction_coeff+'.cbm'
 model_beta_r.save_model(model_name_beta_r,format="cbm")
 # Save model to ONNX-ML format
 model_beta_r.save_model(
-    "model_beta_r.onnx",
+    'model_beta_r'+friction_coeff+'.onnx',
     format="onnx",
     export_parameters={
         'onnx_domain': 'ai.catboost',
@@ -135,14 +137,14 @@ print(f'R2 metric test alpha: {r2_score(y_test[...,2], preds_alpha)}')
 
 # %%
 # %% save the model python
-model_name_alpha = 'model_alpha.cb'
+model_name_alpha = 'model_alpha'+friction_coeff+'.cb'
 model_alpha.save_model(model_name_alpha)
 # %% save the model cpp binary
-model_name_alpha = 'model_alpha.cbm'
+model_name_alpha = 'model_alpha'+friction_coeff+'.cbm'
 model_alpha.save_model(model_name_alpha,format="cbm")
 # Save model to ONNX-ML format
 model_alpha.save_model(
-    "model_alpha.onnx",
+    'model_alpha.onnx',
     format="onnx",
     export_parameters={
         'onnx_domain': 'ai.catboost',

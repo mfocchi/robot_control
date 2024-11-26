@@ -66,12 +66,12 @@ class GenericSimulator(BaseController):
 
         # Parameters for open loop identification
         self.IDENT_TYPE = 'NONE' # 'V_OMEGA', 'WHEELS', 'NONE'
-        self.IDENT_MAX_WHEEL_SPEED = 12 #used only when IDENT_TYPE = 'WHEELS' 7/12
+        self.IDENT_MAX_WHEEL_SPEED = 18 #used only when IDENT_TYPE = 'WHEELS' 7/12
         self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' 0.2, 0.55 (riccardo)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
 
         #biral friction coeff
-        self.friction_coefficient = 0.1 # 0.1/ 0.09041/ 0.13349 / 0.1568 /
+        self.friction_coefficient = 0.4 # 0.1/0.4
 
         # initial pose
         self.p0 = np.array([0., 0., 0.]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
@@ -104,9 +104,9 @@ class GenericSimulator(BaseController):
         self.regressor_alpha = cb.CatBoostRegressor()
         # laod model
         try:
-            self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l.cb')
-            self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r.cb')
-            self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha.cb')
+            self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+str(self.friction_coefficient)+'.cb')
+            self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+str(self.friction_coefficient)+'.cb')
+            self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+str(self.friction_coefficient)+'.cb')
 
         except:
             print(colored("need to generate the models with running tracked_robot/regressor/model_slippage_updated.py","red"))
@@ -227,8 +227,8 @@ class GenericSimulator(BaseController):
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'biral3d':
                 print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
-                print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
-                self.friction_coefficient = 0.7
+                #print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
+                #self.friction_coefficient = 0.7
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
                 conf.robot_params[p.robot_name]['dt'] = 0.001
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
@@ -240,7 +240,8 @@ class GenericSimulator(BaseController):
             self.robot = getRobotModelFloating(self.robot_name)
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
-            #self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
+            if self.IDENT_TYPE!='NONE':
+                self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
 
             if self.NAVIGATION!='none' and self.TERRAIN: #need to launch empty gazebo to emulate the lidar
                 launchFileNode(package='gazebo_ros', launch_file='empty_world.launch', additional_args = ['use_sim_time:=true','gui:=false','paused:=false'])
@@ -820,7 +821,8 @@ class GenericSimulator(BaseController):
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/world')
-            #self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
+            if self.IDENT_TYPE!='NONE':
+                self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
             self.q = q_des.copy()
             self.qd = qd_des.copy()
             self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
