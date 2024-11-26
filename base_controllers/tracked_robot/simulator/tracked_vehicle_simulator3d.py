@@ -160,7 +160,10 @@ class TrackedVehicleSimulator3D:
             self.ros_pub.add_arrow(self.pose[:3], w_Fg / 1000., "green")
             self.ros_pub.add_arrow(self.pose[:3], w_Mg / np.linalg.norm(w_Mg), "green") #should be purely lateral flipping back forth on ramp with only pitch
 
-        b_vc_dot =  1/m*(b_Ft + b_Fgrav + b_Fg-NL_lin)
+        #rolling friction (not dependent on load/inclination) acts only on x direction
+        b_R = np.array([-m*self.ground.g*self.track_param.c*np.sign(b_vc[0]), 0., 0.])
+
+        b_vc_dot =  1/m*(b_Ft + b_R + b_Fgrav + b_Fg-NL_lin)
         b_omega_dot = np.linalg.inv(bI).dot(b_Mt + b_Mg-NL_ang)
 
         w_twist_dot = np.concatenate((w_R_b.dot(b_vc_dot), w_R_b.dot(b_omega_dot)))
@@ -374,11 +377,11 @@ if __name__ == '__main__':
 
     if not p.USE_MESH:#unit test
         #print(p.pose_log[:,-1])
-        assert_almost_equal(p.pose_log[0, -1], 7.729048908314892 , decimal=2)
+        assert_almost_equal(p.pose_log[0, -1], 6.46527581 , decimal=2)
         assert_almost_equal(p.pose_log[1, -1],0. , decimal=2)
-        assert_almost_equal(p.pose_log[2, -1],     0.77491, decimal=2)
+        assert_almost_equal(p.pose_log[2, -1],    0.648124971, decimal=2)
         assert_almost_equal(p.pose_log[3, -1], 0., decimal=2)
-        assert_almost_equal(p.pose_log[4, -1], -0.0995 , decimal=2)
+        assert_almost_equal(p.pose_log[4, -1], -0.099504975 , decimal=2)
         assert_almost_equal(p.pose_log[5, -1], 0., decimal=2)
 
 

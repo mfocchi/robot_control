@@ -13,7 +13,8 @@ class TrackParams:
         self.parts_lateral = 6 #2
         self.d_longitudinal = self.length / self.parts_longitudinal 
         self.d_lateral      = self.width / self.parts_lateral 
-        self.dA = self.d_longitudinal * self.d_lateral 
+        self.dA = self.d_longitudinal * self.d_lateral
+        self.c = 0.025 #rolling resistance
 
 class Track:
     def __init__(self, position, track_param):
