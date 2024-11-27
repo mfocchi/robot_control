@@ -1,4 +1,5 @@
 # import open3d as o3d
+# import sys
 # # Load mesh and convert to open3d.t.geometry.TriangleMesh
 # # Load mesh and convert to open3d.t.geometry.TriangleMesh
 # cube = o3d.geometry.TriangleMesh.create_box().translate([0, 0, 0])
@@ -17,8 +18,14 @@
 #                        dtype=o3d.core.Dtype.Float32)
 #
 # ans = scene.cast_rays(rays)
-#
 # print(ans.keys())
+# # t_hit is the distance to the intersection. The unit is defined by the length of the ray direction. If there is no intersection this is inf
+# # geometry_ids gives the id of the geometry hit by the ray. If no geometry was hit this is RaycastingScene.INVALID_ID=4294967295
+# # primitive_ids is the triangle index of the triangle that was hit or RaycastingScene.INVALID_ID
+# # primitive_uvs is the barycentric coordinates of the intersection point within the triangle.
+# # primitive_normals is the normal of the hit triangle.
+# #print(ans['t_hit'].numpy())
+# sys.exit()
 
 
 import numpy as np
@@ -35,6 +42,31 @@ class TerrainManager:
         self.scene = o3d.t.geometry.RaycastingScene()
         # returns the ID for the added geometry
         self.scene.add_triangles(self.triangle_mesh)
+
+    def project_points_on_mesh(self, points, direction):
+        # SUGGESTED BY https://github.com/matteodv99tn
+        # use open3d ray casting to compute distance from point to surface
+        
+        #np.concatenate: Combines the original array with a new array containing the scalar, which is fast and avoids some overhead compared to np.append
+        array_to_append = np.concatenate(([self.baseline], direction)) #adds the z coord as baseline and the direction of the ray
+
+        # Append using broadcasting and concatenate This approach is faster and memory-efficient for large arrays compared to using np.hstack or np.tile.
+        tensor_set = np.concatenate((points, array_to_append[None, :].repeat(points.shape[0], axis=0)), axis=1)
+
+        #preallocate result
+        eval_points = np.zeros((3 , points.shape[1]))
+
+        ray = o3d.core.Tensor([tensor_set], dtype=o3d.core.Dtype.Float32)
+        #The result contains information about a possible intersection with the geometry in the scene.
+        ans = self.scene.cast_rays(ray)
+
+        #t_hit is the distance to the intersection from the baseline. The unit is defined by the length of the ray direction. If there is no intersection this is inf
+        distances_from_baseline = ans['t_hit'][0].cpu().numpy()
+        ray_initial_points = tensor_set[:, :3]
+        z_coords = distances_from_baseline[:, None] * direction
+        intersection_points = ray_initial_points + z_coords
+
+        return intersection_points
 
     def project_on_mesh(self, point, direction, debug=False):
         # SUGGESTED BY https://github.com/matteodv99tn
@@ -162,12 +194,12 @@ if __name__ == '__main__':
     #scale not uniformly
     #mesh.vertices = o3d.utility.Vector3dVector(np.asarray(mesh.vertices) * np.array([0.5, 0.5, 0.2]))
 
-    eval_point, roll, pitch = terrainManager.project_on_mesh(point=point, direction=direction, debug=True)
+    eval_point, roll, pitch, yaw = terrainManager.project_on_mesh(point=point, direction=direction, debug=True)
 
     # print(scaling_factor * np.array([1, 1, 0.5]))
     print(eval_point)
     print(roll)
     print(pitch)
-
+    print(yaw)
 
 

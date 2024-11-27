@@ -61,8 +61,9 @@ class TrackedVehicleSimulator3D:
         self.patch_pos_long_l, self.patch_pos_lat_l = self.tracked_robot.getLeftPatchesPositions()
         self.patch_pos_long_r, self.patch_pos_lat_r = self.tracked_robot.getRightPatchesPositions()
 
-        self.patch_pos_l = np.zeros((2, self.track_param.parts_longitudinal*self.track_param.parts_lateral))
-        self.patch_pos_r = np.zeros((2, self.track_param.parts_longitudinal * self.track_param.parts_lateral))
+        self.w_patch_pos_l = np.zeros((self.track_param.parts_longitudinal*self.track_param.parts_lateral, 3))
+        self.w_patch_pos_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral,3))
+
 
         #these are just for the unit test
         self.t_end = 20.  # [s]
@@ -124,6 +125,58 @@ class TrackedVehicleSimulator3D:
         b_Mg = w_R_b.T.dot(w_Mg)
 
         return b_Fg, b_Mg, w_e_o[0],b_e_o[1]
+
+
+    def computeDistributedGroundForcesMoments(self,pose, twist, w_R_b, pg, terr_roll, terr_pitch, terr_yaw):
+        # compoute patches under tracks in wf
+        patch_counter = 0
+        for i in range(self.track_param.parts_longitudinal):
+            for j in range(self.track_param.parts_lateral):
+                # compute patch positions in world frame
+                self.w_patch_pos_l[patch_counter, :] = self.pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], 0.]))
+                self.w_patch_pos_r[patch_counter, :] = self.pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], 0.]))
+                patch_counter += 1
+
+        self.intersection_points_l = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_l[:, :2], direction=self.terrain_normal)
+        self.intersection_points_r = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_r[:, :2], direction=self.terrain_normal)
+
+        if self.DEBUG:
+            for point in self.w_patch_pos_l:
+                self.ros_pub.add_marker(point, radius=0.02, color="white", alpha=0.5)
+            for point in self.intersection_points_l:
+                self.ros_pub.add_marker(point, radius=0.01, color="red")
+            for point in self.w_patch_pos_r:
+                self.ros_pub.add_marker(point, radius=0.02, color="white", alpha=0.5)
+            for point in self.intersection_points_r:
+                self.ros_pub.add_marker(point, radius=0.01, color="red")
+        #print(self.intersection_points_l)
+        #compute ditributed forces
+
+        #force is present only if there is linear penetration
+        # print("pg", pg)
+        # print("pcom_",pc_)
+        # if (self.terrain_normal.dot(pg - pc_) > 0.0):
+        #     Fk = self.ground.Kt_x.dot(pg - pc_)
+        #     #only if it is approaching
+        #     Fd = np.zeros(3)
+        #     if (self.terrain_normal.dot(pc_d) < 0.0):
+        #         Fd = -self.ground.Dt_x.dot(pc_d)
+        #     else:
+        #         Fd = np.zeros(3)
+        #     # project along terrain normal
+        #     w_Fg =  self.terrain_normal*self.terrain_normal.dot(Fk + Fd)
+        # else:
+        #     w_Fg = np.array([0.0, 0.0, 0.0])
+
+
+        #map to base frame
+        # b_Fg = w_R_b.T.dot(w_Fg)
+        # b_Mg = w_R_b.T.dot(w_Mg)
+
+        #return b_Fg, b_Mg, w_e_o[0],b_e_o[1]
+
+        return
+
 
     def dynamics3D(self, twist, w_R_b, b_Fg,b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, vehicle_param):
         # calculate the acceleration with the vehicle dynamical model
@@ -206,8 +259,12 @@ class TrackedVehicleSimulator3D:
                                                                                    self.sigma, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
 
 
+
         # compute ground peneration
         b_Fg, b_Mg, b_eox, b_eoy = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+
+        # compute ground peneration
+        self.computeDistributedGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
 
         if self.NO_SLIPPAGE:
             #extension of unicycle to 3d
