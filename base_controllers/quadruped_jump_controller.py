@@ -401,7 +401,7 @@ class QuadrupedJumpController(QuadrupedController):
 
 
 if __name__ == '__main__':
-    p = QuadrupedJumpController('aliengo')
+    p = QuadrupedJumpController('go1')
     world_name = 'fast.world'
 
     try:

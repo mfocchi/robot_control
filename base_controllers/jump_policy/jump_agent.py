@@ -1,6 +1,7 @@
 import numpy as np
 import onnxruntime as ort
 import os
+import json
 
 # Utils function
 def cart2sph(pos, threshold=1e-5):
@@ -56,44 +57,23 @@ def map_range(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 class JumpAgent():
-    def __init__(self, robot_name: str, cfg: dict = {"model_path": os.path.join(os.environ.get('LOCOSIM_DIR'),
-                                                                                'robot_control',
-                                                                                'base_controllers',
-                                                                                'jump_policy'),
-                                                     "min_action": -5,
-                                                     "max_action": 5,
-                                                     "lerp_time": 0.1,
-                                                     "t_th_min": 0.4,
-                                                     "t_th_max": 1.0,
-                                                     "x_theta_min": np.pi / 4,
-                                                     "x_theta_max": np.pi / 2,
-                                                     "x_r_min": 0.15,
-                                                     "x_r_max": 0.4,
-                                                     "xd_theta_min": np.pi / 6,
-                                                     "xd_theta_max": np.pi / 2,
-                                                     "xd_r_min": 0.5,
-                                                     "xd_r_max": 5,
-                                                     "psi_min": -np.pi / 6,
-                                                     "psi_max": np.pi / 6,
-                                                     "theta_min": -np.pi / 6,
-                                                     "theta_max": np.pi / 6,
-                                                     "phi_min": -np.pi / 4,
-                                                     "phi_max": np.pi / 4,
-                                                     "psid_min": -1,
-                                                     "psid_max": 1,
-                                                     "thetad_min": -1,
-                                                     "thetad_max": 1,
-                                                     "phid_min": -4,
-                                                     "phid_max": 4,
-                                                     "xd_mult_min": 1,
-                                                     "xd_mult_max": 3,
-                                                     "l_expl_min": 0,
-                                                     "l_expl_max": 0.3}):
+    def __init__(self, robot_name: str):
 
-        self.cfg = cfg
+        base_model_path = os.path.join(os.environ.get('LOCOSIM_DIR'),
+                                       'robot_control',
+                                       'base_controllers',
+                                       'jump_policy')
+        
+        config_path = os.path.join(base_model_path, f"{robot_name}.json")
 
-        self.model_path = self.cfg["model_path"]
-        self.model_path = os.path.join(self.model_path, f'{robot_name}.onnx')
+        # Load configuration from JSON file
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Configuration file not found at: {config_path}")
+
+        with open(config_path, 'r') as f:
+            self.cfg = json.load(f)
+
+        self.model_path = os.path.join(base_model_path, f'{robot_name}.onnx')
         self.model = ort.InferenceSession(self.model_path)
 
         self.min_action = self.cfg["min_action"]
