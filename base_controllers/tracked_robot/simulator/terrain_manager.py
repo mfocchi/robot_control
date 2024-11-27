@@ -36,35 +36,92 @@ import rospkg
 class TerrainManager:
     def __init__(self, mesh_path = "terrain.stl" ):
         self.mesh =  o3d.io.read_triangle_mesh(mesh_path)
+
+        # Cleanup the mesh
+        self.mesh.remove_degenerate_triangles()  # Remove zero-area triangles
+        self.mesh.remove_duplicated_triangles()  # Remove duplicate faces
+        self.mesh.remove_duplicated_vertices()  # Remove duplicate vertices
+        self.mesh.remove_non_manifold_edges()  # Fix non-manifold edges
+        self.mesh.orient_triangles()  # If the mesh is orientable this function orients all triangles such that all normals point towards the same direction.
+        self.mesh.compute_vertex_normals()  # Recompute normals
+        self.mesh.compute_triangle_normals()
+        # self.mesh.normalize_normals()
+
+        # Scale the mesh by a factor of 100 (does not help)
+        # self.scale_factor = 0.01
+        # self.mesh.scale(self.scale_factor, center=self.mesh.get_center())
+
+        # Create a LineSet for visualizing normals
+        # vertices = np.asarray(self.mesh.vertices)
+        # triangles = np.asarray(self.mesh.triangles)
+        # normals = np.asarray(self.mesh.triangle_normals)  # Use triangle normals
+        # lines = self.visualize_normals(triangles, vertices, normals,2.)
+        # # Visualize the mesh and the normals
+        # self.visualize([self.mesh ,lines])
+
         self.triangle_mesh = o3d.t.geometry.TriangleMesh.from_legacy(self.mesh)
-        self.baseline = -10 # is the Z level from which we cast rays
+        self.baseline = -10. # is the Z level from which we cast rays
         # define scene
         self.scene = o3d.t.geometry.RaycastingScene()
         # returns the ID for the added geometry
         self.scene.add_triangles(self.triangle_mesh)
+
+    def visualize_normals(self, triangles, vertices, normals, length= 1.):
+        lines = []
+        colors = []
+        new_vertices = []
+        for i, triangle in enumerate(triangles):
+            v0, v1, v2 = triangle
+
+            # Compute the center of the triangle (face)
+            triangle_center = (vertices[v0] + vertices[v1] + vertices[v2]) / 3.0
+            normal_start = triangle_center
+            normal_end = triangle_center + normals[i] * length
+
+            new_vertices.append(normal_start)
+            new_vertices.append(normal_end)
+
+            lines.append([2 * i, 2 * i + 1])
+            colors.extend([[1, 0, 0]])  # Red color for normals
+        new_vertices = np.array(new_vertices)
+        lines = np.array(lines)
+
+        line_set = o3d.geometry.LineSet()
+        line_set.points = o3d.utility.Vector3dVector(new_vertices)
+        line_set.lines = o3d.utility.Vector2iVector(lines)
+        line_set.colors = o3d.utility.Vector3dVector(colors)
+
+        return line_set
 
     def project_points_on_mesh(self, points, direction):
         # SUGGESTED BY https://github.com/matteodv99tn
         # use open3d ray casting to compute distance from point to surface
         
         #np.concatenate: Combines the original array with a new array containing the scalar, which is fast and avoids some overhead compared to np.append
-        array_to_append = np.concatenate(([self.baseline], direction)) #adds the z coord as baseline and the direction of the ray
+        #array_to_append = np.concatenate(([self.baseline], direction)) #adds the z coord as baseline and the direction of the ray
 
         # Append using broadcasting and concatenate This approach is faster and memory-efficient for large arrays compared to using np.hstack or np.tile.
-        tensor_set = np.concatenate((points, array_to_append[None, :].repeat(points.shape[0], axis=0)), axis=1)
+        tensor_set = np.concatenate((points, direction[None, :].repeat(points.shape[0], axis=0)), axis=1)
 
-        #preallocate result
-        eval_points = np.zeros((3 , points.shape[1]))
-
-        ray = o3d.core.Tensor([tensor_set], dtype=o3d.core.Dtype.Float32)
+        rays = o3d.core.Tensor([tensor_set], dtype=o3d.core.Dtype.Float32)
         #The result contains information about a possible intersection with the geometry in the scene.
-        ans = self.scene.cast_rays(ray)
+        ans = self.scene.cast_rays(rays)
 
         #t_hit is the distance to the intersection from the baseline. The unit is defined by the length of the ray direction. If there is no intersection this is inf
-        distances_from_baseline = ans['t_hit'][0].cpu().numpy()
-        ray_initial_points = tensor_set[:, :3]
+        distances_from_baseline = ans['t_hit'][0].numpy()
+
+        # check missed rays
+        #intersect_mask = np.isfinite(distances_from_baseline)   # True if the ray hits something, False otherwise
+        #print("Number of failed  intersections:", np.count_nonzero(~intersect_mask))
+        #TODO debug this
+        #missed_rays = rays[~intersect_mask]  # Extract missed rays
+        # missed_points = o3d.geometry.PointCloud()
+        # missed_points.points = o3d.utility.Vector3dVector(missed_rays)
+        # missed_points.paint_uniform_color([1, 0, 0])  # Red for missed intersections
+        # o3d.visualization.draw_geometries([self.mesh, missed_points])
+
         z_coords = distances_from_baseline[:, None] * direction
-        intersection_points = ray_initial_points + z_coords
+        intersection_points = points + z_coords
 
         return intersection_points
 
