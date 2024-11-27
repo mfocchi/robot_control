@@ -16,7 +16,7 @@ import pinocchio as pin
 import rospy as ros
 import tf
 from termcolor import colored
-from base_controllers.utils.math_tools import RK4_step, backward_euler_step
+from base_controllers.utils.math_tools import RK4_step, backward_euler_step, forward_euler_step
 from base_controllers.utils.rk45F_integrator import RK45F_step
 
 class Ground3D():
@@ -40,18 +40,22 @@ class Ground3D():
         self.Kt_theta = np.eye(3) * terrain_torsional_stiffness
         self.Dt_theta = np.eye(3) * terrain_torsional_damping
 
-
 class TrackedVehicleSimulator3D:
-    def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER', enable_visuals=True):
+    def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER',  enable_visuals=True, contact_distribution = False):
         self.NO_SLIPPAGE = False
         self.USE_MESH = USE_MESH
         self.DEBUG = DEBUG
+        self.CONTACT_DISTRIBUTION = contact_distribution
         self.enable_visuals=enable_visuals
         self.int_method = int_method
 
         self.dt = dt
         self.vehicle_param = VehicleParam()
-        self.track_param = TrackParams()
+        if self.CONTACT_DISTRIBUTION:
+            self.track_param = TrackParams(parts_longitudinal=10, parts_lateral=4)
+        else:
+            self.track_param = TrackParams()
+
         if ground is not None:
             self.ground = ground
         else:
@@ -63,7 +67,14 @@ class TrackedVehicleSimulator3D:
 
         self.w_patch_pos_l = np.zeros((self.track_param.parts_longitudinal*self.track_param.parts_lateral, 3))
         self.w_patch_pos_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral,3))
-
+        self.w_patch_pos_l_baseline = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.w_patch_pos_r_baseline = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.w_patch_vel_l = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.w_patch_vel_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.w_Fg_patch_l = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.w_Fg_patch_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.w_Mg_patch_l = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.w_Mg_patch_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
 
         #these are just for the unit test
         self.t_end = 20.  # [s]
@@ -128,55 +139,105 @@ class TrackedVehicleSimulator3D:
 
 
     def computeDistributedGroundForcesMoments(self,pose, twist, w_R_b, pg, terr_roll, terr_pitch, terr_yaw):
+
+        w_R_terr = self.math_utils.eul2Rot(np.array([terr_roll, terr_pitch, terr_yaw]))
+        self.terrain_normal = w_R_terr[:, 2]
+
+        #projection_direction = self.terrain_normal
+        projection_direction = w_R_b[:, 2] #w_base_z_axis
+
         # compoute patches under tracks in wf
         patch_counter = 0
+        # compute patch positions and twists in world frame
         for i in range(self.track_param.parts_longitudinal):
             for j in range(self.track_param.parts_lateral):
-                # compute patch positions in world frame
-                self.w_patch_pos_l[patch_counter, :] = self.pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], 0.]))
-                self.w_patch_pos_r[patch_counter, :] = self.pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], 0.]))
+                b_rel_patch_position_l = np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], 0.])#TODO robot height
+                b_rel_patch_position_r = np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], 0.])#TODO robot height
+                self.w_patch_pos_l[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_l)
+                self.w_patch_pos_r[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_r)
+                self.w_patch_pos_l_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], self.terrainManager.baseline]))
+                self.w_patch_pos_r_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], self.terrainManager.baseline]))
+                self.w_patch_vel_l[patch_counter, :] = twist[:3] + np.cross(twist[3:],w_R_b.dot(b_rel_patch_position_l))
+                self.w_patch_vel_r[patch_counter, :] = twist[:3] + np.cross(twist[3:],w_R_b.dot(b_rel_patch_position_r))
                 patch_counter += 1
 
-        self.intersection_points_l = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_l[:, :2], direction=self.terrain_normal)
-        self.intersection_points_r = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_r[:, :2], direction=self.terrain_normal)
+        #do the ray casting wrt to projection_direction
+
+        self.intersection_points_l = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_l, direction=projection_direction)
+        self.intersection_points_r = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_r, direction=projection_direction)
 
         if self.DEBUG:
             for point in self.w_patch_pos_l:
                 self.ros_pub.add_marker(point, radius=0.02, color="white", alpha=0.5)
             for point in self.intersection_points_l:
-                self.ros_pub.add_marker(point, radius=0.01, color="red")
+                self.ros_pub.add_marker(point, radius=0.01, color="blue")
             for point in self.w_patch_pos_r:
                 self.ros_pub.add_marker(point, radius=0.02, color="white", alpha=0.5)
             for point in self.intersection_points_r:
-                self.ros_pub.add_marker(point, radius=0.01, color="red")
-        #print(self.intersection_points_l)
-        #compute ditributed forces
+                self.ros_pub.add_marker(point, radius=0.01, color="blue")
+            #this is for further debug
+            # for point in self.w_patch_pos_l_baseline:
+            #     self.ros_pub.add_arrow(point, w_base_z_axis, color="green")
+            #     self.ros_pub.add_marker(point, radius=0.01, color="green")
 
+        track_area = self.track_param.length * self.track_param.width
+
+        # compute projector on tx, ty contact plane
+        N = np.eye(3) - np.multiply.outer(projection_direction.ravel(), projection_direction.ravel())
+
+        #compute ditributed forces for left track
         #force is present only if there is linear penetration
-        # print("pg", pg)
-        # print("pcom_",pc_)
-        # if (self.terrain_normal.dot(pg - pc_) > 0.0):
-        #     Fk = self.ground.Kt_x.dot(pg - pc_)
-        #     #only if it is approaching
-        #     Fd = np.zeros(3)
-        #     if (self.terrain_normal.dot(pc_d) < 0.0):
-        #         Fd = -self.ground.Dt_x.dot(pc_d)
-        #     else:
-        #         Fd = np.zeros(3)
-        #     # project along terrain normal
-        #     w_Fg =  self.terrain_normal*self.terrain_normal.dot(Fk + Fd)
-        # else:
-        #     w_Fg = np.array([0.0, 0.0, 0.0])
+        patch_counter = 0
+        for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_l, self.intersection_points_l, self.w_patch_vel_l):
+            if (projection_direction.dot(terrain_pos - patch_pos) > 0.0 and np.all(np.isfinite(terrain_pos))):
+                Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
+                #only if it is approaching
+                Fd = np.zeros(3)
+                if (projection_direction.dot(patch_vel) < 0.0):
+                    Fd = -self.ground.Dt_x.dot(patch_vel)*track_area
+                else:
+                    Fd = np.zeros(3)
+                self.w_Fg_patch_l[patch_counter, :] = projection_direction*projection_direction.dot(Fk + Fd)
+                # compute moment
+                self.w_Mg_patch_l[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], Fk + Fd))
+            else:
+                self.w_Fg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
+                self.w_Mg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
 
+            if self.DEBUG:
+                self.ros_pub.add_arrow(patch_pos, self.w_Fg_patch_l[patch_counter, :] / 100., "blue")
+            patch_counter += 1
+
+        # compute ditributed forces for right track
+        patch_counter = 0
+        for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_r, self.intersection_points_r, self.w_patch_vel_r):
+            if (projection_direction.dot(terrain_pos - patch_pos) > 0.0 and np.all(np.isfinite(terrain_pos))):
+                Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
+                #only if it is approaching
+                Fd = np.zeros(3)
+                if (projection_direction.dot(patch_vel) < 0.0):
+                    Fd = -self.ground.Dt_x.dot(patch_vel)*track_area
+                else:
+                    Fd = np.zeros(3)
+                self.w_Fg_patch_r[patch_counter, :] = projection_direction*projection_direction.dot(Fk + Fd)
+                self.w_Mg_patch_r[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], Fk + Fd))
+            else:
+                self.w_Fg_patch_r[patch_counter, :] = np.array([0.0, 0.0, 0.0])
+                self.w_Mg_patch_r[patch_counter, :] = np.array([0.0, 0.0, 0.0])
+
+            if self.DEBUG:
+                self.ros_pub.add_arrow(patch_pos, self.w_Fg_patch_r[patch_counter, :] / 100., "blue")
+            patch_counter += 1
+
+        #integrate along all patches
+        w_Fg = np.sum(self.w_Fg_patch_l, axis=0) + np.sum(self.w_Fg_patch_r, axis=0)
+
+        w_Mg = np.sum(self.w_Mg_patch_l, axis=0) + np.sum(self.w_Mg_patch_r, axis=0)
 
         #map to base frame
-        # b_Fg = w_R_b.T.dot(w_Fg)
-        # b_Mg = w_R_b.T.dot(w_Mg)
-
-        #return b_Fg, b_Mg, w_e_o[0],b_e_o[1]
-
-        return
-
+        b_Fg = w_R_b.T.dot(w_Fg)
+        b_Mg = w_R_b.T.dot(w_Mg)
+        return b_Fg, b_Mg, 0, 0
 
     def dynamics3D(self, twist, w_R_b, b_Fg,b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, vehicle_param):
         # calculate the acceleration with the vehicle dynamical model
@@ -207,11 +268,11 @@ class TrackedVehicleSimulator3D:
         w_Fgrav = w_R_b.dot(b_Fgrav) #gravity force
         if self.enable_visuals and self.DEBUG:
             self.ros_pub.add_arrow(self.pose[:3], w_Ft / 100., "red")
-            self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / 1000., "blue")
+            #self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / 1000., "blue")
             #N = np.eye(3) - np.multiply.outer(self.terrain_normal.ravel(), self.terrain_normal.ravel())
             #self.ros_pub.add_arrow(self.pose[:3], N.dot(w_Fgrav) / 100., "blue")
             self.ros_pub.add_arrow(self.pose[:3], w_Fg / 1000., "green")
-            self.ros_pub.add_arrow(self.pose[:3], w_Mg / np.linalg.norm(w_Mg), "green") #should be purely lateral flipping back forth on ramp with only pitch
+            self.ros_pub.add_arrow(self.pose[:3], w_Mg / 100., "blue") #should be purely lateral flipping back forth on ramp with only pitch
 
         #rolling friction (not dependent on load/inclination) acts only on x direction
         b_R = np.array([-m*self.ground.g*self.track_param.c*np.sign(b_vc[0]), 0., 0.])
@@ -258,13 +319,11 @@ class TrackedVehicleSimulator3D:
         Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(state2D, omega_right, self.track_param,
                                                                                    self.sigma, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
 
-
-
         # compute ground peneration
-        b_Fg, b_Mg, b_eox, b_eoy = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
-
-        # compute ground peneration
-        self.computeDistributedGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+        if self.CONTACT_DISTRIBUTION:
+            b_Fg, b_Mg, b_eox, b_eoy = self.computeDistributedGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+        else:
+            b_Fg, b_Mg, b_eox, b_eoy = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
 
         if self.NO_SLIPPAGE:
             #extension of unicycle to 3d
@@ -275,7 +334,10 @@ class TrackedVehicleSimulator3D:
         else:
             #update twist from dynamics
             if self.int_method=='FORWARD_EULER':
-                self.twist += self.dynamics3D(self.twist, w_R_b, b_Fg, b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param) * self.dt
+                self.twist = forward_euler_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
+                                  Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
+                                  M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
+
             elif self.int_method=='RK4':
                 self.twist = RK4_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
                                   Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
@@ -389,11 +451,11 @@ class TrackedVehicleSimulator3D:
 if __name__ == '__main__':
     #unit test
     groundParams = Ground3D()
-    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=False, DEBUG=False, int_method='FORWARD_EULER')
+    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=False, DEBUG=True, int_method='FORWARD_EULER')
 
     # critical test
-    # groundParams = Ground3D(friction_coefficient=0.7, terrain_torsional_stiffness=1e05,  terrain_torsional_damping=1e04)
-    # p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER')
+    # groundParams = Ground3D(friction_coefficient=0.7,   terrain_stiffness = 1e05,   terrain_damping = 0.5e04)
+    # p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', contact_distribution=True)
 
     # to debug
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -472,7 +534,7 @@ if __name__ == '__main__':
     plt.xlabel("Time [s]")
     plt.grid()
 
-
+    #TODO remove yaw and yaw_des such that we can compare pitch/roll
     fig = plt.figure()
     fig.suptitle("ang states", fontsize=20)
     plt.subplot(3, 1, 1)
