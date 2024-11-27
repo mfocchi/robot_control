@@ -4,13 +4,13 @@ from base_controllers.tracked_robot.simulator.contact_patch import ContactPatch
 from  base_controllers.tracked_robot.utils import constants as constants
 
 class TrackParams:
-    def __init__(self):
+    def __init__(self, parts_longitudinal= 60, parts_lateral = 6):
         self.length = 0.5  #[m] track l.ength
         self.width = 0.1  #[m] track width
         self.sprocket_radius = constants.SPROCKET_RADIUS #[m]
         self.A = self.length * self.width  # [m^2] contact area
-        self.parts_longitudinal = 60 #4
-        self.parts_lateral = 6 #2
+        self.parts_longitudinal = parts_longitudinal # 60 4
+        self.parts_lateral = parts_lateral  #6 2
         self.d_longitudinal = self.length / self.parts_longitudinal 
         self.d_lateral      = self.width / self.parts_lateral 
         self.dA = self.d_longitudinal * self.d_lateral
