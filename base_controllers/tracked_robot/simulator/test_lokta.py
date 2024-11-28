@@ -4,7 +4,7 @@ from tracked_vehicle_simulator3d import TrackedVehicleSimulator3D
 from tracked_vehicle_simulator3d import Ground3D
 from matplotlib import pyplot as plt #need to import as last to avoid issues with qt
 np.set_printoptions(threshold=np.inf, precision = 9, linewidth = 10000, suppress = True)
-from base_controllers.utils.math_tools import forward_euler_step, backward_euler_step, RK4_step
+from base_controllers.utils.math_tools import forward_euler_step, backward_euler_step, RK4_step, heun_step
 
 
 def volterra(y):
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     while time < t_end:
         if np.mod(time, 1) == 0:
             print(colored(f"TIME: {time}", "red"))
-        x = forward_euler_step(volterra, y = x,  h=dt)
+        x = heun_step(volterra, y = x,  h=dt)
         time = np.round(time + dt, 4)
         time_log[sim_counter] = time
         pose_log[:,sim_counter] = x

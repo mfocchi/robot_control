@@ -16,7 +16,7 @@ import pinocchio as pin
 import rospy as ros
 import tf
 from termcolor import colored
-from base_controllers.utils.math_tools import RK4_step, backward_euler_step, forward_euler_step
+from base_controllers.utils.math_tools import RK4_step, backward_euler_step, forward_euler_step, heun_step
 from base_controllers.utils.rk45F_integrator import RK45F_step
 
 class Ground3D():
@@ -334,7 +334,7 @@ class TrackedVehicleSimulator3D:
         else:
             #update twist from dynamics
             if self.int_method=='FORWARD_EULER':
-                self.twist = forward_euler_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
+                self.twist = heun_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
                                   Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
                                   M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
 
