@@ -55,8 +55,8 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
         self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia'(deprecated), 'biral' 'biral3d'
-        self.NAVIGATION = '3d'  # 'none', '2d' , '3d'
-        self.TERRAIN = True
+        self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
+        self.TERRAIN = False
 
         self.STATISTICAL_ANALYSIS = False
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
@@ -107,9 +107,11 @@ class GenericSimulator(BaseController):
             self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+str(self.friction_coefficient)+'.cb')
             self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+str(self.friction_coefficient)+'.cb')
             self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+str(self.friction_coefficient)+'.cb')
-
         except:
-            print(colored("need to generate the models with running tracked_robot/regressor/model_slippage_updated.py","red"))
+            self.model_beta_l = None
+            self.model_beta_r = None
+            self.model_alpha = None
+            print(colored(f"No NN model for need for friction coefficient {self.friction_coefficient}, you need to generate the models by running tracked_robot/regressor/model_slippage_updated.py","red"))
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -800,6 +802,7 @@ class GenericSimulator(BaseController):
                 else:
                     terrain_roll = 0.
                     terrain_pitch = 0.
+                    terrain_yaw = 0.
                     pg = np.array([self.basePoseW[0], self.basePoseW[1], 0.])
                     self.basePoseW_des = np.concatenate((np.array([p.des_x, p.des_y, pg[2]]), np.array([0, 0, self.des_theta])))
 
@@ -900,7 +903,22 @@ class GenericSimulator(BaseController):
         phi_sample = self.phi.pop(0)
         return np.array([xy_sample[0], xy_sample[1], phi_sample])
 
-
+    def getClothoids(self):
+        import Clothoids
+        curve = Clothoids.ClothoidCurve("curve")
+        curve.build_G1(self.p0[0], self.p0[1], self.p0[2],self.pf[0], self.pf[1], self.pf[2])
+        values = np.arange(0, curve.length(), 0.01, dtype=np.float64)
+        xy = np.zeros((values.size, 2))
+        dxdy = np.zeros((values.size, 2))
+        theta = np.zeros((values.size, 1))
+        dtheta = np.zeros((values.size, 1))
+        # for i in range(values.size):
+        #     xy[i, :] = curve.eval(values[i])
+        #     theta[i] = curve.theta(values[i])
+        #     dxdy[i, :] = curve.eval_D(values[i])
+        #     dtheta[i] = curve.theta_D(values[i])
+        # xy[i, :] = curve.eval(values[i])
+        # return xy[:,0],xy[:,1],theta, v, omega, self.dt
 
 def talker(p):
     p.start()
@@ -973,7 +991,10 @@ def main_loop(p):
                 p.des_theta = p.p0[2]  # +0.1
             p.traj = Trajectory(ModelsList.UNICYCLE, p.des_x, p.des_y, p.des_theta, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
         else: #matlab planning
-            des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, matlab_dt=  p.getTrajFromMatlab()
+            if p.MATLAB_PLANNING=='clothoids':
+                des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, matlab_dt= p.getClothoids()
+            else:
+                des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, matlab_dt=  p.getTrajFromMatlab()
             p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
             traj_length = len(v_ol)
 

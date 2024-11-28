@@ -917,8 +917,7 @@ def wrapTo2pi(theta):
 
 def forward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
     """
-       Performs a single Backward Euler step with Newton's method for solving the implicit equation.
-
+       Performs a single Forward Euler step
        Parameters:
            func : callable
                The ODE function (dy/dt = f(y, t, *args, **kwargs)).
@@ -944,6 +943,43 @@ def forward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
     else:
         y_next = y + h * func(y, *args, **kwargs)
         return y_next
+
+def heun_step(func, y, t=None, t_next=None, h=0.001, *args, **kwargs):
+    """
+       Performs a single Heun step
+
+       Parameters:
+           func : callable
+               The ODE function (dy/dt = f(y, t, *args, **kwargs)).
+           y : array-like
+               Current state at time t.
+           t : float
+               Current time.
+           h : float
+               Time step size.
+           *args : tuple
+               Additional positional arguments for the dynamics function.
+           **kwargs : dict
+               Additional keyword arguments for the dynamics function.
+
+       Returns:
+           y_next : array-like
+               The state at time t + h (next state).
+       """
+    if t is not None:
+        # Predict
+        y_predict = y + h * func(y,t, *args, **kwargs)
+        # Correct
+        y_next = y + (h / 2) * (func(y,t,  *args, **kwargs) + func(t+h, y_predict,  *args, **kwargs))
+        t_next = t + h
+        return t_next, y_next
+    else:
+        # Predict
+        y_predict = y + h * func(y, *args, **kwargs)
+        # Correct
+        y_next = y + (h / 2) * (func(y, *args, **kwargs) + func(y_predict, *args, **kwargs))
+        return y_next
+
 
 def backward_euler_step(func, y, t=None, h=0.001, *args, **kwargs):
     # 1) The y_next value is updated implicitly using an iterative method
