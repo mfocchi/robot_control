@@ -46,7 +46,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.go0_conf = 'standDown'
         self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
         self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
-        self.use_landing_controller = False
+        self.use_landing_controller = True
 
         if self.real_robot:
             print(colored(
@@ -238,9 +238,15 @@ class QuadrupedJumpController(QuadrupedController):
             t_0 = (t-self.dt) / T_th_e
             t_1 = np.clip(t / T_th_e, 0, 1)
 
-            com = self.lerp(com_lo_b, com_lo_e, t_1)
-            comd = self.lerp(comd_lo_b, comd_lo_e, t_1)
-            comd_ = self.lerp(comd_lo_b, comd_lo_e, t_0)
+            #TT
+            com = self.lerp(self.jumpAgent.trunk_x_lo_b,   self.jumpAgent.trunk_x_lo_e, t_1)[0]
+            comd = self.lerp(self.jumpAgent.trunk_xd_lo_b,   self.jumpAgent.trunk_xd_lo_e, t_1)[0]
+            comd_ = self.lerp(self.jumpAgent.trunk_xd_lo_b,  self.jumpAgent.trunk_xd_lo_e, t_0)[0]
+
+            # com = self.lerp(com_lo_b, com_lo_e, t_1)
+            # comd = self.lerp(comd_lo_b, comd_lo_e, t_1)
+            # comd_ = self.lerp(comd_lo_b, comd_lo_e, t_0)
+
             comdd = (comd-comd_)/self.dt
 
         # angle part is computed only 
@@ -425,12 +431,14 @@ if __name__ == '__main__':
             p.startTrust = 1.
             p.customStartupProcedure()
 
+        ros.sleep(2.)
+
         # initial pose
         com_0 = p.basePoseW[:3].copy()
         eul_0 = p.basePoseW[3:].copy()
 
         # define jump action (relative)
-        p.jumpDeltaStep = np.array([0.5, 0., 0.])
+        p.jumpDeltaStep = np.array([0.3, 0., 0.0])
         p.jumpDeltaOrient = np.array([0.0, 0., 0.])
 
         # get the action from the policy (use p.jumpAgent to get values)
@@ -443,21 +451,44 @@ if __name__ == '__main__':
         # we have to do this because the training was done for height 0.3 TODO
         default_start = np.array([0., 0., 0.3])
 
-        # extract liftoff position orientation from action
+        #to debug landing controller
+        p.target_position = np.array([0.3, 0., 0.3])
+        action = np.array([4.2817e+00, 5.2148e-01, 1.9682e+00, -1.4080e+00, -1.7346e+00,
+                           -8.8685e-02, -6.4581e-01, 1.6460e-02, -4.4340e-02, 7.1318e-01,
+                           3.2268e-03, -4.8818e+00, -4.5645e+00])
+        p.jumpAgent.process_actions(action, p.target_position)
+
+        # initial pose
         # linear
-        p.com_lo_b = (com_0-default_start) + p.jumpAgent.trunk_x_lo_b[0]
+        com_0 = p.basePoseW[:3].copy()
+        p.com_lo_b = p.jumpAgent.trunk_x_lo_b[0]
         p.comd_lo_b = p.jumpAgent.trunk_xd_lo_b[0]
-        p.com_lo_e = (com_0-default_start) + p.jumpAgent.trunk_x_lo_e[0]
+        p.com_lo_e = p.jumpAgent.trunk_x_lo_e[0]
         p.comd_lo_e = p.jumpAgent.trunk_xd_lo_e[0]
         # angular
         p.eul_lo = p.jumpAgent.trunk_o_lo
         p.euld_lo = p.jumpAgent.trunk_od_lo
-        # time
+        # t_th
+        eul_0 = p.basePoseW[3:].copy()
         p.T_th_b = p.jumpAgent.t_th_b[0].item()
         p.T_th_e = p.jumpAgent.t_th_e[0].item()
         p.T_th_total = p.T_th_b + p.T_th_e
+        p.lerp_time = 0.1
 
-        p.lerp_time = p.jumpAgent.lerp_time
+        # extract liftoff position orientation from action
+        # linear
+        # p.com_lo_b = (com_0-default_start) + p.jumpAgent.trunk_x_lo_b[0]
+        # p.comd_lo_b = p.jumpAgent.trunk_xd_lo_b[0]
+        # p.com_lo_e = (com_0-default_start) + p.jumpAgent.trunk_x_lo_e[0]
+        # p.comd_lo_e = p.jumpAgent.trunk_xd_lo_e[0]
+        # # angular
+        # p.eul_lo = p.jumpAgent.trunk_o_lo
+        # p.euld_lo = p.jumpAgent.trunk_od_lo
+        # # time
+        # p.T_th_b = p.jumpAgent.t_th_b[0].item()
+        # p.T_th_e = p.jumpAgent.t_th_e[0].item()
+        # p.T_th_total = p.T_th_b + p.T_th_e
+        # p.lerp_time = p.jumpAgent.lerp_time
 
         if p.DEBUG:
             p.initial_com = np.copy(com_0)
@@ -481,8 +512,8 @@ if __name__ == '__main__':
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
         p.W_contacts_sampled = np.copy(p.W_contacts)
 
-        # if not p.real_robot:
-        # p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
+        if not p.real_robot:
+            p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
 
         p.lm = LandingManager(p)
 
@@ -514,7 +545,7 @@ if __name__ == '__main__':
                 if p.time >= (p.startTrust + p.T_th_total):
                     p.trustPhaseFlag = False
                     # we se this here to have enough retraction (important)
-                    p.q_t_th = p.q_des.copy()
+                    p.q_t_th = p.q.copy() #TT q_des
                     p.qd_t_th = p.qd_des.copy()
                     p.tau_ffwd = np.zeros(12)
                     print(colored(f"thrust completed! at time {p.time}", "red"))
