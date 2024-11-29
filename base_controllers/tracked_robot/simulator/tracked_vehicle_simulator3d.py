@@ -41,7 +41,7 @@ class Ground3D():
         self.Dt_theta = np.eye(3) * terrain_torsional_damping
         self.Kt_b = terrain_stiffness
         self.Dt_b = terrain_damping
-        self.Kt_p = 0.1 #max percentual stiffness increase
+        self.Kt_p = 10.5 #max percentual stiffness increase/(m/s)
 
 class TrackedVehicleSimulator3D:
     def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER',  enable_visuals=True, contact_distribution = False):
@@ -196,7 +196,11 @@ class TrackedVehicleSimulator3D:
         for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_l, self.intersection_points_l, self.w_patch_vel_l):
             rho = projection_direction.dot(terrain_pos - patch_pos)
             if (rho> 0.0 and np.all(np.isfinite(terrain_pos))):
-                Fk = (self.ground.Kt_b*rho)*track_area
+                b_robot_vel_x = w_R_b.T.dot(twist[:3])[0]
+                b_patch_pos_x = w_R_b.T.dot(self.w_patch_pos_l[patch_counter, :] - pose[:3])[0]
+                # change patch stiffness according to speed and pos of patch
+                patch_stiffness = self.ground.Kt_b * (1 + b_robot_vel_x * (b_patch_pos_x + np.sign(b_robot_vel_x)* self.track_param.length/2) *self.ground.Kt_p )
+                Fk = (patch_stiffness*rho)*track_area
                 #Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
                 #only if it is approaching
                 #Fd = np.zeros(3)
@@ -220,7 +224,11 @@ class TrackedVehicleSimulator3D:
         for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_r, self.intersection_points_r, self.w_patch_vel_r):
             rho = projection_direction.dot(terrain_pos - patch_pos)
             if (rho > 0.0 and np.all(np.isfinite(terrain_pos))):
-                Fk = (self.ground.Kt_b * rho) * track_area
+                b_robot_vel_x = w_R_b.T.dot(twist[:3])[0]
+                b_patch_pos_x = w_R_b.T.dot(self.w_patch_pos_r[patch_counter, :] - pose[:3])[0]
+                #change patch stiffness according to speed and pos of patch
+                patch_stiffness = self.ground.Kt_b * (1 + b_robot_vel_x * (b_patch_pos_x + np.sign(b_robot_vel_x) * self.track_param.length / 2) * self.ground.Kt_p)
+                Fk = (patch_stiffness * rho) * track_area
                 # Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
                 # only if it is approaching
                 # Fd = np.zeros(3)
@@ -319,7 +327,6 @@ class TrackedVehicleSimulator3D:
     def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right):
         # compute base orientation
         w_R_b = self.math_utils.eul2Rot(self.pose[3:])
-
         #get states in base frame b_v_c
         b_v_c = w_R_b.T.dot(self.twist[:3])
         state2D = np.array([b_v_c[0],b_v_c[1], self.twist[5]])
@@ -334,8 +341,8 @@ class TrackedVehicleSimulator3D:
             # compute patch positions and twists in world frame
             for i in range(self.track_param.parts_longitudinal):
                 for j in range(self.track_param.parts_lateral):
-                    self.sigma_l[i,j] = max(w_R_b.T.dot(w_Fg_patch_l[patch_counter,:])[2]/patch_area, 1e-5)
-                    self.sigma_r[i, j] = max(w_R_b.T.dot(w_Fg_patch_r[patch_counter, :])[2] / patch_area, 1e-5)
+                    self.sigma_l[i,j] = w_R_b.T.dot(w_Fg_patch_l[patch_counter,:])[2]/patch_area
+                    self.sigma_r[i, j] = w_R_b.T.dot(w_Fg_patch_r[patch_counter, :])[2] / patch_area
                     patch_counter+=1
         else:
             b_Fg, b_Mg, b_eox, b_eoy  = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
@@ -357,10 +364,13 @@ class TrackedVehicleSimulator3D:
         else:
             #update twist from dynamics
             if self.int_method=='FORWARD_EULER':
+                self.twist = forward_euler_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
+                                  Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
+                                  M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
+            elif self.int_method=='HEUN':
                 self.twist = heun_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
                                   Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
                                   M_long_r=M_long_r, M_lat_r=M_lat_r, vehicle_param=self.vehicle_param)
-
             elif self.int_method=='RK4':
                 self.twist = RK4_step(self.dynamics3D, y=self.twist, h=self.dt,  w_R_b=w_R_b, b_Fg=b_Fg, b_Mg=b_Mg,
                                   Fx_l=Fx_l, Fy_l=Fy_l, M_long_l=M_long_l, M_lat_l=M_lat_l, Fx_r=Fx_r, Fy_r=Fy_r,
@@ -476,9 +486,15 @@ if __name__ == '__main__':
     groundParams = Ground3D()
     p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=False, DEBUG=True, int_method='FORWARD_EULER')
 
+    #to test the stiffness variation of the terrain
+    #p.pose_init = [5., -5., 0.0, 0, 0, 0]  # position in WF, rpy angles
+    #groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e03, terrain_damping=0.5e04)
+
     # critical test
     # groundParams = Ground3D(friction_coefficient=0.7,   terrain_stiffness = 1e05,   terrain_damping = 0.5e04)
-    # p = TrackedVehicleSimulator3D(dt=0.0005, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', contact_distribution=True)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', contact_distribution=True)
+
+
 
     # to debug
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -503,6 +519,8 @@ if __name__ == '__main__':
     w_omega_z = np.linspace(0.0, 0.0, p.number_of_steps)
     # critical test
     #w_omega_z = np.linspace(0.4, 0.4, p.number_of_steps)
+    # stiffness variation
+    # w_omega_z = np.linspace(1.4, 1.4, p.number_of_steps)
 
     #the trajectory is in the WF
     p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.pose_init[0],
