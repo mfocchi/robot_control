@@ -393,6 +393,11 @@ class GenericSimulator(BaseController):
                     self.terrain_consistent_pose_init[3] = start_roll
                     self.terrain_consistent_pose_init[4] = start_pitch
                     self.terrain_consistent_pose_init[5] = start_yaw
+                    # init com self.vehicle_param.height above ground
+                    w_R_terr = p.math_utils.eul2Rot(np.array([start_roll, start_pitch, start_yaw]))
+                    self.terrain_consistent_pose_init[:3] += self.tracked_vehicle_simulator.consider_robot_height * (w_R_terr[:, 2] * self.tracked_vehicle_simulator.vehicle_param.height)
+                else:
+                    self.terrain_consistent_pose_init[:3] += self.tracked_vehicle_simulator.consider_robot_height * (np.array([0.,0.,1.])* self.tracked_vehicle_simulator.vehicle_param.height)
                 self.tracked_vehicle_simulator.initSimulation(pose_init=self.terrain_consistent_pose_init, twist_init=np.zeros(6), ros_pub = self.ros_pub)
                 # important, you need to reset also baseState otherwise robot_state the first time will be set to 0,0,0!
                 self.basePoseW = self.terrain_consistent_pose_init.copy()
@@ -795,19 +800,24 @@ class GenericSimulator(BaseController):
                     pose_des, terrain_roll_des, terrain_pitch_des, terrain_yaw_des = self.terrainManager.project_on_mesh(point=np.array([self.des_x, self.des_y]), direction=np.array([0., 0., 1.]))
                     w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
                     w_normal = w_R_terr.dot(np.array([0, 0, 1]))
+
                     self.ros_pub.add_arrow(pg, w_normal * 0.5, color="white")
                     self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
-                    self.basePoseW_des = np.concatenate((pose_des, np.array([terrain_roll_des, terrain_pitch_des, self.des_theta])))
 
                 else:
-                    terrain_roll = 0.
-                    terrain_pitch = 0.
+                    terrain_roll = terrain_roll_des = 0.
+                    terrain_pitch = terrain_pitch_des =  0.
                     terrain_yaw = 0.
                     pg = np.array([self.basePoseW[0], self.basePoseW[1], 0.])
-                    self.basePoseW_des = np.concatenate((np.array([p.des_x, p.des_y, pg[2]]), np.array([0, 0, self.des_theta])))
+                    pose_des = np.array([p.des_x, p.des_y, pg[2]])
 
                 self.b_eox, self.b_eoy =self.tracked_vehicle_simulator.simulateOneStep(pg,  terrain_roll,  terrain_pitch, terrain_yaw, qd_des[0], qd_des[1])
                 self.basePoseW, self.baseTwistW = self.tracked_vehicle_simulator.getRobotState()
+                # shift up  of robot height along Zb component
+                pose_des += self.tracked_vehicle_simulator.consider_robot_height * self.tracked_vehicle_simulator.w_com_height_vector
+                self.basePoseW_des = np.concatenate((pose_des, np.array([terrain_roll_des, terrain_pitch_des, self.des_theta])))
+
+
             else:
                 self.tracked_vehicle_simulator.simulateOneStep(qd_des[0], qd_des[1])
                 pose, pose_der =  self.tracked_vehicle_simulator.getRobotState()
@@ -1067,12 +1077,12 @@ def main_loop(p):
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
+
             # update kinematics
             robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
             robot_state.y = p.basePoseW[p.u.sp_crd["LY"]]
             robot_state.theta = p.basePoseW[p.u.sp_crd["AZ"]]
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
-
             # controllers
             if p.NAVIGATION !='none':
                 p.des_x, p.des_y, p.des_theta = p.traj.getSingleUpdate(p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d)
@@ -1080,6 +1090,7 @@ def main_loop(p):
                 p.omega_dot_d = 0.
                 traj_finished = None
             else:
+
                 p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, p.v_dot_d, p.omega_dot_d, traj_finished = p.traj.evalTraj(p.time)
                 if traj_finished:
                     break

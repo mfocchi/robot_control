@@ -43,6 +43,7 @@ class Ground3D():
         self.Dt_b = terrain_damping
         self.Kt_p = 10.5 #max percentual stiffness increase/(m/s)
 
+
 class TrackedVehicleSimulator3D:
     def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER',  enable_visuals=True, contact_distribution = False):
         self.NO_SLIPPAGE = False
@@ -51,6 +52,8 @@ class TrackedVehicleSimulator3D:
         self.CONTACT_DISTRIBUTION = contact_distribution
         self.enable_visuals=enable_visuals
         self.int_method = int_method
+        self.consider_robot_height = True
+
 
         self.dt = dt
         self.vehicle_param = VehicleParam()
@@ -81,10 +84,11 @@ class TrackedVehicleSimulator3D:
         self.w_Mg_patch_l = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
         self.w_Mg_patch_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
 
+
         #these are just for the unit test
         self.t_end = 20.  # [s]
         self.pose_init = [0., 0., 0.0,0,0,0]  # position in WF, rpy angles
-        #critical test
+        #sloped test
         #self.pose_init = [24., 7., 0.0, 0, 0, 0]  # position in WF, rpy angles
 
         self.twist_init = [0, 0.0, 0,0,0,0]  # in WF
@@ -109,7 +113,7 @@ class TrackedVehicleSimulator3D:
         self.terrain_normal = w_R_terr[:,2]
 
         #projection of com on the ground level
-        pc_ = pc# - w_R_b[:,2]*self.vehicle_param.height
+        pc_ = pc -self.consider_robot_height*self.w_com_height_vector
 
         #force is present only if there is linear penetration
         # print("pg", pg)
@@ -156,8 +160,10 @@ class TrackedVehicleSimulator3D:
         # compute patch positions and twists in world frame
         for i in range(self.track_param.parts_longitudinal):
             for j in range(self.track_param.parts_lateral):
-                b_rel_patch_position_l = np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], 0.])#TODO robot height
-                b_rel_patch_position_r = np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], 0.])#TODO robot height
+
+
+                b_rel_patch_position_l = np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], -self.consider_robot_height*self.vehicle_param.height])#TODO robot height
+                b_rel_patch_position_r = np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], -self.consider_robot_height*self.vehicle_param.height])#TODO robot height
                 self.w_patch_pos_l[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_l)
                 self.w_patch_pos_r[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_r)
                 self.w_patch_pos_l_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], self.terrainManager.baseline]))
@@ -316,8 +322,6 @@ class TrackedVehicleSimulator3D:
     def initSimulation(self,pose_init =np.zeros(6),  twist_init=np.zeros(6), ros_pub = None):
         self.pose = pose_init
         self.twist = twist_init
-        #TODO
-        #self.pose[2] = self.vehicle_param.height
         if self.enable_visuals:
             if ros_pub is None:
                 self.ros_pub = RosPub('tractor', only_visual=True)
@@ -330,6 +334,7 @@ class TrackedVehicleSimulator3D:
         #get states in base frame b_v_c
         b_v_c = w_R_b.T.dot(self.twist[:3])
         state2D = np.array([b_v_c[0],b_v_c[1], self.twist[5]])
+        self.w_com_height_vector = w_R_b[:, 2] * self.vehicle_param.height
 
         # compute ground peneration
         if self.CONTACT_DISTRIBUTION:
@@ -415,7 +420,6 @@ class TrackedVehicleSimulator3D:
 
                 self.pose_des,terrain_roll_des,terrain_pitch_des, terrain_yaw_des = self.terrainManager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
                 self.orient_des = np.array([0, 0, des_theta]) #first two elements are the expected values of b_eox, b_eoy
-
                 w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
                 w_normal = w_R_terr.dot(np.array([0, 0, 1]))
 
@@ -426,8 +430,9 @@ class TrackedVehicleSimulator3D:
                 # print("pg ", pg)
                 if self.enable_visuals:
                     self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
-                    self.ros_pub.add_arrow(pg, w_normal*0.5, color="white")
-                    self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha = 1.)
+                    self.ros_pub.add_arrow(self.pose[:3], w_normal*0.5, color="white")
+                    self.ros_pub.add_marker(self.pose[:3], radius=0.1, color="white", alpha=1.)
+                    #self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
             else:
                 terrain_roll = self.terrain_roll_vec[sim_counter]
                 terrain_pitch = self.terrain_pitch_vec[sim_counter]
@@ -435,6 +440,8 @@ class TrackedVehicleSimulator3D:
                 pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch)])
                 self.pose_des = np.array([des_x, des_y, self.computeZcomponent(des_x, des_y, terrain_pitch)])
                 self.orient_des = np.array([0, 0, des_theta])
+
+
 
             #project hf_v onto hf_x_b
             b_v = self.hf_R_b[0].dot(np.array([hf_v[sim_counter], 0., 0.]))
@@ -451,7 +458,7 @@ class TrackedVehicleSimulator3D:
             b_eox, b_eoy = self.simulateOneStep(pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right)
 
             #log
-            self.pose_des_log[:3, sim_counter] = self.pose_des
+            self.pose_des_log[:3, sim_counter] = self.pose_des + self.consider_robot_height*self.w_com_height_vector
             self.pose_des_log[3:, sim_counter] = self.orient_des
             self.pose_log[:, sim_counter] = self.pose
 
@@ -490,11 +497,9 @@ if __name__ == '__main__':
     #p.pose_init = [5., -5., 0.0, 0, 0, 0]  # position in WF, rpy angles
     #groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e03, terrain_damping=0.5e04)
 
-    # critical test
-    # groundParams = Ground3D(friction_coefficient=0.7,   terrain_stiffness = 1e05,   terrain_damping = 0.5e04)
-    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', contact_distribution=True)
-
-
+    # normal test
+    groundParams = Ground3D(friction_coefficient=0.7,   terrain_stiffness = 1e05,   terrain_damping = 0.5e04)
+    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', contact_distribution=True)
 
     # to debug
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -509,15 +514,19 @@ if __name__ == '__main__':
         p.pose_init[3] = start_roll
         p.pose_init[4] = start_pitch
         p.pose_init[5] = start_yaw
+        # init com self.vehicle_param.height above ground
+        w_R_terr = p.math_utils.eul2Rot(np.array([start_roll, start_pitch, start_yaw]))
+        p.pose_init[:3] += p.consider_robot_height*(w_R_terr[:, 2] * p.vehicle_param.height)
     else:
         p.terrain_roll_vec = np.linspace(0.0, 0.0, p.number_of_steps)
         p.terrain_pitch_vec = np.linspace(0.0, -0.1, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
         p.terrain_yaw_vec = np.linspace(0.0, -0.0, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
+        p.pose_init[:3] += p.consider_robot_height * np.array([0,0,1])* p.vehicle_param.height
 
     #gen traj unit test
     hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
     w_omega_z = np.linspace(0.0, 0.0, p.number_of_steps)
-    # critical test
+    # sloped test
     #w_omega_z = np.linspace(0.4, 0.4, p.number_of_steps)
     # stiffness variation
     # w_omega_z = np.linspace(1.4, 1.4, p.number_of_steps)
@@ -539,7 +548,10 @@ if __name__ == '__main__':
         #print(p.pose_log[:,-1])
         assert_almost_equal(p.pose_log[0, -1], 6.46527581 , decimal=2)
         assert_almost_equal(p.pose_log[1, -1],0. , decimal=2)
-        assert_almost_equal(p.pose_log[2, -1],    0.648124971, decimal=2)
+        if p.consider_robot_height:
+            assert_almost_equal(p.pose_log[2, -1],     0.8993727217334103, decimal=2)
+        else:
+            assert_almost_equal(p.pose_log[2, -1],    0.648124971, decimal=2)
         assert_almost_equal(p.pose_log[3, -1], 0., decimal=2)
         assert_almost_equal(p.pose_log[4, -1], -0.099504975 , decimal=2)
         assert_almost_equal(p.pose_log[5, -1], 0., decimal=2)
