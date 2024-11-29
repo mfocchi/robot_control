@@ -58,7 +58,7 @@ class GenericSimulator(BaseController):
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
         self.TERRAIN = False
 
-        self.STATISTICAL_ANALYSIS = False
+        self.STATISTICAL_ANALYSIS = False #samples targets and orientations in a given space around the robot and compute average tracking error
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
         self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
@@ -78,7 +78,7 @@ class GenericSimulator(BaseController):
 
         # target used only for matlab trajectory generation (dubins/optimization) #need to run dubins_optimization/ros/ros_node.m
         self.pf = np.array([2., 2.5, -0.4])
-        self.MATLAB_PLANNING = 'none' # 'none', 'dubins' , 'optim'
+        self.PLANNING = 'none' # 'none', 'dubins' , 'optim', 'clothoids'
 
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
@@ -332,6 +332,28 @@ class GenericSimulator(BaseController):
                 print(colored(f"freq mismatch beyond 10%: coppelia is running at {freq_coppelia} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
         self.check_time = ros.Time.now().to_sec()
 
+    def getClothoids(self, long_vel, dt = 0.001):
+        import Clothoids
+        curve = Clothoids.ClothoidCurve("curve")
+        curve.build_G1(self.p0[0], self.p0[1], self.p0[2],self.pf[0], self.pf[1], self.pf[2])
+        self.planning_time = curve.length() / long_vel
+        number_of_samples = int(np.floor(self.planning_time / dt))
+        values = np.arange(0, curve.length(), curve.length() / number_of_samples, dtype=np.float64)
+        print(colored(f"Planning with {self.PLANNING}, duration {self.planning_time} s", "red"))
+        xy = np.zeros((values.size, 2))
+        dxdy = np.zeros((values.size, 2))
+        theta = np.zeros((values.size))
+        dtheta = np.zeros((values.size))
+        for i in range(values.size):
+            xy[i, :] = curve.eval(values[i])
+            theta[i] = curve.theta(values[i])
+            dxdy[i, :] = curve.eval_D(values[i])
+            dtheta[i] = curve.theta_D(values[i])
+        # map to time (only velocities are affected)
+        dxdy_t = dxdy * long_vel
+        omega_vec = dtheta * long_vel
+        long_v_vec = np.ones((values.size))*long_vel
+        return xy[:,0] , xy[:,1], theta, long_v_vec, omega_vec , dt
 
     def getTrajFromMatlab(self):
         try:
@@ -344,7 +366,7 @@ class GenericSimulator(BaseController):
             request_optim.xf = self.pf[0]
             request_optim.yf = self.pf[1]
             request_optim.thetaf = self.pf[2]
-            request_optim.plan_type = self.MATLAB_PLANNING
+            request_optim.plan_type = self.PLANNING
             response = self.optim_client(request_optim)
             print(colored(f"Planning with {request_optim.plan_type}", "red"))
             #print(response.des_x[-10:])
@@ -913,23 +935,6 @@ class GenericSimulator(BaseController):
         phi_sample = self.phi.pop(0)
         return np.array([xy_sample[0], xy_sample[1], phi_sample])
 
-    def getClothoids(self):
-        import Clothoids
-        curve = Clothoids.ClothoidCurve("curve")
-        curve.build_G1(self.p0[0], self.p0[1], self.p0[2],self.pf[0], self.pf[1], self.pf[2])
-        values = np.arange(0, curve.length(), 0.01, dtype=np.float64)
-        xy = np.zeros((values.size, 2))
-        dxdy = np.zeros((values.size, 2))
-        theta = np.zeros((values.size, 1))
-        dtheta = np.zeros((values.size, 1))
-        # for i in range(values.size):
-        #     xy[i, :] = curve.eval(values[i])
-        #     theta[i] = curve.theta(values[i])
-        #     dxdy[i, :] = curve.eval_D(values[i])
-        #     dtheta[i] = curve.theta_D(values[i])
-        # xy[i, :] = curve.eval(values[i])
-        # return xy[:,0],xy[:,1],theta, v, omega, self.dt
-
 def talker(p):
     p.start()
     p.startSimulator()
@@ -990,7 +995,7 @@ def main_loop(p):
             v_ol, omega_ol = p.mapFromWheels(wheel_l_ol, wheel_r_ol)
             traj_length = len(wheel_l_ol)
 
-        if p.MATLAB_PLANNING == 'none':
+        if p.PLANNING == 'none':
             if p.SIMULATOR == 'biral3d':
                 p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
                 p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
@@ -1000,12 +1005,12 @@ def main_loop(p):
                 p.des_y = p.p0[1]  # +0.1
                 p.des_theta = p.p0[2]  # +0.1
             p.traj = Trajectory(ModelsList.UNICYCLE, p.des_x, p.des_y, p.des_theta, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
-        else: #matlab planning
-            if p.MATLAB_PLANNING=='clothoids':
-                des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, matlab_dt= p.getClothoids()
-            else:
-                des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, matlab_dt=  p.getTrajFromMatlab()
-            p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
+        else:
+            if p.PLANNING=='clothoids':
+                des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, plan_dt= p.getClothoids(long_vel=0.4, dt = 0.001)
+            else: #matlab planning
+                des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, plan_dt=  p.getTrajFromMatlab()
+            p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=plan_dt, v=v_ol, omega=omega_ol)
             traj_length = len(v_ol)
 
         while not ros.is_shutdown():
@@ -1055,7 +1060,7 @@ def main_loop(p):
         # generate reference trajectory
         vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
 
-        if p.MATLAB_PLANNING == 'none':
+        if p.PLANNING == 'none':
             if p.SIMULATOR=='biral3d':
                 p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
                 p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
@@ -1067,9 +1072,12 @@ def main_loop(p):
             v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3)  # slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
             p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
-        else: #matlab planning
-            des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, matlab_dt = p.getTrajFromMatlab()
-            p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=matlab_dt, v=v_ol, omega=omega_ol)
+        else:
+            if p.PLANNING == 'clothoids':
+                des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, plan_dt = p.getClothoids(long_vel=0.4, dt = 0.001)
+            else:  # matlab planning
+                des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, plan_dt = p.getTrajFromMatlab()
+            p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=plan_dt, v=v_ol, omega=omega_ol)
 
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'], ESTIMATE_ALPHA_WITH_ACTUAL_VALUES=p.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES) #high gains 15 5 / low gains 10 1 (default)
@@ -1158,7 +1166,7 @@ def main_loop(p):
         dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_z': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta}
         df_dict = pd.DataFrame([dict])
         p.df = pd.concat([p.df, df_dict], ignore_index=True)
-        p.df.to_csv(f'statistic_{p.ControlType}_Matlab_{p.MATLAB_PLANNING}.csv', index=None)
+        p.df.to_csv(f'statistic_{p.ControlType}_{p.PLANNING}.csv', index=None)
 
 if __name__ == '__main__':
     p = GenericSimulator(robotName)
