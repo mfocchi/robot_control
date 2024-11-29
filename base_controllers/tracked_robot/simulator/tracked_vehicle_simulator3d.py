@@ -39,6 +39,9 @@ class Ground3D():
         self.Dt_x = np.eye(3) * terrain_damping
         self.Kt_theta = np.eye(3) * terrain_torsional_stiffness
         self.Dt_theta = np.eye(3) * terrain_torsional_damping
+        self.Kt_b = terrain_stiffness
+        self.Dt_b = terrain_damping
+        self.Kt_p = 0.1 #max percentual stiffness increase
 
 class TrackedVehicleSimulator3D:
     def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER',  enable_visuals=True, contact_distribution = False):
@@ -191,21 +194,23 @@ class TrackedVehicleSimulator3D:
         #force is present only if there is linear penetration
         patch_counter = 0
         for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_l, self.intersection_points_l, self.w_patch_vel_l):
-            if (projection_direction.dot(terrain_pos - patch_pos) > 0.0 and np.all(np.isfinite(terrain_pos))):
-                Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
+            rho = projection_direction.dot(terrain_pos - patch_pos)
+            if (rho> 0.0 and np.all(np.isfinite(terrain_pos))):
+                Fk = (self.ground.Kt_b*rho)*track_area
+                #Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
                 #only if it is approaching
-                Fd = np.zeros(3)
-                if (projection_direction.dot(patch_vel) < 0.0):
-                    Fd = -self.ground.Dt_x.dot(patch_vel)*track_area
+                #Fd = np.zeros(3)
+                rho_dot = projection_direction.dot(patch_vel)
+                if (rho_dot< 0.0):
+                    Fd = (-self.ground.Dt_b*rho_dot)*track_area
                 else:
-                    Fd = np.zeros(3)
-                self.w_Fg_patch_l[patch_counter, :] = projection_direction*projection_direction.dot(Fk + Fd)
+                    Fd = 0. #np.zeros(3)
+                self.w_Fg_patch_l[patch_counter, :] = projection_direction*(Fk + Fd)
                 # compute moment
-                self.w_Mg_patch_l[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], Fk + Fd))
+                self.w_Mg_patch_l[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], projection_direction*(Fk + Fd)))
             else:
                 self.w_Fg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
                 self.w_Mg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
-
             if self.DEBUG:
                 self.ros_pub.add_arrow(patch_pos, self.w_Fg_patch_l[patch_counter, :] / 100., "blue")
             patch_counter += 1
@@ -213,16 +218,20 @@ class TrackedVehicleSimulator3D:
         # compute ditributed forces for right track
         patch_counter = 0
         for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_r, self.intersection_points_r, self.w_patch_vel_r):
-            if (projection_direction.dot(terrain_pos - patch_pos) > 0.0 and np.all(np.isfinite(terrain_pos))):
-                Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
-                #only if it is approaching
-                Fd = np.zeros(3)
-                if (projection_direction.dot(patch_vel) < 0.0):
-                    Fd = -self.ground.Dt_x.dot(patch_vel)*track_area
+            rho = projection_direction.dot(terrain_pos - patch_pos)
+            if (rho > 0.0 and np.all(np.isfinite(terrain_pos))):
+                Fk = (self.ground.Kt_b * rho) * track_area
+                # Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
+                # only if it is approaching
+                # Fd = np.zeros(3)
+                rho_dot = projection_direction.dot(patch_vel)
+                if (rho_dot < 0.0):
+                    Fd = (-self.ground.Dt_b * rho_dot) * track_area
                 else:
-                    Fd = np.zeros(3)
-                self.w_Fg_patch_r[patch_counter, :] = projection_direction*projection_direction.dot(Fk + Fd)
-                self.w_Mg_patch_r[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], Fk + Fd))
+                    Fd = 0.  # np.zeros(3)
+                self.w_Fg_patch_r[patch_counter, :] = projection_direction * (Fk + Fd)
+                # compute moment
+                self.w_Mg_patch_r[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], projection_direction * (Fk + Fd)))
             else:
                 self.w_Fg_patch_r[patch_counter, :] = np.array([0.0, 0.0, 0.0])
                 self.w_Mg_patch_r[patch_counter, :] = np.array([0.0, 0.0, 0.0])
