@@ -60,7 +60,9 @@ class TrackedVehicleSimulator3D:
             self.ground = ground
         else:
             self.ground = Ground3D()
-        self.sigma = np.ones((self.track_param.parts_longitudinal, self.track_param.parts_lateral)) * self.vehicle_param.weight / (2 * self.track_param.A)
+        self.sigma_l = np.ones((self.track_param.parts_longitudinal, self.track_param.parts_lateral)) * self.vehicle_param.weight / (2 * self.track_param.A)
+        self.sigma_r = np.ones((self.track_param.parts_longitudinal, self.track_param.parts_lateral)) * self.vehicle_param.weight / (2 * self.track_param.A)
+
         self.tracked_robot = TrackedVehicle(self.vehicle_param, self.track_param,  self)
         self.patch_pos_long_l, self.patch_pos_lat_l = self.tracked_robot.getLeftPatchesPositions()
         self.patch_pos_long_r, self.patch_pos_lat_r = self.tracked_robot.getRightPatchesPositions()
@@ -237,7 +239,7 @@ class TrackedVehicleSimulator3D:
         #map to base frame
         b_Fg = w_R_b.T.dot(w_Fg)
         b_Mg = w_R_b.T.dot(w_Mg)
-        return b_Fg, b_Mg, 0, 0
+        return b_Fg, b_Mg, 0, 0, self.w_Fg_patch_l, self.w_Fg_patch_r
 
     def dynamics3D(self, twist, w_R_b, b_Fg,b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, vehicle_param):
         # calculate the acceleration with the vehicle dynamical model
@@ -313,17 +315,29 @@ class TrackedVehicleSimulator3D:
         b_v_c = w_R_b.T.dot(self.twist[:3])
         state2D = np.array([b_v_c[0],b_v_c[1], self.twist[5]])
 
-
-        Fx_l, Fy_l, M_long_l, M_lat_l = self.tracked_robot.track_left.computeTerrainInteractions(state2D, omega_left, self.track_param,
-                                                                                   self.sigma, self.ground, self.patch_pos_long_l, self.patch_pos_lat_l)
-        Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(state2D, omega_right, self.track_param,
-                                                                                   self.sigma, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
-
         # compute ground peneration
         if self.CONTACT_DISTRIBUTION:
-            b_Fg, b_Mg, b_eox, b_eoy = self.computeDistributedGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+            b_Fg, b_Mg, b_eox, b_eoy, w_Fg_patch_l, w_Fg_patch_r = self.computeDistributedGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+            patch_counter = 0
+            number_of_patches = self.track_param.parts_lateral*self.track_param.parts_longitudinal
+            patch_area = self.track_param.A / number_of_patches
+
+            # compute patch positions and twists in world frame
+            for i in range(self.track_param.parts_longitudinal):
+                for j in range(self.track_param.parts_lateral):
+                    self.sigma_l[i,j] = max(w_R_b.T.dot(w_Fg_patch_l[patch_counter,:])[2]/patch_area, 1e-5)
+                    self.sigma_r[i, j] = max(w_R_b.T.dot(w_Fg_patch_r[patch_counter, :])[2] / patch_area, 1e-5)
+                    patch_counter+=1
         else:
-            b_Fg, b_Mg, b_eox, b_eoy = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+            b_Fg, b_Mg, b_eox, b_eoy  = self.computeGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+
+
+        Fx_l, Fy_l, M_long_l, M_lat_l = self.tracked_robot.track_left.computeTerrainInteractions(state2D, omega_left, self.track_param,
+                                                                                   self.sigma_l, self.ground, self.patch_pos_long_l, self.patch_pos_lat_l)
+        Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(state2D, omega_right, self.track_param,
+                                                                                   self.sigma_r, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
+
+
 
         if self.NO_SLIPPAGE:
             #extension of unicycle to 3d
