@@ -5,18 +5,19 @@ import base_controllers.params as conf
 
 class PIDTuningGui:
      
-    def __init__(self, robot, init_freq: float = 0.5, real_robot_: bool = False):
+    def __init__(self, robot, mode:str = 'none',init_freq: float = 0.5, real_robot_: bool = False):
 
         self.robot = robot
 
         self.debug_freq = init_freq
         real_robot = real_robot_
         rr_str = "_real" if real_robot else ""
+        mode_str = "_swing" if (mode == 'swim' or mode == 'step') else ''
 
         # Load initial PID values from configuration
-        self.initial_kp = conf.robot_params[self.robot.robot_name][f'kp{rr_str}']
-        self.initial_kd = conf.robot_params[self.robot.robot_name][f'kd{rr_str}']
-        self.initial_ki = conf.robot_params[self.robot.robot_name][f'ki{rr_str}']
+        self.initial_kp = conf.robot_params[self.robot.robot_name][f'kp{mode_str}{rr_str}']
+        self.initial_kd = conf.robot_params[self.robot.robot_name][f'kd{mode_str}{rr_str}']
+        self.initial_ki = conf.robot_params[self.robot.robot_name][f'ki{mode_str}{rr_str}']
         self.initial_kp_lin = conf.robot_params[self.robot.robot_name][f'kp_lin{rr_str}']
         self.initial_kd_lin = conf.robot_params[self.robot.robot_name][f'kd_lin{rr_str}']
         self.initial_kp_ang = conf.robot_params[self.robot.robot_name][f'kp_ang{rr_str}']

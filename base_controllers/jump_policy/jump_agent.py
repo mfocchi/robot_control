@@ -74,6 +74,7 @@ class JumpAgent():
             self.cfg = json.load(f)
 
         self.model_path = os.path.join(base_model_path, f'{robot_name}.onnx')
+        print(f'JumpAgent, policy: {robot_name}')
         self.model = ort.InferenceSession(self.model_path)
 
         self.min_action = self.cfg["min_action"]

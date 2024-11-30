@@ -542,3 +542,4 @@
 /base_controllers/components/inverse_kinematics/__pycache__/inv_kinematics_pinocchio.cpython-38.pyc
 /base_controllers/doretta/.DS_Store
 /base_controllers/doretta/controllers/.DS_Store
+*pyc

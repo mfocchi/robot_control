@@ -885,7 +885,7 @@ class QuadrupedController(BaseController):
         self.time = np.round(self.time + self.dt, 4)#np.array([self.loop_time]), 3)
 
 
-    def visualizeContacts(self):
+    def visualizeContacts(self, delete_markers=False):
         for legid in self.u.leg_map.keys():
 
             leg = self.u.leg_map[legid]
@@ -893,6 +893,11 @@ class QuadrupedController(BaseController):
                 self.ros_pub.add_arrow(self.W_contacts[leg],
                                        self.u.getLegJointState(leg, self.grForcesW/ (6*self.robot.robotMass)),
                                        "green")
+                
+                self.ros_pub.add_arrow(self.W_contacts[leg],
+                                       self.u.getLegJointState(leg, self.grForcesW_des/ (6*self.robot.robotMass)),
+                                       "blue")
+                
                 #self.ros_pub.add_marker(self.W_contacts[leg], radius=0.1)
             else:
                 self.ros_pub.add_arrow(self.W_contacts[leg],
@@ -919,7 +924,7 @@ class QuadrupedController(BaseController):
         #                           self.B_contacts_des[0]], "green", visual_frame="base_link")
         #
 
-        self.ros_pub.publishVisual(delete_markers=False)
+        self.ros_pub.publishVisual(delete_markers=delete_markers)
 
     def updateKinematics(self, update_legOdom=True, noise=None):
         if noise is not None:
@@ -1036,7 +1041,7 @@ class QuadrupedController(BaseController):
                 self.send_command(self.q_des, self.qd_des, alpha*p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW))
 
             # IMU BIAS ESTIMATION
-            if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2'):
+            if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2' or self.robot_name == 'aliengo'):
                 print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
                 # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
                 while self.imu_utils.counter < self.imu_utils.timeout:
@@ -1068,7 +1073,7 @@ class QuadrupedController(BaseController):
             if (i%3) != 0:
                 q_ref[i] =  conf.robot_params[self.robot_name]['q_fold'][i]
         # IMU BIAS ESTIMATION
-        if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2'):
+        if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2' or self.robot_name == 'aliengo'):
             print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
             # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
             while self.imu_utils.counter < self.imu_utils.timeout:
@@ -1185,9 +1190,17 @@ class QuadrupedController(BaseController):
                     if GCTime <= self.gravity_comp_duration:
                         if alpha < 1:
                             alpha = GCTime
-                        self.tau_ffwd = alpha* self.self_weightCompensation()
+                        # self.tau_ffwd = alpha* self.self_weightCompensation()
+                        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
+                                                            self.wJ,
+                                                            self.h_joints,
+                                                            self.basePoseW)
+
+                        self.visualizeContacts()
+                        
+                        self.tau_ffwd *= alpha
                     else:
-                        print(colored(f"[startupProcedure to make RobotHeight {self.robot_height+0.02} t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height, 3)) +" m)", "blue"))
+                        print(colored(f"[startupProcedure to make RobotHeight {self.robot_height+0.02} t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height+0.02, 3)) +" m)", "blue"))
                         HStarttime = self.time
                         # 5-th order polynomial
                         final_comPose_des = self.comPoseW.copy()
@@ -1204,7 +1217,13 @@ class QuadrupedController(BaseController):
                         self.comPoseW_des = pos(self.time - HStarttime)
                         self.comTwistW_des = vel(self.time - HStarttime)
                         self.Wcom2Joints_des()
-                        self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
+                        # self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
+                        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
+                                    self.wJ,
+                                    self.h_joints,
+                                    self.basePoseW)
+
+                        self.visualizeContacts()
 
                     else:
                         print(colored("[startupProcedure t: " + str(self.time[0]) + "s] desired height reached", "blue"))
@@ -1222,7 +1241,13 @@ class QuadrupedController(BaseController):
                         # enter
                         # if any of the joint velocities is larger than 0.02 or
                         # if the watchdog timer is not expired (0.5 sec)
-                        self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
+                        # self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
+                        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
+                                    self.wJ,
+                                    self.h_joints,
+                                    self.basePoseW)
+
+                        self.visualizeContacts()
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
@@ -1383,7 +1408,7 @@ class QuadrupedController(BaseController):
 
 
 if __name__ == '__main__':
-    p = QuadrupedController('go1')
+    p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
     try:
@@ -1393,15 +1418,14 @@ if __name__ == '__main__':
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
-
         p.startupProcedure()
 
         while not ros.is_shutdown():
             p.updateKinematics()
-            p.visualizeContacts()
-            p.tau_ffwd, p.grForcesW_wbc = p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW)
-            p.logData()
+            p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW)
+            # p.logData()
             p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
+            p.visualizeContacts()
 
 
 

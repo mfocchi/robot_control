@@ -70,8 +70,8 @@ class WholeBodyController():
         return self.computeWBC(W_contacts, wJ, h_joints, basePoseW, comPoseW, baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = comControlled, type = 'projection')
 
     def gravityCompensationBase(self, B_contacts, wJ, h_joints, basePoseW, stance_legs=[True, True, True, True]):
-        self.wrench_gW = np.zeros(6)
-        self.wrench_gW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
+        self.wrench_desW = np.zeros(6)
+        self.wrench_desW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
         w_R_b = pin.rpy.rpyToMatrix(self.u.angPart(basePoseW))
         # wrench = NEMatrix @ grfs
         for leg in range(self.robot.nee):
@@ -231,7 +231,7 @@ class WholeBodyController():
 
         return tau_ffwd, grForcesW_wbc
 
-    def projectionWBC(self, tol=1e-6):
+    def projectionWBC(self, tol=1e-4):
         # NEMatrix is 6 x 12
         Npinv = np.linalg.pinv(self.NEMatrix.T, tol).T# self.NEMatrix.T @ np.linalg.inv(self.NEMatrix @ self.NEMatrix.T)
         return Npinv  @ self.wrench_desW
