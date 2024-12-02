@@ -1030,17 +1030,17 @@ def main_loop(p):
             traj_length = len(v_ol)
 
         while not ros.is_shutdown():
-            if counter<traj_length:
-                if p.IDENT_TYPE == 'WHEELS':
-                    p.qd_des = np.array([wheel_l_ol[counter], wheel_r_ol[counter]])
-                else:
-                    p.v_d = v_ol[counter]
-                    p.omega_d = omega_ol[counter]
-                    p.qd_des = p.mapToWheels(p.v_d, p.omega_d )
-                counter+=1
+            if p.IDENT_TYPE == 'WHEELS':
+                if counter>=traj_length:
+                    print(colored("Open loop test accomplished", "red"))
+                    break
+                p.qd_des = np.array([wheel_l_ol[counter], wheel_r_ol[counter]])
+                counter += 1
             else:
-                print(colored("Open loop test accomplished", "red"))
-                break
+                _, _, _, p.v_d, p.omega_d, _, _, traj_finished = p.traj.evalTraj(p.time)
+                p.qd_des = p.mapToWheels(p.v_d, p.omega_d)
+                if traj_finished:
+                    break
             #forward_speed = 1. #max speed is 4.56 rad/s
             #p.qd_des = forward_speed
             if p.torque_control:

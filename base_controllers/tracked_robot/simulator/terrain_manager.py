@@ -29,10 +29,9 @@
 
 
 import numpy as np
-import open3d as o3d
 import math
 import rospkg
-
+import open3d as o3d
 class TerrainManager:
     def __init__(self, mesh_path = "terrain.stl" ):
         self.mesh =  o3d.io.read_triangle_mesh(mesh_path)
