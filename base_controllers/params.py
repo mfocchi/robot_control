@@ -40,7 +40,7 @@ robot_params['tractor'] ={'dt': 0.01,
                         'spawn_x': -0.,
                         'spawn_y': 0.0,
                         'spawn_z': 1.5,
-                        'buffer_size': 5000}
+                        'buffer_size': 7000}
 
 robot_params['ur5'] ={'dt': 0.001,
                        'kp': np.array([300, 300, 300,30,30,1]),

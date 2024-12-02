@@ -123,7 +123,7 @@ model_beta_r.save_model(
 )
 
 # regressor for Alpha (cannot
-model_alpha = cb.CatBoostRegressor(learning_rate=1e-3, max_depth=10, iterations=10000)
+model_alpha = cb.CatBoostRegressor(iterations=10000)
 
 model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=False,
                 eval_set=(x_valid, y_valid[..., 2].reshape(-1, 1)), use_best_model=True)

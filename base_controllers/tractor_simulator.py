@@ -37,7 +37,6 @@ from optim_interfaces.srv import Optim, OptimRequest
 import scipy.io.matlab as mio
 from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator import TrackedVehicleSimulator, Ground
 from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator3d import  TrackedVehicleSimulator3D, Ground3D
-from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
 from base_controllers.utils.common_functions import spawnModel, launchFileNode
@@ -79,6 +78,7 @@ class GenericSimulator(BaseController):
         # target used only for matlab trajectory generation (dubins/optimization) #need to run dubins_optimization/ros/ros_node.m
         self.pf = np.array([2., 2.5, -0.4])
         self.PLANNING = 'none' # 'none', 'dubins' , 'optim', 'clothoids'
+        self.PLANNING_SPEED = 0.4
 
         self.GRAVITY_COMPENSATION = False
         self.SAVE_BAGS = False
@@ -107,6 +107,12 @@ class GenericSimulator(BaseController):
             self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+str(self.friction_coefficient)+'.cb')
             self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+str(self.friction_coefficient)+'.cb')
             self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+str(self.friction_coefficient)+'.cb')
+            # loading with matlab
+            # import matlab.engine
+            # self.eng = matlab.engine.start_matlab()
+            # self.model_alpha = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['alpha_model_18']
+            # self.model_beta_l = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_l_model_18']
+            # self.model_beta_r = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_r_model_18']
         except:
             self.model_beta_l = None
             self.model_beta_r = None
@@ -243,6 +249,7 @@ class GenericSimulator(BaseController):
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
             if self.IDENT_TYPE!='NONE':
+                self.PLANNING = 'none'
                 self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
 
             if self.NAVIGATION!='none' and self.TERRAIN: #need to launch empty gazebo to emulate the lidar
@@ -259,6 +266,7 @@ class GenericSimulator(BaseController):
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
         if self.TERRAIN: #this works both for gazebo and biral
+            from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
             self.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
         if self.NAVIGATION != 'none':
             print(colored("IMPORTANT: be sure that you are running the image mfocchi/trento_lab_framework:introrob_upgrade", "red"))
@@ -307,7 +315,7 @@ class GenericSimulator(BaseController):
             if p.ControlType=='OPEN_LOOP':
                 if p.IDENT_TYPE=='V_OMEGA':
                     bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}_fr_{p.friction_coefficient}.bag"
-                else:
+                if p.IDENT_TYPE == 'WHEELS':
                     bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
             else:
                 bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.bag"
@@ -336,10 +344,10 @@ class GenericSimulator(BaseController):
         import Clothoids
         curve = Clothoids.ClothoidCurve("curve")
         curve.build_G1(self.p0[0], self.p0[1], self.p0[2],self.pf[0], self.pf[1], self.pf[2])
-        self.planning_time = curve.length() / long_vel
-        number_of_samples = int(np.floor(self.planning_time / dt))
+        self.PLANNING_DURATION = curve.length() / long_vel
+        number_of_samples = int(np.floor(self.PLANNING_DURATION / dt))
         values = np.arange(0, curve.length(), curve.length() / number_of_samples, dtype=np.float64)
-        print(colored(f"Planning with {self.PLANNING}, duration {self.planning_time} s", "red"))
+        print(colored(f"Planning with {self.PLANNING}, duration {self.PLANNING_DURATION} s", "red"))
         xy = np.zeros((values.size, 2))
         dxdy = np.zeros((values.size, 2))
         theta = np.zeros((values.size))
@@ -353,11 +361,13 @@ class GenericSimulator(BaseController):
         dxdy_t = dxdy * long_vel
         omega_vec = dtheta * long_vel
         long_v_vec = np.ones((values.size))*long_vel
+
         return xy[:,0] , xy[:,1], theta, long_v_vec, omega_vec , dt
 
     def getTrajFromMatlab(self):
         try:
-            ros.wait_for_service('/optim', timeout=5)
+            print(colored("Calling Matlab service /optim: remember to run ros_node in dubins_optimization", "red"))
+            ros.wait_for_service('/optim', timeout=120.)
             self.optim_client = ros.ServiceProxy('/optim', Optim)
             request_optim = OptimRequest()
             request_optim.x0 = self.p0[0]
@@ -366,18 +376,21 @@ class GenericSimulator(BaseController):
             request_optim.xf = self.pf[0]
             request_optim.yf = self.pf[1]
             request_optim.thetaf = self.pf[2]
+            request_optim.vmax = self.PLANNING_SPEED
             request_optim.plan_type = self.PLANNING
             response = self.optim_client(request_optim)
-            print(colored(f"Planning with {request_optim.plan_type}", "red"))
+            self.PLANNING_DURATION = response.tf
+            print(colored(f"Planning with {request_optim.plan_type} and duration {self.PLANNING_DURATION}", "red"))
             #print(response.des_x[-10:])
             # print(response.des_y[-10:0])
             # print(response.des_theta[-10:])
             # print(response.des_v[-10:])
             # print(response.des_omega[-10:])
-            return response.des_x,response.des_y,response.des_theta,response.des_v, response.des_omega, response.dt
+            return response.des_x,response.des_y,response.des_theta, response.des_v, response.des_omega, response.dt
 
         except:
             print(colored("Matlab service call /optim not available", "red"))
+            sys.exit()
 
     def get_command_vel(self, msg):
         self.v_d = msg.linear.x
@@ -789,7 +802,9 @@ class GenericSimulator(BaseController):
         # predict the betas from NN
         beta_l = self.model_beta_l.predict(qd_des)
         beta_r = self.model_beta_r.predict(qd_des)
-
+        #matlab
+        # beta_l = self.eng.feval(self.model_beta_l['predictFcn'], qd_des)
+        # beta_r = self.eng.feval(self.model_beta_r['predictFcn'], qd_des)
         v_enc_l += beta_l
         v_enc_r += beta_r
 
@@ -945,7 +960,7 @@ def talker(p):
             main_loop(p)
     elif p.STATISTICAL_ANALYSIS:
         print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
-        columns = [ 'test', 'target_x','target_y','target_z', 'exy', 'etheta']
+        columns = [ 'test', 'target_x','target_y','target_z', 'exy', 'etheta', 'tf']
         p.df = pd.DataFrame(columns=columns)
         np.random.seed(0) #create always the same random sequence
         for p.test in range(100):
@@ -1005,11 +1020,12 @@ def main_loop(p):
                 p.des_y = p.p0[1]  # +0.1
                 p.des_theta = p.p0[2]  # +0.1
             p.traj = Trajectory(ModelsList.UNICYCLE, p.des_x, p.des_y, p.des_theta, DT=conf.robot_params[p.robot_name]['dt'], v=v_ol, omega=omega_ol)
-        else:
+        else: #matlab or clothoids
             if p.PLANNING=='clothoids':
                 des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, plan_dt= p.getClothoids(long_vel=0.4, dt = 0.001)
             else: #matlab planning
                 des_x_vec, des_y_vec,des_theta_vec, v_ol, omega_ol, plan_dt=  p.getTrajFromMatlab()
+            #
             p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=plan_dt, v=v_ol, omega=omega_ol)
             traj_length = len(v_ol)
 
@@ -1081,7 +1097,7 @@ def main_loop(p):
 
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'], ESTIMATE_ALPHA_WITH_ACTUAL_VALUES=p.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES) #high gains 15 5 / low gains 10 1 (default)
-        p.controller = LyapunovController(params=params)
+        p.controller = LyapunovController(params=params)#, matlab_engine = p.eng)
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
@@ -1163,7 +1179,7 @@ def main_loop(p):
         rmse_xy = np.sqrt(np.mean(e_xy ** 2))
         rmse_theta = np.sqrt(np.mean(np.array(p.log_e_theta) ** 2))
         print(colored(f"Target: {p.pf.reshape(1,3)}, e_xy: {rmse_xy} e_theta {rmse_theta}","red"))
-        dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_z': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta}
+        dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_z': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta, 'tf':p.PLANNING_DURATION}
         df_dict = pd.DataFrame([dict])
         p.df = pd.concat([p.df, df_dict], ignore_index=True)
         p.df.to_csv(f'statistic_{p.ControlType}_{p.PLANNING}.csv', index=None)

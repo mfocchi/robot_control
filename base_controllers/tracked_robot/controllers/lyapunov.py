@@ -21,7 +21,7 @@ class Robot:
     pass
 
 class LyapunovController:
-    def __init__(self, params: LyapunovParams):
+    def __init__(self, params: LyapunovParams): #, matlab_engine = None):
 
         self.K_P = params.K_P
         self.K_THETA = params.K_THETA
@@ -38,6 +38,7 @@ class LyapunovController:
         self.omega_old = 0.
 
         self.params = params
+        self.eng = matlab_engine
 
     def setSideSlipCompensationType(self, SIDE_SLIP_COMPENSATION):
         self.SIDE_SLIP_COMPENSATION = SIDE_SLIP_COMPENSATION
@@ -182,6 +183,8 @@ class LyapunovController:
             qd[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
             qd[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
             alpha = model_alpha.predict(qd)
+            #matlab
+            #alpha = self.eng.feval(model_alpha['predictFcn'], qd)
 
         return alpha
 
