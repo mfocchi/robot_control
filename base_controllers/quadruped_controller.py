@@ -1423,7 +1423,7 @@ if __name__ == '__main__':
         while not ros.is_shutdown():
             p.updateKinematics()
             p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW)
-            # p.logData()
+            p.logData()
             p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
             p.visualizeContacts()
 

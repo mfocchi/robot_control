@@ -57,8 +57,10 @@ class QuadrupedJumpController(QuadrupedController):
                 "Real robot TRUE: you should launch your lab alias with xhost +; lab -u root"))
 
         user = os.popen('whoami').read()
-        if user == 'root':
+
+        if user=='root':
             pid = os.getpid()
+            print(colored("USER IS ROOT: USING RNICE FOR THREAD PRIORITY","red"))
             # NOTE: use chrt -r 99 command for rt
             # need to launch docker as root
             os.system(f'sudo renice -n -21 -p {str(pid)}')
@@ -110,28 +112,32 @@ class QuadrupedJumpController(QuadrupedController):
         if not self.detectedApexFlag and self.time >= p.startTrust + p.T_th_total + p.T_apex:
             # Try tp use only the linear acceleration
             if not self.detectedApexFlag:
-
-                if self.real_robot:
-                    if self.baseLinAccW[2] < threshold:
-                        self.detectedApexFlag = True
-                        print(colored(f"APEX detected at t={self.time} setting new treshold", "red"))
-                        self.q_apex = self.q_des.copy()
-                        self.qd_apex = self.qd_des.copy()
-                        self.t_apex = self.time
-                else:
-                    if self.baseTwistW[2] < 0.0:
-                        self.detectedApexFlag = True
-                        # move floating base for landing
-                        # if not self.real_robot:
-                        #     self.pause_physics_client()
-                        #     for i in range(10):
-                        #         self.setJumpPlatformPosition(
-                        #             self.target_position, com_0)
-                        #     self.unpause_physics_client()
-                        print(colored(f"APEX detected at t={self.time}", "red"))
-                        self.q_apex = self.q_des.copy()
-                        self.qd_apex = self.qd_des.copy()
-                        self.t_apex = self.time
+                print(colored(f"APEX detected at t={self.time} setting new treshold", "red"))
+                self.q_apex = self.q_des.copy()
+                self.qd_apex = self.qd_des.copy()
+                self.t_apex = self.time
+                self.detectedApexFlag = True
+                # if self.real_robot:
+                #     #if self.baseLinAccW[2] < threshold:
+                #     self.detectedApexFlag = True
+                #     print(colored(f"APEX detected at t={self.time} setting new treshold", "red"))
+                #     self.q_apex = self.q_des.copy()
+                #     self.qd_apex = self.qd_des.copy()
+                #     self.t_apex = self.time
+                # else:
+                #     if self.baseTwistW[2] < 0.0:
+                #         self.detectedApexFlag = True
+                #         # move floating base for landing
+                #         # if not self.real_robot:
+                #         #     self.pause_physics_client()
+                #         #     for i in range(10):
+                #         #         self.setJumpPlatformPosition(
+                #         #             self.target_position, com_0)
+                #         #     self.unpause_physics_client()
+                #         print(colored(f"APEX detected at t={self.time}", "red"))
+                #         self.q_apex = self.q_des.copy()
+                #         self.qd_apex = self.qd_des.copy()
+                #         self.t_apex = self.time
 
     def detectTouchDown(self):
         # if np.all(self.contact_state):
@@ -472,8 +478,8 @@ if __name__ == '__main__':
         eul_0 = p.basePoseW[3:].copy()
 
         # define jump action (relative)
-        p.jumpDeltaStep = np.array([-0.4, 0., 0.])
-        p.jumpDeltaOrient = np.array([0.0, 0., 0.])
+        p.jumpDeltaStep = np.array([0.4, 0.0, 0.])
+        p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
 
         # get the action from the policy (use p.jumpAgent to get values)
         p.jumpAgent.act(p.jumpDeltaStep, p.jumpDeltaOrient)
@@ -657,7 +663,7 @@ if __name__ == '__main__':
                             p.q_des = p.cerp(p.qdes_td, p.q_final,  elapsed_ratio).copy()
 
                 else:
-                    pass
+
                     # Interpolate for retraction
                     elapsed_time = p.time - (p.startTrust + p.T_th_total)
                     elapsed_ratio = np.clip(
