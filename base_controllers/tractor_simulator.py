@@ -147,10 +147,12 @@ class GenericSimulator(BaseController):
         self.log_e_theta = []
         self.euler = np.zeros(3)
         self.basePoseW_des = np.zeros(6) * np.nan
+        self.b_base_vel = np.zeros(2)
 
         self.state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.des_state_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']), np.nan)
         self.basePoseW_des_log = np.full((6, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
+        self.b_base_vel_log = np.full((2, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
         self.beta_l_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.beta_r_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
@@ -208,6 +210,7 @@ class GenericSimulator(BaseController):
                 self.state_log[2, self.log_counter] =  self.basePoseW[self.u.sp_crd["AZ"]]
 
                 self.basePoseW_des_log[:, self.log_counter] = self.basePoseW_des #basepose is logged in base controller
+                self.b_base_vel_log[:, self.log_counter] = self.b_base_vel  # basepose is logged in base controller
 
                 self.alpha_log[self.log_counter] = self.alpha
                 self.beta_l_log[self.log_counter] = self.beta_l
@@ -513,28 +516,41 @@ class GenericSimulator(BaseController):
                 #plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
             if self.SIMULATOR != 'gazebo':
+                #plot velocities in the base frame
+                plt.figure()
+                ax1 = plt.subplot(2, 1, 1)
+                plt.plot(self.time_log, self.b_base_vel_log[0, :], "-b", label="vx")
+                plt.ylabel("b_vx")
+                plt.legend()
+                plt.grid(True)
+                plt.subplot(2, 1, 2, sharex=ax1)
+                plt.plot(self.time_log, self.b_base_vel_log[1, :], "-b", label="vy")
+                plt.ylabel("b_vy")
+                plt.legend()
+                plt.grid(True)
+
                 #slippage vars
                 plt.figure()
-                plt.subplot(4, 1, 1)
+                ax2 = plt.subplot(4, 1, 1)
                 plt.plot(self.time_log, self.beta_l_log, "-b", label="real")
                 plt.plot(self.time_log, self.beta_l_control_log, "-r", label="control")
                 plt.ylabel("beta_l")
                 plt.legend()
                 plt.grid(True)
-                plt.subplot(4, 1, 2)
+                plt.subplot(4, 1, 2,  sharex=ax2)
                 plt.plot(self.time_log, self.beta_r_log, "-b", label="real")
                 plt.plot(self.time_log, self.beta_r_control_log, "-r", label="control")
                 plt.ylabel("beta_r")
                 plt.legend()
                 plt.grid(True)
-                plt.subplot(4, 1, 3)
+                plt.subplot(4, 1, 3,  sharex=ax2)
                 plt.plot(self.time_log, self.alpha_log, "-b", label="real")
                 plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
                 plt.ylabel("alpha")
-                plt.ylim([-0.4, 0.4])
+                #plt.ylim([-0.4, 0.4])
                 plt.grid(True)
                 plt.legend()
-                plt.subplot(4, 1, 4)
+                plt.subplot(4, 1, 4,  sharex=ax2)
                 plt.plot(self.time_log, self.radius_log, "-b")
                 plt.ylim([-1,1])
                 plt.ylabel("radius")
@@ -664,20 +680,27 @@ class GenericSimulator(BaseController):
         return v_vec, omega_vec
 
     def estimateSlippages(self,W_baseTwist, theta, qd):
-
         wheel_L = qd[0]
         wheel_R = qd[1]
-        w_vel_xy = np.zeros(2)
-        w_vel_xy[0] = W_baseTwist[self.u.sp_crd["LX"]]
-        w_vel_xy[1] = W_baseTwist[self.u.sp_crd["LY"]]
-        omega = W_baseTwist[self.u.sp_crd["AZ"]]
 
-        #compute BF velocity
-        w_R_b = np.array([[np.cos(theta), -np.sin(theta)],
-                         [np.sin(theta), np.cos(theta)]])
-        b_vel_xy = (w_R_b.T).dot(w_vel_xy)
+        if self.SIMULATOR=='biral3d':
+            # project twist from wf to bf
+            w_R_b = self.math_utils.eul2Rot(self.u.angPart(self.basePoseW))
+            b_lin_vel = w_R_b.T.dot(self.u.linPart(W_baseTwist))
+            b_ang_vel = w_R_b.T.dot(self.u.angPart(W_baseTwist))
+            b_vel_xy = b_lin_vel[:2]
+            omega = b_ang_vel[2]
+        else:
+            w_vel_xy = np.zeros(2)
+            w_vel_xy[0] = W_baseTwist[self.u.sp_crd["LX"]]
+            w_vel_xy[1] = W_baseTwist[self.u.sp_crd["LY"]]
+            omega = W_baseTwist[self.u.sp_crd["AZ"]]
+            # compute BF velocity
+            w_R_b = np.array([[np.cos(theta), -np.sin(theta)],
+                              [np.sin(theta), np.cos(theta)]])
+            b_vel_xy = (w_R_b.T).dot(w_vel_xy)
+
         b_vel_x = b_vel_xy[0]
-
         v = np.linalg.norm(b_vel_xy)
 
         # compute turning radius for logging
@@ -706,7 +729,7 @@ class GenericSimulator(BaseController):
         else:
             side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
 
-        return beta_l, beta_r, side_slip, radius
+        return beta_l, beta_r, side_slip, radius, b_vel_xy
 
     def computeGravityCompensation(self, roll, pitch):
         W = np.array([0., 0., constants.mass*9.81, 0., 0., 0.])
@@ -1075,7 +1098,7 @@ def main_loop(p):
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
 
-            p.beta_l, p.beta_r, p.alpha, p.radius = p.estimateSlippages(p.baseTwistW, p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
+            p.beta_l, p.beta_r, p.alpha, p.radius, p.b_base_vel = p.estimateSlippages(p.baseTwistW, p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
 
             # log variables
             p.logData()
@@ -1166,7 +1189,7 @@ def main_loop(p):
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
 
-            p.beta_l, p.beta_r, p.alpha, p.radius = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
+            p.beta_l, p.beta_r, p.alpha, p.radius, p.b_base_vel = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
             # log variables
             p.logData()
             # wait for synconization of the control loop
