@@ -239,11 +239,12 @@ class GenericSimulator(BaseController):
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'biral3d':
-                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
+                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size and setting friction coeff to 0.6", "red"))
                 #print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
                 #self.friction_coefficient = 0.7
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
                 conf.robot_params[p.robot_name]['dt'] = 0.001
+                self.friction_coefficient = 0.6
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
             else:
@@ -255,6 +256,7 @@ class GenericSimulator(BaseController):
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
             if self.IDENT_TYPE!='NONE':
                 self.PLANNING = 'none'
+                self.SAVE_BAGS = True
                 self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
                 if self.IDENT_TYPE == 'WHEELS' and self.SIMULATOR == 'biral3d':
                     self.TERRAIN = True
@@ -636,30 +638,36 @@ class GenericSimulator(BaseController):
 
     def generateWheelTraj(self, wheel_l = -4.5):
         ####################################
-        # OPEN LOOP wl , wr (from -4.5 to 4.5)
+        # OPEN LOOP wl , wr (from -IDENT_MAX_WHEEL_SPEED to IDENT_MAX_WHEEL_SPEED)
         ####################################
-        wheel_l_vec = []
-        wheel_r_vec = []
-        change_interval = 3.
-        if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
-            wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 24) #it if passes from 0 for some reason there is a non linear
-                #behaviour in the long slippage
-        else:
-            wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 24)
-        time = 0
-        i = 0
-        while True:
-            time = np.round(time + conf.robot_params[p.robot_name]['dt'], 4)
-            wheel_l_vec.append(wheel_l)
-            wheel_r_vec.append(wheel_r[i])
-            # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
-            if time > ((1 + i) * change_interval):
-                i += 1
-            if i == len(wheel_r):
-                break
 
-        wheel_l_vec.append(0.0)
-        wheel_r_vec.append(0.0)
+        if self.SIMULATOR=='biral3d':
+            number_of_samples = int(np.floor(10./conf.robot_params[p.robot_name]['dt']))
+            wheel_l_vec = np.linspace(wheel_l, wheel_l, 3*number_of_samples)
+            wheel_r_vec = np.linspace(0, self.IDENT_MAX_WHEEL_SPEED, number_of_samples)  # it if passes from 0 for some reason there is a non linear
+            wheel_r_vec = np.append(wheel_r_vec, np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 2*number_of_samples))
+        else:
+            wheel_l_vec = []
+            wheel_r_vec = []
+            change_interval = 3.
+            if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
+                wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 24) #it if passes from 0 for some reason there is a non linear
+                    #behaviour in the long slippage
+            else:
+                wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 24)
+            time = 0
+            i = 0
+            while True:
+                time = np.round(time + conf.robot_params[p.robot_name]['dt'], 4)
+                wheel_l_vec.append(wheel_l)
+                wheel_r_vec.append(wheel_r[i])
+                # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
+                if time > ((1 + i) * change_interval):
+                    i += 1
+                if i == len(wheel_r):
+                    break
+            wheel_l_vec.append(0.0)
+            wheel_r_vec.append(0.0)
         return wheel_l_vec,wheel_r_vec
 
     def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.6, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
@@ -1001,16 +1009,15 @@ def talker(p):
         wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 24)
         ramps = np.linspace(0.0, 0.4, 6)
         if p.SIMULATOR == 'biral3d':
-            p.IDENT_WHEEL_L =  3
-            p.RAMP_INCLINATION = 0.1
-            main_loop(p)
-
-            # for inclination in range(len(ramps)):
-            #     p.RAMP_INCLINATION = ramps[inclination]
-            #     print(colored(f"Ident with inclination {p.RAMP_INCLINATION}", "red"))
-            #     for speed in range(len(wheel_l)):
-            #         p.IDENT_WHEEL_L = wheel_l[speed]
-            #         main_loop(p)
+            # p.IDENT_WHEEL_L =  3
+            # p.RAMP_INCLINATION = -0.2
+            # main_loop(p)
+            for inclination in range(len(ramps)):
+                p.RAMP_INCLINATION = ramps[inclination]
+                print(colored(f"Ident with inclination {p.RAMP_INCLINATION}", "red"))
+                for speed in range(len(wheel_l)):
+                    p.IDENT_WHEEL_L = wheel_l[speed]
+                    main_loop(p)
         else:
             for speed in range(len(wheel_l)):
                 p.IDENT_WHEEL_L = wheel_l[speed]
@@ -1220,8 +1227,26 @@ def main_loop(p):
 
     if p.SAVE_BAGS:
         p.recorder.stop_recording_srv()
-        filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
+        #this is for ident with biral3d
+        if p.SIMULATOR=='biral3d' and p.IDENT_TYPE=='WHEELS':
+            not_nans=~np.isnan(p.time_log)
+            data = pd.DataFrame({
+                "time": p.time_log[not_nans],
+                "wheel_l": p.qd_des_log[0, not_nans],
+                "wheel_r": p.qd_des_log[1, not_nans],
+                "roll": p.basePoseW_log[3, not_nans],
+                "pitch": p.basePoseW_log[4, not_nans],
+                "alpha": p.alpha_log[not_nans],
+                "beta_l": p.beta_l_log[not_nans],
+                "beta_r": p.beta_r_log[not_nans]})
+            # Save to CSV
+            output_file =  os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/' + \
+                           f"ident_wheels_ramp_fr_{p.friction_coefficient}_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.csv"
+            data.to_csv(output_file, index=False)
+            print(colored(f"Data saved to {output_file}","red"))
+
         if p.ControlType !='OPEN_LOOP':
+            filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
             p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
             mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
                                    'state': p.state_log, 'ex': p.log_e_x, 'ey': p.log_e_y, 'etheta': p.log_e_theta,
