@@ -9,6 +9,7 @@ from visualization_msgs.msg import MarkerArray
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Polygon
 import numpy as np
+import pinocchio as pin
 
 import roslaunch
 import os
@@ -161,6 +162,51 @@ class RosPub():
         self.id += 1
         self.markerArray.markers.append(marker)
 
+    def add_plane(self, pos, orient = np.array([0,0,0]),  color="red", alpha=0.5):
+        marker = Marker()
+        marker.header.frame_id = self.visual_frame
+        marker.type = marker.CUBE
+        marker.action = marker.ADD
+        marker.scale.x = 100
+        marker.scale.y = 100
+        marker.scale.z = 0.1
+        marker.color.a = 0.5
+        if (color == "red"):
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+        if (color == "blue"):
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+        if (color == "green"):
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+        if (color == "purple"):
+            marker.color.r = 0.7
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+        if (color == "white"):
+            marker.color.r = 1.
+            marker.color.g = 1.
+            marker.color.b = 1.
+        marker.color.a = alpha
+        quaternion = np.zeros(4)
+        quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(orient))
+        marker.pose.orientation.x = quaternion[0]
+        marker.pose.orientation.y = quaternion[1]
+        marker.pose.orientation.z = quaternion[2]
+        marker.pose.orientation.w = quaternion[3]
+        marker.pose.position.x = pos[0]
+        marker.pose.position.y = pos[1]
+        marker.pose.position.z = pos[2]
+        marker.lifetime = ros.Duration(0.0)
+
+        marker.id = self.id
+        self.id += 1
+        self.markerArray.markers.append(marker)
+
     def add_marker_fixed(self, pos, radius=0.01, color="red"):
         marker = Marker()
         marker.header.frame_id = self.visual_frame
@@ -182,6 +228,7 @@ class RosPub():
             marker.color.r = 0.0
             marker.color.g = 1.0
             marker.color.b = 0.0
+
         marker.pose.orientation.x = 0.
         marker.pose.orientation.y = 0.
         marker.pose.orientation.z = 0.
@@ -189,7 +236,7 @@ class RosPub():
         marker.pose.position.x = pos[0]
         marker.pose.position.y = pos[1]
         marker.pose.position.z = pos[2]
-        marker.lifetime = ros.Duration(0.0)
+        marker.lifetime = ros.Duration(0.)
 
         marker.id = self.id_fixed
         self.id_fixed += 1
