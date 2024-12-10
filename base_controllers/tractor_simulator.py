@@ -257,14 +257,15 @@ class GenericSimulator(BaseController):
             if self.IDENT_TYPE!='NONE':
                 self.PLANNING = 'none'
                 self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
-
+                if self.IDENT_TYPE == 'WHEELS' and self.SIMULATOR == 'biral3d':
+                    self.TERRAIN = True
             if self.NAVIGATION!='none' and self.TERRAIN: #need to launch empty gazebo to emulate the lidar
                 launchFileNode(package='gazebo_ros', launch_file='empty_world.launch', additional_args = ['use_sim_time:=true','gui:=false','paused:=false'])
                 spawnModel(package_name='tractor_description', model_name='lidar')
                 self.set_state = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
-        if self.TERRAIN:
-            # spawn the terrain model in gazebo
+        if self.TERRAIN and (self.NAVIGATION!='none' or self.SIMULATOR=='gazebo'):
+            # spawn the terrain model in gazebo in case of navigation
             spawnModel("tractor_description", "terrain", spawn_pos=np.array([0., 0., 0.]))
 
     def loadModelAndPublishers(self):
@@ -274,6 +275,10 @@ class GenericSimulator(BaseController):
         if self.TERRAIN: #this works both for gazebo and biral
             from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
             self.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
+            if self.IDENT_TYPE=='WHEELS' and self.SIMULATOR=='biral3d':
+                from base_controllers.tracked_robot.simulator.terrain_manager import create_ramp_mesh
+                ramp_mesh = create_ramp_mesh(length=350., width=350., inclination=p.RAMP_INCLINATION, origin=np.array([0, 0, 0]))
+                self.terrainManager.set_mesh(ramp_mesh)
         if self.NAVIGATION != 'none':
             print(colored("IMPORTANT: be sure that you are running the image mfocchi/trento_lab_framework:introrob_upgrade", "red"))
             self.nav_vel_sub = ros.Subscriber("/cmd_vel", Twist, self.get_command_vel)
@@ -322,7 +327,11 @@ class GenericSimulator(BaseController):
                 if p.IDENT_TYPE=='V_OMEGA':
                     bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}_fr_{p.friction_coefficient}.bag"
                 if p.IDENT_TYPE == 'WHEELS':
-                    bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
+                    if p.SIMULATOR=='biral3d':
+                        bag_name = f"ident_sim_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.bag"
+                    else:
+                        bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
+
             else:
                 bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
@@ -506,6 +515,7 @@ class GenericSimulator(BaseController):
             plt.plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
             plt.ylabel("WHEEL_R")
             plt.grid(True)
+
 
 
             #states plot
@@ -990,9 +1000,22 @@ def talker(p):
     p.startSimulator()
     if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
         wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 24)
-        for speed in range(len(wheel_l)):
-            p.IDENT_WHEEL_L = wheel_l[speed]
+        ramps = np.linspace(0.0, 0.4, 6)
+        if p.SIMULATOR == 'biral3d':
+            p.IDENT_WHEEL_L =  3
+            p.RAMP_INCLINATION = 0.1
             main_loop(p)
+
+            # for inclination in range(len(ramps)):
+            #     p.RAMP_INCLINATION = ramps[inclination]
+            #     print(colored(f"Ident with inclination {p.RAMP_INCLINATION}", "red"))
+            #     for speed in range(len(wheel_l)):
+            #         p.IDENT_WHEEL_L = wheel_l[speed]
+            #         main_loop(p)
+        else:
+            for speed in range(len(wheel_l)):
+                p.IDENT_WHEEL_L = wheel_l[speed]
+                main_loop(p)
     elif p.STATISTICAL_ANALYSIS:
         print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
         columns = [ 'test', 'target_x','target_y','target_z', 'exy', 'etheta', 'tf']
