@@ -33,9 +33,15 @@ import math
 import rospkg
 import open3d as o3d
 class TerrainManager:
-    def __init__(self, mesh_path = "terrain.stl" ):
-        self.mesh =  o3d.io.read_triangle_mesh(mesh_path)
+    def __init__(self, mesh_path = None):
+        if mesh_path is None:
+            mesh_path = rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl"
+        mesh =  o3d.io.read_triangle_mesh(mesh_path)
+        self.set_mesh(mesh)
+        self.baseline = -10. # is the Z level from which we cast rays
 
+    def set_mesh(self, mesh):
+        self.mesh = mesh
         # Cleanup the mesh
         self.mesh.remove_degenerate_triangles()  # Remove zero-area triangles
         self.mesh.remove_duplicated_triangles()  # Remove duplicate faces
@@ -59,7 +65,7 @@ class TerrainManager:
         # self.visualize([self.mesh ,lines])
 
         self.triangle_mesh = o3d.t.geometry.TriangleMesh.from_legacy(self.mesh)
-        self.baseline = -10. # is the Z level from which we cast rays
+
         # define scene
         self.scene = o3d.t.geometry.RaycastingScene()
         # returns the ID for the added geometry
@@ -176,6 +182,9 @@ class TerrainManager:
 
         return eval_point, roll, pitch, yaw
 
+
+
+
     def draw_line(self, start, length, direction, colors =  [[1,0,0]]):
         end = start + length * direction
         points = [start, end]
@@ -231,6 +240,44 @@ class TerrainManager:
     #     vis.destroy_window()
     #     return
 
+def create_ramp_mesh(length, width, inclination=0., origin=np.array([0,0,0])):
+    """
+    Create a ramp mesh with the specified length, width, and height.
+
+    Parameters:
+        length (float): The horizontal length of the ramp.
+        width (float): The width of the ramp.
+        height (float): The height of the ramp's inclined plane.
+
+    Returns:
+        open3d.geometry.TriangleMesh: The ramp mesh.
+    """
+    # Define the vertices of the ramp
+    vertices = [
+        [ -length/2,width/2,  -length/2*math.tan(inclination)],  # Bottom-left corner
+        [ -length/2, -width/2, -length/2*math.tan(inclination)],  # Bottom-right corner
+        [length/2, -width/2, length/2*math.tan(inclination)],  # Top-right corner
+        [length/2, width/2,  length/2*math.tan(inclination)]  # Top-left triangle
+    ]
+
+
+    # Define the triangles (faces) of the ramp
+    triangles = [
+        [0, 1, 2],  # Bottom-right triangle
+        [0, 2, 3]  # Top-left triangle
+    ]
+
+    # Create the mesh
+    ramp_mesh = o3d.geometry.TriangleMesh()
+    ramp_mesh.vertices = o3d.utility.Vector3dVector(vertices)
+    ramp_mesh.triangles = o3d.utility.Vector3iVector(triangles)
+
+    # Compute normals for better visualization
+    ramp_mesh.compute_vertex_normals()
+
+    return ramp_mesh
+
+
 if __name__ == '__main__':
 
     scaling_factor = 1
@@ -239,6 +286,10 @@ if __name__ == '__main__':
 
     mesh_path = rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl"
     terrainManager = TerrainManager(mesh_path)
+
+    # Create the ramp mesh
+    # ramp_mesh = create_ramp_mesh(length=50., width=50., inclination=0.1, origin=np.array([0, 0, 0]))
+    # terrainManager.set_mesh(ramp_mesh)
 
     # mesh = o3d.io.read_triangle_mesh(mesh_path)
     # terrainManager.visualize(mesh)
@@ -258,4 +309,4 @@ if __name__ == '__main__':
     print(pitch)
     print(yaw)
 
-
+    #
