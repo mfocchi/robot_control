@@ -159,6 +159,7 @@ class GenericSimulator(BaseController):
         self.radius_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.beta_l_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.beta_r_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.pub_counter = 0
 
     def reset_joints(self, q0, joint_names = None):
         # create the message
@@ -219,6 +220,7 @@ class GenericSimulator(BaseController):
             super().logData()
 
     def startSimulator(self):
+        self.decimate_publish = 1
         if self.SIMULATOR == 'gazebo':
             world_name = None #'ramps.world'
             additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]), 'rviz_conf:=$(find tractor_description)/rviz/conf.rviz']
@@ -241,6 +243,7 @@ class GenericSimulator(BaseController):
                 conf.robot_params[p.robot_name]['dt'] = 0.001
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
+                self.decimate_publish = 10 #publish every 30 otherwise bags become too big!
             else:
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
@@ -334,10 +337,11 @@ class GenericSimulator(BaseController):
         #check frequency
         if hasattr(self, 'check_time'):
             loop_time = ros.Time.now().to_sec() - self.check_time
-            if loop_time > 1.1*(self.slow_down_factor * conf.robot_params[p.robot_name]['dt']):
-                freq_ros = 1/(self.slow_down_factor * conf.robot_params[p.robot_name]['dt'])
-                freq_coppelia = 1/loop_time
-                print(colored(f"freq mismatch beyond 10%: coppelia is running at {freq_coppelia} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
+            ros_loop_time = 1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt'])
+            if loop_time > 1.1*(ros_loop_time*self.decimate_publish):
+                freq_ros = 1/ros_loop_time
+                loop_real_freq = 1/loop_time
+                print(colored(f"freq mismatch beyond 10%: loop is running at {self.decimate_publish*loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
         self.check_time = ros.Time.now().to_sec()
 
     def getClothoids(self, long_vel, dt = 0.001):
@@ -822,7 +826,8 @@ class GenericSimulator(BaseController):
         msg.position = q_des
         msg.velocity = qd_des
         msg.effort = tau_ffwd
-        self.pub_des_jstate.publish(msg) #publish in /commands
+        if np.mod(self.pub_counter, self.decimate_publish) == 0:
+            self.pub_des_jstate.publish(msg) #publish in /commands
 
         #trigger simulators
         if self.SIMULATOR == 'biral' or self.SIMULATOR == 'biral3d': #TODO implement torque control
@@ -872,20 +877,27 @@ class GenericSimulator(BaseController):
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/world')
             if self.IDENT_TYPE!='NONE':
-                self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
+                if np.mod(self.pub_counter, self.decimate_publish) == 0:
+                    self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
+
             self.q = q_des.copy()
             self.qd = qd_des.copy()
-            self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
+            if np.mod(self.pub_counter, self.decimate_publish) == 0:
+                self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
 
             if self.NAVIGATION!='none' and self.SIMULATOR!='gazebo': #for biral models set the lidar position in gazebo consistent with the robot motion
                 self.setModelState('lidar', self.u.linPart(self.basePoseW), self.quaternion)
 
         if self.TERRAIN: #this is published to show mesh in rviz
-            self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
+            if self.IDENT_TYPE=='WHEELS' and self.SIMULATOR=='biral3d':
+                self.ros_pub.add_plane(pos=np.array([0,0,-0.1]), orient=np.array([0., -self.RAMP_INCLINATION, 0]), color="white", alpha=0.5)
+            else:
+                self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
 
         if self.SIMULATOR == 'coppelia':
             self.coppeliaManager.simulationControl('trigger_next_step')
             self.unwrap() #coppelia joints requires unwrap
+
 
 
         #this is for wolf navigation # gazebo publishes world, base controller publishes base link, we need to add two static transforms from world to odom and map
@@ -904,7 +916,7 @@ class GenericSimulator(BaseController):
         if np.mod(self.time,1) == 0:
             if not self.STATISTICAL_ANALYSIS:
                 print(colored(f"TIME: {self.time}","red"))
-
+        self.pub_counter+=1
 
     def pub_odom_msg(self, odom_publisher):
         msg = Odometry()

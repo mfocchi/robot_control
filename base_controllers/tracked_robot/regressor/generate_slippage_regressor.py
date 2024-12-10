@@ -21,6 +21,7 @@ if sim:
     #data = 'ident_wheels_sim_0.1_WLmax_4.5.csv'
     # only data long_v>0
     #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_4.5.csv'
+    ####Using these
     #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_10.csv'
     data = 'ident_wheels_sim_0.4_long_v_positive_WLmax_18.csv'
     friction_coeff = data.split("_")[3]
