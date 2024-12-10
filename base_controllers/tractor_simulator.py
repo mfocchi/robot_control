@@ -246,7 +246,6 @@ class GenericSimulator(BaseController):
                 conf.robot_params[p.robot_name]['dt'] = 0.001
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
-                self.decimate_publish = 10 #publish every 30 otherwise bags become too big!
             else:
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
@@ -346,14 +345,14 @@ class GenericSimulator(BaseController):
                     self.qd[joint_idx] = msg.velocity[msg_idx]
                     self.tau[joint_idx] = msg.effort[msg_idx]
 
-        #check frequency
+        #check frequency of publishing
         if hasattr(self, 'check_time'):
-            loop_time = ros.Time.now().to_sec() - self.check_time
-            ros_loop_time = 1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt'])
-            if loop_time > 1.1*(ros_loop_time*self.decimate_publish):
-                freq_ros = 1/ros_loop_time
-                loop_real_freq = 1/loop_time
-                print(colored(f"freq mismatch beyond 10%: loop is running at {self.decimate_publish*loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-freq_coppelia)/freq_ros*100} %", "red"))
+            loop_time = ros.Time.now().to_sec() - self.check_time #actual publishing time interval
+            ros_loop_time = self.slow_down_factor * conf.robot_params[p.robot_name]['dt']*self.decimate_publish #ideal publishing time interval
+            if loop_time > 1.1 * (ros_loop_time):
+                loop_real_freq = 1/loop_time #actual publishing frequency
+                freq_ros = 1 / ros_loop_time #ideal publishing frequency
+                #print(colored(f"freq mismatch beyond 10%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-loop_real_freq)/freq_ros*100} %", "red"))
         self.check_time = ros.Time.now().to_sec()
 
     def getClothoids(self, long_vel, dt = 0.001):
@@ -438,7 +437,7 @@ class GenericSimulator(BaseController):
         else:#Biral
             if self.SIMULATOR=='biral3d':
                 self.terrain_consistent_pose_init=np.array([self.p0[0], self.p0[1], 0, 0, 0, 0])
-                if self.TERRAIN:
+                if self.TERRAIN: #ramp and mesh
                     start_position, start_roll, start_pitch, start_yaw = p.terrainManager.project_on_mesh(point=self.terrain_consistent_pose_init[:2], direction=np.array([0., 0., 1.]))
                     self.terrain_consistent_pose_init[:3] = start_position.copy()
                     self.terrain_consistent_pose_init[3] = start_roll
