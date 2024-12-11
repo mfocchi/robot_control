@@ -58,14 +58,14 @@ class QuadrupedJumpController(QuadrupedController):
 
         user = os.popen('whoami').read()
 
-        if user=='root':
-            pid = os.getpid()
-            print(colored("USER IS ROOT: USING RNICE FOR THREAD PRIORITY","red"))
-            # NOTE: use chrt -r 99 command for rt
-            # need to launch docker as root
-            os.system(f'sudo renice -n -21 -p {str(pid)}')
-            # need to launch docker as root
-            os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
+        #if user=='root':
+        pid = os.getpid()
+        print(colored("USER IS ROOT: USING RNICE FOR THREAD PRIORITY","red"))
+        # NOTE: use chrt -r 99 command for rt
+        # need to launch docker as root
+        os.system(f'sudo renice -n -21 -p {str(pid)}')
+        # need to launch docker as root
+        os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
 
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
@@ -449,7 +449,7 @@ class QuadrupedJumpController(QuadrupedController):
 
 
 if __name__ == '__main__':
-    p = QuadrupedJumpController('aliengo')
+    p = QuadrupedJumpController('go1')
     world_name = 'fast.world'
 
     try:
@@ -478,7 +478,7 @@ if __name__ == '__main__':
         eul_0 = p.basePoseW[3:].copy()
 
         # define jump action (relative)
-        p.jumpDeltaStep = np.array([0.4, 0.0, 0.])
+        p.jumpDeltaStep = np.array([-0.4, 0.0, 0.])
         p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
 
         # get the action from the policy (use p.jumpAgent to get values)
