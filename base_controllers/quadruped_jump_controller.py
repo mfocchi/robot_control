@@ -42,13 +42,13 @@ class QuadrupedJumpController(QuadrupedController):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
         self.DEBUG = 'none' # 'none', 'pushup','swim','step'
+        self.FLIGHT_DETECTION='heuristic'#, 'haptic', 'heuristic'
         self.debug_gui = True
         self.jumpAgent = JumpAgent(self.robot_name)
         self.go0_conf = 'standDown'
         # self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
         # self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
         self.q_retraction = conf.robot_params[self.robot_name]['q_retraction']
-        self.q_land = conf.robot_params[self.robot_name]['q_land']
         self.q_final = conf.robot_params[self.robot_name]['q_final']
         self.use_landing_controller = False
 
@@ -58,14 +58,14 @@ class QuadrupedJumpController(QuadrupedController):
 
         user = os.popen('whoami').read()
 
-        #if user=='root':
-        pid = os.getpid()
-        print(colored("USER IS ROOT: USING RNICE FOR THREAD PRIORITY","red"))
-        # NOTE: use chrt -r 99 command for rt
-        # need to launch docker as root
-        os.system(f'sudo renice -n -21 -p {str(pid)}')
-        # need to launch docker as root
-        os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
+        if user=='root':
+            pid = os.getpid()
+            print(colored("USER IS ROOT: USING RNICE FOR THREAD PRIORITY","red"))
+            # NOTE: use chrt -r 99 command for rt
+            # need to launch docker as root
+            os.system(f'sudo renice -n -21 -p {str(pid)}')
+            # need to launch docker as root
+            os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
 
         print("Initialized Quadruped Jump controller---------------------------------------------------------------")
 
@@ -104,48 +104,50 @@ class QuadrupedJumpController(QuadrupedController):
 
     def detectApex(self, threshold=-3):
         # foot tradius is 0.015
-        foot_lifted_off = np.array([False, False, False, False])
-        for leg in range(4):
-            foot_lifted_off[leg] = self.W_contacts[leg][2] > 0.017
-        # if not self.detectedApexFlag and np.all(foot_lifted_off):
+        if not self.real_robot and self.FLIGHT_DETECTION=='haptic':
 
-        if not self.detectedApexFlag and self.time >= p.startTrust + p.T_th_total + p.T_apex:
-            # Try tp use only the linear acceleration
-            if not self.detectedApexFlag:
-                print(colored(f"APEX detected at t={self.time} setting new treshold", "red"))
-                self.q_apex = self.q_des.copy()
-                self.qd_apex = self.qd_des.copy()
-                self.t_apex = self.time
-                self.detectedApexFlag = True
-                # if self.real_robot:
-                #     #if self.baseLinAccW[2] < threshold:
-                #     self.detectedApexFlag = True
-                #     print(colored(f"APEX detected at t={self.time} setting new treshold", "red"))
-                #     self.q_apex = self.q_des.copy()
-                #     self.qd_apex = self.qd_des.copy()
-                #     self.t_apex = self.time
-                # else:
-                #     if self.baseTwistW[2] < 0.0:
-                #         self.detectedApexFlag = True
-                #         # move floating base for landing
-                #         # if not self.real_robot:
-                #         #     self.pause_physics_client()
-                #         #     for i in range(10):
-                #         #         self.setJumpPlatformPosition(
-                #         #             self.target_position, com_0)
-                #         #     self.unpause_physics_client()
-                #         print(colored(f"APEX detected at t={self.time}", "red"))
-                #         self.q_apex = self.q_des.copy()
-                #         self.qd_apex = self.qd_des.copy()
-                #         self.t_apex = self.time
+            foot_lifted_off = np.array([False, False, False, False])
+            for leg in range(4):
+                foot_lifted_off[leg] = self.W_contacts[leg][2] > 0.017
+
+            if not self.detectedApexFlag and np.all(foot_lifted_off):
+                if self.baseTwistW[2] < 0.0:
+                    self.detectedApexFlag = True
+                    # move floating base for landing
+                    # if not self.real_robot:
+                    #     self.pause_physics_client()
+                    #     for i in range(10):
+                    #         self.setJumpPlatformPosition(
+                    #             self.target_position, com_0)
+                    #     self.unpause_physics_client()
+                    print(colored(f"APEX detected at t={self.time}", "red"))
+                    self.q_apex = self.q_des.copy()
+                    self.qd_apex = self.qd_des.copy()
+                    self.t_apex = self.time
+
+        elif self.FLIGHT_DETECTION == 'heuristic':
+            if not self.detectedApexFlag and self.time >= p.startTrust + p.T_th_total + p.T_apex:
+                # Try tp use only the linear acceleration
+                if not self.detectedApexFlag:
+                    print(colored(f"APEX detected at t={self.time} setting new treshold", "red"))
+                    self.q_apex = self.q_des.copy()
+                    self.qd_apex = self.qd_des.copy()
+                    self.t_apex = self.time
+                    self.detectedApexFlag = True
+        else:
+            print("wrong FLIGHT_DETECTION choice!!!")
+
 
     def detectTouchDown(self):
-        # if np.all(self.contact_state):
-        #     return True
-        # else:
-        #     return False
-        return self.time >= p.startTrust + p.T_th_total + p.T_fl
-        # return False
+        if not self.real_robot and self.FLIGHT_DETECTION == 'haptic':
+            if np.all(self.contact_state):
+                return True
+            else:
+                return False
+        elif self.FLIGHT_DETECTION == 'heuristic':
+            return self.time >= p.startTrust + p.T_th_total + p.T_fl
+        else:
+            print("wrong FLIGHT_DETECTION choice!!!")
 
     def resetRobot(self, basePoseDes=np.array([0, 0, 0.3, 0., 0., 0.])):
         # this sets the position of the joints
@@ -480,6 +482,12 @@ if __name__ == '__main__':
         # define jump action (relative)
         p.jumpDeltaStep = np.array([-0.4, 0.0, 0.])
         p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
+        if p.jumpDeltaStep[0]>0.:
+            p.q_land = conf.robot_params[p.robot_name]['q_land_fwd']
+        elif p.jumpDeltaStep[0]<0.:
+            p.q_land = conf.robot_params[p.robot_name]['q_land_bwd']
+        else:
+            p.q_land = p.q_final
 
         # get the action from the policy (use p.jumpAgent to get values)
         p.jumpAgent.act(p.jumpDeltaStep, p.jumpDeltaOrient)
@@ -587,12 +595,6 @@ if __name__ == '__main__':
                               p.startTrust + p.T_th_total)
                         break
             else:
-                # if not p.detectedApexFlag:
-                #     elapsed_time = p.time - (p.startTrust + p.T_th_total)
-                #     elapsed_ratio = np.clip(elapsed_time / p.lerp_time, 0, 1)
-                #     p.q_des = p.cerp(p.q_t_th, conf.robot_params[p.robot_name]['q_land'],  elapsed_ratio).copy()
-                #     p.qd_des = p.cerp(p.qd_t_th, np.zeros_like(p.qd_t_th), elapsed_ratio).copy()
-
                 p.detectApex()
                 if (p.detectedApexFlag):
                     elapsed_time_apex = p.time - p.t_apex
@@ -643,13 +645,9 @@ if __name__ == '__main__':
                                 print(colored(f"landed at {p.basePoseW} with  perc.  error xy {perc_err_xy} and perc orient_error {perc_err_orient}", "green"))
                                 print(colored(f"started at {com_0} and orient {eul_0}", "green"))
                                 print(colored(f"target at {p.target_position}, {p.target_orientation}", "green"))
-                                # if p.real_robot:
-                                #     p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real'],
-                                #                       conf.robot_params[p.robot_name]['kd_real'],
-                                #                       conf.robot_params[p.robot_name]['ki_real'])
-                                #     print(colored(f"pdi: {p.pid.joint_pid}"))
-                                
-                                p.time_td = p.time 
+
+
+                                p.time_td = p.time
                                 p.qdes_td = p.q_des.copy()   
                         else:
                             # break

@@ -175,12 +175,9 @@ robot_params['aliengo'] ={'dt': 0.002,
                         'kp_ang_real': np.array([300., 300., 200.]),
                         'kd_ang_real': np.array([10., 20., 20.]),
                         #forward
-                        'q_land':  np.array([0.1, 0.6, -1.8,  0.1, 0.6, -1.8, -0.1, 0.6, -1.8, -0.1, 0.6, -1.8]),
+                        'q_land_fwd':  np.array([0.1, 0.6, -1.8,  0.1, 0.6, -1.8, -0.1, 0.6, -1.8, -0.1, 0.6, -1.8]),
                         #backward
-                        #'q_land':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
-                        #lateral
-                        #'q_land':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
-
+                        'q_land_bwd':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
 
                         'q_final':  np.array([0.2, 1.1, -1.8,  0.2, 1.1, -1.8, -0.2, 1.1, -1.8, -0.2, 1.1, -1.8]),
 
@@ -261,12 +258,10 @@ robot_params['go1'] ={'dt': 0.002,
                       'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
 
                       #Forward
-                      #'q_land':  np.array([0.1, 0.75, -1.8,  0.1, 0.75, -1.8, -0.1, 0.75, -1.8, -0.1, 0.75, -1.8]),
+                      'q_land_fwd':  np.array([0.1, 0.75, -1.8,  0.1, 0.75, -1.8, -0.1, 0.75, -1.8, -0.1, 0.75, -1.8]),
                       #backward
-                      'q_land':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
-                      #lateral
-                      #'q_land':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
-                     
+                      'q_land_bwd':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
+
                       'q_retraction': np.array([0.1, 1.10, -2.20, 0.1, 1.10, -2.20, -0.1, 1.10, -2.20, -0.1, 1.10, -2.20]),
                       'q_final':  np.array([0.1, 0.9, -1.8,  0.1, 0.9, -1.8, -0.1, 0.5, -1.8, -0.1, 0.9, -1.8]),
                       #orbit
@@ -294,7 +289,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
                       # use real robot or simulation
-                      'real_robot': True} # note the frames are all aligned with base for joints = 0
+                      'real_robot': False} # note the frames are all aligned with base for joints = 0
 
 robot_params['go2'] ={'dt': 0.002,
                       'buffer_size': 5001, # 120 seconds
