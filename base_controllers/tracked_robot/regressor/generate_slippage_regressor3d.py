@@ -50,7 +50,7 @@ preds_train_beta_l = model_beta_l.predict(x_train)
 preds_beta_l = model_beta_l.predict(x_test)
 print(f'R2 metric train beta_l: {r2_score(y_train[...,0], preds_train_beta_l)}')
 print(f'R2 metric test beta_l: {r2_score(y_test[...,0], preds_beta_l)}')
-model_name_beta_l = 'model_beta_l_'+str(friction_coeff)+'.cb'
+model_name_beta_l = 'model_beta_l'+str(friction_coeff)+'.cb'
 model_beta_l.save_model(model_name_beta_l)
 
 # # %% create model of regressor Beta_r
@@ -62,7 +62,7 @@ preds_train_beta_r = model_beta_r.predict(x_train)
 preds_beta_r = model_beta_r.predict(x_test)
 print(f'R2 metric train beta_r: {r2_score(y_train[...,1], preds_train_beta_r)}')
 print(f'R2 metric test beta_r: {r2_score(y_test[...,1], preds_beta_r)}')
-model_name_beta_r = 'model_beta_r_'+str(friction_coeff)+'.cb'
+model_name_beta_r = 'model_beta_r'+str(friction_coeff)+'.cb'
 model_beta_r.save_model(model_name_beta_r)
 
 # regressor for Alpha
@@ -75,7 +75,7 @@ preds_alpha = model_alpha.predict(x_test)
 print(f'R2 metric train alpha: {r2_score(y_train[...,2], preds_train_alpha)}')
 print(f'R2 metric test alpha: {r2_score(y_test[...,2], preds_alpha)}')
 # %% save the model python
-model_name_alpha = 'model_alpha_'+str(friction_coeff)+'.cb'
+model_name_alpha = 'model_alpha'+str(friction_coeff)+'.cb'
 model_alpha.save_model(model_name_alpha)
 
 #################################################

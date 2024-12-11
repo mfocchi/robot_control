@@ -70,7 +70,7 @@ class GenericSimulator(BaseController):
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
 
         #biral friction coeff
-        self.friction_coefficient = 0.4 # 0.1/0.4
+        self.friction_coefficient = 0.6 # 0.1/0.4/ 0.6    0.6 is the identified with parameters depending on gravity
 
         # initial pose
         self.p0 = np.array([0., 0., 0.]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
@@ -239,12 +239,11 @@ class GenericSimulator(BaseController):
             # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'biral3d':
-                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size and setting friction coeff to 0.6", "red"))
+                print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
                 #print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
                 #self.friction_coefficient = 0.7
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
                 conf.robot_params[p.robot_name]['dt'] = 0.001
-                self.friction_coefficient = 0.6
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
             else:
@@ -844,8 +843,12 @@ class GenericSimulator(BaseController):
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
         # predict the betas from NN
-        beta_l = self.model_beta_l.predict(qd_des)
-        beta_r = self.model_beta_r.predict(qd_des)
+        if len(self.model_beta_l.feature_names_)>2:
+            beta_l = self.model_beta_l.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4]]))
+            beta_r = self.model_beta_r.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4]]))
+        else:
+            beta_l = self.model_beta_l.predict(qd_des)
+            beta_r = self.model_beta_r.predict(qd_des)
         #matlab
         # beta_l = self.eng.feval(self.model_beta_l['predictFcn'], qd_des)
         # beta_r = self.eng.feval(self.model_beta_r['predictFcn'], qd_des)
@@ -1149,7 +1152,7 @@ def main_loop(p):
                 p.des_x = p.p0[0] #+0.1
                 p.des_y = p.p0[1] #+0.1
                 p.des_theta = p.p0[2] # +0.1
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3)  # slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.4, omega_max_=0.3)  # slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
             p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
