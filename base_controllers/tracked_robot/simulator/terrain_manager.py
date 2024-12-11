@@ -254,10 +254,10 @@ def create_ramp_mesh(length, width, inclination=0., origin=np.array([0,0,0])):
     """
     # Define the vertices of the ramp
     vertices = [
-        [ -length/2,width/2,  -length/2*math.tan(inclination)],  # Bottom-left corner
-        [ -length/2, -width/2, -length/2*math.tan(inclination)],  # Bottom-right corner
-        [length/2, -width/2, length/2*math.tan(inclination)],  # Top-right corner
-        [length/2, width/2,  length/2*math.tan(inclination)]  # Top-left triangle
+        [ -length/2,width/2,  length/2*math.tan(inclination)],  # Bottom-left corner
+        [ -length/2, -width/2, length/2*math.tan(inclination)],  # Bottom-right corner
+        [length/2, -width/2, -length/2*math.tan(inclination)],  # Top-right corner
+        [length/2, width/2,  -length/2*math.tan(inclination)]  # Top-left triangle
     ]
 
 
@@ -288,7 +288,7 @@ if __name__ == '__main__':
     terrainManager = TerrainManager(mesh_path)
 
     # Create the ramp mesh
-    # ramp_mesh = create_ramp_mesh(length=50., width=50., inclination=0.1, origin=np.array([0, 0, 0]))
+    # ramp_mesh = create_ramp_mesh(length=50., width=50., inclination=-0.1, origin=np.array([0, 0, 0]))
     # terrainManager.set_mesh(ramp_mesh)
 
     # mesh = o3d.io.read_triangle_mesh(mesh_path)

@@ -162,7 +162,7 @@ class RosPub():
         self.id += 1
         self.markerArray.markers.append(marker)
 
-    def add_plane(self, pos, orient = np.array([0,0,0]),  color="red", alpha=0.5):
+    def add_plane(self, pos=np.array([0,0,0]), orient = np.array([0,0,0]),  color="red", alpha=0.5):
         marker = Marker()
         marker.header.frame_id = self.visual_frame
         marker.type = marker.CUBE
@@ -192,12 +192,13 @@ class RosPub():
             marker.color.g = 1.
             marker.color.b = 1.
         marker.color.a = alpha
-        quaternion = np.zeros(4)
+
+
         quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(orient))
-        marker.pose.orientation.x = quaternion[0]
-        marker.pose.orientation.y = quaternion[1]
-        marker.pose.orientation.z = quaternion[2]
-        marker.pose.orientation.w = quaternion[3]
+        marker.pose.orientation.x = quaternion.x
+        marker.pose.orientation.y = quaternion.y
+        marker.pose.orientation.z = quaternion.z
+        marker.pose.orientation.w = quaternion.w
         marker.pose.position.x = pos[0]
         marker.pose.position.y = pos[1]
         marker.pose.position.z = pos[2]

@@ -256,7 +256,6 @@ class GenericSimulator(BaseController):
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
             if self.IDENT_TYPE!='NONE':
                 self.PLANNING = 'none'
-                self.SAVE_BAGS = True
                 self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
                 if self.IDENT_TYPE == 'WHEELS' and self.SIMULATOR == 'biral3d':
                     self.TERRAIN = True
@@ -329,7 +328,7 @@ class GenericSimulator(BaseController):
                     bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}_fr_{p.friction_coefficient}.bag"
                 if p.IDENT_TYPE == 'WHEELS':
                     if p.SIMULATOR=='biral3d':
-                        bag_name = f"ident_sim_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.bag"
+                        bag_name = f"ident_sim_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.bag"
                     else:
                         bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
 
@@ -930,7 +929,7 @@ class GenericSimulator(BaseController):
 
         if self.TERRAIN: #this is published to show mesh in rviz
             if self.IDENT_TYPE=='WHEELS' and self.SIMULATOR=='biral3d':
-                self.ros_pub.add_plane(pos=np.array([0,0,-0.1]), orient=np.array([0., -self.RAMP_INCLINATION, 0]), color="white", alpha=0.5)
+                self.ros_pub.add_plane(pos=np.array([0,0,-0.]), orient=np.array([0., self.RAMP_INCLINATION, 0]), color="white", alpha=0.5)
             else:
                 self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
 
@@ -1007,10 +1006,10 @@ def talker(p):
     p.startSimulator()
     if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
         wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 24)
-        ramps = np.linspace(0.0, 0.4, 6)
+        ramps = np.linspace(0.0, -0.3, 5) #I use negative ramp inclination otherwise the terrain consistent startyaw is PI and not 0
         if p.SIMULATOR == 'biral3d':
             # p.IDENT_WHEEL_L =  3
-            # p.RAMP_INCLINATION = -0.2
+            # p.RAMP_INCLINATION = 0.2
             # main_loop(p)
             for inclination in range(len(ramps)):
                 p.RAMP_INCLINATION = ramps[inclination]
@@ -1240,8 +1239,8 @@ def main_loop(p):
                 "beta_l": p.beta_l_log[not_nans],
                 "beta_r": p.beta_r_log[not_nans]})
             # Save to CSV
-            output_file =  os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/' + \
-                           f"ident_wheels_ramp_fr_{p.friction_coefficient}_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.csv"
+            output_file = os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/data3d/' + \
+                                   f"ident_wheels_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.csv"
             data.to_csv(output_file, index=False)
             print(colored(f"Data saved to {output_file}","red"))
 
