@@ -1235,9 +1235,9 @@ def main_loop(p):
                 "wheel_r": p.qd_des_log[1, not_nans],
                 "roll": p.basePoseW_log[3, not_nans],
                 "pitch": p.basePoseW_log[4, not_nans],
-                "alpha": p.alpha_log[not_nans],
                 "beta_l": p.beta_l_log[not_nans],
-                "beta_r": p.beta_r_log[not_nans]})
+                "beta_r": p.beta_r_log[not_nans],
+                "alpha": p.alpha_log[not_nans]})
             # Save to CSV
             output_file = os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/data3d/' + \
                                    f"ident_wheels_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.csv"
