@@ -604,18 +604,19 @@ class GenericSimulator(BaseController):
             return v, omega
 
 
-    def mapToWheels(self, v_des,omega_des):
+    def   mapToWheels(self, v_des,omega_des):
         #
         # # SAFE CHECK -> clipping velocities
         # v = np.clip(v, -constants.MAX_LINEAR_VELOCITY, constants.MAX_LINEAR_VELOCITY)
         # o = np.clip(o, -constants.MAX_ANGULAR_VELOCITY, constants.MAX_ANGULAR_VELOCITY)
-        if self.SIMULATOR=='biral3d':
-            self.w_R_b = self.math_utils.eul2Rot(self.euler)
-            self.hf_R_b = self.math_utils.eul2Rot(np.array([self.euler[0],self.euler[1], 0.]))
-            # project v_des which is in Horizontal frame onto hf_x_b
-            v_des = self.hf_R_b[0].dot(np.array([v_des, 0., 0.]))
-            # project omega_des which is in WF  onto w_z_b
-            omega_des = self.w_R_b[2].dot(np.array([0., 0.,omega_des]))
+        #no longer needed
+        # if self.SIMULATOR=='biral3d':
+        #     self.w_R_b = self.math_utils.eul2Rot(self.euler)
+        #     self.hf_R_b = self.math_utils.eul2Rot(np.array([self.euler[0],self.euler[1], 0.]))
+        #     # project v_des which is in Horizontal frame onto hf_x_b
+        #     v_des = self.hf_R_b[0].dot(np.array([v_des, 0., 0.]))
+        #     # project omega_des which is in WF  onto w_z_b
+        #     omega_des = self.w_R_b[2].dot(np.array([0., 0.,omega_des]))
 
         qd_des = np.zeros(2)
         qd_des[0] = (v_des - omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
@@ -1164,11 +1165,18 @@ def main_loop(p):
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
-
             # update kinematics
-            robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
-            robot_state.y = p.basePoseW[p.u.sp_crd["LY"]]
-            robot_state.theta = p.basePoseW[p.u.sp_crd["AZ"]]
+            if p.SIMULATOR == 'biral3d':
+                robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
+                robot_state.y = p.basePoseW[p.u.sp_crd["LY"]]
+                robot_state.z = p.basePoseW[p.u.sp_crd["LY"]]
+                robot_state.roll = p.basePoseW[p.u.sp_crd["AX"]]
+                robot_state.pitch = p.basePoseW[p.u.sp_crd["AY"]]
+                robot_state.theta = p.basePoseW[p.u.sp_crd["AZ"]]
+            else:
+                robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
+                robot_state.y = p.basePoseW[p.u.sp_crd["LY"]]
+                robot_state.theta = p.basePoseW[p.u.sp_crd["AZ"]]
             #print(f"pos X: {robot.x} Y: {robot.y} th: {robot.theta}")
             # controllers
             if p.NAVIGATION !='none':

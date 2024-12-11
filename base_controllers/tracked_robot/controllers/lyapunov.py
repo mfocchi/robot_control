@@ -2,6 +2,7 @@ import numpy as np
 import math
 from base_controllers.utils.math_tools import unwrap_angle
 from base_controllers.tracked_robot.utils import constants
+from base_controllers.utils.math_tools import Math
 from scipy.optimize import fsolve
 # ------------------------------------ #
 # CONTROLLER'S PARAMETERS
@@ -38,7 +39,8 @@ class LyapunovController:
         self.omega_old = 0.
 
         self.params = params
-        self.eng = matlab_engine
+        self.math_utils = Math()
+        #self.eng = matlab_engine
 
     def setSideSlipCompensationType(self, SIDE_SLIP_COMPENSATION):
         self.SIDE_SLIP_COMPENSATION = SIDE_SLIP_COMPENSATION
@@ -60,13 +62,12 @@ class LyapunovController:
         # compute errors
         ex = actual_state.x - des_x
         ey = actual_state.y - des_y
-
         theta,self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
         etheta = theta-des_theta
+        beta = theta + des_theta
 
         #compute ausiliary variables
         psi = math.atan2(ey, ex)
-        beta = theta + des_theta
         exy = math.sqrt(ex**2 + ey**2)
 
         dv = -self.K_P * exy * math.cos(psi - theta)
@@ -97,6 +98,7 @@ class LyapunovController:
         """
         ritorna i valori di linear e angular velocity
         """
+        self.actual_state = actual_state
 
         if traj_finished:
             # save errors for plotting
@@ -106,14 +108,33 @@ class LyapunovController:
             return 0.0, 0.0, 0., 0.,0., 0.
 
         # compute errors
-        ex = actual_state.x - des_x
-        ey = actual_state.y - des_y
-        theta, self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
-        etheta = theta - des_theta
+        # 3d case
+        if hasattr(actual_state, 'roll'):
+             # first compute the errors in the worlf frame (equivalent to horizontal frame)
+            hf_ex = actual_state.x - des_x
+            hf_ey = actual_state.y - des_y
+            hf_R_b = self.math_utils.eul2Rot(np.array([actual_state.roll, actual_state.pitch, 0.]))
+            # map from hf to bf
+            b_exy = hf_R_b.T.dot(np.array([hf_ex, hf_ey, 0]))
+            # discard the z component
+            ex = b_exy[0]
+            ey = b_exy[1]
+            # map theta  along base z axis
+            w_z_b = self.math_utils.eul2Rot(np.array([actual_state.roll, actual_state.pitch, actual_state.theta]))[:, 2]
+            theta, self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
+            w_etheta = theta - des_theta
+            w_beta = theta + des_theta
+            etheta = w_z_b.dot(np.array([0., 0., w_etheta]))
+            beta = w_z_b.dot(np.array([0., 0., w_beta]))
+        else:  # 2d case
+            ex = actual_state.x - des_x
+            ey = actual_state.y - des_y
+            theta, self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
+            etheta = theta - des_theta
+            beta = theta + des_theta
 
         # compute ausiliary variables
         psi = math.atan2(ey, ex)
-        beta = theta + des_theta
         exy = math.sqrt(ex ** 2 + ey ** 2)
 
         #initial guess for alpha from des values
