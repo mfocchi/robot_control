@@ -64,6 +64,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.OBSTACLE_AVOIDANCE = False
         self.obstacle_location = np.array([-0.5, 2.5, -6])
 
+        self.obstacle_size = np.array([1.5, 1.5, 0.866])
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
         self.hip_pitch_joint = 12
@@ -630,6 +631,7 @@ class ClimbingrobotController(BaseControllerFixed):
             self.optim_params['m'] = self.getRobotMass()
         self.optim_params['obstacle_avoidance'] = self.OBSTACLE_AVOIDANCE
         self.optim_params['obstacle_location'] = matlab.double(self.obstacle_location).reshape(3, 1)
+        self.optim_params['obstacle_size'] = matlab.double(self.obstacle_size).reshape(3, 1)
         self.optim_params['num_params'] = 4.
         self.optim_params['int_method'] = 'rk4'
         self.optim_params['N_dyn'] = 30.
@@ -890,9 +892,12 @@ def talker(p):
                        'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
                        'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z']),
                        'obstacle:='+str(p.OBSTACLE_AVOIDANCE),
-                       'obstacle_x:=' + str(p.obstacle_location[0]),
-                       'obstacle_y:=' + str(p.obstacle_location[1]),
-                       'obstacle_z:=' + str(p.obstacle_location[2])
+                       'obstacle_location_x:=' + str(p.obstacle_location[0]),
+                       'obstacle_location_y:=' + str(p.obstacle_location[1]),
+                       'obstacle_location_z:=' + str(p.obstacle_location[2]),
+                       'obstacle_size_x:=' + str(p.obstacle_size[0]),
+                       'obstacle_size_y:=' + str(p.obstacle_size[1]),
+                       'obstacle_size_z:=' + str(p.obstacle_size[2]),
                        ]
     if p.landing:
         additional_args.append('wall_inclination:='+ str(conf.robot_params[p.robot_name]['wall_inclination']))
@@ -1327,7 +1332,7 @@ def talker(p):
             except:
                 pass
             p.ros_pub.add_marker(p.x_ee, radius=0.05)
-            p.ros_pub.publishVisual()
+            p.ros_pub.publishVisual(delete_markers=True)
 
             # send commands to gazebo
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
