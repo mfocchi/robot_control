@@ -44,14 +44,12 @@ import sys
 sys.path.insert(0,'./codegen')
 
 import  base_controllers.params as conf
-#robotName = "climbingrobot2landing"
 robotName = "climbingrobot2"
 
 class ClimbingrobotController(BaseControllerFixed):
-    
     def __init__(self, robot_name="ur5"):
-        super().__init__(robot_name=robot_name)
         self.EXTERNAL_FORCE = False
+        self.landing = False #using landing controller
         self.impedance_landing = True
         self.MPC_control = True
         self.PLOT_MPC = False
@@ -72,8 +70,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.anchor_passive_joints = np.array([0,1, 6,7])
         self.impulse_start_count = 0 # start disturbance at different point of the flight phase
 
-        if robot_name == 'climbingrobot2landing':
-            self.landing = True
+        if self.landing == True:
+            robot_name+='landing'
             self.force_scale = 150.
         else:
             self.landing = False
@@ -81,6 +79,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.landing_joints = np.array([15, 17])
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
         self.r_leg = 0.3
+        super().__init__(robot_name=robot_name)
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
     def apply_propeller_force(self, ext_force):
@@ -915,7 +914,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
 def talker(p):
     p.start()
-    additional_args = ['spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
+    additional_args = ['robot_name:='+p.robot_name,
+                       'spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
                        'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
                        'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z']),
                        'obstacle:='+str(p.OBSTACLE_AVOIDANCE),
@@ -925,13 +925,13 @@ def talker(p):
                        'obstacle_size_x:=' + str(p.obstacle_size[0]),
                        'obstacle_size_y:=' + str(p.obstacle_size[1]),
                        'obstacle_size_z:=' + str(p.obstacle_size[2]),
+                       'wall_inclination:=' + str(conf.robot_params[p.robot_name]['wall_inclination'])
                        ]
-    if p.landing:
-        additional_args.append('wall_inclination:='+ str(conf.robot_params[p.robot_name]['wall_inclination']))
     if p.SAVE_BAG:
         additional_args.append('rviz_conf:='+rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf_paper_tro.rviz')
 
-    p.startSimulator(world_name="climbingrobot2.world",additional_args=additional_args)
+    launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_climbingrobot2.launch'
+    p.startSimulator(world_name="climbingrobot2.world", additional_args=additional_args, launch_file=launch_file)
     p.loadModelAndPublishers()
 
     p.startupProcedure()
@@ -1111,7 +1111,7 @@ def talker(p):
         # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
         p.q_des[:12] = p.computeJointVariables(p0)
 
-        #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+        p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
         while not ros.is_shutdown():
 
