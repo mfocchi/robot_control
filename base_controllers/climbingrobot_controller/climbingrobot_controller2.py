@@ -62,8 +62,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.SAVE_BAG = False # does not show rope vectors
         self.ADD_NOISE = False #creates multiple jumps, in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
         self.OBSTACLE_AVOIDANCE = False
-        self.obstacle_location = np.array([-0.5, 2.5, -6])
-
+        self.obstacle_location = np.array([0, 2.5, -6])
         self.obstacle_size = np.array([1.5, 1.5, 0.866])
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -606,19 +605,48 @@ class ClimbingrobotController(BaseControllerFixed):
         self.tau_ffwd[p.rope_index] = np.zeros(2)
         self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
 
+    def printParams(self, p0, pf):
+        print(colored(f"p0: {p0}","red"))
+        print(colored(f"pf: {pf}","red"))
+        print(colored(f"Fleg_max: {self.Fleg_max}","red"))
+        print(colored(f"Fr_max: {self.Fr_max}", "red"))
+        print(colored(f"mu: {self.mu}", "red"))
+        print(colored(f"jump_clearance: {self.optim_params['jump_clearance']}", "red"))
+        print(colored(f"mass: {self.optim_params['m']}", "red"))
+        print(colored(f"obstacle_avoidance: {self.optim_params['obstacle_avoidance']}", "red"))
+        print(colored(f"obstacle_location: {self.optim_params['obstacle_location']}", "red"))
+        print(colored(f"obstacle_size: {self.optim_params['obstacle_size']}", "red"))
+        print(colored(f"num_params: {self.optim_params['num_params'] }", "red"))
+        print(colored(f"int_method: {self.optim_params['int_method']}", "red"))
+        print(colored(f"N_dyn: {self.optim_params['N_dyn']}", "red"))
+        print(colored(f"FRICTION_CONE: {self.optim_params['FRICTION_CONE']}", "red"))
+        print(colored(f"int_steps: {self.optim_params['int_steps']}", "red"))
+        print(colored(f"contact_normal: {self.optim_params['contact_normal']}", "red"))
+        print(colored(f"b: {self.optim_params['b']}", "red"))
+        print(colored(f"p_a1: {self.optim_params['p_a1']}", "red"))
+        print(colored(f"p_a2: {self.optim_params['p_a2']}", "red"))
+        print(colored(f"g: {self.optim_params['g'] }", "red"))
+        print(colored(f"w1: {self.optim_params['w1']}", "red"))
+        print(colored(f"w2: {self.optim_params['w2']}", "red"))
+        print(colored(f"w3: {self.optim_params['w3']}", "red"))
+        print(colored(f"w4: {self.optim_params['w4']}", "red"))
+        print(colored(f"w5: {self.optim_params['w5']}", "red"))
+        print(colored(f"w6: {self.optim_params['w6']}", "red"))
+        print(colored(f"T_th: {self.optim_params['T_th']}", "red"))
+
+
     def initOptim(self, p0, pf):
         ##offline optim vars
         self.Fleg_max = 300.
         self.Fr_max = 90.
         self.mu = 0.8
-
-
         self.optim_params = {}
         self.optim_params['jump_clearance'] = 1.
 
         if self.OBSTACLE_AVOIDANCE:
             # I hard code it otherwise does not converge cause it is very sensitive
             p0 = np.array([0.5, 0.5, -6])
+            self.Fr_max = 120.
 
         if self.landing:
             self.optim_params['m'] = 15.07 # I need to hardcode it otherwise it does not converge
@@ -675,6 +703,7 @@ class ClimbingrobotController(BaseControllerFixed):
         #self.targetPos = mat_vector2python(self.matvars['achieved_target'])
         self.targetPos = self.ref_com[:,-1]
 
+
         # matlab validation test (set qkeee = -0.5)
         # self.matvars = mio.loadmat('validation.mat', squeeze_me=True, struct_as_record=False)
         # self.ref_com  =self.matvars['p']
@@ -686,8 +715,8 @@ class ClimbingrobotController(BaseControllerFixed):
         # self.Fr_r0 = self.matvars['Fr_r']
         # self.Fleg = self.matvars['Fleg']
 
-        print(colored(f"offline optimization accomplished, p0:{p0}, target:{self.targetPos}", "blue"))
-
+        print(colored(f"offline optimization accomplished, p0:{p0}, target(rough integr):{self.targetPos}", "blue"))
+        print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
         # paper IRIM uncomment this
         # self.MPC_control = False
         # self.matvars = mio.loadmat('test_irim.mat', squeeze_me=True, struct_as_record=False)
@@ -700,8 +729,6 @@ class ClimbingrobotController(BaseControllerFixed):
         # self.Fr_r0 = self.matvars['Fr_r']
         # self.Fleg = self.matvars['Fleg']
         # self.targetPos = self.matvars['achieved_target']
-
-
         # print(self.Fr_l0)
         # print(self.Fr_r0)
 
@@ -1048,11 +1075,14 @@ def talker(p):
             #print(landingW)
     else:
         if p.OBSTACLE_AVOIDANCE:
+            p0 = np.array([0.5, 0.5, -6])
             # old one vertical
             #landingW = np.array([0.28, 4, -10]).reshape(3,1)
-            # new one horizontal
-            landingW = np.array([0.5, 4.5, -6]).reshape(3, 1)
-            p0 = np.array([0.5, 0.5, -6])
+            # new one horizontal (first paper submission)
+            #landingW = np.array([0.5, 4.5, -6]).reshape(3, 1)
+            #middle one for reviewer reply R1.5 (NB the obstacle is large Rx = 1.5 but you need to add 0.2 due to the anchor_pos(x)
+            landingW = np.array([1.7, 2.5, -6]).reshape(3, 1)
+
         else:
             landingW = np.array([0.28, 4, -4]).reshape(3, 1)
 
