@@ -328,7 +328,7 @@ class TrackedVehicleSimulator3D:
             else:
                 self.ros_pub =ros_pub
 
-    def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right):
+    def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right, F_lg=None, F_rg=None):
         # compute base orientation
         w_R_b = self.math_utils.eul2Rot(self.pose[3:])
         #get states in base frame b_v_c
@@ -358,6 +358,10 @@ class TrackedVehicleSimulator3D:
         Fx_r, Fy_r, M_long_r, M_lat_r= self.tracked_robot.track_right.computeTerrainInteractions(state2D, omega_right, self.track_param,
                                                                                    self.sigma_r, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
 
+        if F_lg is not None:
+            Fx_l+=F_lg
+        if F_rg is not None:
+            Fx_r += F_rg
 
 
         if self.NO_SLIPPAGE:

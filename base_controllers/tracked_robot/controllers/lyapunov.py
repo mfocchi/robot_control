@@ -60,11 +60,30 @@ class LyapunovController:
             return 0.0, 0.0, 0., 0.
 
         # compute errors
-        ex = actual_state.x - des_x
-        ey = actual_state.y - des_y
-        theta,self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
-        etheta = theta-des_theta
-        beta = theta + des_theta
+        # 3d case
+        if hasattr(actual_state, 'roll'):
+            # first compute the errors in the worlf frame (equivalent to horizontal frame)
+            hf_ex = actual_state.x - des_x
+            hf_ey = actual_state.y - des_y
+            hf_R_b = self.math_utils.eul2Rot(np.array([actual_state.roll, actual_state.pitch, 0.]))
+            # map from hf to bf
+            b_exy = hf_R_b.T.dot(np.array([hf_ex, hf_ey, 0]))
+            # discard the z component
+            ex = b_exy[0]
+            ey = b_exy[1]
+            # map theta  along base z axis
+            w_z_b = self.math_utils.eul2Rot(np.array([actual_state.roll, actual_state.pitch, actual_state.theta]))[:, 2]
+            theta, self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
+            w_etheta = theta - des_theta
+            w_beta = theta + des_theta
+            etheta = w_z_b.dot(np.array([0., 0., w_etheta]))
+            beta = w_z_b.dot(np.array([0., 0., w_beta]))
+        else:  # 2d case
+            ex = actual_state.x - des_x
+            ey = actual_state.y - des_y
+            theta, self.theta_old = unwrap_angle(actual_state.theta, self.theta_old)
+            etheta = theta - des_theta
+            beta = theta + des_theta
 
         #compute ausiliary variables
         psi = math.atan2(ey, ex)

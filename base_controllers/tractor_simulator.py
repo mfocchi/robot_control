@@ -802,7 +802,7 @@ class GenericSimulator(BaseController):
 
         tau_g = np.array([F_lx * constants.SPROCKET_RADIUS, F_rx * constants.SPROCKET_RADIUS])
 
-        return  tau_g, F_l, F_r
+        return  tau_g, F_l, F_r, F_lx, F_rx
 
     def computeLongSlipCompensationExp(self, v, omega, qd_des, constants):
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
@@ -896,7 +896,7 @@ class GenericSimulator(BaseController):
                     pg = np.array([self.basePoseW[0], self.basePoseW[1], 0.])
                     pose_des = np.array([p.des_x, p.des_y, pg[2]])
 
-                self.b_eox, self.b_eoy =self.tracked_vehicle_simulator.simulateOneStep(pg,  terrain_roll,  terrain_pitch, terrain_yaw, qd_des[0], qd_des[1])
+                self.b_eox, self.b_eoy =self.tracked_vehicle_simulator.simulateOneStep(pg,  terrain_roll,  terrain_pitch, terrain_yaw, qd_des[0], qd_des[1], self.F_lx, self.F_rx)
                 self.basePoseW, self.baseTwistW = self.tracked_vehicle_simulator.getRobotState()
                 # shift up  of robot height along Zb component
                 pose_des += self.tracked_vehicle_simulator.consider_robot_height * self.tracked_vehicle_simulator.w_com_height_vector
@@ -1118,12 +1118,14 @@ def main_loop(p):
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
 
             if p.GRAVITY_COMPENSATION:
-                p.tau_ffwd, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
+                p.tau_ffwd, p.F_l, p.F_r,p.F_lx,p.F_rx = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
                 #w_center_track_left = p.b_R_w.T.dot(0.5 * (constants.b_left_track_start + constants.b_left_track_end))
                 #w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
                 #p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l / np.linalg.norm(p.F_l), "red")
                 #p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r / np.linalg.norm(p.F_r), "red")
-
+            else:
+                p.F_lx = 0
+                p.F_rx = 0
             p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, p.v_dot_d, p.omega_dot_d, _ = p.traj.evalTraj(p.time)
             #note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
             #senting it to be tracked from the impedance loop
@@ -1218,12 +1220,14 @@ def main_loop(p):
             # senting it to be tracked from the impedance loop
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
             if p.GRAVITY_COMPENSATION:
-                p.tau_g, p.F_l, p.F_r = p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
+                p.tau_g, p.F_l, p.F_r ,p.F_lx, p.F_rx= p.computeGravityCompensation(p.basePoseW[p.u.sp_crd["AX"]], p.basePoseW[p.u.sp_crd["AY"]])
                 # w_center_track_left = p.b_R_w.T.dot(0.5*(constants.b_left_track_start+constants.b_left_track_end))
                 # w_center_track_right = p.b_R_w.T.dot(0.5 * (constants.b_right_track_start + constants.b_right_track_end))
                 # p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_left, p.F_l/np.linalg.norm(p.F_l), "red")
                 # p.ros_pub.add_arrow(p.basePoseW[:3] + w_center_track_right, p.F_r/np.linalg.norm(p.F_r), "red")
-
+            else:
+                p.F_lx=0
+                p.F_rx = 0
 
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
             p.ros_pub.publishVisual(delete_markers=False)
