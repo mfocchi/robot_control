@@ -56,6 +56,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.type_of_disturbance = 'none' # 'none', 'impulse', 'const'
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
+        self.TYPE_OF_JUMP= 'upward' # 'upward', 'downward'
         self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
         self.ADD_NOISE = False #creates multiple jumps, in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
@@ -328,7 +329,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
-        self.wall_normal = np.array([1.,0.,0.])
+        w_R_wall = self.math_utils.eul2Rot(np.array([0,-conf.robot_params[p.robot_name]['wall_inclination'],0]))
+        self.wall_normal = w_R_wall[:,0].copy() #take X axis, I need to use copy otherwise matlab complains is not contiguous
 
         self.mpc_index = 0
         self.mpc_index_old = 0
@@ -411,11 +413,13 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if p.numberOfJumps < 2: # do plots only for one jump
             print("PLOTTING")
+            print(colored("The initial p0_x and mountain_pitch can be different by the desired ones computed by optim, even if we started optim from actual p0, "
+                          "because the robot sags a bit due to leg reorientation","red"))
             # plotFrameLinear('com position', 1, p.time_log, None, p.com_log)
             # plotFrameLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
-            actual_com= p.base_pos_log - p.anchor_pos.reshape(3, 1) # is in anchor frame which is WF in matlab
+            actual_com= p.base_pos_log - p.mat2Gazebo.reshape(3, 1) # mat2Gazebo is WF in matlab
             time_gazebo = p.time_log - p.start_logging
-            #plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+            plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
             if not p.MULTIPLE_JUMPS:
                 plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
             plot3D('states_test_'+str(p.n_test), 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
@@ -449,7 +453,9 @@ class ClimbingrobotController(BaseControllerFixed):
     def getImpulseAngle(self):
         angle_hip_roll =  math.atan2(self.jumps[self.jumpNumber]["Fleg"][1],
                                 self.jumps[self.jumpNumber]["Fleg"][0])
-        angle_hip_pitch = -1.57 + math.atan2(self.jumps[self.jumpNumber]["Fleg"][2], self.jumps[self.jumpNumber]["Fleg"][0])
+        angle_hip_pitch =  math.atan2(self.jumps[self.jumpNumber]["Fleg"][2], self.jumps[self.jumpNumber]["Fleg"][0])
+        print(colored(f"Start orienting leg to (pitch, roll)  : {angle_hip_roll, angle_hip_roll}", "blue"))
+        angle_hip_pitch +=-1.57
         return angle_hip_pitch, angle_hip_roll
 
 
@@ -457,9 +463,12 @@ class ClimbingrobotController(BaseControllerFixed):
     def computeJointVariables(self, p):
         # mountain_wire_pitch_l = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_x'], -p[2])
         # mountain_wire_pitch_r = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_2x'], -p[2])
+        if conf.robot_params[self.robot_name]['wall_inclination']>0.: #TODO missing normal in matlab wall_constraint!
+            p[0] = (-p[2]) * math.tan(conf.robot_params[self.robot_name]['wall_inclination'])  #spawn_x is for the anchor point which is shifted wrt the wall
+            print(f"adjusting initial position to be consistent with wall: {p}")
+
         mountain_wire_pitch_l = math.atan2(p[0] , -p[2])
         mountain_wire_pitch_r = math.atan2(p[0] , -p[2])
-
 
         mountain_wire_roll_l = -math.atan2(-p[2], p[1])
         mountain_wire_roll_r = math.atan2(-p[2], self.anchor_distance_y-p[1])
@@ -656,6 +665,12 @@ class ClimbingrobotController(BaseControllerFixed):
             self.Fr_max = 300.
         else:
             self.optim_params['m'] = self.getRobotMass()
+
+        #if terrain is inclined we consider only the Y,Z component of the pf and we need to compute a target point consistent with the wall!
+        if conf.robot_params[p.robot_name]['wall_inclination']>0.: #TODO missing normal in matlab wall_constraint!
+            pf[0] = (-pf[2]) * math.tan(conf.robot_params[p.robot_name]['wall_inclination']) +  conf.robot_params[p.robot_name]['spawn_x'] #spawn_x is for the anchor point which is shifted wrt the wall
+            print(f"adjusting landing target to be consistent with wall: {pf}")
+
         self.optim_params['obstacle_avoidance'] = self.OBSTACLE_AVOIDANCE
         self.optim_params['obstacle_location'] = matlab.double(self.obstacle_location).reshape(3, 1)
         self.optim_params['obstacle_size'] = matlab.double(self.obstacle_size).reshape(3, 1)
@@ -664,7 +679,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.optim_params['N_dyn'] = 30.
         self.optim_params['FRICTION_CONE'] = 1.
         self.optim_params['int_steps'] = 5.
-        self.optim_params['contact_normal'] = matlab.double([1., 0., 0.]).reshape(3, 1)
+        self.optim_params['contact_normal'] = matlab.double([1,0,0]).reshape(3, 1)
         self.optim_params['b'] = self.anchor_distance_y
         self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
         self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
@@ -703,7 +718,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.targetPos = self.ref_com[:,-1]
 
 
-        # matlab validation test (set qkeee = -0.5)
+        # matlab validation test (set qknee = -0.5)
         # self.matvars = mio.loadmat('validation.mat', squeeze_me=True, struct_as_record=False)
         # self.ref_com  =self.matvars['p']
         # self.ref_psi = self.matvars['psi']
@@ -716,6 +731,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         print(colored(f"offline optimization accomplished, p0:{p0}, target(rough integr):{self.targetPos}", "blue"))
         print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
+
         # paper IRIM uncomment this
         # self.MPC_control = False
         # self.matvars = mio.loadmat('test_irim.mat', squeeze_me=True, struct_as_record=False)
@@ -1084,8 +1100,12 @@ def talker(p):
             landingW = np.array([1.7, 2.5, -6]).reshape(3, 1)
 
         else:
-            landingW = np.array([0.28, 4, -4]).reshape(3, 1)
-
+            if p.TYPE_OF_JUMP=='upward':
+                landingW = np.array([0.28, 4, -4]).reshape(3, 1)
+            elif p.TYPE_OF_JUMP=='downward':
+                landingW = np.array([0.28, 4, -12]).reshape(3, 1)
+            else:
+                print("wrong TYPE_OF_JUMP")
         if p.ADD_NOISE:
             if p.type_of_disturbance == 'impulse':
                 number_of_tests = 100
@@ -1124,8 +1144,8 @@ def talker(p):
                 p.pause_physics_client()
                 p.initOptim(p.base_pos - p.mat2Gazebo, pf)
                 p.unpause_physics_client()
-                print(colored(f"Start orienting leg to (pitch, roll)  : {p.getImpulseAngle()}", "blue"))
                 p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint] = p.getImpulseAngle()
+
 
                 #set the end of orienting
                 p.end_orienting = p.startJump + p.orientTime
@@ -1261,16 +1281,18 @@ def talker(p):
                         landing_location = p.base_pos-p.mat2Gazebo
                         print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
                         print(colored(f" while from optim it should be  {p.targetPos}", "blue"))
-                        print(colored(f" the error is  {np.linalg.norm(landing_location - p.targetPos)}", "blue"))
+
+                        print(colored(f" the landing error is  {np.linalg.norm(landing_location - p.targetPos)}", "blue"))
                         jump_length = np.linalg.norm(p0[:2] - p.targetPos[:2])
                         MSE = np.square(np.array(p.MPC_tracking_error)).mean()
                         RMSE = math.sqrt(MSE)
                         print(colored(
-                            f" the relative error is {np.linalg.norm(landing_location - p.targetPos) / jump_length}",
+                            f" the relative landing error (norm per jump lenghth)  is {np.linalg.norm(landing_location - p.targetPos) / jump_length}",
                             "blue"))
                         print(colored(f" the energy consumption is  {energy}", "blue"))
-                        print(colored(f" the rmse of tracking error is  {RMSE}", "blue"))
-
+                        print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
+                        print(colored(f" the leg impulse  is  {p.Fleg}", "blue"))
+                        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(p.Fleg)}", "blue"))
                         if p.ADD_NOISE:
                             dict = {'test_nr': p.n_test, 'ideal_target': landingW[:,p.n_test], 'optim_target': p.targetPos,'landing_location':landing_location, 'landing_error': np.linalg.norm(landing_location - p.targetPos),
                                     'relative_error': np.linalg.norm(landing_location - p.targetPos) / jump_length,'energy':energy, 'rmse': RMSE}
@@ -1358,11 +1380,11 @@ def talker(p):
 
             #plot target position (whenever is available)
             try:
-                p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3)
+                p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3, alpha=1.)
             except:
                 pass
             p.ros_pub.add_marker(p.x_ee, radius=0.05)
-            p.ros_pub.publishVisual(delete_markers=True)
+            p.ros_pub.publishVisual(delete_markers=False)
 
             # send commands to gazebo
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -1410,7 +1432,7 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-
+        p.plotStuff()
     finally:
         ros.signal_shutdown("killed")
         p.deregister_node()
