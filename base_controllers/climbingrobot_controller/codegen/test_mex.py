@@ -6,10 +6,9 @@ MATLAB Compiler SDK.
 Refer to the MATLAB Compiler SDK documentation for more information.
 """
 import matlab.engine
-
-import time
-import scipy.io.matlab as mio
 import numpy as np
+import math
+from base_controllers.utils.math_tools import Math
 
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 
@@ -24,19 +23,25 @@ Fr_max = 90.
 # Fr_max = 300.
 # mass = 15.07
 
+wall_inclination = 0.0
+math_utils = Math()
+w_R_wall= math_utils.eul2Rot(np.array([0, -wall_inclination, 0]))
+normal = w_R_wall[:, 0].copy()
+
 mu = 0.8
 params = {}
 params['jump_clearance'] = 1.
 params['m'] = mass
 params['obstacle_avoidance'] = False
-params['obstacle_location'] = matlab.double([-0.5, 2.5,-6]).reshape(3,1)
+params['obstacle_location'] = matlab.double([0, 2.5,-6]).reshape(3,1)
+params['obstacle_size'] = matlab.double([1.5, 1.5, 0.866]).reshape(3,1)
 anchor_distance = 5.
 params['num_params'] = 4.
 params['int_method'] = 'rk4'
 params['N_dyn'] = 30.
 params['FRICTION_CONE'] = 1.
 params['int_steps'] = 5.
-params['contact_normal'] = matlab.double([1.,0.,0.]).reshape(3,1)
+params['contact_normal'] = matlab.double(normal).reshape(3,1)
 params['b'] = anchor_distance
 params['p_a1'] = matlab.double([0.,0.,0.]).reshape(3,1)
 params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
@@ -50,16 +55,18 @@ params['w6']= 1.
 params['T_th'] =  0.05
 
 #jump params
-p0 =  matlab.double([0.5, 2.5, -6]) #unit test ,  there is singularity for px = 0!
+p0 = np.array([0.5, 2.5, -6]) #unit test ,  there is singularity for px = 0!
 #p0 =  matlab.double([0.27753 , 2.51893, -6.09989]) # actual used p0 = np.array([0.28,  2.5, -6.10104])
-pf=  matlab.double([0.5, 4,-4])
+pf=  np.array([0.5, 4,-4])
+#compute wall consistent target
+pf[0]+= (-pf[2])*math.tan(wall_inclination)
 
 if params['obstacle_avoidance'] == True:
-    p0 =  matlab.double([0.5, 0.5, -6]) #unit test ,  there is singularity for px = 0!
+    p0 =  np.array([0.5, 0.5, -6]) #unit test ,  there is singularity for px = 0!
     #p0 =  matlab.double([0.27753 , 2.51893, -6.09989]) # actual used p0 = np.array([0.28,  2.5, -6.10104])
-    pf=  matlab.double([0.5, 4.5,-6])
+    pf = np.array([0.5, 4.5,-6])
 
-solution = eng.optimize_cpp_mex(p0, pf, Fleg_max, Fr_max, mu, params)
+solution = eng.optimize_cpp_mex(matlab.double(p0), matlab.double(pf), Fleg_max, Fr_max, mu, params)
 print(solution['achieved_target'])
 print(solution['Tf'])
 print(solution['Fr_l'])
