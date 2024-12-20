@@ -23,7 +23,7 @@
 
 /* Function Declarations */
 void optimize_cpp(const real_T p0[3], const real_T pf[3], real_T Fleg_max,
-                  real_T Fr_max, real_T mu, const param *params,
+                  real_T Fr_max, real_T Fr_min, real_T mu, const param *params,
                   struct0_T *solution);
 
 real_T optimize_cpp_anonFcn1(const real_T p0[3], real_T params_m,

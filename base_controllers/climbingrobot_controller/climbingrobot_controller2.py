@@ -65,6 +65,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.obstacle_size = np.array([1.5, 1.5, 0.866])
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
+        self.wheel_index = np.array([16, 18]) #'wheel_joint_l',  'wheel_joint_r'
         self.hip_pitch_joint = 12
         self.hip_roll_joint = 13
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
@@ -238,6 +239,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         # WF matlab to WF Gazebo offset
         hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
+
         # to get the matlab state from the gazebo prismatic joints we need to consider that the gazebo joints is in zero config
         # when the rope is 2.5 m half of anchor distance (startup at the point in the middle of the anchors)
         self.l_1 = self.q[p.rope_index[1]] - hoist_distance/2 + self.anchor_distance_y/2
@@ -393,17 +395,6 @@ class ClimbingrobotController(BaseControllerFixed):
         super().startupProcedure()
 
     def plotStuff(self):
-        #plot rope forces
-        # plt.figure()
-        # plt.subplot(2, 1, 1)
-        # plt.ylabel("Fr_l")
-        # plt.plot(p.ref_time, p.Fr_l0, color='red')
-        #
-        # plt.grid()
-        # plt.subplot(2, 1, 2)
-        # plt.ylabel("Fr_r")
-        # plt.plot(p.ref_time, p.Fr_r0, color='red')
-        # plt.grid()
 
         # from operator import itemgetter
         # # plot rope joints
@@ -423,6 +414,47 @@ class ClimbingrobotController(BaseControllerFixed):
             if not p.MULTIPLE_JUMPS:
                 plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
             plot3D('states_test_'+str(p.n_test), 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
+
+            # plot rope forces
+            # plt.figure()
+            # plt.subplot(2, 1, 1)
+            # plt.ylabel("Fr_l")
+            # plt.plot(p.ref_time, p.Fr_l0, color='red')
+            # plt.plot(time_gazebo, p.Fr_l_log, color='blue')
+            # plt.grid()
+            # plt.subplot(2, 1, 2)
+            # plt.ylabel("Fr_r")
+            # plt.plot(p.ref_time, p.Fr_r0, color='red')
+            # plt.plot(time_gazebo, p.Fr_r_log, color='blue')
+            # plt.grid()
+
+            # plot rope forces
+            plt.figure()
+            plt.subplot(2, 1, 1)
+            plt.ylabel("wheel_pos_l")
+            plt.plot(time_gazebo, p.q_des_log[p.wheel_index[0],:], color='red')
+            plt.plot(time_gazebo, p.q_log[p.wheel_index[0],:], color='blue')
+            plt.grid()
+            plt.subplot(2, 1, 2)
+            plt.ylabel("wheel_pos_r")
+            plt.plot(time_gazebo, p.q_des_log[p.wheel_index[1], :], color='red')
+            plt.plot(time_gazebo, p.q_log[p.wheel_index[1], :], color='blue')
+            plt.grid()
+
+            plt.figure()
+            plt.subplot(2, 1, 1)
+            plt.ylabel("wheel_vel_l")
+            plt.plot(time_gazebo, p.qd_des_log[p.wheel_index[0], :], color='red')
+            plt.plot(time_gazebo, p.qd_log[p.wheel_index[0], :], color='blue')
+            plt.grid()
+            plt.subplot(2, 1, 2)
+            plt.ylabel("wheel_vel_r")
+            plt.plot(time_gazebo, p.qd_des_log[p.wheel_index[1], :], color='red')
+            plt.plot(time_gazebo, p.qd_log[p.wheel_index[1], :], color='blue')
+            plt.grid()
+
+
+            #save data
             if p.MPC_control:
                 filename = f'test_gazebo_MPC_{p.MPC_control}_constraints_{p.MPC_uses_constraints}_dist_{p.type_of_disturbance}.mat'
             else:
@@ -597,6 +629,17 @@ class ClimbingrobotController(BaseControllerFixed):
         tau = np.zeros(2)
         return tau
 
+    def computeLateralManeuverVelocity(self, vel_base, omega_base=np.array([0.,0,0.])):
+        y_axis_base = self.w_R_b[:,1]
+        v_ll = y_axis_base.dot(vel_base -self.math_utils.skew(self.x_landing_l - p.base_pos).dot(omega_base))
+        v_lr = y_axis_base.dot(vel_base -self.math_utils.skew(self.x_landing_r - p.base_pos).dot(omega_base))
+        v_rl = self.rope_direction.dot(vel_base - self.math_utils.skew(self.hoist_l_pos - p.base_pos).dot(omega_base))
+        v_rr = self.rope_direction2.dot(vel_base - self.math_utils.skew(self.hoist_r_pos - p.base_pos).dot(omega_base))
+        wheel_radius = 0.15/2.
+        # wheel speed is positive CW ( from top) but the center is moving in opposite diretion (Y positive)
+        return v_ll/wheel_radius, v_lr/wheel_radius, v_rl, v_rr
+
+
     def resetRope(self):
         print(colored(f"RESTORING ROPE PD", "red"))
         # enable PD for rope and reset the PD reference to the new estension
@@ -646,7 +689,8 @@ class ClimbingrobotController(BaseControllerFixed):
     def initOptim(self, p0, pf):
         ##offline optim vars
         self.Fleg_max = 300.
-        self.Fr_max = 90.
+        self.Fr_max = 190.
+        self.Fr_min = 15.
         self.mu = 0.8
         self.optim_params = {}
         self.optim_params['jump_clearance'] = 1.
@@ -698,7 +742,10 @@ class ClimbingrobotController(BaseControllerFixed):
 
         # for unit test use
         #p0 = np.array([0.5, 2.5, -6])  # there is singularity for px = 0!
-        self.matvars = self.eng.optimize_cpp_mex(matlab.double(p0.tolist()), matlab.double(pf.tolist()), self.Fleg_max, self.Fr_max, self.mu, self.optim_params)
+        try:
+            self.matvars = self.eng.optimize_cpp_mex(matlab.double(p0.tolist()), matlab.double(pf.tolist()), self.Fleg_max, self.Fr_max,  self.Fr_min, self.mu, self.optim_params)
+        except:
+            print(colored("Regenerate matlab code issues in calling optimize_cpp_mex","red"))
         # the result should be achieved_target [[0.5762191796248742], [4.004735278193368], [-3.984719850311409]]
         # Tf 1.2888886080707584
         #print(self.matvars["achieved_target"])
@@ -715,8 +762,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fleg = mat_vector2python(self.matvars['Fleg'])
         #this is computed integrating the dynamics with dt and can be different from the reference, we should use the reference at the end of the horizon
         #self.targetPos = mat_vector2python(self.matvars['achieved_target'])
-        self.targetPos = self.ref_com[:,-1]
-
+        self.targetPos = self.ref_com[:,-1] #output of optumization
+        self.targetPosIdeal = self.ref_com[:, -1]
 
         # matlab validation test (set qknee = -0.5)
         # self.matvars = mio.loadmat('validation.mat', squeeze_me=True, struct_as_record=False)
@@ -883,10 +930,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.ax2.set_label("delta Frr")
         self.ax1.grid()
         self.ax2.grid()
-        #MPC action
+        #MPC action (red)
         self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], deltaFr_l, "or-")
         self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N], deltaFr_r, "or-")
-        # full action
+        # full action (black)
         self.ax1.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
                       self.Fr_l0[self.mpc_index:self.mpc_index + self.mpc_N] + deltaFr_l, "ok-")
         self.ax2.plot(self.ref_time[self.mpc_index:self.mpc_index + self.mpc_N],
@@ -946,8 +993,12 @@ def talker(p):
     if p.SAVE_BAG:
         additional_args.append('rviz_conf:='+rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf_paper_tro.rviz')
 
+    if p.landing:
+        world_name = "climbingrobot2landing.world"
+    else:
+        world_name = "climbingrobot2.world"
     launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_climbingrobot2.launch'
-    p.startSimulator(world_name="climbingrobot2.world", additional_args=additional_args, launch_file=launch_file)
+    p.startSimulator(world_name=world_name, additional_args=additional_args, launch_file=launch_file)
     p.loadModelAndPublishers()
 
     p.startupProcedure()
@@ -1131,7 +1182,7 @@ def talker(p):
         # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
         p.q_des[:12] = p.computeJointVariables(p0)
 
-        p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+        p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
 
         while not ros.is_shutdown():
 
@@ -1287,7 +1338,7 @@ def talker(p):
                         MSE = np.square(np.array(p.MPC_tracking_error)).mean()
                         RMSE = math.sqrt(MSE)
                         print(colored(
-                            f" the relative landing error (norm per jump lenghth)  is {np.linalg.norm(landing_location - p.targetPos) / jump_length}",
+                            f" the relative landing error (norm per jump lenghth)  is {100*np.linalg.norm(landing_location - p.targetPos) / jump_length}%",
                             "blue"))
                         print(colored(f" the energy consumption is  {energy}", "blue"))
                         print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
@@ -1347,10 +1398,12 @@ def talker(p):
                         p.resetRope()
                         print(colored("Early TD detected, Start landing", "blue"))
                         p.stateMachine = 'landing'
+                        p.start_landing = p.time
                 else: # you are checking for delayed TD you have already reset rope and restored PD
                     if p.detectTouchDown():
                         print(colored("Start landing", "blue"))
                         p.stateMachine = 'landing'
+                        p.start_landing = p.time
 
                 # plot rope forces
                 p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
@@ -1365,7 +1418,27 @@ def talker(p):
 
 
             if (p.stateMachine == 'landing'):
-                p.tau_ffwd[p.landing_joints] = p.computeLandingControl()
+                if (p.time<(p.start_landing+1.)):
+                    p.tau_ffwd[p.landing_joints] = p.computeLandingControl()
+                else:
+                    print(colored("Start lateral maneuvering", "blue"))
+                    p.pid.setPDjoint(p.wheel_index, 0.1, 0.01, 0.)
+                    p.stateMachine='lateral_maneuvering'
+                    p.start_lateral_maneuver = p.time
+
+            if (p.stateMachine=='lateral_maneuvering'):
+                if p.time < (p.start_lateral_maneuver + 3.5):
+                    wheel_l, wheel_r, v_r_l, v_r_r = p.computeLateralManeuverVelocity(np.array([0., -0.7, 0.]))
+                    p.qd_des[p.rope_index] = [v_r_r, v_r_l]
+                    p.qd_des[p.wheel_index] = [wheel_l, wheel_r]
+                    # integrate positions
+                    p.q_des[p.wheel_index] += conf.robot_params[p.robot_name]['dt'] * p.qd_des[p.wheel_index]
+                    p.q_des[p.rope_index] += conf.robot_params[p.robot_name]['dt'] * p.qd_des[p.rope_index]
+                else:
+                    p.qd_des[p.wheel_index] = np.zeros(2)
+                p.prop_force = (-25.) #push against the wall
+                p.apply_propeller_force(p.prop_force)
+                p.ros_pub.add_arrow(p.base_pos, p.prop_forceW / p.force_scale, "blue", scale=3.5)
 
             # plot ropes as green arrows
             if not p.SAVE_BAG:
@@ -1381,10 +1454,11 @@ def talker(p):
             #plot target position (whenever is available)
             try:
                 p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3, alpha=1.)
+                p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
             except:
                 pass
             p.ros_pub.add_marker(p.x_ee, radius=0.05)
-            p.ros_pub.publishVisual(delete_markers=False)
+            p.ros_pub.publishVisual(delete_markers=True)
 
             # send commands to gazebo
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
@@ -1432,7 +1506,7 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        p.plotStuff()
+
     finally:
         ros.signal_shutdown("killed")
         p.deregister_node()

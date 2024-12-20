@@ -21,6 +21,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void optimize_cpp_api(const mxArray *const prhs[6], const mxArray **plhs);
+void optimize_cpp_api(const mxArray *const prhs[7], const mxArray **plhs);
 
 /* End of code generation (_coder_optimize_cpp_api.h) */

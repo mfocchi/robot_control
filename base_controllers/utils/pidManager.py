@@ -22,6 +22,9 @@ class PidManager:
         self.req_msg = set_pidsRequest()						
         print(colored("PID Manager initialized", "red"))
 
+    def getPDs(self):
+        return self.joint_pid_log
+
     def setPDs(self, kp, kd, ki = 0):
         """
          Set the same values of PID for all the joints of the robot

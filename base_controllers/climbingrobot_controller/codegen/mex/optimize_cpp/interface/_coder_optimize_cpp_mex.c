@@ -39,13 +39,13 @@ emlrtCTX mexFunctionCreateRootTLS(void)
 }
 
 void unsafe_optimize_cpp_mexFunction(int32_T nlhs, mxArray *plhs[1],
-                                     int32_T nrhs, const mxArray *prhs[6])
+                                     int32_T nrhs, const mxArray *prhs[7])
 {
   const mxArray *outputs;
   /* Check for proper number of arguments. */
-  if (nrhs != 6) {
+  if (nrhs != 7) {
     emlrtErrMsgIdAndTxt(emlrtRootTLSGlobal, "EMLRT:runTime:WrongNumberOfInputs",
-                        5, 12, 6, 4, 12, "optimize_cpp");
+                        5, 12, 7, 4, 12, "optimize_cpp");
   }
   if (nlhs > 1) {
     emlrtErrMsgIdAndTxt(emlrtRootTLSGlobal,

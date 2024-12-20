@@ -649,7 +649,7 @@ static void n_emlrt_marshallIn(const mxArray *src,
   emlrtDestroyArray(&src);
 }
 
-void optimize_cpp_api(const mxArray *const prhs[6], const mxArray **plhs)
+void optimize_cpp_api(const mxArray *const prhs[7], const mxArray **plhs)
 {
   param params;
   struct0_T solution;
@@ -657,6 +657,7 @@ void optimize_cpp_api(const mxArray *const prhs[6], const mxArray **plhs)
   real_T(*pf)[3];
   real_T Fleg_max;
   real_T Fr_max;
+  real_T Fr_min;
   real_T mu;
   emlrtHeapReferenceStackEnterFcnR2012b(emlrtRootTLSGlobal);
   /* Marshall function inputs */
@@ -664,11 +665,12 @@ void optimize_cpp_api(const mxArray *const prhs[6], const mxArray **plhs)
   pf = c_emlrt_marshallIn(emlrtAlias(prhs[1]), "pf");
   Fleg_max = emlrt_marshallIn(emlrtAliasP(prhs[2]), "Fleg_max");
   Fr_max = emlrt_marshallIn(emlrtAliasP(prhs[3]), "Fr_max");
-  mu = emlrt_marshallIn(emlrtAliasP(prhs[4]), "mu");
-  e_emlrt_marshallIn(emlrtAliasP(prhs[5]), "params", &params);
+  Fr_min = emlrt_marshallIn(emlrtAliasP(prhs[4]), "Fr_min");
+  mu = emlrt_marshallIn(emlrtAliasP(prhs[5]), "mu");
+  e_emlrt_marshallIn(emlrtAliasP(prhs[6]), "params", &params);
   /* Invoke the target function */
   emxInitStruct_struct0_T(&solution);
-  optimize_cpp(*p0, *pf, Fleg_max, Fr_max, mu, &params, &solution);
+  optimize_cpp(*p0, *pf, Fleg_max, Fr_max, Fr_min, mu, &params, &solution);
   /* Marshall function outputs */
   *plhs = emlrt_marshallOut(&solution);
   emxFreeStruct_struct0_T(&solution);

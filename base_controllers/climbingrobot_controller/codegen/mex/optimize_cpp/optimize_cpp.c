@@ -32,7 +32,7 @@
 
 /* Function Definitions */
 void optimize_cpp(const real_T p0[3], const real_T pf[3], real_T Fleg_max,
-                  real_T Fr_max, real_T mu, const param *params,
+                  real_T Fr_max, real_T Fr_min, real_T mu, const param *params,
                   struct0_T *solution)
 {
   __m128d r;
@@ -150,10 +150,10 @@ void optimize_cpp(const real_T p0[3], const real_T pf[3], real_T Fleg_max,
   c_Fleg_max_data[2] = Fleg_max;
   c_Fleg_max_data[3] = rtInf;
   for (i = 0; i < loop_ub_tmp; i++) {
-    c_Fleg_max_data[i + 4] = 0.0;
+    c_Fleg_max_data[i + 4] = -Fr_min;
   }
   for (i = 0; i < loop_ub_tmp; i++) {
-    c_Fleg_max_data[(i + (int32_T)params->N_dyn) + 4] = 0.0;
+    c_Fleg_max_data[(i + (int32_T)params->N_dyn) + 4] = -Fr_min;
   }
   emxInit_real_T(&x, 2);
   solution->cost = fmincon(
