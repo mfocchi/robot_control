@@ -20,12 +20,12 @@ df_vpos = pd.DataFrame()
 
 for file in list_file:
     print("reading...",file)
-    tmp_df = pd.read_csv(os.path.join('data3d/',file),header=1, names=['time', 'wheel_l','wheel_r','roll', 'pitch', 'alpha','beta_l','beta_r'])
+    tmp_df = pd.read_csv(os.path.join('data3d/',file),header=1, names=['time', 'wheel_l','wheel_r','roll', 'pitch', 'yaw', 'beta_l','beta_r','alpha'])
     v = (tmp_df['wheel_l'].values + tmp_df['wheel_r'].values) / 2. * 0.0856
     idx_filter = v > 0.01
     df_vpos = pd.concat([df_vpos, tmp_df[idx_filter]], ignore_index=True)
 
-x = df_vpos[['wheel_l','wheel_r', 'roll', 'pitch']].values
+x = df_vpos[['wheel_l','wheel_r', 'roll', 'pitch', 'yaw']].values
 y = df_vpos[['beta_l','beta_r','alpha']].values
 # wheel_l = df_vpos.wheel_l.values
 # wheel_r = df_vpos.wheel_r.values
@@ -103,43 +103,43 @@ ax[2].scatter(y_train[..., 2], preds_train_alpha, color="red", alpha=0.5)
 ax[2].plot([y[..., 2].min(), y[..., 2].max()], [y[..., 2].min(), y[..., 2].max()], color="black")
 ax[2].set_title('alpha')
 plt.show()
-
-##########################################
-#### 3D plots
-from mpl_toolkits import mplot3d
-fig = plt.figure(figsize=(10, 10))
-ax = plt.axes(projection='3d')
-ax.scatter(x[..., 0], x[..., 1], y[..., 0], label='groundtruth',  color='blue')
-ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_beta_l.reshape(-1, 1), label='predicted train',color='red')
-ax.scatter(x_test[..., 0], x_test[..., 1], preds_beta_l.reshape(-1, 1),label='predicted test', color='green')
-ax.set_xlabel('wheel_l')
-ax.set_ylabel('wheel_r')
-ax.set_zlabel("beta_l")
-ax.legend()
-plt.show()
-
-fig = plt.figure(figsize=(10, 10))
-ax = plt.axes(projection='3d')
-ax.scatter(x[..., 0], x[..., 1], y[..., 1], label='groundtruth', color='blue')
-ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_beta_r.reshape(-1,1), label='predicted train', color='red')
-ax.scatter(x_test[..., 0], x_test[..., 1], preds_beta_r.reshape(-1,1),label='predicted test', color='green')
-ax.set_xlabel('wheel_l')
-ax.set_ylabel('wheel_r')
-ax.set_zlabel("beta_r")
-ax.legend()
-plt.show()
-
-fig = plt.figure(figsize=(10, 10))
-ax = plt.axes(projection='3d')
-ax.scatter(x[..., 0], x[..., 1], y[..., 2],label='groundtruth', color='blue')
-ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_alpha.reshape(-1,1), label='predicted train',color='red')
-ax.scatter(x_test[..., 0], x_test[..., 1], preds_alpha.reshape(-1,1), label='predicted test', color='green')
-ax.set_xlabel('wheel_l')
-ax.set_ylabel('wheel_r')
-ax.set_zlabel("alpha")
-ax.legend()
-plt.show()
-
+#
+# ##########################################
+# #### 3D plots (NON SENSE)
+# from mpl_toolkits import mplot3d
+# fig = plt.figure(figsize=(10, 10))
+# ax = plt.axes(projection='3d')
+# ax.scatter(x[..., 0], x[..., 1], y[..., 0], label='groundtruth',  color='blue')
+# ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_beta_l.reshape(-1, 1), label='predicted train',color='red')
+# ax.scatter(x_test[..., 0], x_test[..., 1], preds_beta_l.reshape(-1, 1),label='predicted test', color='green')
+# ax.set_xlabel('wheel_l')
+# ax.set_ylabel('wheel_r')
+# ax.set_zlabel("beta_l")
+# ax.legend()
+# plt.show()
+#
+# fig = plt.figure(figsize=(10, 10))
+# ax = plt.axes(projection='3d')
+# ax.scatter(x[..., 0], x[..., 1], y[..., 1], label='groundtruth', color='blue')
+# ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_beta_r.reshape(-1,1), label='predicted train', color='red')
+# ax.scatter(x_test[..., 0], x_test[..., 1], preds_beta_r.reshape(-1,1),label='predicted test', color='green')
+# ax.set_xlabel('wheel_l')
+# ax.set_ylabel('wheel_r')
+# ax.set_zlabel("beta_r")
+# ax.legend()
+# plt.show()
+#
+# fig = plt.figure(figsize=(10, 10))
+# ax = plt.axes(projection='3d')
+# ax.scatter(x[..., 0], x[..., 1], y[..., 2],label='groundtruth', color='blue')
+# ax.scatter(x_train[..., 0], x_train[..., 1], preds_train_alpha.reshape(-1,1), label='predicted train',color='red')
+# ax.scatter(x_test[..., 0], x_test[..., 1], preds_alpha.reshape(-1,1), label='predicted test', color='green')
+# ax.set_xlabel('wheel_l')
+# ax.set_ylabel('wheel_r')
+# ax.set_zlabel("alpha")
+# ax.legend()
+# plt.show()
+#
 
 
 # # To test
@@ -148,14 +148,14 @@ import numpy as np
 import catboost as cb
 model_beta_l = cb.CatBoostRegressor()
 model_beta_l.load_model(model_name_beta_l)
-beta_l = model_beta_l.predict(np.array([-3.4,3.4,0.,0.1]))
+beta_l = model_beta_l.predict(np.array([-3.4,3.4,0.,0.1,0]))
 
 model_beta_r = cb.CatBoostRegressor()
 model_beta_r.load_model(model_name_beta_r)
-beta_r =  model_beta_r.predict(np.array([-3.4,3.4, 0.,0.1]))
+beta_r =  model_beta_r.predict(np.array([-3.4,3.4, 0.,0.1, 0]))
 
 model_alpha = cb.CatBoostRegressor()
 model_alpha.load_model(model_name_alpha)
-alpha = model_alpha.predict(np.array([-3.4,3.4,0.,0.1]))
+alpha = model_alpha.predict(np.array([-3.4,3.4, 0.,0.1,0]))
 
 print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")
