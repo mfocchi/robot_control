@@ -58,6 +58,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.PROPELLERS = True
         self.TYPE_OF_JUMP= 'upward' # 'upward', 'downward'
         self.USE_PROPELLERS_FOR_LEG_REORIENT = False # true use propeller to reorient the leg
+        self.JUMP_LENGTH_MULTIPLIER = 0.75 # 0.75 /1 /1.25
         self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
         self.ADD_NOISE = False #creates multiple jumps, in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
@@ -155,7 +156,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
-            self.recorder = RosbagControlledRecorder(False)
+            self.recorder = RosbagControlledRecorder(record_from_startup_=False)
         if self.ADD_NOISE:
             # remove any previous instance
             try:
@@ -445,30 +446,31 @@ class ClimbingrobotController(BaseControllerFixed):
             # plt.plot(time_gazebo, p.Fr_r_log, color='blue')
             # plt.grid()
 
-            # plot rope forces
-            plt.figure()
-            plt.subplot(2, 1, 1)
-            plt.ylabel("wheel_pos_l")
-            plt.plot(time_gazebo, p.q_des_log[p.wheel_index[0],:], color='red')
-            plt.plot(time_gazebo, p.q_log[p.wheel_index[0],:], color='blue')
-            plt.grid()
-            plt.subplot(2, 1, 2)
-            plt.ylabel("wheel_pos_r")
-            plt.plot(time_gazebo, p.q_des_log[p.wheel_index[1], :], color='red')
-            plt.plot(time_gazebo, p.q_log[p.wheel_index[1], :], color='blue')
-            plt.grid()
+            # plot wheels
+            if p.landing:
+                plt.figure()
+                plt.subplot(2, 1, 1)
+                plt.ylabel("wheel_pos_l")
+                plt.plot(time_gazebo, p.q_des_log[p.wheel_index[0],:], color='red')
+                plt.plot(time_gazebo, p.q_log[p.wheel_index[0],:], color='blue')
+                plt.grid()
+                plt.subplot(2, 1, 2)
+                plt.ylabel("wheel_pos_r")
+                plt.plot(time_gazebo, p.q_des_log[p.wheel_index[1], :], color='red')
+                plt.plot(time_gazebo, p.q_log[p.wheel_index[1], :], color='blue')
+                plt.grid()
 
-            plt.figure()
-            plt.subplot(2, 1, 1)
-            plt.ylabel("wheel_vel_l")
-            plt.plot(time_gazebo, p.qd_des_log[p.wheel_index[0], :], color='red')
-            plt.plot(time_gazebo, p.qd_log[p.wheel_index[0], :], color='blue')
-            plt.grid()
-            plt.subplot(2, 1, 2)
-            plt.ylabel("wheel_vel_r")
-            plt.plot(time_gazebo, p.qd_des_log[p.wheel_index[1], :], color='red')
-            plt.plot(time_gazebo, p.qd_log[p.wheel_index[1], :], color='blue')
-            plt.grid()
+                plt.figure()
+                plt.subplot(2, 1, 1)
+                plt.ylabel("wheel_vel_l")
+                plt.plot(time_gazebo, p.qd_des_log[p.wheel_index[0], :], color='red')
+                plt.plot(time_gazebo, p.qd_log[p.wheel_index[0], :], color='blue')
+                plt.grid()
+                plt.subplot(2, 1, 2)
+                plt.ylabel("wheel_vel_r")
+                plt.plot(time_gazebo, p.qd_des_log[p.wheel_index[1], :], color='red')
+                plt.plot(time_gazebo, p.qd_log[p.wheel_index[1], :], color='blue')
+                plt.grid()
 
 
             #save data
@@ -706,8 +708,12 @@ class ClimbingrobotController(BaseControllerFixed):
     def initOptim(self, p0, pf):
         ##offline optim vars
         self.Fleg_max = 300.
-        self.Fr_max = 190.
-        self.Fr_min = 15.
+        if self.TYPE_OF_JUMP == 'upward':
+            self.Fr_max = 90.  # had to increas because of slopes downward jumps it used tp be 90
+            self.Fr_min = 0.  # had to increas because of slopes downward jumps it used tp be 0
+        if self.TYPE_OF_JUMP == 'downward':
+            self.Fr_max = 190.  # had to increas because of slopes downward jumps it used tp be 90
+            self.Fr_min = 15.  # had to increas because of slopes downward jumps it used tp be 0
         self.mu = 0.8
         self.optim_params = {}
         self.optim_params['jump_clearance'] = 1.
@@ -1008,9 +1014,6 @@ def talker(p):
                        'wall_inclination:=' + str(conf.robot_params[p.robot_name]['wall_inclination']),
                        'double_propeller:=' + str(p.USE_PROPELLERS_FOR_LEG_REORIENT)
                        ]
-    if p.SAVE_BAG:
-        additional_args.append('rviz_conf:='+rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf_paper_tro.rviz')
-
     if p.landing:
         world_name = "climbingrobot2landing.world"
     else:
@@ -1170,9 +1173,9 @@ def talker(p):
 
         else:
             if p.TYPE_OF_JUMP=='upward':
-                landingW = np.array([0.28, 4, -4]).reshape(3, 1)
+                landingW = np.array([0.28, 4, p.JUMP_LENGTH_MULTIPLIER*(-4)]).reshape(3, 1)
             elif p.TYPE_OF_JUMP=='downward':
-                landingW = np.array([0.28, 4, -12]).reshape(3, 1)
+                landingW = np.array([0.28, 4, p.JUMP_LENGTH_MULTIPLIER*(-12)]).reshape(3, 1)
             else:
                 print("wrong TYPE_OF_JUMP")
         if p.ADD_NOISE:
@@ -1200,7 +1203,7 @@ def talker(p):
         # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
         p.q_des[:12] = p.computeJointVariables(p0)
 
-        p.setSimSpeed(dt_sim=0.001, max_update_rate=200, iters=1500)
+        p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
         while not ros.is_shutdown():
 
