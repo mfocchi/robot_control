@@ -64,6 +64,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.OBSTACLE_AVOIDANCE = False
         self.obstacle_location = np.array([0, 2.5, -6])
         self.obstacle_size = np.array([1.5, 1.5, 0.866])
+
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
         self.wheel_index = np.array([16, 18]) #'wheel_joint_l',  'wheel_joint_r'
@@ -103,7 +104,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def apply_propeller_force(self, ext_force):
         # create force per to ropes plane
         self.prop_forceW  = self.n_bar * ext_force
-        self.ros_pub.add_arrow(self.base_pos, self.prop_forceW/p.force_scale , "blue", scale=3.5)
+        self.ros_pub.add_arrow(self.base_pos, self.prop_forceW/self.force_scale , "blue", scale=1.5)
         wrench = Wrench()
         wrench.force.x = self.prop_forceW [0]
         wrench.force.y = self.prop_forceW [1]
@@ -135,7 +136,7 @@ class ClimbingrobotController(BaseControllerFixed):
         additional_urdf_args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
         additional_urdf_args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
         additional_urdf_args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
-        super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args)
+        super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args,  markers_time_to_live=conf.robot_params[p.robot_name]['dt'])
 
         self.broadcaster = tf.TransformBroadcaster()
         self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
@@ -602,7 +603,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if f_com <0:
             f_com = 0.
         f_com_vec =  self.wall_normal*f_com
-        self.ros_pub.add_arrow( self.base_pos ,f_com_vec/self.force_scale , "red", scale=3.5)
+        self.ros_pub.add_arrow( self.base_pos ,f_com_vec/self.force_scale , "red", scale=1.5)
 
         # map into feet landing forces
         A = np.zeros((6, 6))
@@ -625,12 +626,12 @@ class ClimbingrobotController(BaseControllerFixed):
         b[3:] = -np.cross(self.hoist_l_pos - self.com, self.rope_direction * self.Fr_l_actual) - np.cross(self.hoist_r_pos - self.com, self.rope_direction2 * self.Fr_r_actual)
 
         F_l = np.linalg.pinv(A).dot(b)  # Fl_l, Fl_r
-        #self.ros_pub.add_arrow(self.x_landing_l, F_l[:3] / self.force_scale, "red", scale=3.5)
-        #self.ros_pub.add_arrow(self.x_landing_r, F_l[3:] / self.force_scale, "red", scale=3.5)
+        #self.ros_pub.add_arrow(self.x_landing_l, F_l[:3] / self.force_scale, "red", scale=1.5)
+        #self.ros_pub.add_arrow(self.x_landing_r, F_l[3:] / self.force_scale, "red", scale=1.5)
         #debug
-        # self.ros_pub.add_arrow(self.hoist_l_pos,  self.rope_direction *self.Fr_l_actual / self.force_scale, color = "black", scale=3.5)
-        # self.ros_pub.add_arrow(self.hoist_r_pos,self.rope_direction2*self.Fr_r_actual / self.force_scale, "blue", scale=3.5)
-        # self.ros_pub.add_arrow(self.com, self.getRobotMass() * self.robot.model.gravity.vector[:3] / self.force_scale, "red", scale=3.5)
+        # self.ros_pub.add_arrow(self.hoist_l_pos,  self.rope_direction *self.Fr_l_actual / self.force_scale, color = "black", scale=1.5)
+        # self.ros_pub.add_arrow(self.hoist_r_pos,self.rope_direction2*self.Fr_r_actual / self.force_scale, "blue", scale=1.5)
+        # self.ros_pub.add_arrow(self.com, self.getRobotMass() * self.robot.model.gravity.vector[:3] / self.force_scale, "red", scale=1.5)
 
         # build jacobian extracting columbs from  geom landing jacobians
         Jl = block_diag(self.J_landing_l[:, 15].reshape(3,1), self.J_landing_r[:, 17].reshape(3,1))
@@ -638,8 +639,8 @@ class ClimbingrobotController(BaseControllerFixed):
         #debug
         # feas_space_proj = np.linalg.pinv(Jl.T).dot(Jl.T)
         # F_l_feas = feas_space_proj.dot(F_l)
-        # self.ros_pub.add_arrow(self.x_landing_l, F_l_feas[:3] / self.force_scale, "green", scale=3.5)
-        # self.ros_pub.add_arrow(self.x_landing_r, F_l_feas[3:] / self.force_scale, "green", scale=3.5)
+        # self.ros_pub.add_arrow(self.x_landing_l, F_l_feas[:3] / self.force_scale, "green", scale=1.5)
+        # self.ros_pub.add_arrow(self.x_landing_r, F_l_feas[3:] / self.force_scale, "green", scale=1.5)
         # TODO uncomment
         #tau = -Jl.T.dot(F_l)
         tau = np.zeros(2)
@@ -1255,7 +1256,7 @@ def talker(p):
                 # apply leg inpulse for thust duration
                 p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
                 # plot Fleg
-                p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / p.force_scale, "red", scale=4.5)
+                p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / p.force_scale, "red", scale=2.5)
 
                 # start also applying forces to ropes
                 delta_t = p.time - p.end_orienting
@@ -1263,8 +1264,8 @@ def talker(p):
                 p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
 
                 # plot rope forces
-                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
-                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
+                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
+                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
                 p.tau_ffwd[p.rope_index[0]] = p.Fr_r
                 p.tau_ffwd[p.rope_index[1]] = p.Fr_l
 
@@ -1337,8 +1338,8 @@ def talker(p):
                 p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
 
                 #plot rope forces
-                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
-                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
+                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
+                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
 
                 p.tau_ffwd[p.rope_index[0]] = p.Fr_r
                 p.tau_ffwd[p.rope_index[1]] = p.Fr_l
@@ -1412,7 +1413,7 @@ def talker(p):
 
                 if p.type_of_disturbance != 'none':
                     if ((delta_t - p.delayed_start) >= 0) and ((delta_t - p.delayed_start) < p.dist_duration):
-                        p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "blue", scale=4.5)
+                        p.ros_pub.add_arrow(p.base_pos, p.base_dist / 10., "white", scale=1.5)
 
                 if not p.optimal_control_traj_finished:
                     if p.getIndex(delta_t) == -1:
@@ -1435,8 +1436,8 @@ def talker(p):
                         p.start_landing = p.time
 
                 # plot rope forces
-                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=4.5)
-                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=4.5)
+                p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
+                p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
                 p.tau_ffwd[p.rope_index[0]] = p.Fr_r
                 p.tau_ffwd[p.rope_index[1]] = p.Fr_l
                 end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
@@ -1467,7 +1468,7 @@ def talker(p):
                     p.qd_des[p.wheel_index] = np.zeros(2)
                 p.prop_force = (-25.) #push against the wall
                 p.apply_propeller_force(p.prop_force)
-                p.ros_pub.add_arrow(p.base_pos, p.prop_forceW / p.force_scale, "blue", scale=3.5)
+
 
             # plot ropes as green arrows
             if not p.SAVE_BAG:
@@ -1475,10 +1476,10 @@ def talker(p):
                 p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
             # plot contact forces on landing legs
             if p.landing:
-                p.ros_pub.add_arrow(p.x_landing_l, p.contactForceW_l / p.force_scale, "blue", scale=4.5)
-                p.ros_pub.add_arrow(p.x_landing_r, p.contactForceW_r / p.force_scale, "blue", scale=4.5)
+                p.ros_pub.add_arrow(p.x_landing_l, p.contactForceW_l / p.force_scale, "blue", scale=1.5)
+                p.ros_pub.add_arrow(p.x_landing_r, p.contactForceW_r / p.force_scale, "blue", scale=1.5)
             # plot contact force on retractable leg
-            p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=4.5)
+            p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=2.5)
 
             #plot target position (whenever is available)
             try:
@@ -1487,7 +1488,7 @@ def talker(p):
             except:
                 pass
             p.ros_pub.add_marker(p.x_ee, radius=0.05)
-            p.ros_pub.publishVisual(delete_markers=True)
+            p.ros_pub.publishVisual(delete_markers=False)
 
             # send commands to gazebo
             p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
