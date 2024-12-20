@@ -16,7 +16,7 @@ import os
 import rospkg
 
 class RosPub():
-    def __init__(self, robot_name="solo", only_visual = False, visual_frame = "world"):
+    def __init__(self, robot_name="solo", only_visual = False, visual_frame = "world", markers_time_to_live = 0.):
 
         print("Starting ros pub---------------------------------------------------------------")
         if (not only_visual):                           
@@ -36,6 +36,7 @@ class RosPub():
         #init ros node to publish joint states and vis topics
         ros.init_node('sub_pub_node_python', anonymous=False, log_level=ros.FATAL)
 
+        self.markers_time_to_live = markers_time_to_live
         self.marker_pub = ros.Publisher('/vis' , MarkerArray, queue_size=1)
         self.arrow_pub = ros.Publisher('/arrow', MarkerArray, queue_size=1)
         self.polygon_pub = ros.Publisher('/support_polygon', MarkerArray, queue_size=1)
@@ -156,7 +157,7 @@ class RosPub():
         marker.pose.position.x = pos[0]
         marker.pose.position.y = pos[1]
         marker.pose.position.z = pos[2]
-        marker.lifetime = ros.Duration(0.0)
+        marker.lifetime = ros.Duration(self.markers_time_to_live)
        
         marker.id = self.id
         self.id += 1
@@ -202,7 +203,7 @@ class RosPub():
         marker.pose.position.x = pos[0]
         marker.pose.position.y = pos[1]
         marker.pose.position.z = pos[2]
-        marker.lifetime = ros.Duration(0.0)
+        marker.lifetime = ros.Duration(self.markers_time_to_live)
 
         marker.id = self.id
         self.id += 1
@@ -237,7 +238,7 @@ class RosPub():
         marker.pose.position.x = pos[0]
         marker.pose.position.y = pos[1]
         marker.pose.position.z = pos[2]
-        marker.lifetime = ros.Duration(0.)
+        marker.lifetime = ros.Duration(self.markers_time_to_live)
 
         marker.id = self.id_fixed
         self.id_fixed += 1
@@ -275,7 +276,7 @@ class RosPub():
        marker.scale.y = 0.04*scale
        marker.scale.z = 0.02*scale
        marker.color.a = 1.0
-       marker.lifetime = ros.Duration(0.0)
+       marker.lifetime = ros.Duration(self.markers_time_to_live)
        marker.pose.orientation.x = 0.
        marker.pose.orientation.y = 0.
        marker.pose.orientation.z = 0.
@@ -308,7 +309,7 @@ class RosPub():
         marker.scale.x = 1
         marker.scale.y = 1
         marker.scale.z = 1
-        marker.lifetime = ros.Duration(0)
+        marker.lifetime = ros.Duration(self.markers_time_to_live)
         marker.pose.position.x = position[0]
         marker.pose.position.y = position[1]
         marker.pose.position.z = position[2]
@@ -352,7 +353,7 @@ class RosPub():
         marker.scale.x = 0.01 * scale
         marker.scale.y = 0.01 * scale
         marker.scale.z = 0.01 * scale
-        marker.lifetime = ros.Duration(0.0)
+        marker.lifetime = ros.Duration(self.markers_time_to_live)
         marker.pose.orientation.x = 0.
         marker.pose.orientation.y = 0.
         marker.pose.orientation.z = 0.

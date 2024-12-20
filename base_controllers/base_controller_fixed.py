@@ -154,10 +154,10 @@ class BaseControllerFixed(threading.Thread):
         ros.sleep(1.0)
         print(colored('SIMULATION Started', 'blue'))
 
-    def loadModelAndPublishers(self,  xacro_path = None, additional_urdf_args = None):
+    def loadModelAndPublishers(self,  xacro_path = None, additional_urdf_args = None, markers_time_to_live = 0.):
 
         # instantiating objects
-        self.ros_pub = RosPub(self.robot_name, only_visual=True)
+        self.ros_pub = RosPub(self.robot_name, only_visual=True, markers_time_to_live=markers_time_to_live)
         self.pub_des_jstate = ros.Publisher("/command", JointState, queue_size=1, tcp_nodelay=True)
         # freeze base  and pause simulation service
         self.reset_world = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
