@@ -58,7 +58,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.PROPELLERS = True
         self.TYPE_OF_JUMP= 'upward' # 'upward', 'downward'
         self.USE_PROPELLERS_FOR_LEG_REORIENT = False # true use propeller to reorient the leg
-        self.JUMP_LENGTH_MULTIPLIER = 0.75 # 0.75 /1 /1.25
+        self.JUMP_LENGTH_MULTIPLIER = 1 # 0.75 /1 /1.25
         self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
         self.ADD_NOISE = False #creates multiple jumps, in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance

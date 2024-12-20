@@ -223,7 +223,7 @@ class LyapunovController:
             qd[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
             qd[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
             if len(model_alpha.feature_names_)>2:
-                alpha = model_alpha.predict(np.array([qd[0], qd[1], self.actual_state.roll, self.actual_state.pitch]))
+                alpha = model_alpha.predict(np.array([qd[0], qd[1], self.actual_state.roll, self.actual_state.pitch, self.actual_state.theta]))
             else:
                 alpha = model_alpha.predict(qd)
             #matlab

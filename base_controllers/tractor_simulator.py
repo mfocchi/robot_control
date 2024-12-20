@@ -40,6 +40,7 @@ from base_controllers.tracked_robot.simulator.tracked_vehicle_simulator3d import
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.utils.common_functions import checkRosMaster
 from base_controllers.utils.common_functions import spawnModel, launchFileNode
+from base_controllers.tracked_robot.regressor.NN.inference_nn import SlipNN
 import pandas as pd
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
@@ -61,6 +62,7 @@ class GenericSimulator(BaseController):
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
         self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
+        self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','NN'
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
         # Parameters for open loop identification
@@ -70,7 +72,7 @@ class GenericSimulator(BaseController):
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
 
         #biral friction coeff
-        self.friction_coefficient = 0.6 # 0.1/0.4/ 0.6    0.6 is the identified with parameters depending on gravity
+        self.friction_coefficient = 0.4 # 0.1/0.4/ 0.6    0.6 is the identified with parameters depending on gravity
 
         # initial pose
         self.p0 = np.array([0., 0., 0.]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
@@ -98,21 +100,28 @@ class GenericSimulator(BaseController):
     def initVars(self):
         super().initVars()
 
-        # regressor
-        self.regressor_beta_l = cb.CatBoostRegressor()
-        self.regressor_beta_r = cb.CatBoostRegressor()
-        self.regressor_alpha = cb.CatBoostRegressor()
+
         # laod model
         try:
-            self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+str(self.friction_coefficient)+'.cb')
-            self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+str(self.friction_coefficient)+'.cb')
-            self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+str(self.friction_coefficient)+'.cb')
-            # loading with matlab
-            # import matlab.engine
-            # self.eng = matlab.engine.start_matlab()
-            # self.model_alpha = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['alpha_model_18']
-            # self.model_beta_l = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_l_model_18']
-            # self.model_beta_r = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_r_model_18']
+            if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
+                # regressor
+                self.regressor_beta_l = cb.CatBoostRegressor()
+                self.regressor_beta_r = cb.CatBoostRegressor()
+                self.regressor_alpha = cb.CatBoostRegressor()
+                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+str(self.friction_coefficient)+'.cb')
+                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+str(self.friction_coefficient)+'.cb')
+                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+str(self.friction_coefficient)+'.cb')
+                # loading with matlab
+                # import matlab.engine
+                # self.eng = matlab.engine.start_matlab()
+                # self.model_alpha = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['alpha_model_18']
+                # self.model_beta_l = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_l_model_18']
+                # self.model_beta_r = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_r_model_18']
+            elif  self.SLIPPAGE_INFERENCE_TYPE=='NN':
+                self.model_beta_l = SlipNN(output='beta_l')
+                self.model_beta_r = SlipNN(output='beta_r')
+                self.model_alpha = SlipNN(output='alpha')
+
         except:
             self.model_beta_l = None
             self.model_beta_r = None
@@ -844,8 +853,8 @@ class GenericSimulator(BaseController):
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
         # predict the betas from NN
         if len(self.model_beta_l.feature_names_)>2:
-            beta_l = self.model_beta_l.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4]]))
-            beta_r = self.model_beta_r.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4]]))
+            beta_l = self.model_beta_l.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4], self.basePoseW[5]]))
+            beta_r = self.model_beta_r.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4], self.basePoseW[5]]))
         else:
             beta_l = self.model_beta_l.predict(qd_des)
             beta_r = self.model_beta_r.predict(qd_des)
@@ -1250,6 +1259,7 @@ def main_loop(p):
                 "wheel_r": p.qd_des_log[1, not_nans],
                 "roll": p.basePoseW_log[3, not_nans],
                 "pitch": p.basePoseW_log[4, not_nans],
+                "yaw": p.basePoseW_log[5, not_nans],
                 "beta_l": p.beta_l_log[not_nans],
                 "beta_r": p.beta_r_log[not_nans],
                 "alpha": p.alpha_log[not_nans]})
