@@ -57,6 +57,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.MPC_uses_constraints = True
         self.PROPELLERS = True
         self.TYPE_OF_JUMP= 'upward' # 'upward', 'downward'
+        self.USE_PROPELLERS_FOR_LEG_REORIENT = False # true use propeller to reorient the leg
         self.MULTIPLE_JUMPS = False # use this for paper to generate targets in an ellipsoid around p0,
         self.SAVE_BAG = False # does not show rope vectors
         self.ADD_NOISE = False #creates multiple jumps, in case of MULTOPLE JUMPS adds noise to velocity in case of disturbance adds noise to disturbance
@@ -83,6 +84,21 @@ class ClimbingrobotController(BaseControllerFixed):
         self.r_leg = 0.3
         super().__init__(robot_name=robot_name)
         print("Initialized climbingrobot controller---------------------------------------------------------------")
+
+    def apply_propeller_moment(self, Mz):
+        # create force per to ropes plane
+        arm = np.linalg.norm(self.hoist_l_pos-self.base_pos)
+        force = self.w_R_b[:,0]*Mz/(2*arm)
+        self.ros_pub.add_arrow(self.hoist_l_pos, force/(10*self.force_scale), "green", scale=1.5)  #left should be positive
+        self.ros_pub.add_arrow(self.hoist_r_pos, -force/(10*self.force_scale), "green", scale=1.5) #right should be negative
+        wrench = Wrench()
+        wrench.force.x = 0.
+        wrench.force.y = 0.
+        wrench.force.z = 0.
+        wrench.torque.x = 0.
+        wrench.torque.y = 0.
+        wrench.torque.z = Mz
+        self.pub_prop_force.publish(wrench)
 
     def apply_propeller_force(self, ext_force):
         # create force per to ropes plane
@@ -988,7 +1004,8 @@ def talker(p):
                        'obstacle_size_x:=' + str(p.obstacle_size[0]),
                        'obstacle_size_y:=' + str(p.obstacle_size[1]),
                        'obstacle_size_z:=' + str(p.obstacle_size[2]),
-                       'wall_inclination:=' + str(conf.robot_params[p.robot_name]['wall_inclination'])
+                       'wall_inclination:=' + str(conf.robot_params[p.robot_name]['wall_inclination']),
+                       'double_propeller:=' + str(p.USE_PROPELLERS_FOR_LEG_REORIENT)
                        ]
     if p.SAVE_BAG:
         additional_args.append('rviz_conf:='+rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf_paper_tro.rviz')
@@ -1195,7 +1212,7 @@ def talker(p):
                 p.pause_physics_client()
                 p.initOptim(p.base_pos - p.mat2Gazebo, pf)
                 p.unpause_physics_client()
-                p.q_des[p.hip_pitch_joint], p.q_des[p.hip_roll_joint] = p.getImpulseAngle()
+                p.des_leg_orient = p.getImpulseAngle()
 
 
                 #set the end of orienting
@@ -1207,20 +1224,32 @@ def talker(p):
                     p.recorder.start_recording_srv()
 
 
-            if (p.stateMachine == 'orienting_leg') and (p.time >= p.end_orienting):
-                print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to optimized target: ",
-                      p.jumps[p.jumpNumber]["targetPos"], " from actual p0 : ", p.base_pos - p.mat2Gazebo)
+            if (p.stateMachine == 'orienting_leg'):
+                # use propellers (review)
+                if p.USE_PROPELLERS_FOR_LEG_REORIENT:
+                    p.q_des[p.hip_pitch_joint] = p.des_leg_orient[0]
+                    p.q_des[p.hip_roll_joint] = 0. #set leg straight
+                    # reorient base yaw to be p.des_leg_orient[1]
+                    rpy = p.math_utils.rot2eul(p.w_R_b)
+                    Mz = 30.*(p.des_leg_orient[0] - rpy[2])
+                    p.apply_propeller_moment(Mz)
+                else:
+                    p.q_des[p.hip_pitch_joint] = p.des_leg_orient[0]
+                    p.q_des[p.hip_roll_joint] = p.des_leg_orient[1]
 
-
-                print(colored(f"Start trusting", "blue"))
-                p.tau_ffwd = np.zeros(p.robot.na)
-                p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
-                p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
-                p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
-                print(colored(f"ZERO LEG AND ROPE PD", "red"))
-                p.stateMachine = 'thrusting'
-                p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
-                p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
+                if  (p.time >= p.end_orienting):
+                    print(colored(f"Stop orienting leg", "blue"))
+                    print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to optimized target: ",
+                          p.jumps[p.jumpNumber]["targetPos"], " from actual p0 : ", p.base_pos - p.mat2Gazebo)
+                    print(colored(f"Start trusting", "blue"))
+                    p.tau_ffwd = np.zeros(p.robot.na)
+                    p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
+                    p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
+                    p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
+                    print(colored(f"ZERO LEG AND ROPE PD", "red"))
+                    p.stateMachine = 'thrusting'
+                    p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
+                    p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
 
             if (p.stateMachine == 'thrusting'):
                 # apply leg inpulse for thust duration
