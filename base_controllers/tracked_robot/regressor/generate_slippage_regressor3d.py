@@ -43,18 +43,18 @@ x_valid, x_test, y_valid, y_test = train_test_split(x_valid, y_valid, random_sta
 
 
 # # %% create model of regressor Beta_l
-print(colored("Training beta_l","red"))
+print(colored("Training beta_l 3d","red"))
 model_beta_l = cb.CatBoostRegressor(max_depth=15)#learning_rate=1e-2, max_depth=15)
 model_beta_l.fit(x_train, y_train[..., 0].reshape(-1, 1), verbose=True,eval_set=(x_valid, y_valid[..., 0].reshape(-1, 1)), use_best_model=True)
 preds_train_beta_l = model_beta_l.predict(x_train)
 preds_beta_l = model_beta_l.predict(x_test)
 print(f'R2 metric train beta_l: {r2_score(y_train[...,0], preds_train_beta_l)}')
 print(f'R2 metric test beta_l: {r2_score(y_test[...,0], preds_beta_l)}')
-model_name_beta_l = 'model_beta_l'+str(friction_coeff)+'.cb'
+model_name_beta_l = 'model_beta_l_3d_'+str(friction_coeff)+'.cb'
 model_beta_l.save_model(model_name_beta_l)
 
 # # %% create model of regressor Beta_r
-print(colored("Training beta_r","red"))
+print(colored("Training beta_r 3D","red"))
 model_beta_r = cb.CatBoostRegressor(max_depth=15)#learning_rate=1e-2, max_depth=15)
 model_beta_r.fit(x_train, y_train[..., 1].reshape(-1, 1), verbose=True,
                  eval_set=(x_valid, y_valid[..., 1].reshape(-1, 1)), use_best_model=True)
@@ -62,11 +62,11 @@ preds_train_beta_r = model_beta_r.predict(x_train)
 preds_beta_r = model_beta_r.predict(x_test)
 print(f'R2 metric train beta_r: {r2_score(y_train[...,1], preds_train_beta_r)}')
 print(f'R2 metric test beta_r: {r2_score(y_test[...,1], preds_beta_r)}')
-model_name_beta_r = 'model_beta_r'+str(friction_coeff)+'.cb'
+model_name_beta_r = 'model_beta_r_3d_'+str(friction_coeff)+'.cb'
 model_beta_r.save_model(model_name_beta_r)
 
 # regressor for Alpha
-print(colored("Training Alpha","red"))
+print(colored("Training Alpha 3d","red"))
 model_alpha = cb.CatBoostRegressor(max_depth=15)#iterations=10000)
 model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=True,
                 eval_set=(x_valid, y_valid[..., 2].reshape(-1, 1)), use_best_model=True)
@@ -75,7 +75,7 @@ preds_alpha = model_alpha.predict(x_test)
 print(f'R2 metric train alpha: {r2_score(y_train[...,2], preds_train_alpha)}')
 print(f'R2 metric test alpha: {r2_score(y_test[...,2], preds_alpha)}')
 # %% save the model python
-model_name_alpha = 'model_alpha'+str(friction_coeff)+'.cb'
+model_name_alpha = 'model_alpha_3d_'+str(friction_coeff)+'.cb'
 model_alpha.save_model(model_name_alpha)
 
 #################################################

@@ -99,18 +99,16 @@ class GenericSimulator(BaseController):
 
     def initVars(self):
         super().initVars()
-
-
-        # laod model
+        # load model
         try:
             if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
                 # regressor
                 self.regressor_beta_l = cb.CatBoostRegressor()
                 self.regressor_beta_r = cb.CatBoostRegressor()
                 self.regressor_alpha = cb.CatBoostRegressor()
-                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+str(self.friction_coefficient)+'.cb')
-                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+str(self.friction_coefficient)+'.cb')
-                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+str(self.friction_coefficient)+'.cb')
+                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+self.flag3D+str(self.friction_coefficient)+'.cb')
+                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+self.flag3D+str(self.friction_coefficient)+'.cb')
+                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+self.flag3D+str(self.friction_coefficient)+'.cb')
                 # loading with matlab
                 # import matlab.engine
                 # self.eng = matlab.engine.start_matlab()
@@ -245,7 +243,11 @@ class GenericSimulator(BaseController):
             # launch roscore
             checkRosMaster()
             ros.sleep(1.5)
-            # run robot state publisher + load robot description + rviz
+            if self.friction_coefficient == 0.1: #should match with training region
+                constants.MAXSPEED_RADS_PULLEY = 10.
+            if self.friction_coefficient == 0.4: #should match with training region
+                constants.MAXSPEED_RADS_PULLEY = 18.
+                    # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'biral3d':
                 print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
@@ -253,12 +255,14 @@ class GenericSimulator(BaseController):
                 #self.friction_coefficient = 0.7
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
                 conf.robot_params[p.robot_name]['dt'] = 0.001
-                groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
-                self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
+                #groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
+                groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e05, terrain_damping=0.5e04)
+                self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams, contact_distribution=False)
+                self.flag3D='_3d_'
             else:
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
-
+                self.flag3D=''
             self.robot = getRobotModelFloating(self.robot_name)
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
@@ -371,7 +375,7 @@ class GenericSimulator(BaseController):
         self.PLANNING_DURATION = curve.length() / long_vel
         number_of_samples = int(np.floor(self.PLANNING_DURATION / dt))
         values = np.arange(0, curve.length(), curve.length() / number_of_samples, dtype=np.float64)
-        print(colored(f"Planning with {self.PLANNING}, duration {self.PLANNING_DURATION} s", "red"))
+        print(colored(f"Planning with {self.PLANNING}, pf: {p.pf},  duration {self.PLANNING_DURATION} s", "red"))
         xy = np.zeros((values.size, 2))
         dxdy = np.zeros((values.size, 2))
         theta = np.zeros((values.size))
@@ -390,7 +394,7 @@ class GenericSimulator(BaseController):
 
     def getTrajFromMatlab(self):
         try:
-            print(colored("Calling Matlab service /optim: remember to run ros_node in dubins_optimization", "red"))
+            print(colored("Calling Matlab service /optim: remember to  set correct  friction_coeff in robot_params.m", "red"))
             ros.wait_for_service('/optim', timeout=120.)
             self.optim_client = ros.ServiceProxy('/optim', Optim)
             request_optim = OptimRequest()
@@ -404,7 +408,7 @@ class GenericSimulator(BaseController):
             request_optim.plan_type = self.PLANNING
             response = self.optim_client(request_optim)
             self.PLANNING_DURATION = response.tf
-            print(colored(f"Planning with {request_optim.plan_type} and duration {self.PLANNING_DURATION}", "red"))
+            print(colored(f"Planning with {request_optim.plan_type} to pf:{self.pf} and duration {self.PLANNING_DURATION}", "red"))
             #print(response.des_x[-10:])
             # print(response.des_y[-10:0])
             # print(response.des_theta[-10:])
@@ -413,7 +417,7 @@ class GenericSimulator(BaseController):
             return response.des_x,response.des_y,response.des_theta, response.des_v, response.des_omega, response.dt
 
         except:
-            print(colored("Matlab service call /optim not available", "red"))
+            print(colored("Matlab service call /optim not available, run ros_node in dubins_optimization", "red"))
             sys.exit()
 
     def get_command_vel(self, msg):
@@ -1040,10 +1044,22 @@ def talker(p):
         p.df = pd.DataFrame(columns=columns)
         np.random.seed(0) #create always the same random sequence
         for p.test in range(100):
+
             p.p0 = np.zeros(3)
-            # p.pf = p.genUniformRandomTarget(1., 4.)
+            # p.pf = p.genUniformRandomTarget(1., 4.) #no longer used
             p.pf = p.genQuasiMontecarloRandomTarget(1., 4.)
             main_loop(p)
+            # xy plot
+            plt.figure()
+            plt.plot(p.des_state_log[0, :], p.des_state_log[1, :], "-r", label="desired")
+            plt.plot(p.state_log[0, :], p.state_log[1, :], "-b", label="real")
+            plt.legend()
+            plt.title(f"Control: {p.ControlType}, Long: {p.LONG_SLIP_COMPENSATION} Side: {p.SIDE_SLIP_COMPENSATION}")
+            plt.xlabel("x[m]")
+            plt.ylabel("y[m]")
+            plt.axis("equal")
+            plt.grid(True)
+
     else:
         main_loop(p)
 
@@ -1279,16 +1295,18 @@ def main_loop(p):
                                    'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
                                    'alpha': p.alpha_log, 'alpha_pred': p.alpha_control_log, 'radius': p.radius_log})
 
-    if p.STATISTICAL_ANALYSIS and not p.ControlType=='OPEN_LOOP':
+    if  p.PLANNING!='none' and p.ControlType!='OPEN_LOOP':
         p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
         e_xy = np.sqrt(np.power(p.log_e_x, 2) + np.power(p.log_e_y, 2))
         rmse_xy = np.sqrt(np.mean(e_xy ** 2))
         rmse_theta = np.sqrt(np.mean(np.array(p.log_e_theta) ** 2))
         print(colored(f"Target: {p.pf.reshape(1,3)}, e_xy: {rmse_xy} e_theta {rmse_theta}","red"))
-        dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_z': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta, 'tf':p.PLANNING_DURATION}
-        df_dict = pd.DataFrame([dict])
-        p.df = pd.concat([p.df, df_dict], ignore_index=True)
-        p.df.to_csv(f'statistic_{p.ControlType}_{p.PLANNING}.csv', index=None)
+        if p.STATISTICAL_ANALYSIS:
+            dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_z': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta, 'tf':p.PLANNING_DURATION}
+            df_dict = pd.DataFrame([dict])
+            p.df = pd.concat([p.df, df_dict], ignore_index=True)
+            p.df.to_csv(f'statistic_{p.ControlType}_{p.PLANNING}.csv', index=None)
+
 
 if __name__ == '__main__':
     p = GenericSimulator(robotName)
