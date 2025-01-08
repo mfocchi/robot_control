@@ -18,6 +18,7 @@ eng = matlab.engine.start_matlab()
 mass = 4.976936060000001
 Fleg_max = 300.
 Fr_max = 90.
+Fr_min = 0.
 Fr_max_mpc = 100.
 
 #landing
@@ -33,6 +34,7 @@ params['jump_clearance'] = 1.
 params['m'] = mass
 params['obstacle_avoidance'] = False
 params['obstacle_location'] = matlab.double([-0.5, 3.,-7.5]).reshape(3,1)
+params['obstacle_size'] = matlab.double([1.5, 1.5, 0.866]).reshape(3,1)
 anchor_distance = 5.
 params['num_params'] = 4.
 params['int_method'] = 'rk4'
@@ -55,7 +57,7 @@ params['T_th'] =  0.05
 #jump params
 p0 =  matlab.double([0.5, 2.5, -6]) # there is singularity for px = 0!
 pf=  matlab.double([0.5, 4,-4])
-solution = eng.optimize_cpp_mex(p0, pf, Fleg_max, Fr_max, mu, params)
+solution = eng.optimize_cpp_mex(p0, pf, Fleg_max, Fr_max, Fr_min, mu, params)
 print(solution['achieved_target'])
 print(solution['Tf'])
 print(solution['Fr_l'])
@@ -89,6 +91,9 @@ params_mpc['w2']= 0.000001
 params_mpc['mpc_dt'] = matlab.double(solution['Tf'] / (params['N_dyn']-1))
 
 x = eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, Fr_max_mpc, mpc_N, params_mpc)
+
+
+
 print("x", x)
 # the result of this test should not be compared with the matlab one
 
