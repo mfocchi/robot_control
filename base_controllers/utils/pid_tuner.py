@@ -15,9 +15,9 @@ class PIDTuningGui:
         mode_str = "_swing" if (mode == 'swim' or mode == 'step') else ''
 
         # Load initial PID values from configuration
-        self.initial_kp = conf.robot_params[self.robot.robot_name][f'kp{mode_str}{rr_str}']
-        self.initial_kd = conf.robot_params[self.robot.robot_name][f'kd{mode_str}{rr_str}']
-        self.initial_ki = conf.robot_params[self.robot.robot_name][f'ki{mode_str}{rr_str}']
+        self.initial_kp = conf.robot_params[self.robot.robot_name][f'kp{rr_str}{mode_str}']
+        self.initial_kd = conf.robot_params[self.robot.robot_name][f'kd{rr_str}{mode_str}']
+        self.initial_ki = conf.robot_params[self.robot.robot_name][f'ki{rr_str}{mode_str}']
         self.initial_kp_lin = conf.robot_params[self.robot.robot_name][f'kp_lin{rr_str}']
         self.initial_kd_lin = conf.robot_params[self.robot.robot_name][f'kd_lin{rr_str}']
         self.initial_kp_ang = conf.robot_params[self.robot.robot_name][f'kp_ang{rr_str}']

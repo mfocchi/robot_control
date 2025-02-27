@@ -57,7 +57,7 @@ def map_range(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 class JumpAgent():
-    def __init__(self, robot_name: str):
+    def __init__(self, robot_name: str, policy: str):
 
         base_model_path = os.path.join(os.environ.get('LOCOSIM_DIR'),
                                        'robot_control',
@@ -73,8 +73,8 @@ class JumpAgent():
         with open(config_path, 'r') as f:
             self.cfg = json.load(f)
 
-        self.model_path = os.path.join(base_model_path, f'{robot_name}.onnx')
-        print(f'JumpAgent, policy: {robot_name}')
+        self.model_path = os.path.join(base_model_path, f'{robot_name}_{policy}.onnx')
+        print(f'JumpAgent, policy: {robot_name} {policy}')
         self.model = ort.InferenceSession(self.model_path)
 
         self.min_action = self.cfg["min_action"]
@@ -172,14 +172,15 @@ class JumpAgent():
             actions[..., 12], self.min_action, self.max_action, self.l_expl_min, self.l_expl_max)
 
         trunk_xd_lo_un = self.trunk_xd_lo_b / np.linalg.norm(self.trunk_xd_lo_b)
-        self.trunk_x_lo_e = self.trunk_x_lo_b + trunk_xd_lo_un * l_expl.reshape(-1, 1)
+        self.trunk_x_lo_e = self.trunk_x_lo_b + (trunk_xd_lo_un * l_expl.reshape(-1, 1))
 
         self.trunk_xd_lo_e = self.trunk_xd_lo_b * xd_mult.reshape(-1, 1)
 
         vf_n = np.linalg.norm(self.trunk_xd_lo_e)
         v0_n = np.linalg.norm(self.trunk_xd_lo_b)
-        sf_n = np.linalg.norm(self.trunk_x_lo_e)
-        s0_n = np.linalg.norm(self.trunk_x_lo_b)
+        # in this, the 0.5 of z is added because it need to be equal to the orbit one
+        sf_n = np.linalg.norm(self.trunk_x_lo_e + [0,0,0.5])
+        s0_n = np.linalg.norm(self.trunk_x_lo_b + [0,0,0.5])
 
         self.a = 0.5 * ((np.power(vf_n, 2) - np.power(v0_n, 2)) / ((sf_n - s0_n) + 1e-15))
 
@@ -197,6 +198,7 @@ class JumpAgent():
                     trunk_x_lo_e: {self.trunk_x_lo_e}\n\
                     trunk_xd_lo_e: {self.trunk_xd_lo_e}\n\
                     t_th_exp: {self.t_th_e}\n\
+                    a :{self.a}\n\
                     t_th_tot: {self.t_th_total}\n\
                     ")
 

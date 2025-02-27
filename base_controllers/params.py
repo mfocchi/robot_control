@@ -235,10 +235,10 @@ robot_params['go1'] ={'dt': 0.002,
                       'kp_real': np.array([30., 30.,30.]*4),
                       'kd_real': np.array([.15, .1, .15]*4),
                       'ki_real': np.array([2., 2., 2.]*4),
-                      'kp_real_swing':  np.array([30., 7.,4.6]*4),
+                      'kp_real_swing':  np.array([15., 7.,4.6]*4),
                       'kd_real_swing':  np.array([.2, .2, .24]*4),
                       'ki_real_swing':  np.array([2., 2., 2.]*4),
-                      'kp_real_land': np.array([30., 20.,20]*4),
+                      'kp_real_land': np.array([20., 10.,10]*4),
                       'kd_real_land': np.array([.2, .2, .24]*4),
                       'ki_real_land': np.array([2., 2., 2.]*4),
                        # joint pid + wbc (optional)
@@ -262,7 +262,7 @@ robot_params['go1'] ={'dt': 0.002,
                       #backward
                       'q_land_bwd':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
 
-                      'q_retraction': np.array([0.1, 1.10, -2.20, 0.1, 1.10, -2.20, -0.1, 1.10, -2.20, -0.1, 1.10, -2.20]),
+                      'q_retraction': np.array([0.23, 1.38, -2.46, 0.23, 1.68, -2.31, -0.23, 1.38, -2.46, -0.23, 1.68, -2.31]),
                       'q_final':  np.array([0.1, 0.9, -1.8,  0.1, 0.9, -1.8, -0.1, 0.5, -1.8, -0.1, 0.9, -1.8]),
                       #orbit
                      #  'q_0':  np.array([0.1, 0.8, -1.5,#lf
@@ -289,7 +289,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
                       # use real robot or simulation
-                      'real_robot': False} # note the frames are all aligned with base for joints = 0
+                      'real_robot': True} # note the frames are all aligned with base for joints = 0
 
 robot_params['go2'] ={'dt': 0.002,
                       'buffer_size': 5001, # 120 seconds

@@ -44,7 +44,7 @@ class QuadrupedJumpController(QuadrupedController):
         self.DEBUG = 'none' # 'none', 'pushup','swim','step'
         self.FLIGHT_DETECTION='heuristic'#, 'haptic', 'heuristic'
         self.debug_gui = True
-        self.jumpAgent = JumpAgent(self.robot_name)
+        self.jumpAgent = JumpAgent(self.robot_name, 'omnidirectional') # 'omnidirectional', 'forward'
         self.go0_conf = 'standDown'
         # self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
         # self.q_0_lo = conf.robot_params[self.robot_name]['q_0_lo']
@@ -355,7 +355,8 @@ class QuadrupedJumpController(QuadrupedController):
                 tau_ffwd = np.zeros(12)
             
             if self.DEBUG=='step':
-                p.qj_switch  = p.q_0_lo
+                #p.qj_switch  = p.q_0_lo
+                p.qj_switch  = p.q_retraction
                 switching_signal =  0.5*(1. + np.sin(2*np.pi*self.pid_tuning_gui.debug_freq * t_) )   
                 if (switching_signal  > 0.75) and not p.switch_on:
                     print(colored("SWITCH ON","red"))
@@ -480,8 +481,8 @@ if __name__ == '__main__':
         eul_0 = p.basePoseW[3:].copy()
 
         # define jump action (relative)
-        p.jumpDeltaStep = np.array([-0.4, 0.0, 0.])
-        p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
+        p.jumpDeltaStep = np.array([-0.2, -0.2, 0.0])
+        p.jumpDeltaOrient = np.array([0.0, 0.0, -0.785])
         if p.jumpDeltaStep[0]>0.:
             p.q_land = conf.robot_params[p.robot_name]['q_land_fwd']
         elif p.jumpDeltaStep[0]<0.:
