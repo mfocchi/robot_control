@@ -489,6 +489,7 @@ class QuadrupedJumpController(QuadrupedController):
         # define jump action (relative)
         p.jumpDeltaStep = np.array([0.4, 0.0, 0.])
         p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
+
         if p.jumpDeltaStep[0]>0.:
             p.q_land = conf.robot_params[p.robot_name]['q_land_fwd']
         elif p.jumpDeltaStep[0]<0.:
@@ -646,13 +647,14 @@ class QuadrupedJumpController(QuadrupedController):
                                 p.landing_error = p.target_position - p.landing_position
                                 p.orient_error = p.target_orientation - p.landing_orientation
                                 # it does not make sense to compute perc error considering variable Z either succeed or not
-                                perc_err_xy = 100. * np.linalg.norm(p.landing_error[:2]) / np.linalg.norm(com_0 - p.target_position)
-                                perc_err_orient = 100. * np.linalg.norm(p.orient_error) / np.linalg.norm(eul_0 - p.target_orientation)
+                                p.perc_err_xy = 100. * np.linalg.norm(p.landing_error[:2]) / np.linalg.norm(com_0 - p.target_position)
+                                p.perc_err_orient = 100. * np.linalg.norm(p.orient_error) / np.linalg.norm(eul_0 - p.target_orientation)
                                 print(colored(f"TOUCHDOWN detected at t {p.time}", "red"))
-                                print(colored(f"landed at {p.basePoseW} with  perc.  error xy {perc_err_xy} and perc orient_error {perc_err_orient}", "green"))
+                                print(colored(f"landed at {p.basePoseW} with  perc.  error xy {p.perc_err_xy} and perc orient_error {p.perc_err_orient}", "green"))
                                 print(colored(f"started at {com_0} and orient {eul_0}", "green"))
                                 print(colored(f"target at {p.target_position}, {p.target_orientation}", "green"))
-
+                                if self.STATISTICAL_ANALYSIS:
+                                    break
 
                                 p.time_td = p.time
                                 p.qdes_td = p.q_des.copy()   
@@ -740,7 +742,7 @@ if __name__ == '__main__':
 
             np.random.seed(0)  # create always the same random sequence
             for p.test in range(20):
-                print(colored(f"STATISTICAL_ANALYSIS TEST:{p.test}", "red"))
+                print(colored(f"STATISTICAL_ANALYSIS TEST:{p.test}", "blue"))
                 p.initVars()
                 p.changeMass('base_link', 1.0) #changing trunk mass of 100%
                 p.main_loop()
