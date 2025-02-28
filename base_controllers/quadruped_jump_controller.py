@@ -17,6 +17,7 @@ from landing_controller.controller.landingManager import LandingManager
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetLinkProperties, GetLinkProperties, SetLinkPropertiesRequest
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from gazebo_msgs.srv import SetModelConfiguration
 from base_controllers.utils.pidManager import PidManager
@@ -41,6 +42,7 @@ class QuadrupedJumpController(QuadrupedController):
     def __init__(self, robot_name="go1", launch_file=None):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
+        self.STATISTICAL_ANALYSIS = False
         self.DEBUG = 'none' # 'none', 'pushup','swim','step'
         self.FLIGHT_DETECTION='heuristic'#, 'haptic', 'heuristic'
         self.debug_gui = True
@@ -148,6 +150,27 @@ class QuadrupedJumpController(QuadrupedController):
             return self.time >= p.startTrust + p.T_th_total + p.T_fl
         else:
             print("wrong FLIGHT_DETECTION choice!!!")
+
+    def changeMass(self, link_name='base_link', percentage=0.1):
+        try:
+            self.set_mass = ros.ServiceProxy('/set_mass', SetLinkProperties)
+            #self.get_link_properties = ros.ServiceProxy('/gazebo/get_link_properties', GetLinkProperties)
+            #response = self.get_link_properties(link_name)
+            #original_mass = response.mass
+            #use the urdf one if you are changing it every sim
+            original_mass = self.robot.model.inertias[1].mass #cannot  use self.robot.model.getJointId('base_link')
+            print(colored(f"Original Mass of {link_name} : {original_mass}", "blue"))
+            max_delta_mass = original_mass*percentage
+            new_mass =  original_mass+max_delta_mass * np.random.uniform(low=-1, high=1, size=1)
+            request = SetLinkPropertiesRequest()
+            # Create request using response values
+            request.link_name = link_name
+            request.mass = original_mass
+            self.set_mass(request)
+
+            print(colored(f"Mass of {link_name} changed to : {request.mass}", "blue"))
+        except ros.ServiceException as e:
+            print("get_mass/set_mass Service call failed:", e)
 
     def resetRobot(self, basePoseDes=np.array([0, 0, 0.3, 0., 0., 0.])):
         # this sets the position of the joints
@@ -450,30 +473,13 @@ class QuadrupedJumpController(QuadrupedController):
         # Interpolation
         return (h00 * start) + (h10 * start_tangent) + (h01 * end) + (h11 * end_tangent)
 
-
-if __name__ == '__main__':
-    p = QuadrupedJumpController('go1')
-    world_name = 'fast.world'
-
-    try:
-        # p.startController(world_name='slow.world')
-        p.startController(world_name=world_name,
-                          use_ground_truth_pose=True,
-                          use_ground_truth_contacts=True,
-                          additional_args=['gui:='+str(p.use_gui),
-                                           'go0_conf:='+p.go0_conf,
-                                           'rviz:='+str(not p.real_robot)])
-        # initialize data stucture to use them with desired values
-        p.des_robot = RobotWrapper.BuildFromURDF(
-            os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf",
-            root_joint=pinocchio.JointModelFreeFlyer())
-
+    def main_loop(self):
         if p.real_robot:
             p.startTrust = 15.  # the startup procedure should be shorter than this! otherwise the time is wrong
             p.startupProcedure()
             p.updateKinematics()  # neeeded to call legodom to have an initial estimate of com position
         else:
-            p.startTrust = 1.
+            p.startTrust = 2.
             p.customStartupProcedure()
 
         # initial pose
@@ -481,8 +487,8 @@ if __name__ == '__main__':
         eul_0 = p.basePoseW[3:].copy()
 
         # define jump action (relative)
-        p.jumpDeltaStep = np.array([-0.2, -0.2, 0.0])
-        p.jumpDeltaOrient = np.array([0.0, 0.0, -0.785])
+        p.jumpDeltaStep = np.array([0.4, 0.0, 0.])
+        p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
         if p.jumpDeltaStep[0]>0.:
             p.q_land = conf.robot_params[p.robot_name]['q_land_fwd']
         elif p.jumpDeltaStep[0]<0.:
@@ -546,8 +552,8 @@ if __name__ == '__main__':
         p.W_feetRelPosDes = np.copy(p.W_contacts - com_0)
         p.W_contacts_sampled = np.copy(p.W_contacts)
 
-        # if not p.real_robot:
-        #      p.setSimSpeed(dt_sim=0.001, max_update_rate=50, iters=1500)
+        if not p.real_robot:
+            p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
         p.lm = LandingManager(p)
 
@@ -699,6 +705,53 @@ if __name__ == '__main__':
             p.sync_check()
 
             p.time = np.round(p.time + p.dt, 4)
+
+if __name__ == '__main__':
+
+    p = QuadrupedJumpController('go1')
+    world_name = 'fast.world'
+
+    np.random.seed(0)  # create always the same random sequence
+    #for custom set_mass plugins
+    os.environ["GAZEBO_PLUGIN_PATH"] += ":" + os.environ["LOCOSIM_DIR"] + '/robot_descriptions/gazebo_plugins/lib'
+
+    try:
+        # p.startController(world_name='slow.world')
+        p.startController(world_name=world_name,
+                          use_ground_truth_pose=True,
+                          use_ground_truth_contacts=True,
+                          additional_args=['gui:='+str(p.use_gui),
+                                           'go0_conf:='+p.go0_conf,
+                                           'rviz:='+str(not p.real_robot)])
+        # initialize data stucture to use them with desired values
+        p.des_robot = RobotWrapper.BuildFromURDF(
+            os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf",
+            root_joint=pinocchio.JointModelFreeFlyer())
+
+        if p.STATISTICAL_ANALYSIS:
+            import pandas as pd
+            try:
+                os.system('rm *.csv')
+            except:
+                pass
+            print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
+            columns = ['test', 'landing_error', 'orient_error', 'perc_err_xy', 'perc_err_orient']
+            p.df = pd.DataFrame(columns=columns)
+
+            np.random.seed(0)  # create always the same random sequence
+            for p.test in range(20):
+                print(colored(f"STATISTICAL_ANALYSIS TEST:{p.test}", "red"))
+                p.initVars()
+                p.changeMass('base_link', 1.0) #changing trunk mass of 100%
+                p.main_loop()
+                dict = {'test': p.test, 'landing_error': p.landing_error, 'orient_error': p.orient_error,
+                        'perc_err_xy': p.perc_err_xy, 'perc_err_orient': p.perc_err_orient}
+                df_dict = pd.DataFrame([dict])
+                p.df = pd.concat([p.df, df_dict], ignore_index=True)
+                p.df.to_csv(f'statistic.csv', index=None)
+
+        else:
+            p.main_loop()
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
