@@ -209,26 +209,28 @@ robot_params['aliengo'] ={'dt': 0.002,
 robot_params['go1'] ={'dt': 0.002,
                       'buffer_size': 25001, # 120 seconds
                       # simulation gains
-                      'kp': np.array([30., 30., 30.]*4),
-                      'kd': np.array([3., 3., 3.]*4),
-                      'ki': np.array([0., 0., 0.]*4),
+
+                      # default config
+                      # 'kp': np.array([30., 30., 30.]*4),
+                      # 'kd': np.array([3., 3., 3.]*4),
+                      # 'ki': np.array([0., 0., 0.]*4),
                       #Orbit
-                      # 'kp': np.array([50., 50., 50.] * 4),
-                      # 'kd': np.array([3, 3, 3] * 4),
-                      # 'ki': np.array([0., 0., 0.] * 4),
+                      'kp': np.array([50., 50., 50.] * 4),
+                      'kd': np.array([3, 3, 3] * 4),
+                      'ki': np.array([0., 0., 0.] * 4),
 
-                      'kp_land': np.array([30., 30., 30.]*4),
-                      'kd_land': np.array([3., 3., 3.]*4),
-                      'ki_land': np.array([0., 0., 0.]*4),
-
-                      'kp_swing':  np.array([30., 7.,4.6]*4),
-                      'kd_swing':  np.array([.2, .2, .24]*4),
-                      'ki_swing':  np.array([2., 2., 2.]*4),
-
+                      #default config
+                      # 'kp_swing':  np.array([30., 30.,30]*4),
+                      # 'kd_swing':  np.array([.2, .2, .24]*4),
+                      # 'ki_swing':  np.array([2., 2., 2.]*4),
                       #orbit
-                      # 'kp_swing': np.array([30., 30., 30.] * 4),
-                      # 'kd_swing': np.array([0.3, 0.3, 0.3] * 4),
-                      # 'ki_swing': np.array([0., 0., 0.] * 4),
+                      'kp_swing': np.array([30., 30., 30.] * 4),
+                      'kd_swing': np.array([0.3, 0.3, 0.3] * 4),
+                      'ki_swing': np.array([0., 0., 0.] * 4),
+
+                      'kp_land': np.array([30., 30., 30.] * 4),
+                      'kd_land': np.array([3., 3., 3.] * 4),
+                      'ki_land': np.array([0., 0., 0.] * 4),
 
                       # joint pid + wbc (optional)
                       'kp_wbc': np.array([15., 15., 15.]*4),#np.array([10., 10., 10.]*4),
@@ -264,21 +266,22 @@ robot_params['go1'] ={'dt': 0.002,
                       'kp_ang_real': np.array([20., 35., 20.]), # #np.array([30., 50., 30.]), # R P Y
                       'kd_ang_real': np.array([1.5, 2.5, 1.5]), #np.array([2., 4., 2.]),
                       # joint configuration
-                      'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
-
+                      #default configuration
+                      #'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
                       # q0 orbit
-                      #  'q_0':  np.array([0.1, 0.8, -1.6,#lf
-                      #                    0.1, 1.0, -1.6,#lh
-                      #                    -0.1, 0.8, -1.6,#rf
-                      #                    -0.1, 1.0, -1.6]),#rh
+                       'q_0':  np.array([0.1, 0.8, -1.6,#lf
+                                         0.1, 1.0, -1.6,#lh
+                                         -0.1, 0.8, -1.6,#rf
+                                         -0.1, 1.0, -1.6]),#rh
                       'q_retraction': np.array([0.23, 1.38, -2.46, 0.23, 1.68, -2.31, -0.23, 1.38, -2.46, -0.23, 1.68, -2.31]),
 
-                      'q_final': np.array([0.1, 0.9, -1.8, 0.1, 0.9, -1.8, -0.1, 0.9, -1.8, -0.1, 0.9, -1.8]),
-                      #orbit
-                      # 'q_final': np.array([0.1, 0.8, -1.6,#lf
-                      #                    0.1, 1.0, -1.6,#lh
-                      #                    -0.1, 0.8, -1.6,#rf
-                      #                    -0.1, 1.0, -1.6]),#rh
+                      #default configuration
+                      #'q_final': np.array([0.1, 0.9, -1.8, 0.1, 0.9, -1.8, -0.1, 0.9, -1.8, -0.1, 0.9, -1.8]),
+                      #q final orbit
+                      'q_final': np.array([0.1, 0.8, -1.6,#lf
+                                         0.1, 1.0, -1.6,#lh
+                                         -0.1, 0.8, -1.6,#rf
+                                         -0.1, 1.0, -1.6]),#rh
                       #Forward
                       'q_land_fwd':  np.array([0.1, 0.75, -1.8,  0.1, 0.75, -1.8, -0.1, 0.75, -1.8, -0.1, 0.75, -1.8]),
                       #backward
@@ -289,7 +292,7 @@ robot_params['go1'] ={'dt': 0.002,
 
                       'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
                       'q_0_td': np.array([0.1789, 1.2234, -2.2329, 0.1867, 1.4733, -2.1055, -0.1784, 1.2230, -2.2327, -0.1861, 1.4733, -2.1053]),
-                      'landing_duration': 0.4,
+                      'landing_duration': 1.4,
                         # 'q_0_lo': np.array([0.3430, 1.5495, -2.6620, 0.3433, 1.9171, -2.4902, -0.3425, 1.5490, -2.6620, -0.3424, 1.9171, -2.4901]),
                       'joint_names': ['lf_haa_joint',  'lf_hfe_joint', 'lf_kfe_joint',
                                       'lh_haa_joint',  'lh_hfe_joint', 'lh_kfe_joint',

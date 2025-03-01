@@ -153,7 +153,7 @@ class QuadrupedJumpController(QuadrupedController):
         else:
             print("wrong FLIGHT_DETECTION choice!!!")
 
-    def changeMass(self, link_name='base_link', percentage=0.1):
+    def changeTrunkMass(self, link_name='base_link', percentage=0.1):
         try:
             self.set_mass = ros.ServiceProxy('/set_mass', SetLinkProperties)
             #self.get_link_properties = ros.ServiceProxy('/gazebo/get_link_properties', GetLinkProperties)
@@ -167,7 +167,7 @@ class QuadrupedJumpController(QuadrupedController):
             request = SetLinkPropertiesRequest()
             # Create request using response values
             request.link_name = link_name
-            request.mass = original_mass
+            request.mass = new_mass
             self.set_mass(request)
 
             print(colored(f"Mass of {link_name} changed to : {request.mass}", "blue"))
@@ -510,7 +510,7 @@ class QuadrupedJumpController(QuadrupedController):
         p.target_orientation = eul_0 + p.jumpDeltaOrient
 
         # we have to do this because the training was done for height 0.3 TODO
-        default_start = np.array([0., 0., 0.3])
+        default_start = np.array([0., 0., 0.31])
 
         # extract liftoff position orientation from action
         # linear
@@ -747,10 +747,10 @@ if __name__ == '__main__':
             p.df = pd.DataFrame(columns=columns)
 
             np.random.seed(0)  # create always the same random sequence
-            for p.test in range(20):
+            for p.test in range(100):
                 print(colored(f"STATISTICAL_ANALYSIS TEST:{p.test}", "blue"))
                 p.initVars()
-                p.changeMass('base_link', 1.0) #changing trunk mass of 100%
+                p.changeTrunkMass('base_link', 0.5) #changing trunk mass of 100%
                 p.main_loop()
                 dict = {'test': p.test, 'landing_error': p.landing_error, 'orient_error': p.orient_error,
                         'perc_err_xy': p.perc_err_xy, 'perc_err_orient': p.perc_err_orient}
