@@ -53,6 +53,8 @@ class QuadrupedJumpController(QuadrupedController):
         self.q_retraction = conf.robot_params[self.robot_name]['q_retraction']
         self.q_final = conf.robot_params[self.robot_name]['q_final']
         self.use_landing_controller = False
+        if not self.real_robot:
+            self.FLIGHT_DETECTION = 'haptic'  #in sim use haptic!
 
         if self.real_robot:
             print(colored(
@@ -482,6 +484,7 @@ class QuadrupedJumpController(QuadrupedController):
             p.startTrust = 2.
             p.customStartupProcedure()
 
+
         # initial pose
         com_0 = p.basePoseW[:3].copy()
         eul_0 = p.basePoseW[3:].copy()
@@ -490,13 +493,15 @@ class QuadrupedJumpController(QuadrupedController):
         p.jumpDeltaStep = np.array([0.4, 0.0, 0.])
         p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
 
-        if p.jumpDeltaStep[0]>0.:
-            p.q_land = conf.robot_params[p.robot_name]['q_land_fwd']
-        elif p.jumpDeltaStep[0]<0.:
-            p.q_land = conf.robot_params[p.robot_name]['q_land_bwd']
+        if p.real_robot:
+            if p.jumpDeltaStep[0]>0.:
+                p.q_land = conf.robot_params[p.robot_name]['q_land_fwd']
+            elif p.jumpDeltaStep[0]<0.:
+                p.q_land = conf.robot_params[p.robot_name]['q_land_bwd']
+            else:
+                p.q_land = p.q_final
         else:
-            p.q_land = p.q_final
-
+            p.q_land = p.q_final # do not use in real robot
         # get the action from the policy (use p.jumpAgent to get values)
         p.jumpAgent.act(p.jumpDeltaStep, p.jumpDeltaOrient)
 
@@ -641,20 +646,8 @@ class QuadrupedJumpController(QuadrupedController):
                                                     conf.robot_params[p.robot_name][f'kd{real_str}_land'],
                                                     conf.robot_params[p.robot_name][f'ki{real_str}_land'])
                                 print(colored(f"pdi: {p.pid.joint_pid}"))
-                                p.landing_position = p.u.linPart(p.basePoseW)
-                                p.landing_orientation = p.u.angPart(
-                                    p.basePoseW)
-                                p.landing_error = p.target_position - p.landing_position
-                                p.orient_error = p.target_orientation - p.landing_orientation
-                                # it does not make sense to compute perc error considering variable Z either succeed or not
-                                p.perc_err_xy = 100. * np.linalg.norm(p.landing_error[:2]) / np.linalg.norm(com_0 - p.target_position)
-                                p.perc_err_orient = 100. * np.linalg.norm(p.orient_error) / np.linalg.norm(eul_0 - p.target_orientation)
                                 print(colored(f"TOUCHDOWN detected at t {p.time}", "red"))
-                                print(colored(f"landed at {p.basePoseW} with  perc.  error xy {p.perc_err_xy} and perc orient_error {p.perc_err_orient}", "green"))
-                                print(colored(f"started at {com_0} and orient {eul_0}", "green"))
-                                print(colored(f"target at {p.target_position}, {p.target_orientation}", "green"))
-                                if self.STATISTICAL_ANALYSIS:
-                                    break
+
 
                                 p.time_td = p.time
                                 p.qdes_td = p.q_des.copy()   
@@ -668,6 +661,19 @@ class QuadrupedJumpController(QuadrupedController):
                             elapsed_time = p.time - p.time_td
                             elapsed_ratio = np.clip(elapsed_time / 0.4, 0, 1)
                             p.q_des = p.cerp(p.qdes_td, p.q_final,  elapsed_ratio).copy()
+
+                            if elapsed_ratio >=1:
+                                p.landing_position = p.u.linPart(p.basePoseW)
+                                p.landing_orientation = p.u.angPart(p.basePoseW)
+                                p.landing_error = p.target_position - p.landing_position
+                                p.orient_error = p.target_orientation - p.landing_orientation
+                                # it does not make sense to compute perc error considering variable Z either succeed or not
+                                p.perc_err_xy = 100. * np.linalg.norm(p.landing_error[:2]) / np.linalg.norm(com_0 - p.target_position)
+                                p.perc_err_orient = 100. * np.linalg.norm(p.orient_error) / np.linalg.norm(eul_0 - p.target_orientation)
+                                print(colored(f"landed at {p.basePoseW} with  perc.  error xy {p.perc_err_xy} and perc orient_error {p.perc_err_orient}", "green"))
+                                print(colored(f"started at {com_0} and orient {eul_0}", "green"))
+                                print(colored(f"target at {p.target_position}, {p.target_orientation}", "green"))
+                                break
 
                 else:
 
