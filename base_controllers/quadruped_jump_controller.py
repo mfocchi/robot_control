@@ -659,7 +659,7 @@ class QuadrupedJumpController(QuadrupedController):
                                                                                         p.basePoseW)
                             # if p.real_robot:
                             elapsed_time = p.time - p.time_td
-                            elapsed_ratio = np.clip(elapsed_time / 0.4, 0, 1)
+                            elapsed_ratio = np.clip(elapsed_time / conf.robot_params[p.robot_name]['landing_duration'], 0, 1)
                             p.q_des = p.cerp(p.qdes_td, p.q_final,  elapsed_ratio).copy()
 
                             if elapsed_ratio >=1:
