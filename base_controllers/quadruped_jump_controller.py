@@ -17,9 +17,10 @@ from landing_controller.controller.landingManager import LandingManager
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.msg import ModelState
-from gazebo_msgs.srv import SetLinkProperties, GetLinkProperties, SetLinkPropertiesRequest
+from gazebo_msgs.srv import SetLinkProperties, GetLinkProperties, GetJointProperties, SetLinkPropertiesRequest
 from gazebo_msgs.srv import SetModelConfigurationRequest
 from gazebo_msgs.srv import SetModelConfiguration
+from set_damping_plugin.srv import SetFloat
 from base_controllers.utils.pidManager import PidManager
 from gazebo_ros import gazebo_interface
 from termcolor import colored
@@ -89,6 +90,8 @@ class QuadrupedJumpController(QuadrupedController):
         # for debug
         self.switch_on = False
         self.t0 = None
+        self.new_mass = 0
+        self.new_damping = 0
 
         self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.set_state = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -156,23 +159,37 @@ class QuadrupedJumpController(QuadrupedController):
     def changeTrunkMass(self, link_name='base_link', percentage=0.1):
         try:
             self.set_mass = ros.ServiceProxy('/set_mass', SetLinkProperties)
-            #self.get_link_properties = ros.ServiceProxy('/gazebo/get_link_properties', GetLinkProperties)
-            #response = self.get_link_properties(link_name)
-            #original_mass = response.mass
+
             #use the urdf one if you are changing it every sim
-            original_mass = self.robot.model.inertias[1].mass #cannot  use self.robot.model.getJointId('base_link')
-            print(colored(f"Original Mass of {link_name} : {original_mass}", "blue"))
-            max_delta_mass = original_mass*percentage
-            new_mass =  original_mass+max_delta_mass * np.random.uniform(low=-1, high=1, size=1)
+            #original_mass = self.robot.model.inertias[1].mass #cannot  use self.robot.model.getJointId('base_link')
+            print(colored(f"Original Trunk Mass of base_link : {p.original_mass}", "blue"))
+
+            max_delta_mass = self.original_mass*percentage
+            self.new_mass =  self.original_mass+max_delta_mass * np.random.uniform(low=-1, high=1, size=1)
             request = SetLinkPropertiesRequest()
             # Create request using response values
             request.link_name = link_name
-            request.mass = new_mass
+            request.mass = self.new_mass
             self.set_mass(request)
 
             print(colored(f"Mass of {link_name} changed to : {request.mass}", "blue"))
         except ros.ServiceException as e:
             print("get_mass/set_mass Service call failed:", e)
+
+    def changeJointDamping(self, max_damping):
+        try:
+            self.set_damping = ros.ServiceProxy('/set_joint_damping', SetFloat)
+            #get original value of damping (for some reason it does not work)
+            # get_joint_properties = ros.ServiceProxy('/gazebo/get_joint_properties', GetJointProperties)
+            # response = get_joint_properties('lf_haa_joint')
+            # p.original_damping = response.damping
+            # print(colored(f"Original Damping : {p.original_damping}", "blue"))
+            self.new_damping = max_damping * np.random.uniform(low=0, high=1, size=1)
+            # Create request using response values
+            self.set_damping(self.new_damping)
+            print(colored(f"Joint damping  changed to : {self.new_damping}", "blue"))
+        except ros.ServiceException as e:
+            print("set_damping Service call failed:", e)
 
     def resetRobot(self, basePoseDes=np.array([0, 0, 0.3, 0., 0., 0.])):
         # this sets the position of the joints
@@ -743,16 +760,22 @@ if __name__ == '__main__':
             except:
                 pass
             print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
-            columns = ['test', 'landing_error', 'orient_error', 'perc_err_xy', 'perc_err_orient']
+            columns = ['test', 'mass', 'damping', 'landing_error', 'orient_error', 'perc_err_xy', 'perc_err_orient']
             p.df = pd.DataFrame(columns=columns)
+            #get original value of mass
+            get_link_properties = ros.ServiceProxy('/gazebo/get_link_properties', GetLinkProperties)
+            response = get_link_properties('base_link')
+            p.original_mass = response.mass
+
 
             np.random.seed(0)  # create always the same random sequence
             for p.test in range(100):
                 print(colored(f"STATISTICAL_ANALYSIS TEST:{p.test}", "blue"))
                 p.initVars()
-                p.changeTrunkMass('base_link', 0.5) #changing trunk mass of 100%
+                #p.changeTrunkMass('base_link', 0.5) #changing trunk mass of 100%
+                p.changeJointDamping(2)  # absolute damping
                 p.main_loop()
-                dict = {'test': p.test, 'landing_error': p.landing_error, 'orient_error': p.orient_error,
+                dict = {'test': p.test, 'mass': p.new_mass, 'damping': p.new_damping, 'landing_error': p.landing_error, 'orient_error': p.orient_error,
                         'perc_err_xy': p.perc_err_xy, 'perc_err_orient': p.perc_err_orient}
                 df_dict = pd.DataFrame([dict])
                 p.df = pd.concat([p.df, df_dict], ignore_index=True)
