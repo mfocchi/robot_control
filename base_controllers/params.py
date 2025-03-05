@@ -120,80 +120,84 @@ robot_params['solo_fw'] ={'dt': 0.002,
                         'buffer_size': 1501} # note the frames are all aligned with base for joints = 0
 
 robot_params['aliengo'] ={'dt': 0.002,
-                        'kp': np.array([60., 90., 60.]*4),
-                        'kd': np.array([10., 10., 10.]*4),
-                        'ki': np.array([0., 0., 0.]*4),
+                          'kp': np.array([60., 90., 60.]*4),
+                          'kd': np.array([10., 10., 10.]*4),
+                          'ki': np.array([0., 0., 0.]*4),
 
-                        'kp_swing':  np.array([20., 30., 20.]*4),
-                        'kd_swing':  np.array([1., 1., 1.]*4),
-                        'ki_swing':  np.array([0., 0., 0.]*4),
 
-                        'kp_land': np.array([60., 90., 60.]*4),
-                        'kd_land': np.array([10., 10., 10.]*4),
-                        'ki_land': np.array([0., 0., 0.]*4),
+                          'kp_swing':  np.array([20., 30., 20.]*4),
+                          'kd_swing':  np.array([1., 1., 1.]*4),
+                          'ki_swing':  np.array([0., 0., 0.]*4),
 
-                        'kp_real': np.array([20., 30., 30.]*4),
-                        'kd_real': np.array([1., 1., 1.]*4),
-                        'ki_real': np.array([1., 1., 1.]*4),
+                          'kp_land': np.array([60., 90., 60.]*4),
+                          'kd_land': np.array([10., 10., 10.]*4),
+                          'ki_land': np.array([0., 0., 0.]*4),
 
-                        # 'kp_real': np.array([30., 30.,30.]*4),
-                        # 'kd_real': np.array([.15, .1, .15]*4),
-                        # 'ki_real': np.array([2., 2., 2.]*4),
-                        
-                        # 'kp_real_swing':  np.array([20., 20., 20]*4),
-                        # 'kd_real_swing':  np.array([1., 1., 1.]*4),
-                        # 'ki_real_swing':  np.array([0., 0., 0.]*4),
+                          'kp_real': np.array([20., 30., 30.]*4),
+                          'kd_real': np.array([1., 1., 1.]*4),
+                          'ki_real': np.array([1., 1., 1.]*4),
 
-                        'kp_real_swing':  np.array([15., 15., 15]*4),
-                        'kd_real_swing':  np.array([1., 1., 1.]*4),
-                        'ki_real_swing':  np.array([0., 0., 0.]*4),
+                          'kp_real_swing':  np.array([15., 15., 15]*4),
+                          'kd_real_swing':  np.array([1., 1., 1.]*4),
+                          'ki_real_swing':  np.array([0., 0., 0.]*4),
 
-                        'kp_real_land': np.array([15., 15., 15]*4),
-                        'kd_real_land': np.array([1., 1., 1.]*4),
-                        'ki_real_land': np.array([0., 0., 0.]*4),
+                          'kp_real_land': np.array([15., 15., 15]*4),
+                          'kd_real_land': np.array([1., 1., 1.]*4),
+                          'ki_real_land': np.array([0., 0., 0.]*4),
 
-                        # SIM ---------------------------
+                          # SIM ---------------------------
 
-                        # joint pid + wbc (optional)
-                        'kp_wbc': np.array([60., 60., 60.]*4),
-                        'kd_wbc': np.array([10., 10., 10.]*4),
-                        'ki_wbc': np.array([0., 0., 0.]*4),
-                        # virtual impedance wrench control
-                        'kp_lin': np.array([1000., 1000., 800.]),
-                        'kd_lin': np.array([150., 150., 100.]), 
-                        'kp_ang': np.array([200., 200., 100.]), 
-                        'kd_ang': np.array([10., 20., 20.]), 
+                          # joint pid + wbc (optional)
+                          'kp_wbc': np.array([60., 60., 60.]*4),
+                          'kd_wbc': np.array([10., 10., 10.]*4),
+                          'ki_wbc': np.array([0., 0., 0.]*4),
+                          # virtual impedance wrench control
+                          'kp_lin': np.array([1000., 1000., 800.]),
+                          'kd_lin': np.array([150., 150., 100.]),
+                          'kp_ang': np.array([200., 200., 100.]),
+                          'kd_ang': np.array([10., 20., 20.]),
 
-                        # REAL---------------------------
-                        # joint pid for landing contoller after td + wbc (optional)
-                        'kp_wbc_real': np.array([10., 10., 10.]*4),
-                        'kd_wbc_real': np.array([1., 1., 1.]*4),
-                        'ki_wbc_real': np.array([0., 0., 0.]*4),
+                          # REAL---------------------------
+                          # joint pid for landing contoller after td + wbc (optional)
+                          'kp_wbc_real': np.array([10., 10., 10.]*4),
+                          'kd_wbc_real': np.array([1., 1., 1.]*4),
+                          'ki_wbc_real': np.array([0., 0., 0.]*4),
 
                         'kp_lin_real': np.array([1000., 1000., 1000.]),
                         'kd_lin_real': np.array([200., 150., 200.]),
                         'kp_ang_real': np.array([300., 300., 200.]),
                         'kd_ang_real': np.array([10., 20., 20.]),
+
+                          #joint configuration
+                          #default
+                          #'q_0': np.array([0.2, 0.78, -1.7, 0.20, 0.78, -1.7, -0.20, 0.78, -1.7, -0.20, 0.78, -1.7]),  # this is to set the desired heigth for the startup phase
+                          #orbit
+                          'q_0': np.array([0.0951, 0.8303,-1.5419,
+                                           0.0980, 0.9864, -1.4778,
+                                           -0.0948, 0.8305,-1.5420,
+                                           -0.0979,0.9864, -1.4779]),
+
+                         'q_retraction': np.array([0.2867, 1.48, -2.6,
+                                0.2867, 1.8, -2.48,
+                                -0.2867, 1.48, -2.6,
+                                -0.2867, 1.8, -2.48]),
+                          # default
+                          #'q_final': np.array([0.2, 1.1, -1.8, 0.2, 1.1, -1.8, -0.2, 1.1, -1.8, -0.2, 1.1, -1.8]),
+                          # orbit
+                          'q_final': np.array([0.1, 0.8, -1.6,  # lf
+                                               0.1, 1.0, -1.6,  # lh
+                                               -0.1, 0.8, -1.6,  # rf
+                                               -0.1, 1.0, -1.6]),  # rh
+
+
                         #forward
                         'q_land_fwd':  np.array([0.1, 0.6, -1.8,  0.1, 0.6, -1.8, -0.1, 0.6, -1.8, -0.1, 0.6, -1.8]),
                         #backward
                         'q_land_bwd':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
-
-                        'q_final':  np.array([0.2, 1.1, -1.8,  0.2, 1.1, -1.8, -0.2, 1.1, -1.8, -0.2, 1.1, -1.8]),
                         'landing_duration': 1.4,
-                        #'q_0':  np.array([0.2, 0.7, -1.4, -0.2, 0.7, -1.4, 0.2, 0.7, -1.4, -0.2, 0.7, -1.4]),
-                        'q_0':  np.array([0.2, 0.78, -1.7,   0.20, 0.78, -1.7, -0.20, 0.78, -1.7, -0.20, 0.78, -1.7]), # this is to set the desired heigth for the startup phase
-                        #'q_fold': np.array([0.6, 1.7, -2.77, 0.6, 1.7, -2.77, -0.6, 1.52, -2.77, -0.6, 1.52, -2.77]),
-                        # 'q_fold': np.array([0.2, 1.3, -2.8,  -0.2, 1.3, -2.8, 0.2, 1.3, -2.8, -0.2, 1.3, -2.8]),
-                        'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]), #thjis is for the startup phase
-
-                        'q_retraction':  np.array([0.2867, 1.48, -2.6, 
-                                             0.2867, 1.8, -2.48,
-                                             -0.2867, 1.48, -2.6,
-                                             -0.2867, 1.8, -2.48]),
-                        # q_0_lo = torch.tensor([0.2867, -0.2870, 0.2488, -0.2475, 1.4799, 1.4788, 1.8103, 1.8094, -2.6072, -2.6055, -2.4796, -2.4787])
-
-
+                        'com_z0_training' : 0.375,
+                        'q_0_td': np.array([0.1789, 1.2234, -2.2329, 0.1867, 1.4733, -2.1055, -0.1784, 1.2230, -2.2327, -0.1861, 1.4733, -2.1053]),
+                        'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),  #thjis is for the startup phase
                         'joint_names': ['lf_haa_joint', 'lf_hfe_joint', 'lf_kfe_joint',
                                        'lh_haa_joint', 'lh_hfe_joint', 'lh_kfe_joint',
                                        'rf_haa_joint', 'rf_hfe_joint', 'rf_kfe_joint',
@@ -293,6 +297,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'q_fold': np.array([0.2, 1.7, -2.7, 0.2,  1.7, -2.7, -0.2, 1.7,  -2.7, -0.2, 1.7, -2.7]),
                       'q_0_td': np.array([0.1789, 1.2234, -2.2329, 0.1867, 1.4733, -2.1055, -0.1784, 1.2230, -2.2327, -0.1861, 1.4733, -2.1053]),
                       'landing_duration': 1.4,
+                      'com_z0_training': 0.31,
                         # 'q_0_lo': np.array([0.3430, 1.5495, -2.6620, 0.3433, 1.9171, -2.4902, -0.3425, 1.5490, -2.6620, -0.3424, 1.9171, -2.4901]),
                       'joint_names': ['lf_haa_joint',  'lf_hfe_joint', 'lf_kfe_joint',
                                       'lh_haa_joint',  'lh_hfe_joint', 'lh_kfe_joint',

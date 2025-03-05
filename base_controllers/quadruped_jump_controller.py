@@ -502,7 +502,7 @@ class QuadrupedJumpController(QuadrupedController):
             p.customStartupProcedure()
 
 
-        # initial pose
+        # initial pose (we consider com the base origin)
         com_0 = p.basePoseW[:3].copy()
         eul_0 = p.basePoseW[3:].copy()
 
@@ -527,7 +527,7 @@ class QuadrupedJumpController(QuadrupedController):
         p.target_orientation = eul_0 + p.jumpDeltaOrient
 
         # we have to do this because the training was done for height 0.3 TODO
-        default_start = np.array([0., 0., 0.31])
+        default_start = np.array([0., 0., conf.robot_params[p.robot_name]['com_z0_training']])
 
         # extract liftoff position orientation from action
         # linear
@@ -679,7 +679,7 @@ class QuadrupedJumpController(QuadrupedController):
                             elapsed_ratio = np.clip(elapsed_time / conf.robot_params[p.robot_name]['landing_duration'], 0, 1)
                             p.q_des = p.cerp(p.qdes_td, p.q_final,  elapsed_ratio).copy()
 
-                            if elapsed_ratio >=1:
+                            if elapsed_time >= (conf.robot_params[p.robot_name]['landing_duration']+1.):
                                 p.landing_position = p.u.linPart(p.basePoseW)
                                 p.landing_orientation = p.u.angPart(p.basePoseW)
                                 p.landing_error = p.target_position - p.landing_position
@@ -738,7 +738,7 @@ if __name__ == '__main__':
 
     np.random.seed(0)  # create always the same random sequence
     #for custom set_mass plugins
-    os.environ["GAZEBO_PLUGIN_PATH"] += ":" + os.environ["LOCOSIM_DIR"] + '/robot_descriptions/gazebo_plugins/lib'
+    os.environ["GAZEBO_PLUGIN_PATH"] = os.environ["LOCOSIM_DIR"] + '/robot_descriptions/gazebo_plugins/lib'
 
     try:
         # p.startController(world_name='slow.world')
@@ -756,7 +756,7 @@ if __name__ == '__main__':
         if p.STATISTICAL_ANALYSIS:
             import pandas as pd
             try:
-                os.system('rm *.csv')
+                os.system('rm statistics.csv')
             except:
                 pass
             print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
