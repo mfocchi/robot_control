@@ -387,11 +387,11 @@ class QuadrupedJumpController(QuadrupedController):
                 qd_des[3 * leg:3 * (leg+1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
                 
             if self.DEBUG!='swim' and self.DEBUG!='step':
-                tau_ffwd, self.grForcesW_wbc = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
+                tau_ffwd, self.grForcesW_des = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
                                                             W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
                                                             comControlled=False, type='projection', stance_legs=self.stance_legs)
             # OLD
-            # tau_ffwd, self.grForcesW_wbc = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
+            # tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
             
             else:
                 tau_ffwd = np.zeros(12)
@@ -612,6 +612,7 @@ class QuadrupedJumpController(QuadrupedController):
                     p.q_t_th = p.q_des.copy()
                     p.qd_t_th = p.qd_des.copy()
                     p.tau_ffwd = np.zeros(12)
+                    p.grForcesW_des = np.zeros(3 * self.robot.nee)
                     print(colored(f"thrust completed! at time {p.time}", "red"))
                     # Reducing gains for more complaint landing  ATTENTIONNN!!! THIS MIGHT LEAD TO INSTABILITIES AND BREAK THE REAL ROBOT
                     real_str = '_real' if p.real_robot else ''
@@ -773,7 +774,7 @@ if __name__ == '__main__':
                 print(colored(f"STATISTICAL_ANALYSIS TEST:{p.test}", "blue"))
                 p.initVars()
                 #p.changeTrunkMass('base_link', 0.5) #changing trunk mass of 100%
-                p.changeJointDamping(2)  # absolute damping
+                p.changeJointDamping(2.)  # absolute damping
                 p.main_loop()
                 dict = {'test': p.test, 'mass': p.new_mass, 'damping': p.new_damping, 'landing_error': p.landing_error, 'orient_error': p.orient_error,
                         'perc_err_xy': p.perc_err_xy, 'perc_err_orient': p.perc_err_orient}

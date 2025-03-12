@@ -340,7 +340,7 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
     return ax
 
 def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None,
-              sharex=True, sharey=False, start=0, end=-1):
+              sharex=True, sharey=False, start=0, end=-1, title=None):
     plot_var_log = None
     plot_var_des_log = None
     if name=='position':
@@ -404,8 +404,12 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         figure_id = 1
     else:
         figure_id = max(plt.get_fignums())+1
-    fig = plt.figure(figure_id)                
-    fig.suptitle(name, fontsize=20)
+    fig = plt.figure(figure_id)
+
+    if title is not None:
+        fig.suptitle(title, fontsize=20)
+    else:
+        fig.suptitle(name, fontsize=20)
 
     if joint_names is None:
         if njoints <= 6:
@@ -650,7 +654,7 @@ def plotFrame(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=No
     return fig
 
 def plotFrameLinear(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist_log=None, Twist_log=None, des_Acc_log=None, Acc_log=None,
-              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=False, start=0, end=-1, custom_labels=None):
+              des_Wrench_log=None, Wrench_log=None, title=None, frame=None, sharex=True, sharey=False, start=0, end=-1, wrapp_labels=None, custom_labels=None):
     plot_var_log = None
     plot_var_des_log = None
     labels = ["", "", ""]
@@ -884,7 +888,7 @@ def plotFrameAngular(name, time_log, des_Pose_log=None, Pose_log=None, des_Twist
 
 
 def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_LinTwist_log=None, LinTwist_log=None, des_Forces_log=None,
-                 Forces_log=None, gt_Forces_log=None, contact_states=None, frame=None, sharex=True, sharey=True, start=0, end=-1):
+                 Forces_log=None, gt_Forces_log=None, contact_states=None, frame=None, sharex=True, sharey=True, start=0, end=-1, title=None):
     # %% Input plots
     plot_var_log = None
     plot_var_des_log = None
@@ -912,9 +916,10 @@ def plotContacts(name, time_log, des_LinPose_log=None, LinPose_log=None, des_Lin
     else:
         print("wrong choice")
 
-    title = 'Contacts ' + name
-    if frame is not None:
-        title += ' ' + frame
+    if title is None:
+        title = 'Contacts ' + name
+        if frame is not None:
+            title += ' ' + frame
 
     dt = np.round(time_log[1] - time_log[0], 3)
     if type(start) == str:
