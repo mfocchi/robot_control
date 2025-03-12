@@ -80,8 +80,11 @@ class TrackedVehicleSimulator3D:
 
         self.w_patch_pos_l = np.zeros((self.track_param.parts_longitudinal*self.track_param.parts_lateral, 3))
         self.w_patch_pos_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral,3))
-        self.w_patch_pos_l_baseline = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
-        self.w_patch_pos_r_baseline = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        self.intersection_points_l =  np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral,3))
+        self.intersection_points_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        # this is to debug the baseline from which you cast the rays
+        # self.w_patch_pos_l_baseline = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
+        # self.w_patch_pos_r_baseline = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
         self.w_patch_vel_l = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
         self.w_patch_vel_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
         self.w_Fg_patch_l = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
@@ -93,8 +96,6 @@ class TrackedVehicleSimulator3D:
         #these are just for the unit test
         self.t_end = 20.  # [s]
         self.pose_init = [0., 0., 0.0,0,0,0]  # position in WF, rpy angles
-        #sloped test
-        #self.pose_init = [24., 7., 0.0, 0, 0, 0]  # position in WF, rpy angles
 
         self.twist_init = [0, 0.0, 0,0,0,0]  # in WF
         self.number_of_steps = np.int32(self.t_end / self.dt)
@@ -108,6 +109,8 @@ class TrackedVehicleSimulator3D:
         self.pose_des = np.zeros(3)
         self.orient_des = np.zeros(3)
         self.rk45F = RK45F_step(self.dynamics3D, adaptive_step=True)
+        self.slow_down_factor = 1.0
+        self.out_of_frequency_counter = 0
 
     def setTerrainManager(self, terrain_manager):
         self.terrain_manager = terrain_manager
@@ -116,8 +119,6 @@ class TrackedVehicleSimulator3D:
         pc = pose[:3]
         pc_d = twist[:3]
         w_omega = twist[3:]
-        w_R_terr = self.math_utils.eul2Rot(np.array([terr_roll, terr_pitch, terr_yaw]))
-        self.terrain_normal = w_R_terr[:,2]
 
         #projection of com on the ground level
         pc_ = pc -self.consider_robot_height*self.w_com_height_vector
@@ -142,7 +143,7 @@ class TrackedVehicleSimulator3D:
         #moments due to penetration
         #compute projector on tx, ty contact plane
         N = np.eye(3) -  np.multiply.outer(self.terrain_normal.ravel(), self.terrain_normal.ravel())
-        w_e_o =   computeOrientationError(w_R_b, w_R_terr)
+        w_e_o =   computeOrientationError(w_R_b, self.w_R_terr)
         b_e_o = w_R_b.T.dot(w_e_o)
         #this projection is fundamental
         w_Mg = N.dot(self.ground.Kt_theta.dot(w_e_o) - self.ground.Dt_theta.dot(w_omega))
@@ -154,11 +155,9 @@ class TrackedVehicleSimulator3D:
         return b_Fg, b_Mg, w_e_o[0],b_e_o[1]
 
 
-    def computeDistributedGroundForcesMoments(self,pose, twist, w_R_b, pg, terr_roll, terr_pitch, terr_yaw):
+    def computeDistributedGroundForcesMoments(self,pose, twist, w_R_b, terr_roll, terr_pitch, terr_yaw):
 
-        w_R_terr = self.math_utils.eul2Rot(np.array([terr_roll, terr_pitch, terr_yaw]))
-        self.terrain_normal = w_R_terr[:, 2]
-
+        # this is the direction patches are projected on ground to compute forces
         #projection_direction = self.terrain_normal
         projection_direction = w_R_b[:, 2] #w_base_z_axis
 
@@ -167,22 +166,28 @@ class TrackedVehicleSimulator3D:
         # compute patch positions and twists in world frame
         for i in range(self.track_param.parts_longitudinal):
             for j in range(self.track_param.parts_lateral):
-
-
                 b_rel_patch_position_l = np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], -self.consider_robot_height*self.vehicle_param.height])#TODO robot height
                 b_rel_patch_position_r = np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], -self.consider_robot_height*self.vehicle_param.height])#TODO robot height
                 self.w_patch_pos_l[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_l)
                 self.w_patch_pos_r[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_r)
-                self.w_patch_pos_l_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], self.terrain_manager.baseline]))
-                self.w_patch_pos_r_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], self.terrain_manager.baseline]))
+
+                # this is to debug the baseline from which you cast the rays
+                # self.w_patch_pos_l_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], self.terrain_manager.baseline]))
+                # self.w_patch_pos_r_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], self.terrain_manager.baseline]))
                 self.w_patch_vel_l[patch_counter, :] = twist[:3] + np.cross(twist[3:],w_R_b.dot(b_rel_patch_position_l))
                 self.w_patch_vel_r[patch_counter, :] = twist[:3] + np.cross(twist[3:],w_R_b.dot(b_rel_patch_position_r))
                 patch_counter += 1
 
         #do the ray casting wrt to projection_direction
-
-        self.intersection_points_l = self.terrain_manager.project_points_on_mesh(points=self.w_patch_pos_l, direction=projection_direction)
-        self.intersection_points_r = self.terrain_manager.project_points_on_mesh(points=self.w_patch_pos_r, direction=projection_direction)
+        if self.USE_MESH:
+            self.intersection_points_l = self.terrain_manager.project_points_on_mesh(points=self.w_patch_pos_l, direction=projection_direction)
+            self.intersection_points_r = self.terrain_manager.project_points_on_mesh(points=self.w_patch_pos_r, direction=projection_direction)
+        else:
+            patch_counter = 0
+            for patch_pos_l, patch_pos_r in zip(self.w_patch_pos_l, self.w_patch_pos_r):
+                self.intersection_points_l[patch_counter, :] = np.concatenate((patch_pos_l[:2], [self.computeZcomponent(patch_pos_l[0], patch_pos_l[0], terr_pitch)]))
+                self.intersection_points_r[patch_counter, :] = np.concatenate((patch_pos_r[:2], [self.computeZcomponent(patch_pos_r[0], patch_pos_r[0], terr_pitch)]))
+                patch_counter += 1
 
         if self.DEBUG:
             for point in self.w_patch_pos_l:
@@ -193,7 +198,7 @@ class TrackedVehicleSimulator3D:
                 self.ros_pub.add_marker(point, radius=0.02, color="white", alpha=0.5)
             for point in self.intersection_points_r:
                 self.ros_pub.add_marker(point, radius=0.01, color="blue")
-            #this is for further debug
+            #this is for further debug, this is to debug the baseline from which you cast the rays
             # for point in self.w_patch_pos_l_baseline:
             #     self.ros_pub.add_arrow(point, w_base_z_axis, color="green")
             #     self.ros_pub.add_marker(point, radius=0.01, color="green")
@@ -299,11 +304,14 @@ class TrackedVehicleSimulator3D:
 
         w_Fgrav = w_R_b.dot(b_Fgrav) #gravity force
         if self.enable_visuals and self.DEBUG:
+            # traction force
             self.ros_pub.add_arrow(self.pose[:3], w_Ft / 100., "red")
             #self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / 1000., "blue")
             #N = np.eye(3) - np.multiply.outer(self.terrain_normal.ravel(), self.terrain_normal.ravel())
             #self.ros_pub.add_arrow(self.pose[:3], N.dot(w_Fgrav) / 100., "blue")
+            #ground normal force
             self.ros_pub.add_arrow(self.pose[:3], w_Fg / 1000., "green")
+            #ground moment
             self.ros_pub.add_arrow(self.pose[:3], w_Mg / 100., "blue") #should be purely lateral flipping back forth on ramp with only pitch
 
         #rolling friction (not dependent on load/inclination) acts only on x direction
@@ -329,13 +337,17 @@ class TrackedVehicleSimulator3D:
     def initSimulation(self,pose_init =np.zeros(6),  twist_init=np.zeros(6), ros_pub = None):
         self.pose = pose_init
         self.twist = twist_init
-        if self.enable_visuals:
-            if ros_pub is None:
-                self.ros_pub = RosPub('tractor', only_visual=True)
-            else:
-                self.ros_pub =ros_pub
+        if ros_pub is None:
+            self.ros_pub = RosPub('tractor', only_visual=True)
+        else:
+            self.ros_pub =ros_pub
 
     def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right, F_lg=None, F_rg=None):
+
+        #compute terrain variables
+        self.w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
+        self.terrain_normal = self.w_R_terr[:, 2]
+
         # compute base orientation
         w_R_b = self.math_utils.eul2Rot(self.pose[3:])
         #get states in base frame b_v_c
@@ -345,7 +357,7 @@ class TrackedVehicleSimulator3D:
 
         # compute ground peneration
         if self.CONTACT_DISTRIBUTION:
-            b_Fg, b_Mg, b_eox, b_eoy, w_Fg_patch_l, w_Fg_patch_r = self.computeDistributedGroundForcesMoments(self.pose, self.twist, w_R_b, pg, terrain_roll, terrain_pitch, terrain_yaw)
+            b_Fg, b_Mg, b_eox, b_eoy, w_Fg_patch_l, w_Fg_patch_r = self.computeDistributedGroundForcesMoments(self.pose, self.twist, w_R_b,  terrain_roll, terrain_pitch, terrain_yaw)
             patch_counter = 0
             number_of_patches = self.track_param.parts_lateral*self.track_param.parts_longitudinal
             patch_area = self.track_param.A / number_of_patches
@@ -369,6 +381,14 @@ class TrackedVehicleSimulator3D:
             Fx_l+=F_lg
         if F_rg is not None:
             Fx_r += F_rg
+
+        if self.enable_visuals:
+            # terrain normal
+            self.ros_pub.add_arrow(self.pose[:3], self.terrain_normal * 0.5, color="white")
+            # position of com
+            self.ros_pub.add_marker(self.pose[:3], radius=0.1, color="white", alpha=1.)
+            # position of com projection on ground
+            self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
 
 
         if self.NO_SLIPPAGE:
@@ -405,7 +425,8 @@ class TrackedVehicleSimulator3D:
         self.pose  = self.integrateTwist(self.pose, self.twist)
         return b_eox, b_eoy
 
-    def computeZcomponent(self, x, y, pitch):#TODO use mesh
+    def computeZcomponent(self, x, y, pitch):
+        #important x should start from 0!
         return x * np.tan(-pitch)
 
 
@@ -428,22 +449,15 @@ class TrackedVehicleSimulator3D:
             if self.USE_MESH:
                 #base_x_axis = self.math_utils.eul2Rot(self.pose[3:])[:, 0]
                 pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrain_manager.project_on_mesh(point=self.pose[:2],  direction=np.array([0., 0., 1.]))
-
                 self.pose_des,terrain_roll_des,terrain_pitch_des, terrain_yaw_des = self.terrain_manager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
                 self.orient_des = np.array([0, 0, des_theta]) #first two elements are the expected values of b_eox, b_eoy
-                w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
-                w_normal = w_R_terr.dot(np.array([0, 0, 1]))
-
                 # print("pose ", self.pose[:3])
                 # print("pg ", pg)
                 #for debug
                 # print("pose ", self.pose[:3])
                 # print("pg ", pg)
-                if self.enable_visuals:
-                    self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
-                    self.ros_pub.add_arrow(self.pose[:3], w_normal*0.5, color="white")
-                    self.ros_pub.add_marker(self.pose[:3], radius=0.1, color="white", alpha=1.)
-                    #self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
+                self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
+
             else:
                 terrain_roll = self.terrain_roll_vec[sim_counter]
                 terrain_pitch = self.terrain_pitch_vec[sim_counter]
@@ -451,7 +465,6 @@ class TrackedVehicleSimulator3D:
                 pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch)])
                 self.pose_des = np.array([des_x, des_y, self.computeZcomponent(des_x, des_y, terrain_pitch)])
                 self.orient_des = np.array([0, 0, des_theta])
-
 
             # we use only velocity inputs because we are open loop, the des_x, des_y, des_theta are only for plotting
             #project hf_v onto hf_x_b
@@ -469,6 +482,7 @@ class TrackedVehicleSimulator3D:
             b_eox, b_eoy = self.simulateOneStep(pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right)
 
             #log
+            #robot_height is naturally incorporated in pose because is added at the beginning i pose_init, in the desired I should account for robot height mapped in WF
             self.pose_des_log[:3, sim_counter] = self.pose_des + self.consider_robot_height*self.w_com_height_vector
             self.pose_des_log[3:, sim_counter] = self.orient_des
             self.pose_log[:, sim_counter] = self.pose
@@ -485,12 +499,37 @@ class TrackedVehicleSimulator3D:
             #ros.sleep(self.dt)
             self.euler = self.pose[3:]
             self.quaternion = pin.Quaternion(self.w_R_b)
+            #publish tf of base link
             self.broadcaster.sendTransform(self.pose[:3],
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/world')
+            # publish tf of horizontal frame on terrain to understand inclination
+            self.broadcaster.sendTransform(pg+np.array([0.,0,.1]),
+                                           pin.Quaternion(self.w_R_b.dot(self.hf_R_b.T)),
+                                           ros.Time.now(), '/horizontal_frame', '/world')
             self.ros_pub.publishVisual(delete_markers=False)
 
             self.rate.sleep()
+
+            # check frequency of publishing
+            # if hasattr(self, 'check_time'):
+            #     loop_time = ros.Time.now().to_sec() - self.check_time  # actual publishing time interval
+            #     ros_loop_time = self.slow_down_factor * self.dt  # ideal publishing time interval
+            #     if loop_time > 1.15 * (ros_loop_time):
+            #         loop_real_freq = 1 / loop_time  # actual publishing frequency
+            #         freq_ros = 1 / ros_loop_time  # ideal publishing frequency
+            #         print(colored(f"freq mismatch beyond 15%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros - loop_real_freq) / freq_ros * 100} %", "red"))
+            #         self.out_of_frequency_counter += 1
+            #         if self.out_of_frequency_counter > 10:
+            #             original_slow_down_factor = self.slow_down_factor
+            #             self.slow_down_factor *= 2
+            #             self.rate = ros.Rate(1 / (self.slow_down_factor * self.dt))
+            #             print(colored(f"increasing slow_down_factor from {original_slow_down_factor} to {self.slow_down_factor}", "red"))
+            #             self.out_of_frequency_counter = 0
+
+            self.check_time = ros.Time.now().to_sec()
+
+
             if ros.is_shutdown():
                 break
         os.system("rosnode kill rviz")
@@ -506,27 +545,62 @@ def check_assertion(value, expected, decimal, description):
         errors.append(f"{description}: {e}")
 
 if __name__ == '__main__':
-    #unit test
+    #unit test (very slippery friction is 0.1!)
+    test = "unit_test"
     groundParams = Ground3D()
     p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=False, DEBUG=True, int_method='FORWARD_EULER')
+    hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
+    w_omega_z = np.linspace(0.0, 0.0, p.number_of_steps)
+    p.initial_ramp_inclination = 0 # pitch ramp
+    p.final_ramp_inclination = -0.1
 
-    #to test the stiffness variation of the terrain
+    #test = "normal_test"
+    # groundParams = Ground3D(friction_coefficient=0.6, terrain_stiffness=1e05, terrain_damping=0.5e04)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=True,contact_distribution=True)
+    #
+
+    #PAPER: to test the stiffness variation of the terrain we need a softer terrain and we need a flat location and high linear speed
+    #test = "stiff_var_test"
     #p.pose_init = [5., -5., 0.0, 0, 0, 0]  # position in WF, rpy angles
     #groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e03, terrain_damping=0.5e04)
+    # hf_v = np.linspace(1.4, 1.4, p.number_of_steps)
+    # w_omega_z = np.linspace(0,0, p.number_of_steps)
+    #p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False,contact_distribution=True)
 
-    # normal test
-    groundParams = Ground3D(friction_coefficient=0.7,   terrain_stiffness = 1e05,   terrain_damping = 0.5e04)
-    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', contact_distribution=True)
 
-    # to debug
+    # PAPER: sloped test, do a left turn in a sloped place
+    # test = "sloped_test_left"
+    # groundParams = Ground3D(friction_coefficient=0.6, terrain_stiffness=1e05, terrain_damping=0.5e04)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=True)
+    # p.pose_init = [24., 7., 0.0, 0, 0, 0]  # position in WF, rpy angles
+    # hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
+    # w_omega_z = np.linspace(0.4, 0.4, p.number_of_steps)
+
+    # PAPER: sloped test, do a right turn in a sloped place
+    # test = "sloped_test_right"
+    # groundParams = Ground3D(friction_coefficient=0.6, terrain_stiffness=1e05, terrain_damping=0.5e04)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=True)
+    # p.pose_init = [15., 5., 0.0, 0, 0, 0]  # position in WF, rpy angles
+    # hf_v = np.linspace(1.4, 1.4, p.number_of_steps)
+    # w_omega_z = np.linspace(-0.0, -0.0, p.number_of_steps)
+
+
+    # # PAPER: ramp  test  (not slippery)
+    # test = "ramp_test"
+    # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.5e04)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=False, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=True, contact_distribution=True)
+    # hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
+    # w_omega_z = np.linspace(-0.0, -0.0, p.number_of_steps)
+    # p.initial_ramp_inclination = -0.0
+    # p.mid_ramp_inclination = -0.3
+    # p.final_ramp_inclination = -0.3
+    #for rviz
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
     p.broadcaster = tf.TransformBroadcaster()
 
     if p.USE_MESH:
-        from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
-        p.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
         #start the robot on the mesh
-        start_position, start_roll, start_pitch, start_yaw = p.terrainManager.project_on_mesh(point=p.pose_init[:2], direction=np.array([0., 0., 1.]))
+        start_position, start_roll, start_pitch, start_yaw = p.terrain_manager.project_on_mesh(point=p.pose_init[:2], direction=np.array([0., 0., 1.]))
         p.pose_init[:3] = start_position.copy()
         p.pose_init[3] = start_roll
         p.pose_init[4] = start_pitch
@@ -536,24 +610,18 @@ if __name__ == '__main__':
         p.pose_init[:3] += p.consider_robot_height*(w_R_terr[:, 2] * p.vehicle_param.height)
     else:
         p.terrain_roll_vec = np.linspace(0.0, 0.0, p.number_of_steps)
-        p.terrain_pitch_vec = np.linspace(0.0, -0.1, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
-        p.terrain_yaw_vec = np.linspace(0.0, -0.0, p.number_of_steps) # if you set -0.3 the robot starts to slip backwards!
+        if hasattr(p, 'mid_ramp_inclination'):
+            speed_up = np.linspace(p.initial_ramp_inclination, p.mid_ramp_inclination, int(p.number_of_steps*0.2))
+            p.terrain_pitch_vec = np.concatenate((speed_up, np.linspace(p.mid_ramp_inclination, p.final_ramp_inclination, int(p.number_of_steps*0.8))) )# 0.1 if you set -0.3 the robot starts to slip backwards!
+        else:
+            p.terrain_pitch_vec = np.linspace(p.initial_ramp_inclination, p.final_ramp_inclination, p.number_of_steps)  # 0.1 if you set -0.3 the robot starts to slip backwards!
+        p.terrain_yaw_vec = np.linspace(0.0, -0.0, p.number_of_steps)
         p.pose_init[:3] += p.consider_robot_height * np.array([0,0,1])* p.vehicle_param.height
-
-    #gen traj unit test
-    hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
-    w_omega_z = np.linspace(0.0, 0.0, p.number_of_steps)
-    # sloped test
-    #w_omega_z = np.linspace(0.4, 0.4, p.number_of_steps)
-    # stiffness variation
-    # w_omega_z = np.linspace(1.4, 1.4, p.number_of_steps)
 
     #the trajectory is in the WF
     p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.pose_init[0],
                         start_y= p.pose_init[1], start_theta=p.pose_init[5],
                         DT=p.dt, v=hf_v, omega=w_omega_z)
-
-
 
     # init vars
     p.initSimulation(p.pose_init, p.twist_init)
