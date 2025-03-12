@@ -1,15 +1,21 @@
 import Clothoids
 import numpy as np
+
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 curve = Clothoids.ClothoidCurve("curve")
 curve.build_G1(0.0, 0.0, 0.0, 4.0, 4.0, 0.0)
 
-#https://ebertolazzi.github.io/Clothoids/doxygen/html/class_g2lib_1_1_clothoid_curve.html#a519e61f7a826e77d199a5298ef05b3c9
-#add elements to clothoids_interface.hh
-# pip install -e .
+#1) description
+# 2) clone git@github.com:SebastianoTaddei/Clothoids.git
+# 3) commit b744b9f21213c75c183f1b9966794ac9baf3832a (HEAD -> python_bindings, origin/python_bindings)
+# Author: Sebastiano Taddei <sebastianotaddei@gmail.com>
+# Date:   Thu Nov 14 10:32:11 2024 +0100
+# 4) you nee to add elements to clothoids_interface.hh
+# 5) pip install -e .
 
 values = np.arange(0, curve.length(), 0.01, dtype=np.float64)
 xy = np.zeros((values.size, 2))
@@ -22,15 +28,21 @@ for i in range(values.size):
     dxdy[i, :] = curve.eval_D(values[i])
     dtheta[i] = curve.theta_D(values[i])
 
-# plt.figure()
-# plt.plot(xy[:, 0], xy[:, 1])
-# plt.show()
-# plt.figure()
-# plt.plot(dxdy[:, 0], dxdy[:, 1])
-# plt.show()
-# plt.figure()
-# plt.plot(theta)
-# plt.show()
+plt.figure(1)
+plt.plot(xy[:, 0], xy[:, 1])
+plt.title('xy plot')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.show()
+plt.figure(2)
+plt.plot(theta)
+plt.xlabel('sample (discretization 0.01 m)')
+plt.title('orientation')
+plt.figure(3)
+plt.plot(dtheta)
+plt.title('curvature (linear)')
+plt.xlabel('sample')
+plt.show()
 #
 #
 #map to time
@@ -66,7 +78,11 @@ for i in range(number_of_samples):
     xy_log[i,:] = xy_int
     theta_log[i, :] = theta_int
 
-plt.figure()
-plt.plot(xy_log[:, 0], xy_log[:, 1])
+plt.figure(5)
+
+plt.plot(xy_log[:, 0], xy_log[:, 1], '-o')
+plt.title('xy plot after time integration')
+plt.xlabel('X')
+plt.ylabel('Y')
 plt.show()
 

@@ -16,29 +16,33 @@ import math
 radius_min = 1.
 radius_max = 4.
 
+sample = np.full((100,2), np.nan)
+
+plt.figure(0)
+np.random.seed(0)
+#comparison with uniform sampling
+for i in range(100):
+    x = radius_max * np.random.uniform(low=0, high=1, size=1)
+    y = radius_max * np.random.uniform(low=0, high=1, size=1)
+    sample[i,0] = x
+    sample[i,1] = y
+plt.plot(sample[:, 0], sample[:, 1], "ob")
+plt.title("sample position: random sampling")
+plt.show()
+
 #quasi montecarlo
 sampler = qmc.Halton(d=3, scramble=True, seed=0)
 #since we are going to remove the samples out of the circle I need to generate a bit more samples
 n_samples = int(np.floor(100*math.sqrt(2)))
-sample = sampler.random(n=n_samples)
-xy = radius_max * (2*sample[:, :2]-1)
-phi = sample[:, 2] *2*np.pi
-plt.figure(0)
+sample = sampler.random(n=n_samples) #generates samples in [0,1]
+xy = radius_max * (2*sample[:, :2]-1) #generates samples in a square [-1,1]*radius_max of edge radiusmax
+phi = sample[:, 2] *2*np.pi #generates samples in [0, 2pi]
+plt.figure(1)
 plt.plot(xy[:,0], xy[:,1], "or")
+plt.title("sample position: halton sampling")
 plt.show()
 
-# plt.figure(1)
-# np.random.seed(0)
-# #comparison with uniform sampling
-# for i in range(100):
-#     x = radius_max * np.random.uniform(low=0, high=1, size=1)
-#     y = radius_max * np.random.uniform(low=0, high=1, size=1)
-#     sample[i,0] = x
-#     sample[i,1] = y
-# plt.plot(sample[:, 0], sample[:, 1], "ob")
-# plt.show()
-
-plt.figure(1)
+plt.figure(2)
 sample_ok = np.zeros((2))
 phi_ok = np.zeros((1))
 #remove samples out of the cilinder
@@ -56,9 +60,10 @@ angle = np.linspace(0, np.pi*2, 100)
 p_max = np.array([radius_max*np.cos(angle), radius_max*np.sin(angle)])
 p_min = np.array([radius_min*np.cos(angle), radius_min*np.sin(angle)])
 
-plt.figure(1)
+plt.figure(2)
 plt.plot(sample_ok[:, 0], sample_ok[:, 1], "ob")
 plt.plot(p_max[0, :], p_max[1,:], "r")
 plt.plot(p_min[0, :], p_min[1,:], "r")
+plt.title("sample position+orientation: random sampling")
 plt.show()
 
