@@ -499,6 +499,12 @@ class TrackedVehicleSimulator3D:
     def getRobotState(self):
         return self.pose, self.twist
 
+def check_assertion(value, expected, decimal, description):
+    try:
+        assert_almost_equal(value, expected, decimal=decimal)
+    except AssertionError as e:
+        errors.append(f"{description}: {e}")
+
 if __name__ == '__main__':
     #unit test
     groundParams = Ground3D()
@@ -559,17 +565,25 @@ if __name__ == '__main__':
     p.recorder.stop_recording_srv()
 
     if not p.USE_MESH:#unit test
+        errors = []
         #print(p.pose_log[:,-1])
-        assert_almost_equal(p.pose_log[0, -1], 6.46527581 , decimal=2)
-        assert_almost_equal(p.pose_log[1, -1],0. , decimal=2)
-        if p.consider_robot_height:
-            assert_almost_equal(p.pose_log[2, -1],     0.8993727217334103, decimal=2)
-        else:
-            assert_almost_equal(p.pose_log[2, -1],    0.648124971, decimal=2)
-        assert_almost_equal(p.pose_log[3, -1], 0., decimal=2)
-        assert_almost_equal(p.pose_log[4, -1], -0.099504975 , decimal=2)
-        assert_almost_equal(p.pose_log[5, -1], 0., decimal=2)
 
+        check_assertion(p.pose_log[0, -1], 6.46527581 , decimal=2, description="Pose X")
+        check_assertion(p.pose_log[1, -1],0. , decimal=2, description="Pose Y")
+        if p.consider_robot_height:
+            check_assertion(p.pose_log[2, -1],     0.8993727217334103, decimal=2, description="Pose Z")
+        else:
+            check_assertion(p.pose_log[2, -1],    0.648124971, decimal=2,description="Pose Z")
+        check_assertion(p.pose_log[3, -1], 0., decimal=2, description="Pose Roll")
+        check_assertion(p.pose_log[4, -1], -0.099504975 , decimal=2,description="Pose Pitch")
+        check_assertion(p.pose_log[5, -1], 0., decimal=2, description="Pose Yaw")
+
+        if errors:
+            print(colored("Unit test failed:","red"))
+            for error in errors:
+                print(error)
+        else:
+            print(colored("Unit test succesful!","green"))
 
     # xy plot
     plt.figure()
