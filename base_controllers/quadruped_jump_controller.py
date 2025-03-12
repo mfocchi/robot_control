@@ -812,14 +812,20 @@ if __name__ == '__main__':
         plotJoint('velocity', time_log=p.time_log,
                   qd_log=p.qd_log, qd_des_log=p.qd_des_log)
         plotJoint('torque', time_log=p.time_log,
-                  tau_log=p.tau_log,   tau_des_log=p.tau_des_log)
+                  tau_log=p.tau_log,   tau_des_log=p.tau_des_log, title='Torque tracking')
         plotJoint('torque', time_log=p.time_log,
-                  tau_log=p.tau_log, tau_ffwd_log=p.tau_ffwd_log)
+                  tau_log=p.tau_log, tau_ffwd_log=p.tau_ffwd_log, title='Torque tracking')
 
         # COM
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log,
                   Pose_log=p.basePoseW_log,  title='Base', frame='W')
         plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log,
                   Twist_log=p.baseTwistW_log,  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        if p.use_ground_truth_contacts:
+            actual_grf_log = p.grForcesW_gt_log
+        else:
+            actual_grf_log =  p.grForcesW_log
         plotContacts('GRFs', time_log=p.time_log, des_Forces_log=p.grForcesW_des_log,
-                     Forces_log=p.grForcesW_gt_log, contact_states=p.contact_state_log, frame='W')
+                     Forces_log=actual_grf_log, contact_states=p.contact_state_log, frame='W')
+        plotContacts('GRFs', time_log=p.time_log, des_Forces_log=p.grForcesW_gt_log,
+                     Forces_log=p.grForcesW_log, contact_states=p.contact_state_log, frame='W', title='estimate of contact forces')
