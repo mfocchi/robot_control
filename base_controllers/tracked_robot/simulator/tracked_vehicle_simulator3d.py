@@ -7,6 +7,7 @@ from  base_controllers.tracked_robot.environment.trajectory import Trajectory, M
 import base_controllers.tracked_robot.utils.constants as constants
 from base_controllers.utils.math_tools import computeOrientationError
 from base_controllers.utils.math_tools import Math
+from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 #to debug
 from base_controllers.utils.common_functions import  launchFileGeneric
 from base_controllers.utils.ros_publish import RosPub
@@ -551,8 +552,11 @@ if __name__ == '__main__':
     # init vars
     p.initSimulation(p.pose_init, p.twist_init)
 
+    p.recorder = RosbagControlledRecorder(bag_name=f"openLoop3DModel_{test}_Distr_{p.CONTACT_DISTRIBUTION}.bag")
+    p.recorder.start_recording_srv()
     # simulation with internal while loop
     p.simulate(hf_v, w_omega_z)
+    p.recorder.stop_recording_srv()
 
     if not p.USE_MESH:#unit test
         #print(p.pose_log[:,-1])
