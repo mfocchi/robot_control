@@ -90,6 +90,7 @@ class RosbagControlledRecorder(object):
         self.process_pid = None
         if record_from_startup_:
             self.start_recording_srv()
+        self.exit_loop = False  # Flag to break the loop prematurely
 
     def start_recording_srv(self, service_message=None):
         print(colored(f"Starting Bag {self.bag_name}", "red"))
@@ -129,6 +130,58 @@ class RosbagControlledRecorder(object):
         self.recording_stopped = True
         return EmptyResponse()
 
+    def rosbagPlay(self, bag_file, robot_name="tractor", upload_args='', bag_options=''):
+        """Play the rosbag, setup Ctrl+C handling, and allow early termination."""
+        print(colored(f"Starting rosbag play for {bag_file}", "green"))
+
+        # Setup signal handler for Ctrl + C (SIGINT)
+        signal.signal(signal.SIGINT, self.stop_loop_early)
+
+        # Command to launch rviz and play the rosbag
+        command = (
+            "pkill rviz & "
+            f"roslaunch "+robot_name+"_description upload.launch "+upload_args+"  & "
+            "rosrun rviz rviz -d $LOCOSIM_DIR/robot_descriptions/"+robot_name+"_description/rviz/conf.rviz & "
+            f"rosbag play {bag_file}  "+bag_options
+        )
+        self.rosbag_play_process = subprocess.Popen(command, shell=True, executable="/bin/bash")
+
+        # Main loop that checks for premature exit or completion
+        while not rospy.is_shutdown():
+            if self.exit_loop:  # If Ctrl + C was pressed, exit loop
+                print("Premature loop exit due to Ctrl+C")
+                break
+            rospy.sleep(1.0)
+        # After the loop ends, ensure the subprocess is terminated
+        if self.rosbag_play_process:
+            self.kill_process_and_children(self.rosbag_play_process)
+
+        print("Playback completed.")
+
+    def stop_loop_early(self, signum, frame):
+        """Exit the loop on Ctrl+C (SIGINT)."""
+        self.exit_loop = True
+        print("Received Ctrl+C. Exiting the loop early.")
+        rospy.signal_shutdown("Received SIGINT")
+
+    def kill_process_and_children(self, process):
+        """Terminate the given process and all of its children."""
+        try:
+            # Get the parent process ID (PID) of the rosbag play process
+            p = psutil.Process(process.pid)
+
+            # Kill all child processes of rosbag play process first
+            for child in p.children(recursive=True):
+                child.kill()  # Send SIGKILL to child processes
+
+            # Then kill the main rosbag play process
+            p.kill()  # Send SIGKILL to the main process
+
+            print(f"Killed process and its children (PID: {process.pid})")
+        except psutil.NoSuchProcess:
+            print("Process already terminated.")
+        except Exception as e:
+            print(f"Failed to kill process: {e}")
 
 if __name__ == '__main__':
     checkRosMaster()
@@ -137,7 +190,7 @@ if __name__ == '__main__':
     # Get parameters
 
     # Start recorder object
-    recorder = RosbagControlledRecorder('rosbag record -a',  False)
+    recorder = RosbagControlledRecorder(bag_name="prova.bag")
 
     # Services
     start_service = rospy.Service('~start', Empty, recorder.start_recording_srv)
@@ -163,3 +216,5 @@ if __name__ == '__main__':
             print("finish")
             break
         rospy.sleep(1.0)
+
+
