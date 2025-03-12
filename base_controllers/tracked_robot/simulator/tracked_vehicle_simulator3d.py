@@ -45,7 +45,7 @@ class Ground3D():
 
 
 class TrackedVehicleSimulator3D:
-    def __init__(self, dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER',  enable_visuals=True, contact_distribution = False):
+    def __init__(self,  dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER',  enable_visuals=True, contact_distribution = False, terrain_manager=None):
         self.NO_SLIPPAGE = False
         self.USE_MESH = USE_MESH
         self.DEBUG = DEBUG
@@ -54,11 +54,15 @@ class TrackedVehicleSimulator3D:
         self.int_method = int_method
         self.consider_robot_height = True
 
+        if  terrain_manager is None:
+            print(colored("loading default terrain Manager", "red"))
+            from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
+            self.terrain_manager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
 
         self.dt = dt
         self.vehicle_param = VehicleParam()
         if self.CONTACT_DISTRIBUTION:
-            self.track_param = TrackParams(parts_longitudinal=10, parts_lateral=4)
+            self.track_param = TrackParams(parts_longitudinal=10, parts_lateral=4) #use small discretization otherwise is too slow
         else:
             self.track_param = TrackParams()
 
@@ -104,6 +108,8 @@ class TrackedVehicleSimulator3D:
         self.orient_des = np.zeros(3)
         self.rk45F = RK45F_step(self.dynamics3D, adaptive_step=True)
 
+    def setTerrainManager(self, terrain_manager):
+        self.terrain_manager = terrain_manager
 
     def computeGroundForcesMoments(self,pose, twist, w_R_b, pg, terr_roll, terr_pitch, terr_yaw):
         pc = pose[:3]
@@ -166,16 +172,16 @@ class TrackedVehicleSimulator3D:
                 b_rel_patch_position_r = np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], -self.consider_robot_height*self.vehicle_param.height])#TODO robot height
                 self.w_patch_pos_l[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_l)
                 self.w_patch_pos_r[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_r)
-                self.w_patch_pos_l_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], self.terrainManager.baseline]))
-                self.w_patch_pos_r_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], self.terrainManager.baseline]))
+                self.w_patch_pos_l_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], self.terrain_manager.baseline]))
+                self.w_patch_pos_r_baseline[patch_counter, :] = pose[:3] + w_R_b.dot(np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], self.terrain_manager.baseline]))
                 self.w_patch_vel_l[patch_counter, :] = twist[:3] + np.cross(twist[3:],w_R_b.dot(b_rel_patch_position_l))
                 self.w_patch_vel_r[patch_counter, :] = twist[:3] + np.cross(twist[3:],w_R_b.dot(b_rel_patch_position_r))
                 patch_counter += 1
 
         #do the ray casting wrt to projection_direction
 
-        self.intersection_points_l = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_l, direction=projection_direction)
-        self.intersection_points_r = self.terrainManager.project_points_on_mesh(points=self.w_patch_pos_r, direction=projection_direction)
+        self.intersection_points_l = self.terrain_manager.project_points_on_mesh(points=self.w_patch_pos_l, direction=projection_direction)
+        self.intersection_points_r = self.terrain_manager.project_points_on_mesh(points=self.w_patch_pos_r, direction=projection_direction)
 
         if self.DEBUG:
             for point in self.w_patch_pos_l:
@@ -420,9 +426,9 @@ class TrackedVehicleSimulator3D:
 
             if self.USE_MESH:
                 #base_x_axis = self.math_utils.eul2Rot(self.pose[3:])[:, 0]
-                pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrainManager.project_on_mesh(point=self.pose[:2],  direction=np.array([0., 0., 1.]))
+                pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrain_manager.project_on_mesh(point=self.pose[:2],  direction=np.array([0., 0., 1.]))
 
-                self.pose_des,terrain_roll_des,terrain_pitch_des, terrain_yaw_des = self.terrainManager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
+                self.pose_des,terrain_roll_des,terrain_pitch_des, terrain_yaw_des = self.terrain_manager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
                 self.orient_des = np.array([0, 0, des_theta]) #first two elements are the expected values of b_eox, b_eoy
                 w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
                 w_normal = w_R_terr.dot(np.array([0, 0, 1]))
@@ -446,7 +452,7 @@ class TrackedVehicleSimulator3D:
                 self.orient_des = np.array([0, 0, des_theta])
 
 
-
+            # we use only velocity inputs because we are open loop, the des_x, des_y, des_theta are only for plotting
             #project hf_v onto hf_x_b
             b_v = self.hf_R_b[0].dot(np.array([hf_v[sim_counter], 0., 0.]))
             #project w_omega_z onto w_z_b
