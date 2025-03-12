@@ -54,9 +54,9 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'biral'#, 'gazebo', 'coppelia'(deprecated), 'biral' 'biral3d'
+        self.SIMULATOR = 'biral3d'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'biral'(2d) 'biral3d'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
-        self.TERRAIN = False
+        self.TERRAIN = False #True: slopes False: flat
 
         self.STATISTICAL_ANALYSIS = False #samples targets and orientations in a given space around the robot and compute average tracking error
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
@@ -72,7 +72,7 @@ class GenericSimulator(BaseController):
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
 
         #biral friction coeff
-        self.friction_coefficient = 0.4 # 0.1/0.4/ 0.6    0.6 is the identified with parameters depending on gravity
+        self.friction_coefficient = 0.4 # 0.1 (used only in 2d)/0.4 (2d and 3d) (used for planning in paper)/0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
 
         # initial pose
         self.p0 = np.array([0., 0., 0.]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
@@ -169,7 +169,7 @@ class GenericSimulator(BaseController):
         self.beta_l_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.beta_r_control_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.pub_counter = 0
-
+        self.out_of_frequency_counter=0
     def reset_joints(self, q0, joint_names = None):
         # create the message
         req_reset_joints = SetModelConfigurationRequest()
@@ -238,12 +238,12 @@ class GenericSimulator(BaseController):
         elif self.SIMULATOR == 'coppelia':
            self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
            self.coppeliaManager.startSimulator()
-        else: # Biral simulator
+        else: # Biral simulator biral2d/biral3d
             os.system("killall rosmaster rviz gzserver coppeliaSim")
             # launch roscore
             checkRosMaster()
             ros.sleep(1.5)
-            if self.friction_coefficient == 0.1: #should match with training region
+            if self.friction_coefficient == 0.1: #should match with training region (very slippery only on flat)
                 constants.MAXSPEED_RADS_PULLEY = 10.
             if self.friction_coefficient == 0.4: #should match with training region
                 constants.MAXSPEED_RADS_PULLEY = 18.
@@ -251,15 +251,12 @@ class GenericSimulator(BaseController):
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'biral3d':
                 print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
-                #print(colored("increasing friction coeff to 0.7 otherwise it slips too much", "red"))
-                #self.friction_coefficient = 0.7
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
                 conf.robot_params[p.robot_name]['dt'] = 0.001
-                #groundParams = Ground3D(friction_coefficient=self.friction_coefficient)
-                groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e05, terrain_damping=0.5e04)
-                self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams, contact_distribution=False)
+                groundParams = Ground3D(friction_coefficient=self.friction_coefficient, terrain_stiffness=1e05, terrain_damping=0.5e04)
+                self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'],  ground=groundParams, USE_MESH=self.TERRAIN, contact_distribution=False)
                 self.flag3D='_3d_'
-            else:
+            else: #'biral':
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
                 self.flag3D=''
@@ -284,10 +281,11 @@ class GenericSimulator(BaseController):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
-        if self.TERRAIN: #this works both for gazebo and biral
+        if self.TERRAIN and self.SIMULATOR=='biral3d': #terrain is only available in biral 3d
             from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
             self.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
-            if self.IDENT_TYPE=='WHEELS' and self.SIMULATOR=='biral3d':
+            self.tracked_vehicle_simulator.setTerrainManager(self.terrainManager)
+            if self.IDENT_TYPE=='WHEELS' :
                 from base_controllers.tracked_robot.simulator.terrain_manager import create_ramp_mesh
                 ramp_mesh = create_ramp_mesh(length=350., width=350., inclination=p.RAMP_INCLINATION, origin=np.array([0, 0, 0]))
                 self.terrainManager.set_mesh(ramp_mesh)
@@ -365,7 +363,15 @@ class GenericSimulator(BaseController):
             if loop_time > 1.1 * (ros_loop_time):
                 loop_real_freq = 1/loop_time #actual publishing frequency
                 freq_ros = 1 / ros_loop_time #ideal publishing frequency
-                #print(colored(f"freq mismatch beyond 10%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-loop_real_freq)/freq_ros*100} %", "red"))
+                print(colored(f"freq mismatch beyond 15%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-loop_real_freq)/freq_ros*100} %", "red"))
+                self.out_of_frequency_counter += 1
+                if self.out_of_frequency_counter > 10:
+                    original_slow_down_factor = self.slow_down_factor
+                    self.slow_down_factor *= 2
+                    self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
+                    print(colored(f"increasing slow_down_factor from {original_slow_down_factor} to {self.slow_down_factor}","red"))
+                    self.out_of_frequency_counter = 0
+
         self.check_time = ros.Time.now().to_sec()
 
     def getClothoids(self, long_vel, dt = 0.001):
@@ -1040,7 +1046,7 @@ def talker(p):
                 main_loop(p)
     elif p.STATISTICAL_ANALYSIS:
         print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
-        columns = [ 'test', 'target_x','target_y','target_z', 'exy', 'etheta', 'tf']
+        columns = [ 'test', 'target_x','target_y','target_theta', 'exy', 'etheta', 'tf']
         p.df = pd.DataFrame(columns=columns)
         np.random.seed(0) #create always the same random sequence
         for p.test in range(100):
@@ -1302,7 +1308,7 @@ def main_loop(p):
         rmse_theta = np.sqrt(np.mean(np.array(p.log_e_theta) ** 2))
         print(colored(f"Target: {p.pf.reshape(1,3)}, e_xy: {rmse_xy} e_theta {rmse_theta}","red"))
         if p.STATISTICAL_ANALYSIS:
-            dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_z': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta, 'tf':p.PLANNING_DURATION}
+            dict = {'test':p.test, 'target_x': p.pf[0],'target_y': p.pf[1],'target_theta': p.pf[2], 'exy': rmse_xy, 'etheta': rmse_theta, 'tf':p.PLANNING_DURATION}
             df_dict = pd.DataFrame([dict])
             p.df = pd.concat([p.df, df_dict], ignore_index=True)
             p.df.to_csv(f'statistic_{p.ControlType}_{p.PLANNING}.csv', index=None)
