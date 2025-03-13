@@ -448,7 +448,9 @@ class TrackedVehicleSimulator3D:
 
             if self.USE_MESH:
                 #base_x_axis = self.math_utils.eul2Rot(self.pose[3:])[:, 0]
-                pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrain_manager.project_on_mesh(point=self.pose[:2],  direction=np.array([0., 0., 1.]))
+                w_com_height_vector = self.w_R_b[:, 2] * self.vehicle_param.height
+                pcom_on_ground = self.pose[:3] - self.consider_robot_height * w_com_height_vector
+                pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrain_manager.project_on_mesh(point=pcom_on_ground[:2],  direction=np.array([0., 0., 1.]))
                 self.pose_des,terrain_roll_des,terrain_pitch_des, terrain_yaw_des = self.terrain_manager.project_on_mesh(point=np.array([des_x, des_y]), direction=np.array([0., 0., 1.]))
                 self.orient_des = np.array([0, 0, des_theta]) #first two elements are the expected values of b_eox, b_eoy
                 # print("pose ", self.pose[:3])
@@ -462,7 +464,9 @@ class TrackedVehicleSimulator3D:
                 terrain_roll = self.terrain_roll_vec[sim_counter]
                 terrain_pitch = self.terrain_pitch_vec[sim_counter]
                 terrain_yaw =  self.terrain_yaw_vec[sim_counter]
-                pg = np.array([self.pose[0], self.pose[1], self.computeZcomponent(self.pose[0], self.pose[1], terrain_pitch)])
+                w_com_height_vector = self.w_R_b[:, 2] * self.vehicle_param.height
+                pcom_on_ground = self.pose[:3] - self.consider_robot_height*w_com_height_vector
+                pg = np.array([pcom_on_ground[0], pcom_on_ground[1], self.computeZcomponent(pcom_on_ground[0], pcom_on_ground[1], terrain_pitch)])
                 self.pose_des = np.array([des_x, des_y, self.computeZcomponent(des_x, des_y, terrain_pitch)])
                 self.orient_des = np.array([0, 0, des_theta])
 
