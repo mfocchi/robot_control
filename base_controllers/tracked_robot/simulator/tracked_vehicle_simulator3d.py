@@ -50,11 +50,13 @@ class TrackedVehicleSimulator3D:
     def __init__(self,  dt=0.001, ground=None, USE_MESH = False, DEBUG=False, int_method='FORWARD_EULER',  enable_visuals=True, contact_distribution = False, terrain_manager=None):
         self.NO_SLIPPAGE = False
         self.USE_MESH = USE_MESH
+        self.TYPE_OF_TERRAIN = 'slopes' #'slopes' /'ramp'
         self.DEBUG = DEBUG
         self.CONTACT_DISTRIBUTION = contact_distribution
         self.enable_visuals=enable_visuals
         self.int_method = int_method
         self.consider_robot_height = True
+        self.SAVE_BAGS = False
 
         if  terrain_manager is None:
             print(colored("loading default terrain Manager", "red"))
@@ -93,16 +95,7 @@ class TrackedVehicleSimulator3D:
         self.w_Mg_patch_l = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
         self.w_Mg_patch_r = np.zeros((self.track_param.parts_longitudinal * self.track_param.parts_lateral, 3))
 
-
-        #these are just for the unit test
-        self.t_end = 20.  # [s]
-        self.pose_init = [0., 0., 0.0,0,0,0]  # position in WF, rpy angles
-
-        self.twist_init = [0, 0.0, 0,0,0,0]  # in WF
-        self.number_of_steps = np.int32(self.t_end / self.dt)
-        self.pose_des_log = np.full((6, self.number_of_steps), np.nan)
-        self.pose_log = np.full((6, self.number_of_steps), np.nan)
-        self.time_log = np.full((self.number_of_steps), np.nan)
+        self.initLoggingVars(20.)
         self.math_utils = Math()
 
         self.q_des = np.zeros(2)
@@ -112,6 +105,16 @@ class TrackedVehicleSimulator3D:
         self.rk45F = RK45F_step(self.dynamics3D, adaptive_step=True)
         self.slow_down_factor = 1.0
         self.out_of_frequency_counter = 0
+
+    def initLoggingVars(self, simulation_duration=20.):
+        # these are just for the unit test
+        self.t_end = simulation_duration  # [s]
+        self.pose_init = [0., 0., 0.0, 0, 0, 0]  # position in WF, rpy angles
+        self.twist_init = [0, 0.0, 0, 0, 0, 0]  # in WF
+        self.number_of_steps = np.int32(self.t_end / self.dt)
+        self.pose_des_log = np.full((6, self.number_of_steps), np.nan)
+        self.pose_log = np.full((6, self.number_of_steps), np.nan)
+        self.time_log = np.full((self.number_of_steps), np.nan)
 
     def setTerrainManager(self, terrain_manager):
         self.terrain_manager = terrain_manager
@@ -482,9 +485,14 @@ class TrackedVehicleSimulator3D:
                 #for debug
                 # print("pose ", self.pose[:3])
                 # print("pg ", pg)
-                self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
+                if self.TYPE_OF_TERRAIN=='slopes':
+                    self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
+                elif self.TYPE_OF_TERRAIN=='ramp':
+                    self.ros_pub.add_plane(pos=np.array([0, 0, -0.]), orient=np.array([0., self.RAMP_INCLINATION, 0]), color="white", alpha=0.8)
+                else:
+                    print("type of terrain not supported")
 
-            else:
+            else: #this is only used for the unit test and has the strong assumptio of being a pitch ramp followed with fwd motion
                 terrain_roll = self.terrain_roll_vec[sim_counter]
                 terrain_pitch = self.terrain_pitch_vec[sim_counter]
                 terrain_yaw =  self.terrain_yaw_vec[sim_counter]
@@ -520,44 +528,44 @@ class TrackedVehicleSimulator3D:
             self.time = np.round(self.time + self.dt, 4)
             sim_counter +=1
 
-
-
-            #debug
-            #time.sleep(0.2)
-            #ros.sleep(self.dt)
             self.euler = self.pose[3:]
             self.quaternion = pin.Quaternion(self.w_R_b)
             #publish tf of base link
             self.broadcaster.sendTransform(self.pose[:3],
                                            self.quaternion,
                                            ros.Time.now(), '/base_link', '/world')
-            # publish tf of horizontal frame on terrain to understand inclination
-            self.broadcaster.sendTransform(pg+np.array([0.,0,.1]),
-                                           pin.Quaternion(self.w_R_b.dot(self.hf_R_b.T)),
-                                           ros.Time.now(), '/horizontal_frame', '/world')
+            if self.enable_visuals:
+                # publish tf of horizontal frame on terrain to understand inclination
+                self.broadcaster.sendTransform(pg,
+                                               pin.Quaternion(self.w_R_b.dot(self.hf_R_b.T)),
+                                               ros.Time.now(), '/horizontal_frame', '/world')
 
-            self.ros_pub.add_plane(pos=np.array([0, 0, -0.]), orient=np.array([0., 0.2, 0]), color="white", alpha=0.5)
             self.ros_pub.publishVisual(delete_markers=False)
 
             self.rate.sleep()
 
             # check frequency of publishing
-            # if hasattr(self, 'check_time'):
-            #     loop_time = ros.Time.now().to_sec() - self.check_time  # actual publishing time interval
-            #     ros_loop_time = self.slow_down_factor * self.dt  # ideal publishing time interval
-            #     if loop_time > 1.15 * (ros_loop_time):
-            #         loop_real_freq = 1 / loop_time  # actual publishing frequency
-            #         freq_ros = 1 / ros_loop_time  # ideal publishing frequency
-            #         print(colored(f"freq mismatch beyond 15%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros - loop_real_freq) / freq_ros * 100} %", "red"))
-            #         self.out_of_frequency_counter += 1
-            #         if self.out_of_frequency_counter > 10:
-            #             original_slow_down_factor = self.slow_down_factor
-            #             self.slow_down_factor *= 2
-            #             self.rate = ros.Rate(1 / (self.slow_down_factor * self.dt))
-            #             print(colored(f"increasing slow_down_factor from {original_slow_down_factor} to {self.slow_down_factor}", "red"))
-            #             self.out_of_frequency_counter = 0
-
-            self.check_time = ros.Time.now().to_sec()
+            # if self.USE_MESH: #not doing for unit test
+            #     if hasattr(self, 'check_time'):
+            #         loop_time = ros.Time.now().to_sec() - self.check_time  # actual publishing time interval
+            #         ros_loop_time = self.slow_down_factor * self.dt  # ideal publishing time interval
+            #         if loop_time > 1.20 * (ros_loop_time):
+            #             loop_real_freq = 1 / loop_time  # actual publishing frequency
+            #             freq_ros = 1 / ros_loop_time  # ideal publishing frequency
+            #             print(colored(f"freq mismatch beyond 20%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros - loop_real_freq) / freq_ros * 100} %", "red"))
+            #             self.out_of_frequency_counter += 1
+            #             if self.out_of_frequency_counter > 10:
+            #                 original_slow_down_factor = self.slow_down_factor
+            #                 self.slow_down_factor *= 2
+            #                 self.rate = ros.Rate(1 / (self.slow_down_factor * self.dt))
+            #                 print(colored(f"increasing slow_down_factor from {original_slow_down_factor} to {self.slow_down_factor}", "red"))
+            #                 self.out_of_frequency_counter = 0
+            #                 self.slowing_down_time = ros.Time.now().to_sec()
+            #             if hasattr(self, 'slowing_down_time'):
+            #                 time_from_last_slow_down = ros.Time.now().to_sec() - self.slowing_down_time
+            #                 if time_from_last_slow_down > 2.:
+            #                     self.slow_down_factor /= 2
+            #     self.check_time = ros.Time.now().to_sec()
 
 
             if ros.is_shutdown():
@@ -567,6 +575,12 @@ class TrackedVehicleSimulator3D:
 
     def getRobotState(self):
         return self.pose, self.twist
+
+    def setRampTerrain(self, ramp_inclination):
+        self.TYPE_OF_TERRAIN = 'ramp'
+        self.RAMP_INCLINATION = ramp_inclination
+        ramp_mesh = create_ramp_mesh(length=350., width=350., inclination=p.RAMP_INCLINATION, origin=np.array([0, 0, 0]))
+        self.terrain_manager.set_mesh(ramp_mesh)
 
 def check_assertion(value, expected, decimal, description):
     try:
@@ -615,14 +629,14 @@ if __name__ == '__main__':
     # w_omega_z = np.linspace(-0.0, -0.0, p.number_of_steps)
 
     # # PAPER: pitch ramp  test forward (not slippery)
-    test = "ramp_test"
-    groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04) #good setting for distributed contact
-    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=True, contact_distribution=True)
-    hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
-    w_omega_z = np.linspace(.0, 0., p.number_of_steps)
-
-    ramp_mesh = create_ramp_mesh(length=350., width=350., inclination=0.2, origin=np.array([0, 0, 0]))
-    p.terrain_manager.set_mesh(ramp_mesh)
+    # test = "ramp_test"
+    # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04) #good setting for distributed contact
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=True)
+    # hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
+    # w_omega_z = np.linspace(.0, 0., p.number_of_steps)
+    # p.setRampTerrain(0.2)
+    # p.initLoggingVars(simulation_duration=5.)
+    # p.SAVE_BAGS = True
 
     #for rviz
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -638,13 +652,9 @@ if __name__ == '__main__':
         # init com self.vehicle_param.height above ground
         w_R_terr = p.math_utils.eul2Rot(np.array([start_roll, start_pitch, start_yaw]))
         p.pose_init[:3] += p.consider_robot_height*(w_R_terr[:, 2] * p.vehicle_param.height)
-    else:
+    else:#unit test
         p.terrain_roll_vec = np.linspace(0.0, 0.0, p.number_of_steps)
-        if hasattr(p, 'mid_ramp_inclination'):
-            speed_up = np.linspace(p.initial_ramp_inclination, p.mid_ramp_inclination, int(p.number_of_steps*0.2))
-            p.terrain_pitch_vec = np.concatenate((speed_up, np.linspace(p.mid_ramp_inclination, p.final_ramp_inclination, int(p.number_of_steps*0.8))) )# 0.1 if you set -0.3 the robot starts to slip backwards!
-        else:
-            p.terrain_pitch_vec = np.linspace(p.initial_ramp_inclination, p.final_ramp_inclination, p.number_of_steps)  # 0.1 if you set -0.3 the robot starts to slip backwards!
+        p.terrain_pitch_vec = np.linspace(p.initial_ramp_inclination, p.final_ramp_inclination, p.number_of_steps)  # 0.1 if you set -0.3 the robot starts to slip backwards!
         p.terrain_yaw_vec = np.linspace(0.0, -0.0, p.number_of_steps)
         p.pose_init[:3] += p.consider_robot_height * np.array([0,0,1])* p.vehicle_param.height
 
@@ -658,12 +668,13 @@ if __name__ == '__main__':
 
     # init vars
     p.initSimulation(p.pose_init, p.twist_init)
-
-    p.recorder = RosbagControlledRecorder(bag_name=f"openLoop3DModel_{test}_Distr_{p.CONTACT_DISTRIBUTION}.bag")
-    p.recorder.start_recording_srv()
+    if p.SAVE_BAGS:
+        p.recorder = RosbagControlledRecorder(bag_name=f"openLoop3DModel_{test}_Distr_{p.CONTACT_DISTRIBUTION}.bag")
+        p.recorder.start_recording_srv()
     # simulation with internal while loop
     p.simulate(hf_v, w_omega_z)
-    p.recorder.stop_recording_srv()
+    if p.SAVE_BAGS:
+        p.recorder.stop_recording_srv()
 
     if not p.USE_MESH:#unit test
         errors = []

@@ -242,7 +242,7 @@ class TerrainManager:
 
 def create_ramp_mesh(length, width, inclination=0., origin=np.array([0,0,0])):
     """
-    Create a ramp mesh with the specified length, width, and height.
+    Create a pitch ramp mesh with the specified length, width, and height.
 
     Parameters:
         length (float): The horizontal length of the ramp.
@@ -252,7 +252,7 @@ def create_ramp_mesh(length, width, inclination=0., origin=np.array([0,0,0])):
     Returns:
         open3d.geometry.TriangleMesh: The ramp mesh.
     """
-    # Define the vertices of the ramp
+    # Define the vertices of the pitch ramp
     vertices = [
         [ -length/2,width/2,  length/2*math.tan(inclination)],  # Bottom-left corner
         [ -length/2, -width/2, length/2*math.tan(inclination)],  # Bottom-right corner
