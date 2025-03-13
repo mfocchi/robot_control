@@ -129,26 +129,31 @@ class RosPub():
         marker.scale.y = radius
         marker.scale.z = radius
         marker.color.a = 0.5
-        if (color == "red"):
-           marker.color.r = 1.0
-           marker.color.g = 0.0
-           marker.color.b = 0.0
-        if (color == "blue"):
-           marker.color.r = 0.0
-           marker.color.g = 0.0
-           marker.color.b = 1.0
-        if (color == "green"):
-           marker.color.r = 0.0
-           marker.color.g = 1.0
-           marker.color.b = 0.0
-        if (color == "purple"):
-            marker.color.r = 0.7
-            marker.color.g = 0.0
-            marker.color.b = 1.0
-        if (color == "white"):
-            marker.color.r = 1.
-            marker.color.g = 1.
-            marker.color.b = 1.
+        if isinstance(color, np.ndarray):
+            marker.color.r = color[0]
+            marker.color.g = color[1]
+            marker.color.b = color[2]
+        else:
+            if (color == "red"):
+               marker.color.r = 1.0
+               marker.color.g = 0.0
+               marker.color.b = 0.0
+            if (color == "blue"):
+               marker.color.r = 0.0
+               marker.color.g = 0.0
+               marker.color.b = 1.0
+            if (color == "green"):
+               marker.color.r = 0.0
+               marker.color.g = 1.0
+               marker.color.b = 0.0
+            if (color == "purple"):
+                marker.color.r = 0.7
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+            if (color == "white"):
+                marker.color.r = 1.
+                marker.color.g = 1.
+                marker.color.b = 1.
         marker.color.a = alpha
         marker.pose.orientation.x = 0.
         marker.pose.orientation.y = 0.
@@ -172,26 +177,31 @@ class RosPub():
         marker.scale.y = 100
         marker.scale.z = 0.1
         marker.color.a = 0.5
-        if (color == "red"):
-            marker.color.r = 1.0
-            marker.color.g = 0.0
-            marker.color.b = 0.0
-        if (color == "blue"):
-            marker.color.r = 0.0
-            marker.color.g = 0.0
-            marker.color.b = 1.0
-        if (color == "green"):
-            marker.color.r = 0.0
-            marker.color.g = 1.0
-            marker.color.b = 0.0
-        if (color == "purple"):
-            marker.color.r = 0.7
-            marker.color.g = 0.0
-            marker.color.b = 1.0
-        if (color == "white"):
-            marker.color.r = 1.
-            marker.color.g = 1.
-            marker.color.b = 1.
+        if isinstance(color, np.ndarray):
+            marker.color.r = color[0]
+            marker.color.g = color[1]
+            marker.color.b = color[2]
+        else:
+            if (color == "red"):
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
+            if (color == "blue"):
+                marker.color.r = 0.0
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+            if (color == "green"):
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            if (color == "purple"):
+                marker.color.r = 0.7
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+            if (color == "white"):
+                marker.color.r = 1.
+                marker.color.g = 1.
+                marker.color.b = 1.
         marker.color.a = alpha
 
 
@@ -218,18 +228,23 @@ class RosPub():
         marker.scale.y = radius
         marker.scale.z = radius
         marker.color.a = 0.5
-        if (color == "red"):
-            marker.color.r = 1.0
-            marker.color.g = 0.0
-            marker.color.b = 0.0
-        if (color == "blue"):
-            marker.color.r = 0.0
-            marker.color.g = 0.0
-            marker.color.b = 1.0
-        if (color == "green"):
-            marker.color.r = 0.0
-            marker.color.g = 1.0
-            marker.color.b = 0.0
+        if isinstance(color, np.ndarray):
+            marker.color.r = color[0]
+            marker.color.g = color[1]
+            marker.color.b = color[2]
+        else:
+            if (color == "red"):
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
+            if (color == "blue"):
+                marker.color.r = 0.0
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+            if (color == "green"):
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
 
         marker.pose.orientation.x = 0.
         marker.pose.orientation.y = 0.
@@ -246,26 +261,32 @@ class RosPub():
                             
     def add_arrow(self, start, vector, color = "green", scale = 1.):
        marker = Marker()
-       if (color == "green"):
-           marker.color.r = 0.0
-           marker.color.g = 1.0
-           marker.color.b = 0.0
-       if (color == "blue"):
-           marker.color.r = 0.0
-           marker.color.g = 0.0
-           marker.color.b = 1.0
-       if (color == "red"):
-           marker.color.r = 1.0
-           marker.color.g = 0.0
-           marker.color.b = 0.0
-       if (color == "black"):
-           marker.color.r = 0.0
-           marker.color.g = 0.0
-           marker.color.b = 0.0
-       if (color == "white"):
-           marker.color.r = 1.0
-           marker.color.g = 1.0
-           marker.color.b = 1.0
+
+       if isinstance(color, np.ndarray):
+           marker.color.r = color[0]
+           marker.color.g = color[1]
+           marker.color.b = color[2]
+       else:
+           if (color == "green"):
+               marker.color.r = 0.0
+               marker.color.g = 1.0
+               marker.color.b = 0.0
+           if (color == "blue"):
+               marker.color.r = 0.0
+               marker.color.g = 0.0
+               marker.color.b = 1.0
+           if (color == "red"):
+               marker.color.r = 1.0
+               marker.color.g = 0.0
+               marker.color.b = 0.0
+           if (color == "black"):
+               marker.color.r = 0.0
+               marker.color.g = 0.0
+               marker.color.b = 0.0
+           if (color == "white"):
+               marker.color.r = 1.0
+               marker.color.g = 1.0
+               marker.color.b = 1.0
 
        marker.header.frame_id = self.visual_frame
        marker.type = marker.ARROW
@@ -287,18 +308,23 @@ class RosPub():
 
     def add_mesh(self, package, mesh_path, position = np.zeros(3), color = "green", alpha = 1.):
         marker = Marker()
-        if (color == "green"):
-            marker.color.r = 0.0
-            marker.color.g = 1.0
-            marker.color.b = 0.0
-        if (color == "blue"):
-            marker.color.r = 0.0
-            marker.color.g = 0.0
-            marker.color.b = 1.0
-        if (color == "red"):
-            marker.color.r = 1.0
-            marker.color.g = 0.0
-            marker.color.b = 0.0
+        if isinstance(color, np.ndarray):
+            marker.color.r = color[0]
+            marker.color.g = color[1]
+            marker.color.b = color[2]
+        else:
+            if (color == "green"):
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            if (color == "blue"):
+                marker.color.r = 0.0
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+            if (color == "red"):
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
         marker.color.a = alpha
 
         marker.header.frame_id = self.visual_frame
@@ -329,18 +355,23 @@ class RosPub():
         # a line connect points[1] - points[2]
         # ...
         marker = Marker()
-        if (color == "green"):
-            marker.color.r = 0.0
-            marker.color.g = 1.0
-            marker.color.b = 0.0
-        if (color == "blue"):
-            marker.color.r = 0.0
-            marker.color.g = 0.0
-            marker.color.b = 1.0
-        if (color == "red"):
-            marker.color.r = 1.0
-            marker.color.g = 0.0
-            marker.color.b = 0.0
+        if isinstance(color, np.ndarray):
+            marker.color.r = color[0]
+            marker.color.g = color[1]
+            marker.color.b = color[2]
+        else:
+            if (color == "green"):
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            if (color == "blue"):
+                marker.color.r = 0.0
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+            if (color == "red"):
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
         marker.color.a = 1.0
         if visual_frame is None:
             marker.header.frame_id = self.visual_frame
@@ -379,14 +410,19 @@ class RosPub():
        radius = friction_coeff* height
        tail_end = origin + normal*height; 
        marker = Marker()
-       if (color == "green"):                    
-           marker.color.r = 0.0
-           marker.color.g = 1.0
-           marker.color.b = 0.0                    
-       if (color == "blue"):                    
-           marker.color.r = 0.0
-           marker.color.g = 0.0
-           marker.color.b = 1.0                                                
+       if isinstance(color, np.ndarray):
+           marker.color.r = color[0]
+           marker.color.g = color[1]
+           marker.color.b = color[2]
+       else:
+           if (color == "green"):
+               marker.color.r = 0.0
+               marker.color.g = 1.0
+               marker.color.b = 0.0
+           if (color == "blue"):
+               marker.color.r = 0.0
+               marker.color.g = 0.0
+               marker.color.b = 1.0
 
        marker.header.frame_id = self.visual_frame
        marker.type = marker.ARROW
