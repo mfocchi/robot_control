@@ -122,13 +122,13 @@ class TrackedVehicleSimulator3D:
         w_omega = twist[3:]
 
         #projection of com on the ground level
-        pc_ = pc -self.consider_robot_height*self.w_com_height_vector
+        pcom_on_ground = pc -self.consider_robot_height*self.w_com_height_vector
 
         #force is present only if there is linear penetration
         # print("pg", pg)
-        # print("pcom_",pc_)
-        if (self.terrain_normal.dot(pg - pc_) > 0.0):
-            Fk = self.ground.Kt_x.dot(pg - pc_)
+        # print("pcom_",pcom_on_ground)
+        if (self.terrain_normal.dot(pg - pcom_on_ground) > 0.0):
+            Fk = self.ground.Kt_x.dot(pg - pcom_on_ground)
             #only if it is approaching
             Fd = np.zeros(3)
             if (self.terrain_normal.dot(pc_d) < 0.0):
@@ -159,16 +159,17 @@ class TrackedVehicleSimulator3D:
     def computeDistributedGroundForcesMoments(self,pose, twist, w_R_b, terr_roll, terr_pitch, terr_yaw):
 
         # this is the direction patches are projected on ground to compute forces
-        #projection_direction = self.terrain_normal
-        projection_direction = w_R_b[:, 2] #w_base_z_axis
+        projection_direction =  np.array([0, 0, 1])
+        #projection_direction = self.terrain_normal (does not do load transfer!)
+        #projection_direction = w_R_b[:, 2] #w_base_z_axis  (does not do load transfer!)
 
         # compoute patches under tracks in wf
         patch_counter = 0
         # compute patch positions and twists in world frame
         for i in range(self.track_param.parts_longitudinal):
             for j in range(self.track_param.parts_lateral):
-                b_rel_patch_position_l = np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], -self.consider_robot_height*self.vehicle_param.height])#TODO robot height
-                b_rel_patch_position_r = np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], -self.consider_robot_height*self.vehicle_param.height])#TODO robot height
+                b_rel_patch_position_l = np.array([self.patch_pos_long_l[i, j], self.patch_pos_lat_l[i, j], -self.consider_robot_height*self.vehicle_param.height])
+                b_rel_patch_position_r = np.array([self.patch_pos_long_r[i, j], self.patch_pos_lat_r[i, j], -self.consider_robot_height*self.vehicle_param.height])
                 self.w_patch_pos_l[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_l)
                 self.w_patch_pos_r[patch_counter, :] = pose[:3] + w_R_b.dot(b_rel_patch_position_r)
 
@@ -230,7 +231,7 @@ class TrackedVehicleSimulator3D:
                     Fd = 0. #np.zeros(3)
                 self.w_Fg_patch_l[patch_counter, :] = projection_direction*(Fk + Fd)
                 # compute moment
-                self.w_Mg_patch_l[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], projection_direction*(Fk + Fd)))
+                self.w_Mg_patch_l[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3],self.w_Fg_patch_l[patch_counter, :] ))
             else:
                 self.w_Fg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
                 self.w_Mg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
@@ -258,7 +259,7 @@ class TrackedVehicleSimulator3D:
                     Fd = 0.  # np.zeros(3)
                 self.w_Fg_patch_r[patch_counter, :] = projection_direction * (Fk + Fd)
                 # compute moment
-                self.w_Mg_patch_r[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], projection_direction * (Fk + Fd)))
+                self.w_Mg_patch_r[patch_counter, :] = N.dot(np.cross(patch_pos - pose[:3], self.w_Fg_patch_r[patch_counter, :]))
             else:
                 self.w_Fg_patch_r[patch_counter, :] = np.array([0.0, 0.0, 0.0])
                 self.w_Mg_patch_r[patch_counter, :] = np.array([0.0, 0.0, 0.0])
@@ -266,6 +267,26 @@ class TrackedVehicleSimulator3D:
             if self.DEBUG:
                 self.ros_pub.add_arrow(patch_pos, self.w_Fg_patch_r[patch_counter, :] / 100., "blue")
             patch_counter += 1
+
+        # compute resultant of forces on tracks
+        Fg_l_z = 0
+        Fg_r_z = 0
+        resultant_pos_l = np.zeros(3)
+        resultant_pos_r = np.zeros(3)
+        for patch_pos_l, fg_l, patch_pos_r, fg_r, in zip(self.w_patch_pos_l, self.w_Fg_patch_l, self.w_patch_pos_r, self.w_Fg_patch_r):
+            resultant_pos_l[0] += patch_pos_l[0]*fg_l[2]
+            resultant_pos_l[1] += patch_pos_l[1]*fg_l[2]
+            resultant_pos_l[2] += patch_pos_l[2] * fg_l[2]
+            Fg_l_z += fg_l[2]
+            resultant_pos_r[0] += patch_pos_r[0] * fg_r[2]
+            resultant_pos_r[1] += patch_pos_r[1] * fg_r[2]
+            resultant_pos_r[2] += patch_pos_r[2] * fg_r[2]
+            Fg_r_z += fg_r[2]
+        resultant_pos_l/=Fg_l_z
+        resultant_pos_r/= Fg_r_z
+        if self.DEBUG:
+            self.ros_pub.add_arrow(resultant_pos_l, np.array([0., 0., Fg_l_z]) / 1000., "red")
+            self.ros_pub.add_arrow(resultant_pos_r, np.array([0., 0., Fg_r_z]) / 1000., "red")
 
         #integrate along all patches
         w_Fg = np.sum(self.w_Fg_patch_l, axis=0) + np.sum(self.w_Fg_patch_r, axis=0)
@@ -275,6 +296,7 @@ class TrackedVehicleSimulator3D:
         #map to base frame
         b_Fg = w_R_b.T.dot(w_Fg)
         b_Mg = w_R_b.T.dot(w_Mg)
+
         return b_Fg, b_Mg, 0, 0, self.w_Fg_patch_l, self.w_Fg_patch_r
 
     def dynamics3D(self, twist, w_R_b, b_Fg,b_Mg, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, vehicle_param):
@@ -303,10 +325,11 @@ class TrackedVehicleSimulator3D:
         w_Fg = w_R_b.dot(b_Fg) # terrain linear
         w_Mg = w_R_b.dot(b_Mg) # terrain moment
 
-        w_Fgrav = w_R_b.dot(b_Fgrav) #gravity force
         if self.enable_visuals and self.DEBUG:
             # traction force
             self.ros_pub.add_arrow(self.pose[:3], w_Ft / 100., "red")
+            #gravity force
+            #w_Fgrav = w_R_b.dot(b_Fgrav)  # gravity force
             #self.ros_pub.add_arrow(self.pose[:3], w_Fgrav / 1000., "blue")
             #N = np.eye(3) - np.multiply.outer(self.terrain_normal.ravel(), self.terrain_normal.ravel())
             #self.ros_pub.add_arrow(self.pose[:3], N.dot(w_Fgrav) / 100., "blue")
