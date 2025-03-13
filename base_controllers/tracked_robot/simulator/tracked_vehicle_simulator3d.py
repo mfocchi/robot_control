@@ -19,6 +19,7 @@ import tf
 from termcolor import colored
 from base_controllers.utils.math_tools import RK4_step, backward_euler_step, forward_euler_step, heun_step
 from base_controllers.utils.rk45F_integrator import RK45F_step
+from base_controllers.tracked_robot.simulator.terrain_manager import create_ramp_mesh
 
 class Ground3D():
     def __init__(self,
@@ -511,6 +512,8 @@ class TrackedVehicleSimulator3D:
             self.broadcaster.sendTransform(pg+np.array([0.,0,.1]),
                                            pin.Quaternion(self.w_R_b.dot(self.hf_R_b.T)),
                                            ros.Time.now(), '/horizontal_frame', '/world')
+
+            self.ros_pub.add_plane(pos=np.array([0, 0, -0.]), orient=np.array([0., 0.2, 0]), color="white", alpha=0.5)
             self.ros_pub.publishVisual(delete_markers=False)
 
             self.rate.sleep()
@@ -588,16 +591,16 @@ if __name__ == '__main__':
     # hf_v = np.linspace(1.4, 1.4, p.number_of_steps)
     # w_omega_z = np.linspace(-0.0, -0.0, p.number_of_steps)
 
+    # # PAPER: pitch ramp  test forward (not slippery)
+    test = "ramp_test"
+    groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04) #good setting for distributed contact
+    p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=True, contact_distribution=True)
+    hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
+    w_omega_z = np.linspace(.0, 0., p.number_of_steps)
 
-    # # PAPER: ramp  test  (not slippery)
-    # test = "ramp_test"
-    # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.5e04)
-    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=False, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=True, contact_distribution=True)
-    # hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
-    # w_omega_z = np.linspace(-0.0, -0.0, p.number_of_steps)
-    # p.initial_ramp_inclination = -0.0
-    # p.mid_ramp_inclination = -0.3
-    # p.final_ramp_inclination = -0.3
+    ramp_mesh = create_ramp_mesh(length=350., width=350., inclination=0.2, origin=np.array([0, 0, 0]))
+    p.terrain_manager.set_mesh(ramp_mesh)
+
     #for rviz
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
     p.broadcaster = tf.TransformBroadcaster()
@@ -621,6 +624,9 @@ if __name__ == '__main__':
             p.terrain_pitch_vec = np.linspace(p.initial_ramp_inclination, p.final_ramp_inclination, p.number_of_steps)  # 0.1 if you set -0.3 the robot starts to slip backwards!
         p.terrain_yaw_vec = np.linspace(0.0, -0.0, p.number_of_steps)
         p.pose_init[:3] += p.consider_robot_height * np.array([0,0,1])* p.vehicle_param.height
+
+    #PAPER: lateral ramp test
+    #p.pose_init[5] = 1.57
 
     #the trajectory is in the WF
     p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.pose_init[0],
