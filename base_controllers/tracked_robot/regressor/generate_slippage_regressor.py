@@ -6,7 +6,9 @@ import catboost as cb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 import os
-os.environ["MPLBACKEND"] = "TkAgg" #do it out side it export MPLBACKEND=TkAgg
+from termcolor import colored
+
+os.environ["MPLBACKEND"] = "TkAgg" #do it out side it exports MPLBACKEND=TkAgg
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt #do as last import
@@ -23,11 +25,12 @@ if sim:
     #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_4.5.csv'
     ## Using this with 0.4
     #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_10.csv'
-    data = 'ident_wheels_sim_0.4_long_v_positive_WLmax_18.csv'
+    data = 'data2d/ident_wheels_sim_0.4_long_v_positive_WLmax_18.csv'
     friction_coeff = data.split("_")[3]
 else:
-    data = 'ident_wheels_real_indoor.csv'
+    data = 'data2d/ident_wheels_real_indoor.csv'
 
+print(colored("remember to run in interactive mode otherwise the plots do now show up!","red"))
 df = pd.read_csv(data,header=None, names=['wheel_l','wheel_r','beta_l','beta_r','alpha'])
 x = df[['wheel_l','wheel_r']].values
 y = df[['beta_l','beta_r','alpha']].values

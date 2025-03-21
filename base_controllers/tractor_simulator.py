@@ -75,7 +75,8 @@ class GenericSimulator(BaseController):
         self.friction_coefficient = 0.4 # 0.1 (used only in 2d)/0.4 (2d and 3d) (used for planning in paper)/0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
 
         # initial pose
-        self.p0 = np.array([0., 0., 0.]) #FOR PAPER np.array([-0.05, 0.03, 0.01])
+        self.p0 = np.array([15., 2., 0.])
+        #self.p0 = np.array([15., 2., 0.]) #for closed loop slope test 3d
 
         # target used only for matlab trajectory generation (dubins/optimization) #need to run dubins_optimization/ros/ros_node.m
         self.pf = np.array([2., 2.5, -0.4])
@@ -254,7 +255,7 @@ class GenericSimulator(BaseController):
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
                 conf.robot_params[p.robot_name]['dt'] = 0.001
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient, terrain_stiffness=1e05, terrain_damping=0.5e04)
-                self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'],  ground=groundParams, USE_MESH=self.TERRAIN, contact_distribution=False)
+                self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'],  ground=groundParams, USE_MESH=self.TERRAIN, enable_visuals=False, contact_distribution=False)
                 self.flag3D='_3d_'
             else: #'biral':
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
@@ -360,10 +361,10 @@ class GenericSimulator(BaseController):
         if hasattr(self, 'check_time'):
             loop_time = ros.Time.now().to_sec() - self.check_time #actual publishing time interval
             ros_loop_time = self.slow_down_factor * conf.robot_params[p.robot_name]['dt']*self.decimate_publish #ideal publishing time interval
-            if loop_time > 1.1 * (ros_loop_time):
+            if loop_time > 1.3 * (ros_loop_time):
                 loop_real_freq = 1/loop_time #actual publishing frequency
                 freq_ros = 1 / ros_loop_time #ideal publishing frequency
-                print(colored(f"freq mismatch beyond 15%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-loop_real_freq)/freq_ros*100} %", "red"))
+                print(colored(f"freq mismatch beyond 30%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-loop_real_freq)/freq_ros*100} %", "red"))
                 self.out_of_frequency_counter += 1
                 if self.out_of_frequency_counter > 10:
                     original_slow_down_factor = self.slow_down_factor
@@ -905,8 +906,8 @@ class GenericSimulator(BaseController):
                     w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
                     w_normal = w_R_terr.dot(np.array([0, 0, 1]))
 
-                    self.ros_pub.add_arrow(pg, w_normal * 0.5, color="white")
-                    self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
+                    # self.ros_pub.add_arrow(pg, w_normal * 0.5, color="white")
+                    # self.ros_pub.add_marker(pg, radius=0.1, color="white", alpha=1.)
 
                 else:
                     terrain_roll = terrain_roll_des = 0.
@@ -1185,7 +1186,7 @@ def main_loop(p):
                 p.des_x = p.p0[0] #+0.1
                 p.des_y = p.p0[1] #+0.1
                 p.des_theta = p.p0[2] # +0.1
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.4, omega_max_=0.3)  # slow 0.2 0.3 / fast 0.25 0.4 (for higher linear speed alpha is not predicted properly)
+            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.4, omega_max_=0.2)   # fr=0.4 (0.4 0.2)  / fr=0.6 (0.6, 0.4)
             p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
@@ -1295,7 +1296,9 @@ def main_loop(p):
             filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
             p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
             mio.savemat(filename, {'time': p.time_log, 'des_state': p.des_state_log,
-                                   'state': p.state_log, 'ex': p.log_e_x, 'ey': p.log_e_y, 'etheta': p.log_e_theta,
+                                   'state': p.state_log,
+                                   'pose_des':p.basePoseW_des_log,
+                                   'pose':p.basePoseW_log, 'ex': p.log_e_x, 'ey': p.log_e_y, 'etheta': p.log_e_theta,
                                    'v': p.ctrl_v_log, 'vd': p.v_d_log, 'omega': p.ctrl_omega_log, 'omega_d': p.omega_d_log,
                                    'wheel_l': p.qd_log[0, :], 'wheel_r': p.qd_log[1, :], 'beta_l': p.beta_l_log,
                                    'beta_r': p.beta_r_log, 'beta_l_pred': p.beta_l_control_log, 'beta_r_pred': p.beta_r_control_log,
