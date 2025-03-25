@@ -2,6 +2,8 @@ import numpy as np
 from base_controllers.tracked_robot.simulator.tracked_vehicle import TrackedVehicle, VehicleParam
 from base_controllers.tracked_robot.simulator.track import TrackParams
 from numpy.testing import assert_almost_equal
+import matplotlib
+matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 import base_controllers.tracked_robot.utils.constants as constants
@@ -56,6 +58,7 @@ class TrackedVehicleSimulator3D:
         self.int_method = int_method
         self.consider_robot_height = True
         self.SAVE_BAGS = False
+        self.PROFILE = False
 
         if  terrain_manager is None:
             print(colored("loading default terrain Manager", "red"))
@@ -484,6 +487,10 @@ class TrackedVehicleSimulator3D:
         sim_counter = 0
         self.rate = ros.Rate(1 /  (self.dt))
 
+        if self.PROFILE:
+            from base_controllers.utils.profiler import Profiler
+            profiler = Profiler(function_name=self.simulateOneStep)
+
         while self.time < self.t_end:
             if np.mod(self.time, 1) == 0:
                 print(colored(f"TIME: {self.time}","red"))
@@ -546,7 +553,7 @@ class TrackedVehicleSimulator3D:
             self.pose_log[:, sim_counter] = self.pose
 
             self.time_log[sim_counter] = self.time
-            self.max_patch_stiffness_log = self.max_patch_stiffness_l
+            self.max_patch_stiffness_log[sim_counter] = self.max_patch_stiffness_l
 
             self.time = np.round(self.time + self.dt, 4)
             sim_counter +=1
@@ -593,6 +600,10 @@ class TrackedVehicleSimulator3D:
 
             if ros.is_shutdown():
                 break
+
+        if self.PROFILE:
+            avg_time = profiler.get_total_time() / sim_counter
+            print(colored(f"Average Time per Call: {avg_time:.6f} seconds", "red"))
         os.system("rosnode kill rviz")
         os.system("pkill rosmaster")
 
@@ -628,13 +639,13 @@ if __name__ == '__main__':
     #1 PAPER: sloped test: distributed/non distributed
     # test = "sloped_test_chicane"
     # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04)  # good setting for distributed contact
-    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=False)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=Trueis significa)
     # p.initLoggingVars(simulation_duration=20., pose_init=[19., 3., 0.0, 0, 0, 0]) # position in WF, rpy angles
     # hf_v = np.linspace(0.8, 0.8, p.number_of_steps)
     # w_omega_z = np.linspace(0.6, -0.6, p.number_of_steps)
     # p.SAVE_BAGS = True
 
-    # 2 PAPER: pitch ramp: distributed
+    # 2 PAPER: pitch ramp: distributed (not used)
     # test = "ramp_test_turning_left"
     # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04) #good setting for distributed contact
     # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=True)
@@ -692,7 +703,7 @@ if __name__ == '__main__':
     if p.SAVE_BAGS:
         p.recorder.stop_recording_srv()
         import scipy.io.matlab as mio
-        mio.savemat(test_name+".mat", {'time': p.time_log, 'pose': p.pose_log, 'vdes':hf_v, 'Kmax': p.max_patch_stiffness_log})
+        mio.savemat(test_name+".mat", {'time': p.time_log, 'pose_des': p.pose_des_log, 'pose': p.pose_log, 'vdes':hf_v, 'Kmax': p.max_patch_stiffness_log})
 
     if not p.USE_MESH:#unit test
         errors = []

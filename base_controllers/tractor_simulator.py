@@ -54,7 +54,7 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'biral3d'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'biral'(2d) 'biral3d'
+        self.SIMULATOR = 'biral'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'biral'(2d) 'biral3d'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
         self.TERRAIN = False #True: slopes False: flat
 
@@ -75,8 +75,9 @@ class GenericSimulator(BaseController):
         self.friction_coefficient = 0.4 # 0.1 (used only in 2d)/0.4 (2d and 3d) (used for planning in paper)/0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
 
         # initial pose
-        self.p0 = np.array([15., 2., 0.])
-        #self.p0 = np.array([15., 2., 0.]) #for closed loop slope test 3d
+        self.p0 = np.array([0., 0., 0.])
+        #self.p0 = np.array([15., 2., 0.]) #FOR PAPER for closed loop slope test 3d
+        #self.p0 = np.array([0.05, 0.03, 0.01]) #FOR PAPER user_defined_reference
 
         # target used only for matlab trajectory generation (dubins/optimization) #need to run dubins_optimization/ros/ros_node.m
         self.pf = np.array([2., 2.5, -0.4])
@@ -87,7 +88,7 @@ class GenericSimulator(BaseController):
         self.SAVE_BAGS = False
 
         self.USE_GUI = False
-        self.ADD_NOISE = False #FOR PAPER
+        self.ADD_NOISE = False #FOR PAPER user_defined_reference
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
 
         if self.SIMULATOR == 'gazebo' and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
@@ -396,7 +397,6 @@ class GenericSimulator(BaseController):
         dxdy_t = dxdy * long_vel
         omega_vec = dtheta * long_vel
         long_v_vec = np.ones((values.size))*long_vel
-
         return xy[:,0] , xy[:,1], theta, long_v_vec, omega_vec , dt
 
     def getTrajFromMatlab(self):
@@ -1183,15 +1183,27 @@ def main_loop(p):
                 p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
                 p.des_theta = p.terrain_consistent_pose_init[5]  # +0.1
             else:
-                p.des_x = p.p0[0] #+0.1
-                p.des_y = p.p0[1] #+0.1
-                p.des_theta = p.p0[2] # +0.1
-            v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.4, omega_max_=0.2)   # fr=0.4 (0.4 0.2)  / fr=0.6 (0.6, 0.4)
+                # for PAPER user_defined_reference
+                # p.des_x = 0
+                # p.des_y = 0
+                # p.des_theta = 0
+                p.des_x = p.p0[0]
+                p.des_y = p.p0[1]
+                p.des_theta = p.p0[2]
+            if p.friction_coefficient == 0.1:
+                v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3)
+            if p.friction_coefficient == 0.4:
+                v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.4, omega_max_=0.2)
+            if p.friction_coefficient == 0.6:
+                v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.6, omega_max_=0.4)
             p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                                 v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
         else:
             if p.PLANNING == 'clothoids':
+                # from base_controllers.utils.profiler import Profiler
+                # profiler = Profiler(function_name=p.getClothoids)
                 des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, plan_dt = p.getClothoids(long_vel=0.4, dt = 0.001)
+                #print(colored(f"Computation time per Clothoid call: {profiler.get_total_time()} seconds", "red"))
             else:  # matlab planning
                 des_x_vec, des_y_vec, des_theta_vec, v_ol, omega_ol, plan_dt = p.getTrajFromMatlab()
             p.traj = Trajectory(None, des_x_vec, des_y_vec, des_theta_vec, None, DT=plan_dt, v=v_ol, omega=omega_ol)
