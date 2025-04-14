@@ -328,6 +328,7 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, ad
     return robot                    
 
 
+
 def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=None):
     if sharex and sharey:
         ax = plt.subplot(n_rows, n_cols, n_subplot, sharex=ax_to_share, sharey=ax_to_share)
