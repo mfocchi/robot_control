@@ -695,10 +695,10 @@ class GenericSimulator(BaseController):
             wheel_r_vec = []
             change_interval = 3.
             if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
-                wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 48) #it if passes from 0 for some reason there is a non linear
+                wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 32) #it if passes from 0 for some reason there is a non linear
                     #behaviour in the long slippage
             else:
-                wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 24)
+                wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 32)
             time = 0
             i = 0
             while True:
@@ -1066,8 +1066,9 @@ class GenericSimulator(BaseController):
 def talker(p):
     p.start()
     p.startSimulator()
+
     if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
-        wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 24)
+        wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 32)
         ramps = np.linspace(0.0, -0.3, 5) #I use negative ramp inclination otherwise the terrain consistent startyaw is PI and not 0
         if p.SIMULATOR == 'biral3d':
             # p.IDENT_WHEEL_L =  3
