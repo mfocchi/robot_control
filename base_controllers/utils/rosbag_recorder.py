@@ -52,6 +52,7 @@ import rospy
 from termcolor import colored
 from std_srvs.srv import Empty, EmptyResponse
 from base_controllers.utils.common_functions import checkRosMaster
+import os
 
 def signal_process_and_children(pid, signal_to_send, wait=False):
     process = psutil.Process(pid)
@@ -77,11 +78,23 @@ def format_to_columns(input_list, cols):
 class RosbagControlledRecorder(object):
     """Record a rosbag with service calls to control start, stop  and pause"""
 
-    def __init__(self, topics=' -a', bag_name=None, record_from_startup_=False):
+    def __init__(self, topics=' -a', bag_name=None, record_from_startup_=False,  bag_folder=None, local_folder=False):
         rosbag_command_ = "rosbag record"+topics
         self.bag_name = bag_name
+        self.bag_folder = bag_folder
+
         if self.bag_name is not None:
-            rosbag_command_+=" -O "+self.bag_name
+            if self.bag_folder is not None:
+                if local_folder:
+                    # Create path relative to the current working directory
+                    full_path = os.path.join(os.getcwd(), self.bag_folder, self.bag_name)
+                else:
+                    full_path = f"{self.bag_folder.rstrip('/')}/{self.bag_name}"
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)  # Create folder if it doesn't exist
+            else:
+                full_path = self.bag_name
+            rosbag_command_ += " -O " + full_path
+
         self.rosbag_command = shlex.split(rosbag_command_)
         self.recording_started = False
         self.recording_paused = False
@@ -190,7 +203,7 @@ if __name__ == '__main__':
     # Get parameters
 
     # Start recorder object
-    recorder = RosbagControlledRecorder(bag_name="prova.bag")
+    recorder = RosbagControlledRecorder(bag_name="prova.bag", bag_folder="test_bag", local_folder=True)
 
     # Services
     start_service = rospy.Service('~start', Empty, recorder.start_recording_srv)
