@@ -297,6 +297,10 @@ class GenericSimulator(BaseController):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
+
+        self.clock_pub = ros.Publisher('/clock', Clock, queue_size=10)
+
+
         if self.TERRAIN and self.SIMULATOR=='biral3d': #terrain is only available in biral 3d
             from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
             self.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
@@ -362,8 +366,7 @@ class GenericSimulator(BaseController):
                 bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
 
-
-    # This will be used instead of the basecontroller one, I do it just to check frequency
+    # This will be used instead of the basecontroller one, I do it just to check frequency!
     def _receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
@@ -372,20 +375,21 @@ class GenericSimulator(BaseController):
                     self.qd[joint_idx] = msg.velocity[msg_idx]
                     self.tau[joint_idx] = msg.effort[msg_idx]
 
-        #check frequency of publishing
+    def checkLoopFrequency(self):
+        # check frequency of publishing
         if hasattr(self, 'check_time'):
-            loop_time = ros.Time.now().to_sec() - self.check_time #actual publishing time interval
-            ros_loop_time = self.slow_down_factor * conf.robot_params[p.robot_name]['dt']*self.decimate_publish #ideal publishing time interval
+            loop_time = ros.Time.now().to_sec() - self.check_time  # actual publishing time interval
+            ros_loop_time = self.slow_down_factor * conf.robot_params[p.robot_name]['dt'] * self.decimate_publish  # ideal publishing time interval
             if loop_time > 1.3 * (ros_loop_time):
-                loop_real_freq = 1/loop_time #actual publishing frequency
-                freq_ros = 1 / ros_loop_time #ideal publishing frequency
-                print(colored(f"freq mismatch beyond 30%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros-loop_real_freq)/freq_ros*100} %", "red"))
+                loop_real_freq = 1 / loop_time  # actual publishing frequency
+                freq_ros = 1 / ros_loop_time  # ideal publishing frequency
+                print(colored(f"freq mismatch beyond 30%: loop is running at {loop_real_freq} Hz while it should run at {freq_ros} Hz, freq error is {(freq_ros - loop_real_freq) / freq_ros * 100} %", "red"))
                 self.out_of_frequency_counter += 1
                 if self.out_of_frequency_counter > 10:
                     original_slow_down_factor = self.slow_down_factor
                     self.slow_down_factor *= 2
                     self.rate = ros.Rate(1 / (self.slow_down_factor * conf.robot_params[p.robot_name]['dt']))
-                    print(colored(f"increasing slow_down_factor from {original_slow_down_factor} to {self.slow_down_factor}","red"))
+                    print(colored(f"increasing slow_down_factor from {original_slow_down_factor} to {self.slow_down_factor}", "red"))
                     self.out_of_frequency_counter = 0
 
         self.check_time = ros.Time.now().to_sec()
@@ -691,7 +695,7 @@ class GenericSimulator(BaseController):
             wheel_r_vec = []
             change_interval = 3.
             if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
-                wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 24) #it if passes from 0 for some reason there is a non linear
+                wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 48) #it if passes from 0 for some reason there is a non linear
                     #behaviour in the long slippage
             else:
                 wheel_r =np.linspace(self.IDENT_MAX_WHEEL_SPEED, -self.IDENT_MAX_WHEEL_SPEED, 24)
@@ -907,6 +911,12 @@ class GenericSimulator(BaseController):
         return qd_comp, beta_l, beta_r
     
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
+
+        self.checkLoopFrequency()
+
+        # Publish clock to have ros.Time.now sync with self.time
+        self.clock_pub.publish(Clock(clock=ros.Time.from_sec(self.time)))
+
         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
         msg = JointState()
         msg.name = self.joint_names
@@ -916,6 +926,10 @@ class GenericSimulator(BaseController):
         msg.effort = tau_ffwd
         if np.mod(self.pub_counter, self.decimate_publish) == 0:
             self.pub_des_jstate.publish(msg) #publish in /commands
+
+        # I comment because it slows loop down TODO
+        if np.mod(self.pub_counter, self.decimate_publish) == 0:
+            self.joint_pub.publish(msg)  # this publishes in tractor/joint_state q = q_des, it is just for rviz to see the joints of the wheels moving
 
         #trigger simulators
         if self.SIMULATOR == 'biral' or self.SIMULATOR == 'biral3d': #TODO implement torque control
@@ -970,8 +984,7 @@ class GenericSimulator(BaseController):
 
             self.q = q_des.copy()
             self.qd = qd_des.copy()
-            if np.mod(self.pub_counter, self.decimate_publish) == 0:
-                self.joint_pub.publish(msg)  # this publishes q = q_des, it is just for rviz
+
 
             if self.NAVIGATION!='none' and self.SIMULATOR!='gazebo': #for biral models set the lidar position in gazebo consistent with the robot motion
                 self.setModelState('lidar', self.u.linPart(self.basePoseW), self.quaternion)
@@ -1097,6 +1110,7 @@ def talker(p):
 
 def main_loop(p):
     p.loadModelAndPublishers()
+    p.u.putIntoGlobalParamServer("use_sim_time", True)
     p.robot.na = 2 #initialize properly vars for only 2 actuators (other 2 are caster wheels)
     p.initVars()
     p.q_old = np.zeros(2)
