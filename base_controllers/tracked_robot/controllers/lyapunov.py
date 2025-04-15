@@ -29,7 +29,7 @@ class LyapunovController:
 
         self.C1 = constants.side_slip_angle_coefficients[0]
         self.C2 = constants.side_slip_angle_coefficients[1]
-        self.SIDE_SLIP_COMPENSATION = 'NN'
+        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING'
         self.log_e_x = []
         self.log_e_y = []
         self.log_e_theta = []
@@ -44,6 +44,9 @@ class LyapunovController:
 
     def setSideSlipCompensationType(self, SIDE_SLIP_COMPENSATION):
         self.SIDE_SLIP_COMPENSATION = SIDE_SLIP_COMPENSATION
+
+    def setSlippageInferenceType(self, SLIPPAGE_INFERENCE_TYPE):
+        self.SLIPPAGE_INFERENCE_TYPE = SLIPPAGE_INFERENCE_TYPE
 
     def getErrors(self):
         return self.log_e_x, self.log_e_y,  self.log_e_theta
@@ -218,17 +221,20 @@ class LyapunovController:
             else:
                 alpha = -self.C1*np.exp(-self.C2*radius)
 
-        elif self.SIDE_SLIP_COMPENSATION=='NN':
+        elif self.SIDE_SLIP_COMPENSATION=='MACHINE_LEARNING':
             qd = np.zeros(2)
             qd[0] = (v - omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
             qd[1] = (v + omega * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
-            if len(model_alpha.feature_names_)>2:
-                alpha = model_alpha.predict(np.array([qd[0], qd[1], self.actual_state.roll, self.actual_state.pitch, self.actual_state.theta]))
-            else:
-                alpha = model_alpha.predict(qd)
-            #matlab
-            #alpha = self.eng.feval(model_alpha['predictFcn'], qd)
 
+            if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
+                if len(model_alpha.feature_names_)>2:
+                    alpha = model_alpha.predict(np.array([qd[0], qd[1], self.actual_state.roll, self.actual_state.pitch, self.actual_state.theta]))
+                else:
+                    alpha = model_alpha.predict(qd)
+                #matlab
+                #alpha = self.eng.feval(model_alpha['predictFcn'], qd)
+            elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
+                alpha = (model_alpha([qd])).squeeze()
         return alpha
 
     def alpha_dot_exp(self, v, omega, v_dot, omega_dot):

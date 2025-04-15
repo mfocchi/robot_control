@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 import catboost as cb
-
+from scipy.interpolate import RBFInterpolator
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 import os
@@ -22,9 +22,9 @@ if sim:
     # full data also long_v<0 (not used)
     #data = 'ident_wheels_sim_0.1_WLmax_4.5.csv'
     # only data long_v>0 (not used)
-    #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_4.5.csv'
-    ## Using this with 0.4
-    #data = 'ident_wheels_sim_0.1_long_v_positive_WLmax_10.csv'
+    #data = 'data2d/ident_wheels_sim_0.1_long_v_positive_WLmax_4.5.csv'
+    #data = 'data2d/ident_wheels_sim_0.1_long_v_positive_WLmax_10.csv'
+    # Using this with 0.4
     data = 'data2d/ident_wheels_sim_0.4_long_v_positive_WLmax_18.csv'
     friction_coeff = data.split("_")[3]
 else:
@@ -39,11 +39,42 @@ y = df[['beta_l','beta_r','alpha']].values
 # %%compute input correlation
 df.corr()
 
+#upsampling
+# Fit an interpolator for each output dimension
+interpolator_beta_l = RBFInterpolator(x, y[:, 0], smoothing=0.1)
+interpolator_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
+interpolator_alpha  = RBFInterpolator(x, y[:, 2], smoothing=0.1)
+
+# Create a dense grid of inputs
+wl_dense = np.linspace(-10, 10, 100)
+wr_dense = np.linspace(-10, 10, 100)
+wl_mesh, wr_mesh = np.meshgrid(wl_dense, wr_dense)
+x_dense = np.stack([wl_mesh.ravel(), wr_mesh.ravel()], axis=1)
+
+# Interpolate new outputs
+beta_l_dense = interpolator_beta_l(x_dense)
+beta_r_dense = interpolator_beta_r(x_dense)
+alpha_dense  = interpolator_alpha(x_dense)
+y_dense = np.stack([beta_l_dense, beta_r_dense, alpha_dense], axis=1)
+data_dense = np.hstack([x_dense, y_dense])
+
+# Create DataFrame with proper column names
+df_dense = pd.DataFrame(data_dense, columns=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha'])
+
+v = (df_dense.wheel_l + df_dense.wheel_r) / 2 * 0.0856
+idx_filter = v > 0.01
+filtered = df_dense[idx_filter]
+
+x = filtered[['wheel_l','wheel_r']].values
+y = filtered[['beta_l','beta_r','alpha']].values
+
+
+
 # %% plot histogram to see if input distribution is well behaved, to see if it is neeeded a scaling
 fig, ax = plt.subplots(1, 5, figsize=(20, 4))
 ax[0].hist(x[..., 0])
 ax[0].set_title('wheel_l')
-ax[1].hist(x[..., 1], bins=np.arange(-160, 121, 40))
+ax[1].hist(x[..., 1])
 ax[1].set_title('wheel_r')
 # %% plot histogram to see if output distribution is well behaved, to see if it is neeeded a scaling
 ax[2].hist(y[..., 0])
@@ -69,7 +100,7 @@ len(y_train), len(y_valid), len(y_test)
 # # %% create model of regressor Beta_l
 model_beta_l = cb.CatBoostRegressor(learning_rate=1e-2, max_depth=15)
 # %% train the model
-model_beta_l.fit(x_train, y_train[..., 0].reshape(-1, 1), verbose=False,
+model_beta_l.fit(x_train, y_train[..., 0].reshape(-1, 1), verbose=100,
                  eval_set=(x_valid, y_valid[..., 0].reshape(-1, 1)), use_best_model=True)
 preds_train_beta_l = model_beta_l.predict(x_train)
 # %%
@@ -100,7 +131,7 @@ model_beta_l.save_model(model_name_beta_l)
 # %% [markdown]
 # # %% create model of regressor Beta_r
 model_beta_r = cb.CatBoostRegressor(learning_rate=1e-2, max_depth=15)
-model_beta_r.fit(x_train, y_train[..., 1].reshape(-1, 1), verbose=False,
+model_beta_r.fit(x_train, y_train[..., 1].reshape(-1, 1), verbose=100,
                  eval_set=(x_valid, y_valid[..., 1].reshape(-1, 1)), use_best_model=True)
 preds_train_beta_r = model_beta_r.predict(x_train)
 preds_beta_r = model_beta_r.predict(x_test)
@@ -129,7 +160,7 @@ model_beta_r.save_model(model_name_beta_r)
 # regressor for Alpha (cannot
 model_alpha = cb.CatBoostRegressor(iterations=10000)
 
-model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=False,
+model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=100,
                 eval_set=(x_valid, y_valid[..., 2].reshape(-1, 1)), use_best_model=True)
 
 preds_train_alpha = model_alpha.predict(x_train)
@@ -244,4 +275,10 @@ model_alpha = cb.CatBoostRegressor()
 model_alpha.load_model(model_name_alpha)
 alpha = model_alpha.predict(np.array([-3.4,3.4]))
 
+print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")
+
+#check directly with interpolators
+beta_l = interpolator_beta_l(np.array([[-3.4,3.4]]))
+beta_r = interpolator_beta_r(np.array([[-3.4,3.4]]))
+alpha = interpolator_alpha(np.array([[-3.4,3.4]]))
 print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")

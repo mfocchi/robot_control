@@ -45,6 +45,7 @@ import pandas as pd
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.srv import SetModelStateRequest
+from rosgraph_msgs.msg import Clock
 
 robotName = "tractor" # needs to inherit BaseController
 
@@ -56,23 +57,23 @@ class GenericSimulator(BaseController):
         print("Initialized tractor controller---------------------------------------------------------------")
         self.SIMULATOR = 'biral'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'biral'(2d) 'biral3d'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
-        self.TERRAIN = False #True: slopes False: flat
+        self.TERRAIN = False #True: Slopes False: Flat terrain
 
         self.STATISTICAL_ANALYSIS = False #samples targets and orientations in a given space around the robot and compute average tracking error
         self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
-        self.LONG_SLIP_COMPENSATION = 'NN'#'NN', 'EXP(not used)', 'NONE'
-        self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','NN'
+        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'EXP(not used)', 'NONE'
+        self.LONG_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'EXP(not used)', 'NONE'
+        self.SLIPPAGE_INFERENCE_TYPE = 'interpolator'  # 'decision_trees','interpolator' , 'NN'
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'NONE' # 'V_OMEGA', 'WHEELS', 'NONE'
-        self.IDENT_MAX_WHEEL_SPEED = 18 #used only when IDENT_TYPE = 'WHEELS' 7/12
+        self.IDENT_TYPE = 'NONE' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
         self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' 0.2, 0.55 (riccardo)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
+        self.IDENT_MAX_WHEEL_SPEED = 12 #used only when IDENT_TYPE = 'WHEELS' 7/12
 
         #biral friction coeff
-        self.friction_coefficient = 0.4 # 0.1 (used only in 2d)/0.4 (2d and 3d) (used for planning in paper)/0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
+        self.friction_coefficient = 0.4 # 0.1 (used only in 2d) / 0.4 (2d and 3d) (used for planning in paper)/ 0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
 
         # initial pose
         self.p0 = np.array([0., 0., 0.])
@@ -121,12 +122,23 @@ class GenericSimulator(BaseController):
                 self.model_beta_l = SlipNN(output='beta_l')
                 self.model_beta_r = SlipNN(output='beta_r')
                 self.model_alpha = SlipNN(output='alpha')
-
-        except:
+            elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
+                from scipy.interpolate import RBFInterpolator
+                data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/data2d/ident_wheels_sim_{str(self.friction_coefficient)}_long_v_positive_WLmax_'+str(int(constants.MAXSPEED_RADS_PULLEY))+'.csv'
+                df = pd.read_csv(data, header=None, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha'])
+                x = df[['wheel_l', 'wheel_r']].values
+                y = df[['beta_l', 'beta_r', 'alpha']].values
+                # upsampling
+                # Fit an interpolator for each output dimension
+                self.model_beta_l = RBFInterpolator(x, y[:, 0], smoothing=0.1)
+                self.model_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
+                self.model_alpha = RBFInterpolator(x, y[:, 2], smoothing=0.1)
+        except Exception as e:
+            print("Error initializing slippage inference model:", e)
             self.model_beta_l = None
             self.model_beta_r = None
             self.model_alpha = None
-            print(colored(f"No NN model for need for friction coefficient {self.friction_coefficient}, you need to generate the models by running tracked_robot/regressor/model_slippage_updated.py","red"))
+            print(colored(f"No Machine Learning  model for need for friction coefficient {self.friction_coefficient}, you need to generate the models by running tracked_robot/regressor/model_slippage_updated.py","red"))
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -259,6 +271,8 @@ class GenericSimulator(BaseController):
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'],  ground=groundParams, USE_MESH=self.TERRAIN, enable_visuals=False, contact_distribution=False)
                 self.flag3D='_3d_'
             else: #'biral':
+                if (self.friction_coefficient != 0.4) or (self.friction_coefficient != 0.1):
+                    print(colored("wrong friction coeff, can be 0.1 or 0.4"))
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
                 self.flag3D=''
@@ -519,22 +533,29 @@ class GenericSimulator(BaseController):
 
             #plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
             #joint velocities with limits
-            plt.figure()
-            plt.subplot(2, 1, 1)
-            plt.plot(p.time_log, p.qd_log[0,:], "-b",  linewidth=3)
-            plt.plot(p.time_log, p.qd_des_log[0, :], "-r",  linewidth=4)
-            plt.plot(p.time_log, constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
-            plt.plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
-            plt.ylabel("WHEEL_L")
-            plt.grid(True)
-            plt.subplot(2, 1, 2)
-            plt.plot(p.time_log, p.qd_log[1, :], "-b",  linewidth=3)
-            plt.plot(p.time_log, p.qd_des_log[1, :], "-r",  linewidth=4)                
-            plt.plot(p.time_log, constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
-            plt.plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY*np.ones((len(p.time_log))), "-k",  linewidth=4)
-            plt.ylabel("WHEEL_R")
-            plt.grid(True)
+            fig, axs = plt.subplots(3, 1, sharex=True, figsize=(10, 8))  # Create all 3 subplots at once
 
+            axs[0].plot(p.time_log, p.qd_log[0, :], "-b", linewidth=3)
+            axs[0].plot(p.time_log, p.qd_des_log[0, :], "-r", linewidth=4)
+            axs[0].plot(p.time_log, constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[0].plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[0].set_ylabel("WHEEL_L")
+            axs[0].grid(True)
+
+            axs[1].plot(p.time_log, p.qd_log[1, :], "-b", linewidth=3)
+            axs[1].plot(p.time_log, p.qd_des_log[1, :], "-r", linewidth=4)
+            axs[1].plot(p.time_log, constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[1].plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[1].set_ylabel("WHEEL_R")
+            axs[1].grid(True)
+
+            axs[2].plot(p.time_log, p.alpha_control_log, "-r", linewidth=4)
+            axs[2].set_ylabel("alpha")
+            axs[2].grid(True)
+
+            plt.xlabel("Time [s]")
+            plt.tight_layout()
+            plt.show()
 
 
             #states plot
@@ -858,17 +879,21 @@ class GenericSimulator(BaseController):
 
         return qd_comp, beta_l, beta_r
 
-    def computeLongSlipCompensationNN(self,  qd_des, constants):
+    def computeLongSlipCompensationMachineLearning(self,  qd_des, constants):
         # compute track velocity from encoder
         v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
         v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
-        # predict the betas from NN
-        if len(self.model_beta_l.feature_names_)>2:
-            beta_l = self.model_beta_l.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4], self.basePoseW[5]]))
-            beta_r = self.model_beta_r.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4], self.basePoseW[5]]))
-        else:
-            beta_l = self.model_beta_l.predict(qd_des)
-            beta_r = self.model_beta_r.predict(qd_des)
+        if  self.SLIPPAGE_INFERENCE_TYPE == 'decision_trees':
+            # predict the betas from NN
+            if len(self.model_beta_l.feature_names_)>2:
+                beta_l = self.model_beta_l.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4], self.basePoseW[5]]))
+                beta_r = self.model_beta_r.predict(np.array([qd_des[0], qd_des[1], self.basePoseW[3], self.basePoseW[4], self.basePoseW[5]]))
+            else:
+                beta_l = self.model_beta_l.predict(qd_des)
+                beta_r = self.model_beta_r.predict(qd_des)
+        elif self.SLIPPAGE_INFERENCE_TYPE == 'interpolator':
+            beta_l = (self.model_beta_l([qd_des])).squeeze()
+            beta_r = (self.model_beta_r([qd_des])).squeeze()
         #matlab
         # beta_l = self.eng.feval(self.model_beta_l['predictFcn'], qd_des)
         # beta_r = self.eng.feval(self.model_beta_r['predictFcn'], qd_des)
@@ -1183,13 +1208,13 @@ def main_loop(p):
                 p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
                 p.des_theta = p.terrain_consistent_pose_init[5]  # +0.1
             else:
+                p.des_x = p.p0[0]
+                p.des_y = p.p0[1]
+                p.des_theta = p.p0[2]
                 # for PAPER user_defined_reference
                 # p.des_x = 0
                 # p.des_y = 0
                 # p.des_theta = 0
-                p.des_x = p.p0[0]
-                p.des_y = p.p0[1]
-                p.des_theta = p.p0[2]
             if p.friction_coefficient == 0.1:
                 v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.2, omega_max_=0.3)
             if p.friction_coefficient == 0.4:
@@ -1212,6 +1237,7 @@ def main_loop(p):
         params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'], ESTIMATE_ALPHA_WITH_ACTUAL_VALUES=p.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES) #high gains 15 5 / low gains 10 1 (default)
         p.controller = LyapunovController(params=params)#, matlab_engine = p.eng)
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
+        p.controller.setSlippageInferenceType(p.SLIPPAGE_INFERENCE_TYPE)
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
             # update kinematics
@@ -1246,14 +1272,16 @@ def main_loop(p):
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,p.model_alpha, approx=False)
                 #p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
+
+
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
 
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
 
             if not p.ControlType=='CLOSED_LOOP_UNICYCLE'  and not traj_finished:
-                if p.LONG_SLIP_COMPENSATION=='NN':
-                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationNN(p.qd_des, constants)
+                if p.LONG_SLIP_COMPENSATION=='MACHINE_LEARNING':
+                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, constants)
                 if p.LONG_SLIP_COMPENSATION == 'EXP':
                     p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationExp(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
 
@@ -1283,27 +1311,31 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 4) # to avoid issues of dt 0.0009999
 
-    if p.SAVE_BAGS:
-        p.recorder.stop_recording_srv()
-        #this is for ident with biral3d
-        if p.SIMULATOR=='biral3d' and p.IDENT_TYPE=='WHEELS':
-            not_nans=~np.isnan(p.time_log)
-            data = pd.DataFrame({
-                "time": p.time_log[not_nans],
-                "wheel_l": p.qd_des_log[0, not_nans],
-                "wheel_r": p.qd_des_log[1, not_nans],
-                "roll": p.basePoseW_log[3, not_nans],
-                "pitch": p.basePoseW_log[4, not_nans],
-                "yaw": p.basePoseW_log[5, not_nans],
-                "beta_l": p.beta_l_log[not_nans],
-                "beta_r": p.beta_r_log[not_nans],
-                "alpha": p.alpha_log[not_nans]})
+    # always save csv when you do ident
+    if p.IDENT_TYPE == 'WHEELS':
+        not_nans = ~np.isnan(p.time_log)
+        data = pd.DataFrame({
+            "time": p.time_log[not_nans],
+            "wheel_l": p.qd_des_log[0, not_nans],
+            "wheel_r": p.qd_des_log[1, not_nans],
+            "roll": p.basePoseW_log[3, not_nans],
+            "pitch": p.basePoseW_log[4, not_nans],
+            "yaw": p.basePoseW_log[5, not_nans],
+            "beta_l": p.beta_l_log[not_nans],
+            "beta_r": p.beta_r_log[not_nans],
+            "alpha": p.alpha_log[not_nans]})
+        if p.SIMULATOR == 'biral3d':
             # Save to CSV
             output_file = os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/data3d/' + \
-                                   f"ident_wheels_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.csv"
-            data.to_csv(output_file, index=False)
-            print(colored(f"Data saved to {output_file}","red"))
+                          f"ident_wheels_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.csv"
+        else:
+            output_file = os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/data2d/' + \
+                          f"ident_wheels_fr_{p.friction_coefficient}_wheelL_{p.IDENT_WHEEL_L}.csv"
+        data.to_csv(output_file, index=False)
+        print(colored(f"Data saved to {output_file}", "red"))
 
+    if p.SAVE_BAGS:
+        p.recorder.stop_recording_srv()
         if p.ControlType !='OPEN_LOOP':
             filename = f'{p.ControlType}_Long_{p.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.mat'
             p.log_e_x, p.log_e_y, p.log_e_theta = p.controller.getErrors()
