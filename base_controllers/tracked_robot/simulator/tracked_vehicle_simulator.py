@@ -5,7 +5,8 @@ from numpy.testing import assert_almost_equal
 from matplotlib import pyplot as plt
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 import base_controllers.tracked_robot.utils.constants as constants
-from termcolor import colored
+from base_controllers.utils.unit_test import UnitTest
+
 
 class Ground():
     def __init__(self,
@@ -48,6 +49,7 @@ class TrackedVehicleSimulator:
         self.pose_des_log = np.full((3, self.number_of_steps), np.nan)
         self.pose_log = np.full((3, self.number_of_steps), np.nan)
         self.time_log = np.full((self.number_of_steps), np.nan)
+        self.unit_test = UnitTest()
 
     def setGround(self, ground):
         self.ground = ground
@@ -91,10 +93,8 @@ class TrackedVehicleSimulator:
                                                                                    self.sigma, self.ground, self.patch_pos_long_r, self.patch_pos_lat_r)
 
 
-
+        #state are the velocities in the body frame!
         self.state += self.dynamics(self.state, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param) * self.dt
-
-
 
         if self.NO_SLIPPAGE:
             vel = constants.SPROCKET_RADIUS * (omega_left + omega_right) / 2
@@ -151,16 +151,16 @@ class TrackedVehicleSimulator:
                                                                                                  self.ground,
                                                                                                  self.patch_pos_long_l,
                                                                                                  self.patch_pos_lat_l)
-
+        #test terra-mechanics computation
         # print("track")
         # print(Fx_l)
         # print(Fy_l)
         # print(M_long_l)
         # print(M_lat_l)
-        assert_almost_equal(Fx_l,  -5.427720569302706, decimal = 2)
-        assert_almost_equal(Fy_l, 1.9137256084209593, decimal = 2)
-        assert_almost_equal(M_long_l,1.4172282686978552, decimal = 2)
-        assert_almost_equal(M_lat_l,   -3.0884029613580166, decimal = 2)
+        assert_almost_equal(Fx_l, -4.538428981561184, decimal = 2)
+        assert_almost_equal(Fy_l, 1.2738565144164866, decimal = 2)
+        assert_almost_equal(M_long_l,1.1864354473062027, decimal = 2)
+        assert_almost_equal(M_lat_l,   -4.78000679514826, decimal = 2)
         #test dynamics
         state = np.array([   0.6549,   0.00025322,     0.036401])
         Fx_l=-15.477331 
@@ -173,9 +173,9 @@ class TrackedVehicleSimulator:
         M_lat_r=-0.258470
         vbody_dot  = p.dynamics(state, Fx_l, Fy_l, M_long_l, M_lat_l, Fx_r, Fy_r, M_long_r, M_lat_r, self.vehicle_param)
 
-        assert_almost_equal(vbody_dot[0], 0.21964 , decimal=2)
-        assert_almost_equal(vbody_dot[1],    0.019616  , decimal=2)
-        assert_almost_equal(vbody_dot[2],       2.4754, decimal=2)
+        assert_almost_equal(vbody_dot[0], 0.2158647457167483 , decimal=2)
+        assert_almost_equal(vbody_dot[1],    0.018868814747829643  , decimal=2)
+        assert_almost_equal(vbody_dot[2],     2.475354666666666, decimal=2)
 
 if __name__ == '__main__':
     groundParams = Ground()
@@ -199,9 +199,9 @@ if __name__ == '__main__':
     p.simulate(omega_left, omega_right)
 
 
-    assert_almost_equal(p.pose_log[0, -1], -1.02009 , decimal=2)
-    assert_almost_equal(p.pose_log[1, -1], 4.41854 , decimal=2)
-    assert_almost_equal(p.pose_log[2, -1], 3.54506, decimal=2)
+    assert_almost_equal(p.pose_log[0, -1], -0.17105 , decimal=2)
+    assert_almost_equal(p.pose_log[1, -1], 5.18307 , decimal=2)
+    assert_almost_equal(p.pose_log[2, -1], 3.1504, decimal=2)
 
     # xy plot
     plt.figure()

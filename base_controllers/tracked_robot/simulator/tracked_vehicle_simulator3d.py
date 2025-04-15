@@ -1,7 +1,6 @@
 import numpy as np
 from base_controllers.tracked_robot.simulator.tracked_vehicle import TrackedVehicle, VehicleParam
 from base_controllers.tracked_robot.simulator.track import TrackParams
-from numpy.testing import assert_almost_equal
 import matplotlib
 matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
@@ -22,6 +21,7 @@ from termcolor import colored
 from base_controllers.utils.math_tools import RK4_step, backward_euler_step, forward_euler_step, heun_step
 from base_controllers.utils.rk45F_integrator import RK45F_step
 from base_controllers.tracked_robot.simulator.terrain_manager import create_ramp_mesh
+from base_controllers.utils.unit_test import UnitTest
 
 class Ground3D():
     def __init__(self,
@@ -57,8 +57,9 @@ class TrackedVehicleSimulator3D:
         self.enable_visuals=enable_visuals
         self.int_method = int_method
         self.consider_robot_height = True
-        self.SAVE_BAGS = False
+        self.SAVE_LOGS = False
         self.PROFILE = False
+        self.unit_test = UnitTest()
 
         if  terrain_manager is None:
             print(colored("loading default terrain Manager", "red"))
@@ -224,7 +225,7 @@ class TrackedVehicleSimulator3D:
         # compute projector on tx, ty contact plane
         N = np.eye(3) - np.multiply.outer(projection_direction.ravel(), projection_direction.ravel())
 
-        #compute ditributed forces for left track
+        #compute ditributed forces for LEFT track
         #force is present only if there is linear penetration
         patch_counter = 0
         for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_l, self.intersection_points_l, self.w_patch_vel_l):
@@ -256,7 +257,7 @@ class TrackedVehicleSimulator3D:
                                        color=np.array([1.-self.patch_stiffness_l[patch_counter]/self.max_patch_stiffness_l, 0., self.patch_stiffness_l[patch_counter]/self.max_patch_stiffness_l])) #low stiffness is red
             patch_counter += 1
 
-        # compute ditributed forces for right track
+        # compute ditributed forces for RIGHT track
         patch_counter = 0
         for patch_pos, terrain_pos, patch_vel in zip(self.w_patch_pos_r, self.intersection_points_r, self.w_patch_vel_r):
             rho = projection_direction.dot(terrain_pos - patch_pos)
@@ -266,13 +267,13 @@ class TrackedVehicleSimulator3D:
                 #change patch stiffness according to speed and pos of patch
                 self.patch_stiffness_r[patch_counter] = self.ground.Kt_b * (1 + b_robot_vel_x *  self.ground.Kt_p * (b_patch_pos_x + np.sign(b_robot_vel_x) * self.track_param.length / 2) )
 
-                Fk = (self.patch_stiffness_r[patch_counter] * rho) * track_area
+                Fk = (self.patch_stiffness_r[patch_counter] * rho)* track_area
                 # Fk = self.ground.Kt_x.dot(terrain_pos - patch_pos)*track_area
                 # only if it is approaching
                 # Fd = np.zeros(3)
                 rho_dot = projection_direction.dot(patch_vel)
                 if (rho_dot < 0.0):
-                    Fd = (-self.ground.Dt_b * rho_dot) * track_area
+                    Fd = (-self.ground.Dt_b * rho_dot)* track_area
                 else:
                     Fd = 0.  # np.zeros(3)
                 self.w_Fg_patch_r[patch_counter, :] = projection_direction * (Fk + Fd)
@@ -395,16 +396,17 @@ class TrackedVehicleSimulator3D:
             self.ros_pub =ros_pub
 
     def simulateOneStep(self,pg, terrain_roll, terrain_pitch, terrain_yaw, omega_left, omega_right, F_lg=None, F_rg=None):
-
         #compute terrain variables
         self.w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
         self.terrain_normal = self.w_R_terr[:, 2]
 
         # compute base orientation
         w_R_b = self.math_utils.eul2Rot(self.pose[3:])
-        #get states in base frame b_v_c
+        #get states, they are the velocities in base frame b_v_c and the yaw rate
         b_v_c = w_R_b.T.dot(self.twist[:3])
-        state2D = np.array([b_v_c[0],b_v_c[1], self.twist[5]])
+        #project twist_ang_z onto w_z_b
+        b_omega = w_R_b[2].dot(np.array([0.,0., self.twist[5]]))
+        state2D = np.array([b_v_c[0],b_v_c[1], b_omega])
         self.w_com_height_vector = w_R_b[:, 2] * self.vehicle_param.height
 
         # compute ground peneration
@@ -616,11 +618,6 @@ class TrackedVehicleSimulator3D:
         ramp_mesh = create_ramp_mesh(length=350., width=350., inclination=p.RAMP_INCLINATION, origin=np.array([0, 0, 0]))
         self.terrain_manager.set_mesh(ramp_mesh)
 
-def check_assertion(value, expected, decimal, description):
-    try:
-        assert_almost_equal(value, expected, decimal=decimal)
-    except AssertionError as e:
-        errors.append(f"{description}: {e}")
 
 if __name__ == '__main__':
     #unit test (very slippery friction is 0.1!)
@@ -636,16 +633,26 @@ if __name__ == '__main__':
     # groundParams = Ground3D(friction_coefficient=0.6, terrain_stiffness=1e05, terrain_damping=0.5e04)
     # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=True,contact_distribution=True)
 
-    #1 PAPER: sloped test: distributed/non distributed
+    # PAPER: sloped test: distributed/non distributed
     # test = "sloped_test_chicane"
-    # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04)  # good setting for distributed contact
-    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=Trueis significa)
+    # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=False)
     # p.initLoggingVars(simulation_duration=20., pose_init=[19., 3., 0.0, 0, 0, 0]) # position in WF, rpy angles
     # hf_v = np.linspace(0.8, 0.8, p.number_of_steps)
     # w_omega_z = np.linspace(0.6, -0.6, p.number_of_steps)
-    # p.SAVE_BAGS = True
+    # p.SAVE_LOGS = True
 
-    # 2 PAPER: pitch ramp: distributed (not used)
+    # PAPER: Stiffness variation
+    # # to test the stiffness variation of the terrain we need a softer terrain and we need a flat location and high linear speed
+    # test = "stiff_var_test"
+    # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=0.5e04, terrain_damping=0.5e04)
+    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False,contact_distribution=True)
+    # p.initLoggingVars(simulation_duration=10., pose_init=[5., -5., 0.0, 0, 0, 0])
+    # hf_v = np.linspace(0.01, 1.4, p.number_of_steps)
+    # w_omega_z = np.linspace(0,0, p.number_of_steps)
+    # p.SAVE_LOGS = True
+
+    # PAPER: pitch ramp: distributed (not used)
     # test = "ramp_test_turning_left"
     # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=1e04, terrain_damping=0.1e04) #good setting for distributed contact
     # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False, contact_distribution=True)
@@ -653,16 +660,7 @@ if __name__ == '__main__':
     # p.initLoggingVars(simulation_duration=10.)
     # hf_v = np.linspace(0.4, 0.4, p.number_of_steps)
     # w_omega_z = np.linspace(0.4, 0.4, p.number_of_steps)
-    # p.SAVE_BAGS = True
-
-    #3 PAPER: to test the stiffness variation of the terrain we need a softer terrain and we need a flat location and high linear speed
-    # test = "stiff_var_test"
-    # groundParams = Ground3D(friction_coefficient=0.7, terrain_stiffness=0.5e04, terrain_damping=0.5e04)
-    # p = TrackedVehicleSimulator3D(dt=0.001, ground=groundParams, USE_MESH=True, DEBUG=True, int_method='FORWARD_EULER', enable_visuals=False,contact_distribution=True)
-    # p.initLoggingVars(simulation_duration=10., pose_init=[5., -5., 0.0, 0, 0, 0])
-    # hf_v = np.linspace(0.01, 1.4, p.number_of_steps)
-    # w_omega_z = np.linspace(0,0, p.number_of_steps)
-    # p.SAVE_BAGS = True
+    # p.SAVE_LOGS = True
 
     #for rviz
     launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
@@ -694,13 +692,13 @@ if __name__ == '__main__':
 
     # init vars
     p.initSimulation(p.pose_init, p.twist_init)
-    if p.SAVE_BAGS:
+    if p.SAVE_LOGS:
         test_name =f"openLoop3DModel_{test}_Distr_{p.CONTACT_DISTRIBUTION}"
         p.recorder = RosbagControlledRecorder(bag_name=test_name+".bag")
         p.recorder.start_recording_srv()
     # simulation with internal while loop
     p.simulate(hf_v, w_omega_z)
-    if p.SAVE_BAGS:
+    if p.SAVE_LOGS:
         p.recorder.stop_recording_srv()
         import scipy.io.matlab as mio
         mio.savemat(test_name+".mat", {'time': p.time_log, 'pose_des': p.pose_des_log, 'pose': p.pose_log, 'vdes':hf_v, 'Kmax': p.max_patch_stiffness_log})
@@ -709,22 +707,16 @@ if __name__ == '__main__':
         errors = []
         #print(p.pose_log[:,-1])
 
-        check_assertion(p.pose_log[0, -1], 6.46527581 , decimal=2, description="Pose X")
-        check_assertion(p.pose_log[1, -1],0. , decimal=2, description="Pose Y")
+        p.unit_test.check_assertion(p.pose_log[0, -1], 6.5590648756217425, decimal=2, description="Pose X")
+        p.unit_test.check_assertion(p.pose_log[1, -1],0. , decimal=2, description="Pose Y")
         if p.consider_robot_height:
-            check_assertion(p.pose_log[2, -1],     0.8993727217334103, decimal=2, description="Pose Z")
+            p.unit_test.check_assertion(p.pose_log[2, -1],     0.8993727217334103, decimal=2, description="Pose Z")
         else:
-            check_assertion(p.pose_log[2, -1],    0.648124971, decimal=2,description="Pose Z")
-        check_assertion(p.pose_log[3, -1], 0., decimal=2, description="Pose Roll")
-        check_assertion(p.pose_log[4, -1], -0.099504975 , decimal=2,description="Pose Pitch")
-        check_assertion(p.pose_log[5, -1], 0., decimal=2, description="Pose Yaw")
-
-        if errors:
-            print(colored("Unit test failed:","red"))
-            for error in errors:
-                print(error)
-        else:
-            print(colored("Unit test succesful!","green"))
+            p.unit_test.check_assertion(p.pose_log[2, -1],    0.648124971, decimal=2,description="Pose Z")
+        p.unit_test.check_assertion(p.pose_log[3, -1], 0., decimal=2, description="Pose Roll")
+        p.unit_test.check_assertion(p.pose_log[4, -1], -0.099504975 , decimal=2,description="Pose Pitch")
+        p.unit_test.check_assertion(p.pose_log[5, -1], 0., decimal=2, description="Pose Yaw")
+        p.unit_test.report()
 
     # xy plot
     plt.figure()

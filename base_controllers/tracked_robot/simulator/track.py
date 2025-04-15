@@ -5,7 +5,7 @@ from  base_controllers.tracked_robot.utils import constants as constants
 
 class TrackParams:
     def __init__(self, parts_longitudinal= 60, parts_lateral = 6):
-        self.length = 0.5  #[m] track l.ength
+        self.length = constants.TRACK_LENGTH  #[m] track l.ength
         self.width = 0.1  #[m] track width
         self.sprocket_radius = constants.SPROCKET_RADIUS #[m]
         self.A = self.length * self.width  # [m^2] contact area

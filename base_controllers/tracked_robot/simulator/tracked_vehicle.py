@@ -9,15 +9,18 @@ class VehicleParam:
         self.Izz = constants.inertia_moment #[kg m^2] vehicle inertia
         self.width = constants.TRACK_WIDTH #[m]
         self.height = 0.25 #[m] com height wrt ground
+        self.length = constants.TRACK_LENGTH
         self.weight  = self.mass * 9.81
-        self.bI = np.eye(3)*constants.inertia_moment #assuming homogeneous density TODO change
+        self.bI = np.diag([1 / 12 * self.mass * (self.height * self.height + self.width * self.width),
+                            1 / 12 * self.mass * (self.height * self.height + self.length * self.length),
+                            constants.inertia_moment])
 
 class TrackedVehicle:
     def __init__(self, vehicle_param, track_param, ground_param):
     # Simulates a tracked vehicle. Formulas are taken from "theory of
     # ground vehicles" of Wong.
         self.vehicle_param = vehicle_param
-        #using Biral model
+        #using distributed model
         self.track_left  = Track([0.0, vehicle_param.width / 2], track_param)
         self.track_right = Track([0.0,-vehicle_param.width / 2], track_param)
         self.F_left =  np.array([0.0, 0.0])
