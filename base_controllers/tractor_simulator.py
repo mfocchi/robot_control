@@ -55,7 +55,7 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'biral'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'biral'(2d) 'biral3d'
+        self.SIMULATOR = 'distributed2d'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'distributed2d'(2d) 'distributed3d'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
         self.TERRAIN = False #True: Slopes False: Flat terrain
 
@@ -72,8 +72,8 @@ class GenericSimulator(BaseController):
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
         self.IDENT_MAX_WHEEL_SPEED = 12 #used only when IDENT_TYPE = 'WHEELS' 7/12
 
-        #biral friction coeff
         self.friction_coefficient = 0.4 # 0.1 (used only in 2d) / 0.4 (2d and 3d) (used for planning in paper)/ 0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
+        #distributed friction coeff
 
         # initial pose
         self.p0 = np.array([0., 0., 0.])
@@ -93,7 +93,7 @@ class GenericSimulator(BaseController):
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
 
         if self.SIMULATOR == 'gazebo' and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
-            print(colored("Gazebo Model has no slippage, use self.SIMULATOR:=biral","red"))
+            print(colored("Gazebo Model has no slippage, use self.SIMULATOR:=distributed2d","red"))
             sys.exit()
         if self.NAVIGATION !='none':
             #add custom models from wolf, need to clone git@github.com:graiola/wolf_gazebo_resources.git
@@ -252,7 +252,7 @@ class GenericSimulator(BaseController):
         elif self.SIMULATOR == 'coppelia':
            self.coppeliaManager = CoppeliaManager(self.coppeliaModel, self.USE_GUI)
            self.coppeliaManager.startSimulator()
-        else: # Biral simulator biral2d/biral3d
+        else: # Biral simulator distributed2d/distributed3d
             os.system("killall rosmaster rviz gzserver coppeliaSim")
             # launch roscore
             checkRosMaster()
@@ -263,14 +263,14 @@ class GenericSimulator(BaseController):
                 constants.MAXSPEED_RADS_PULLEY = 18.
                     # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
-            if self.SIMULATOR == 'biral3d':
+            if self.SIMULATOR == 'distributed3d':
                 print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
                 conf.robot_params[self.robot_name]['buffer_size'] *= 5
                 conf.robot_params[p.robot_name]['dt'] = 0.001
                 groundParams = Ground3D(friction_coefficient=self.friction_coefficient, terrain_stiffness=1e05, terrain_damping=0.5e04)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator3D(dt=conf.robot_params[p.robot_name]['dt'],  ground=groundParams, USE_MESH=self.TERRAIN, enable_visuals=False, contact_distribution=False)
                 self.flag3D='_3d_'
-            else: #'biral':
+            else: #'distributed2d':
                 if (self.friction_coefficient != 0.4) or (self.friction_coefficient != 0.1):
                     print(colored("wrong friction coeff, can be 0.1 or 0.4"))
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
@@ -282,7 +282,7 @@ class GenericSimulator(BaseController):
             if self.IDENT_TYPE!='NONE':
                 self.PLANNING = 'none'
                 self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
-                if self.IDENT_TYPE == 'WHEELS' and self.SIMULATOR == 'biral3d':
+                if self.IDENT_TYPE == 'WHEELS' and self.SIMULATOR == 'distributed3d':
                     self.TERRAIN = True
             if self.NAVIGATION!='none' and self.TERRAIN: #need to launch empty gazebo to emulate the lidar
                 launchFileNode(package='gazebo_ros', launch_file='empty_world.launch', additional_args = ['use_sim_time:=true','gui:=false','paused:=false'])
@@ -301,7 +301,7 @@ class GenericSimulator(BaseController):
         self.clock_pub = ros.Publisher('/clock', Clock, queue_size=10)
 
 
-        if self.TERRAIN and self.SIMULATOR=='biral3d': #terrain is only available in biral 3d
+        if self.TERRAIN and self.SIMULATOR=='distributed3d': #terrain is only available in distributed3d
             from base_controllers.tracked_robot.simulator.terrain_manager import TerrainManager
             self.terrainManager = TerrainManager(rospkg.RosPack().get_path('tractor_description') + "/meshes/terrain.stl")
             self.tracked_vehicle_simulator.setTerrainManager(self.terrainManager)
@@ -357,7 +357,7 @@ class GenericSimulator(BaseController):
                 if p.IDENT_TYPE=='V_OMEGA':
                     bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}_fr_{p.friction_coefficient}.bag"
                 if p.IDENT_TYPE == 'WHEELS':
-                    if p.SIMULATOR=='biral3d':
+                    if p.SIMULATOR=='distributed3d':
                         bag_name = f"ident_sim_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.bag"
                     else:
                         bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
@@ -473,7 +473,7 @@ class GenericSimulator(BaseController):
             self.slow_down_factor = 8
 
         else:#Biral
-            if self.SIMULATOR=='biral3d':
+            if self.SIMULATOR=='distributed3d':
                 self.terrain_consistent_pose_init=np.array([self.p0[0], self.p0[1], 0, 0, 0, 0])
                 if self.TERRAIN: #ramp and mesh
                     start_position, start_roll, start_pitch, start_yaw = p.terrainManager.project_on_mesh(point=self.terrain_consistent_pose_init[:2], direction=np.array([0., 0., 1.]))
@@ -563,7 +563,7 @@ class GenericSimulator(BaseController):
 
 
             #states plot
-            if self.SIMULATOR == 'biral3d': #not the roll and pitch are not meaningful because we are not tracking the yaw of the terrain so they are assosiated to a different yaw
+            if self.SIMULATOR == 'distributed3d': #not the roll and pitch are not meaningful because we are not tracking the yaw of the terrain so they are assosiated to a different yaw
                 plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log, title='states', frame='W')
             else:
                 plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log, custom_labels=(["X","Y","THETA"]))
@@ -654,7 +654,7 @@ class GenericSimulator(BaseController):
         # v = np.clip(v, -constants.MAX_LINEAR_VELOCITY, constants.MAX_LINEAR_VELOCITY)
         # o = np.clip(o, -constants.MAX_ANGULAR_VELOCITY, constants.MAX_ANGULAR_VELOCITY)
         #no longer needed
-        # if self.SIMULATOR=='biral3d':
+        # if self.SIMULATOR=='distributed3d':
         #     self.w_R_b = self.math_utils.eul2Rot(self.euler)
         #     self.hf_R_b = self.math_utils.eul2Rot(np.array([self.euler[0],self.euler[1], 0.]))
         #     # project v_des which is in Horizontal frame onto hf_x_b
@@ -685,7 +685,7 @@ class GenericSimulator(BaseController):
         # OPEN LOOP wl , wr (from -IDENT_MAX_WHEEL_SPEED to IDENT_MAX_WHEEL_SPEED)
         ####################################
 
-        if self.SIMULATOR=='biral3d':
+        if self.SIMULATOR=='distributed3d':
             number_of_samples = int(np.floor(10./conf.robot_params[p.robot_name]['dt']))
             wheel_l_vec = np.linspace(wheel_l, wheel_l, 3*number_of_samples)
             wheel_r_vec = np.linspace(0, self.IDENT_MAX_WHEEL_SPEED, number_of_samples)  # it if passes from 0 for some reason there is a non linear
@@ -744,7 +744,7 @@ class GenericSimulator(BaseController):
         wheel_L = qd[0]
         wheel_R = qd[1]
 
-        if self.SIMULATOR=='biral3d':
+        if self.SIMULATOR=='distributed3d':
             # project twist from wf to bf
             w_R_b = self.math_utils.eul2Rot(self.u.angPart(self.basePoseW))
             b_lin_vel = w_R_b.T.dot(self.u.linPart(W_baseTwist))
@@ -932,13 +932,13 @@ class GenericSimulator(BaseController):
             self.joint_pub.publish(msg)  # this publishes in tractor/joint_state q = q_des, it is just for rviz to see the joints of the wheels moving
 
         #trigger simulators
-        if self.SIMULATOR == 'biral' or self.SIMULATOR == 'biral3d': #TODO implement torque control
+        if self.SIMULATOR == 'distributed2d' or self.SIMULATOR == 'distributed3d': #TODO implement torque control
             if self.ControlType != 'OPEN_LOOP' and self.LONG_SLIP_COMPENSATION  != 'NONE':
                 if np.any(qd_des > np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])) or np.any(qd_des < -np.array([constants.MAXSPEED_RADS_PULLEY, constants.MAXSPEED_RADS_PULLEY])):
                     print(colored("wheel speed beyond limits, NN might do wrong predictions", "red"))
 
 
-            if self.SIMULATOR=='biral3d':
+            if self.SIMULATOR=='distributed3d':
                 if self.TERRAIN:
                     pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0., 0., 1.]))
                     pose_des, terrain_roll_des, terrain_pitch_des, terrain_yaw_des = self.terrainManager.project_on_mesh(point=np.array([self.des_x, self.des_y]), direction=np.array([0., 0., 1.]))
@@ -986,11 +986,11 @@ class GenericSimulator(BaseController):
             self.qd = qd_des.copy()
 
 
-            if self.NAVIGATION!='none' and self.SIMULATOR!='gazebo': #for biral models set the lidar position in gazebo consistent with the robot motion
+            if self.NAVIGATION!='none' and self.SIMULATOR!='gazebo': #for distributed models set the lidar position in gazebo consistent with the robot motion
                 self.setModelState('lidar', self.u.linPart(self.basePoseW), self.quaternion)
 
         if self.TERRAIN: #this is published to show mesh in rviz
-            if self.IDENT_TYPE=='WHEELS' and self.SIMULATOR=='biral3d':
+            if self.IDENT_TYPE=='WHEELS' and self.SIMULATOR=='distributed3d':
                 self.ros_pub.add_plane(pos=np.array([0,0,-0.]), orient=np.array([0., self.RAMP_INCLINATION, 0]), color="white", alpha=0.5)
             else:
                 self.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
@@ -1070,7 +1070,7 @@ def talker(p):
     if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
         wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 32)
         ramps = np.linspace(0.0, -0.3, 5) #I use negative ramp inclination otherwise the terrain consistent startyaw is PI and not 0
-        if p.SIMULATOR == 'biral3d':
+        if p.SIMULATOR == 'distributed3d':
             # p.IDENT_WHEEL_L =  3
             # p.RAMP_INCLINATION = 0.2
             # main_loop(p)
@@ -1150,7 +1150,7 @@ def main_loop(p):
             traj_length = len(wheel_l_ol)
 
         if p.PLANNING == 'none':
-            if p.SIMULATOR == 'biral3d':
+            if p.SIMULATOR == 'distributed3d':
                 p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
                 p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
                 p.des_theta = p.terrain_consistent_pose_init[5]  # +0.1
@@ -1218,7 +1218,7 @@ def main_loop(p):
         vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
 
         if p.PLANNING == 'none':
-            if p.SIMULATOR=='biral3d':
+            if p.SIMULATOR=='distributed3d':
                 p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
                 p.des_y = p.terrain_consistent_pose_init[1]  # +0.1
                 p.des_theta = p.terrain_consistent_pose_init[5]  # +0.1
@@ -1256,7 +1256,7 @@ def main_loop(p):
         p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
             # update kinematics
-            if p.SIMULATOR == 'biral3d':
+            if p.SIMULATOR == 'distributed3d':
                 robot_state.x = p.basePoseW[p.u.sp_crd["LX"]]
                 robot_state.y = p.basePoseW[p.u.sp_crd["LY"]]
                 robot_state.z = p.basePoseW[p.u.sp_crd["LY"]]
@@ -1339,7 +1339,7 @@ def main_loop(p):
             "beta_l": p.beta_l_log[not_nans],
             "beta_r": p.beta_r_log[not_nans],
             "alpha": p.alpha_log[not_nans]})
-        if p.SIMULATOR == 'biral3d':
+        if p.SIMULATOR == 'distributed3d':
             # Save to CSV
             output_file = os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/data3d/' + \
                           f"ident_wheels_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.csv"
