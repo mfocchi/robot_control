@@ -60,17 +60,16 @@ class GenericSimulator(BaseController):
         self.TERRAIN = False #True: Slopes False: Flat terrain
 
         self.STATISTICAL_ANALYSIS = False #samples targets and orientations in a given space around the robot and compute average tracking error
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'EXP(not used)', 'NONE'
-        self.LONG_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'EXP(not used)', 'NONE'
-        self.SLIPPAGE_INFERENCE_TYPE = 'interpolator'  # 'decision_trees','interpolator' , 'NN'
+        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
+        self.LONG_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
+        self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'NONE' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
-        self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' 0.2, 0.55 (riccardo)
-        self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA'
-        self.IDENT_MAX_WHEEL_SPEED = 12 #used only when IDENT_TYPE = 'WHEELS' 7/12
+        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
+        self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
 
         self.friction_coefficient = 0.4 # 0.1 (used only in 2d) / 0.4 (2d and 3d) (used for planning in paper)/ 0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
         #distributed friction coeff
@@ -124,8 +123,8 @@ class GenericSimulator(BaseController):
                 self.model_alpha = SlipNN(output='alpha')
             elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
                 from scipy.interpolate import RBFInterpolator
-                data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/data2d/ident_wheels_sim_{str(self.friction_coefficient)}_long_v_positive_WLmax_'+str(int(constants.MAXSPEED_RADS_PULLEY))+'.csv'
-                df = pd.read_csv(data, header=None, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha'])
+                data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/ident_wheels_sim_2d_'+str(self.friction_coefficient)+'.csv'
+                df = pd.read_csv(data, skiprows=1, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha']) #skiprows skips the first row which are the labels
                 x = df[['wheel_l', 'wheel_r']].values
                 y = df[['beta_l', 'beta_r', 'alpha']].values
                 # upsampling
@@ -134,7 +133,7 @@ class GenericSimulator(BaseController):
                 self.model_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
                 self.model_alpha = RBFInterpolator(x, y[:, 2], smoothing=0.1)
         except Exception as e:
-            print("Error initializing slippage inference model:", e)
+            print(colored(f"Error initializing slippage inference model:{e}","red"))
             self.model_beta_l = None
             self.model_beta_r = None
             self.model_alpha = None
@@ -259,9 +258,11 @@ class GenericSimulator(BaseController):
             ros.sleep(1.5)
             if self.friction_coefficient == 0.1: #should match with training region (very slippery only on flat)
                 constants.MAXSPEED_RADS_PULLEY = 10.
-            if self.friction_coefficient == 0.4: #should match with training region
+                self.IDENT_MAX_WHEEL_SPEED = 10.  # used only when IDENT_TYPE = 'WHEELS' 7/12
+            if self.friction_coefficient == 0.4 or self.friction_coefficient == 0.6: #should match with training region
                 constants.MAXSPEED_RADS_PULLEY = 18.
-                    # run robot state publisher + load robot description + rviz
+                self.IDENT_MAX_WHEEL_SPEED = 18.
+                # run robot state publisher + load robot description + rviz
             launchFileGeneric(rospkg.RosPack().get_path('tractor_description') + "/launch/rviz_nojoints.launch")
             if self.SIMULATOR == 'distributed3d':
                 print(colored("SIMULATION 3D is unstable for dt > 0.001, resetting dt=0.001 and increased 5x buffer_size", "red"))
@@ -693,7 +694,7 @@ class GenericSimulator(BaseController):
         else:
             wheel_l_vec = []
             wheel_r_vec = []
-            change_interval = 3.
+            change_interval = 2.
             if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
                 wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 32) #it if passes from 0 for some reason there is a non linear
                     #behaviour in the long slippage
@@ -1148,7 +1149,10 @@ def main_loop(p):
             wheel_l_ol, wheel_r_ol  = p.generateWheelTraj(p.IDENT_WHEEL_L)
             v_ol, omega_ol = p.mapFromWheels(wheel_l_ol, wheel_r_ol)
             traj_length = len(wheel_l_ol)
-
+            # check the buffer size is big enough
+            if  traj_length>conf.robot_params[p.robot_name]['buffer_size']:
+                print(colored("Buffer size is not big enough for the ID!"))
+                sys.exit()
         if p.PLANNING == 'none':
             if p.SIMULATOR == 'distributed3d':
                 p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
@@ -1216,7 +1220,6 @@ def main_loop(p):
         # CLOSE loop control
         # generate reference trajectory
         vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
-
         if p.PLANNING == 'none':
             if p.SIMULATOR=='distributed3d':
                 p.des_x = p.terrain_consistent_pose_init[0]  # +0.1
