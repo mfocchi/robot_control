@@ -248,10 +248,12 @@ class BaseController(threading.Thread):
 
     def _receive_pose(self, msg):
 
-        self.quaternion[0]=    msg.pose.pose.orientation.x
-        self.quaternion[1]=    msg.pose.pose.orientation.y
-        self.quaternion[2]=    msg.pose.pose.orientation.z
-        self.quaternion[3]=    msg.pose.pose.orientation.w
+        self.quaternion = np.array([
+            msg.pose.pose.orientation.x,
+            msg.pose.pose.orientation.y,
+            msg.pose.pose.orientation.z,
+            msg.pose.pose.orientation.w
+        ])
         self.euler = np.array(euler_from_quaternion(self.quaternion))
         #unwrap
         self.euler, self.euler_old = unwrap_vector(self.euler, self.euler_old)
