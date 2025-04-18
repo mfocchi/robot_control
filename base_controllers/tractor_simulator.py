@@ -60,14 +60,14 @@ class GenericSimulator(BaseController):
         self.TERRAIN = False #True: Slopes False: Flat terrain
 
         self.STATISTICAL_ANALYSIS = False #samples targets and orientations in a given space around the robot and compute average tracking error
-        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.LONG_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'WHEELS' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
+        self.IDENT_TYPE = 'NONE' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
         self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
 
@@ -299,7 +299,7 @@ class GenericSimulator(BaseController):
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
         self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
 
-        self.clock_pub = ros.Publisher('/clock', Clock, queue_size=10)
+        #self.clock_pub = ros.Publisher('/clock', Clock, queue_size=10)
 
 
         if self.TERRAIN and self.SIMULATOR=='distributed3d': #terrain is only available in distributed3d
@@ -324,7 +324,7 @@ class GenericSimulator(BaseController):
             print(colored("Starting wolf navigation", "red"))
             if self.NAVIGATION=='2d':
                 # launch orchard world
-                launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo') + "/launch/orchard_world.launch")
+                #launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo') + "/launch/orchard_world.launch")
                 launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db',
                                                                                                                        'type:=indoor',
                                                                                                                        'launch_controller:=false',
@@ -335,9 +335,13 @@ class GenericSimulator(BaseController):
                                                                                                                        'launch_odometry:=false',
                                                                                                                        'world_name:=inspection',
                                                                                                                        'cmd_vel_topic:=/cmd_vel',
-                                                                                                                       'max_vel_yaw:=1', 'max_vel_x:=0.5'])
+                                                                                                                       'max_vel_yaw:=1', 'max_vel_x:=0.8'])
             if self.NAVIGATION=='3d':
                 #to set 3dNav goal: sx click + drag +right click to move up
+                self.p0 = np.array([5, -3.8, 0])
+                print(colored(f"Navigation 3d: adjusting initial position to {self.p0} because to be able to generate a path the nav should have the map of the hill"))
+                self.friction_coefficient = 0.6
+                print(colored(f"Navigation 3d: Setting friction coeff to {self.friction_coefficient} otherwise it slips too much"))
                 launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db',
                                                                                                                        'type:=3d',
                                                                                                                        'launch_controller:=false',
@@ -350,7 +354,7 @@ class GenericSimulator(BaseController):
                                                                                                                        'launch_odometry:=false',
                                                                                                                        'world_name:=inspection',
                                                                                                                        'cmd_vel_topic:=/cmd_vel',
-                                                                                                                       'max_vel_yaw:=1', 'max_vel_x:=0.5'])
+                                                                                                                       'max_vel_yaw:=1', 'max_vel_x:=1.2'])
 
 
         if self.SAVE_BAGS:
@@ -912,11 +916,11 @@ class GenericSimulator(BaseController):
         return qd_comp, beta_l, beta_r
     
     def send_des_jstate(self, q_des, qd_des, tau_ffwd):
-
-        self.checkLoopFrequency()
+        if self.NAVIGATION=='none':
+            self.checkLoopFrequency()
 
         # Publish clock to have ros.Time.now sync with self.time
-        self.clock_pub.publish(Clock(clock=ros.Time.from_sec(self.time)))
+        #self.clock_pub.publish(Clock(clock=ros.Time.from_sec(self.time)))
 
         # No need to change the convention because in the HW interface we use our conventtion (see ros_impedance_contoller_xx.yaml)
         msg = JointState()
@@ -1011,6 +1015,10 @@ class GenericSimulator(BaseController):
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            pin.Quaternion(pin.rpy.rpyToMatrix(np.array([0., 0., self.euler[2]]))),
                                            ros.Time.now(), '/horizontal_frame', '/world') #for 3d nav
+            self.broadcaster.sendTransform(np.zeros(3),
+                                           pin.Quaternion(pin.rpy.rpyToMatrix(np.array([0., 0., 0]))),
+                                           ros.Time.now(), '/base_footprint', '/horizontal_frame')  # for 3d nav
+
 
             sendStaticTransform("odom", "world", np.zeros(3), np.array([1, 0, 0, 0]))  # this is just to not  brake the locosim rviz that still wants world
             self.pub_odom_msg(self.odom_pub)
