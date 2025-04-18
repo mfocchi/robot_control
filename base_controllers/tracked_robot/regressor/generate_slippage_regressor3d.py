@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt #do as last import
 import pandas as pd
 from termcolor import colored
 
-friction_coeff = 0.4 #file.split("_")[4]
+friction_coeff = 0.6 #file.split("_")[4]
 
 list_file = [x for x in os.listdir('data3d') if (x.endswith('.csv') and 'ramp' in x and str(friction_coeff) in x )]
 df_vpos = pd.DataFrame()
@@ -45,7 +45,7 @@ x_valid, x_test, y_valid, y_test = train_test_split(x_valid, y_valid, random_sta
 # # %% create model of regressor Beta_l
 print(colored("Training beta_l 3d","red"))
 model_beta_l = cb.CatBoostRegressor(max_depth=15)#learning_rate=1e-2, max_depth=15)
-model_beta_l.fit(x_train, y_train[..., 0].reshape(-1, 1), verbose=True,eval_set=(x_valid, y_valid[..., 0].reshape(-1, 1)), use_best_model=True)
+model_beta_l.fit(x_train, y_train[..., 0].reshape(-1, 1), verbose=100,eval_set=(x_valid, y_valid[..., 0].reshape(-1, 1)), use_best_model=True)
 preds_train_beta_l = model_beta_l.predict(x_train)
 preds_beta_l = model_beta_l.predict(x_test)
 print(f'R2 metric train beta_l: {r2_score(y_train[...,0], preds_train_beta_l)}')
@@ -56,7 +56,7 @@ model_beta_l.save_model(model_name_beta_l)
 # # %% create model of regressor Beta_r
 print(colored("Training beta_r 3D","red"))
 model_beta_r = cb.CatBoostRegressor(max_depth=15)#learning_rate=1e-2, max_depth=15)
-model_beta_r.fit(x_train, y_train[..., 1].reshape(-1, 1), verbose=True,
+model_beta_r.fit(x_train, y_train[..., 1].reshape(-1, 1), verbose=100,
                  eval_set=(x_valid, y_valid[..., 1].reshape(-1, 1)), use_best_model=True)
 preds_train_beta_r = model_beta_r.predict(x_train)
 preds_beta_r = model_beta_r.predict(x_test)
@@ -68,7 +68,7 @@ model_beta_r.save_model(model_name_beta_r)
 # regressor for Alpha
 print(colored("Training Alpha 3d","red"))
 model_alpha = cb.CatBoostRegressor(max_depth=15)#iterations=10000)
-model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=True,
+model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=100,
                 eval_set=(x_valid, y_valid[..., 2].reshape(-1, 1)), use_best_model=True)
 preds_train_alpha = model_alpha.predict(x_train)
 preds_alpha = model_alpha.predict(x_test)

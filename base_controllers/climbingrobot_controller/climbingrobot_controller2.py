@@ -1323,7 +1323,7 @@ def talker(p):
 
             if (p.stateMachine == 'flying'):
                 # after the thrust we start MPC it will start from time 0.05 so the index should be 12
-                # applying forces to ropes
+                # applying forces to ropes, when time is finished just reset rope length (only once!) and wait for tf
                 delta_t = p.time - p.end_orienting
                 if p.MPC_control:
                     deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)

@@ -315,8 +315,6 @@ class GenericSimulator(BaseController):
             self.nav_vel_sub = ros.Subscriber("/cmd_vel", Twist, self.get_command_vel)
             self.odom_pub = ros.Publisher("/odom", Odometry, queue_size=1, tcp_nodelay=True)
             self.broadcast_world = False # this prevents to publish baselink tf from world because we need baselink to odom
-            #launch orchard world
-            #launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo') + "/launch/orchard_world.launch")
 
             # type: indoor: based on slam 2d (default: gmapping)
             # type: outdoor: based on gps
@@ -325,6 +323,8 @@ class GenericSimulator(BaseController):
             # slam:  default = "gmapping", gmapping/slam_toolbox/hector_mapping
             print(colored("Starting wolf navigation", "red"))
             if self.NAVIGATION=='2d':
+                # launch orchard world
+                launchFileGeneric(rospkg.RosPack().get_path('cpr_orchard_gazebo') + "/launch/orchard_world.launch")
                 launchFileNode(package="wolf_navigation_utils", launch_file="wolf_navigation.launch", additional_args=['map_file:=/tmp/embty.db',
                                                                                                                        'type:=indoor',
                                                                                                                        'launch_controller:=false',

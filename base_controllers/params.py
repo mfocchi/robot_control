@@ -481,6 +481,7 @@ robot_params['climbingrobot2'] ={'dt': 0.001,
                        'spawn_2y': 5.0,
                        'spawn_2z': 20.0,
                        'wall_inclination': 0.0,
+                       'real_robot': False,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
 robot_params['climbingrobot2landing'] ={'dt': 0.001,
