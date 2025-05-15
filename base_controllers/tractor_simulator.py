@@ -282,6 +282,7 @@ class GenericSimulator(BaseController):
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
             if self.IDENT_TYPE!='NONE':
                 self.PLANNING = 'none'
+                self.ControlType = 'OPEN_LOOP'
                 self.groundtruth_pub = ros.Publisher("/" + self.robot_name + "/ground_truth", Odometry, queue_size=1, tcp_nodelay=True)
                 if self.IDENT_TYPE == 'WHEELS' and self.SIMULATOR == 'distributed3d':
                     self.TERRAIN = True
@@ -365,7 +366,7 @@ class GenericSimulator(BaseController):
                     if p.SIMULATOR=='distributed3d':
                         bag_name = f"ident_sim_fr_{p.friction_coefficient}_ramp_{p.RAMP_INCLINATION}_wheelL_{p.IDENT_WHEEL_L}.bag"
                     else:
-                        bag_name = f"ident_sim_wheelL_{p.IDENT_WHEEL_L}.bag"
+                        bag_name = f"ident_sim_fr_{p.friction_coefficient}_wheelL_{p.IDENT_WHEEL_L}.bag"
 
             else:
                 bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.bag"

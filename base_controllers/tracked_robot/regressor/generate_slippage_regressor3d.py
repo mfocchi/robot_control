@@ -23,7 +23,7 @@ for file in list_file:
     tmp_df = pd.read_csv(os.path.join('data3d/',file),header=1, names=['time', 'wheel_l','wheel_r','roll', 'pitch', 'yaw', 'beta_l','beta_r','alpha'])
     v = (tmp_df['wheel_l'].values + tmp_df['wheel_r'].values) / 2. * 0.0856
     idx_filter = v > 0.01
-    df_vpos = pd.concat([df_vpos, tmp_df[idx_filter]], ignore_index=True)
+    df_vpos = pd.concat([df_vpos, tmp_df[idx_filter]], ignore_index=True, header=False)
 
 x = df_vpos[['wheel_l','wheel_r', 'roll', 'pitch', 'yaw']].values
 y = df_vpos[['beta_l','beta_r','alpha']].values
