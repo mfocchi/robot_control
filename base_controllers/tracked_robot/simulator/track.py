@@ -156,8 +156,10 @@ class Track:
         r = track_param.sprocket_radius
         L = track_param.length
         mu = ground.friction_coefficient
+        cohesion = ground.cohesion
         K  = ground.K
         dA = track_param.dA
+
 
         u = state[0]
         v = state[1]
@@ -199,7 +201,7 @@ class Track:
         shear_angles_cos = shear_velocitys_x / shear_velocitys
 
         #compute shear stress
-        shear_stress = sigma * mu * (1 - np.exp(-shear_disp / K))
+        shear_stress = cohesion + sigma * mu * (1 - np.exp(-shear_disp / K))
 
         #compute tractive forces
         dFx = -dA * shear_stress * shear_angles_cos
