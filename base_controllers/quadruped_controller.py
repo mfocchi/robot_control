@@ -22,6 +22,7 @@ from base_controllers.utils.common_functions import *
 from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics as AnalyticInverseKinematics
 from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics as PinocchioInverseKinematics
 from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
+from base_controllers.components.rl_velocity_controller.rl_controller import RlVelocityController
 from termcolor import colored
 from std_msgs.msg import Float64MultiArray
 import base_controllers.params as conf
@@ -1261,6 +1262,10 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
+    use_rl = False
+    
+    rl_controller = RlVelocityController(p.robot_name, p.dt)
+    
     try:
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
@@ -1269,13 +1274,32 @@ if __name__ == '__main__':
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
         p.startupProcedure()
+        
+        if use_rl:
+            p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12,0))
 
         while not ros.is_shutdown():
             p.updateKinematics()
-            p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW)
+            
+            if use_rl:
+                
+                if p.time > 10:
+                    rl_controller.velocity_cmd = np.array([0.3,0.0,0.0])
+                
+                lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
+                ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
+                proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
+                
+                rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
+                
+                p.send_command(rl_q_des, np.zeros(12), np.zeros(12))
+                
+            else:
+                p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW)
+                
             p.logData()
-            p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
             p.visualizeContacts()
+        
 
 
 
