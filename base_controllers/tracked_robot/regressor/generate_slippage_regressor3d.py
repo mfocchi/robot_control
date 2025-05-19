@@ -12,8 +12,20 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt #do as last import
 import pandas as pd
 from termcolor import colored
+import glob
 
 friction_coeff = 0.6 #file.split("_")[4]
+
+pattern = "model_*.cb"
+# Search in the current directory
+matching_files = glob.glob(pattern)
+if matching_files:
+    response = input(colored(f"Some model file already exists. Overwrite? [y/N]: ","red")).strip().lower()
+    if response != 'y':
+        print("Aborting script.")
+        sys.exit(0)
+# Continue with script if file does not exist or user agrees to overwrite
+print("Proceeding...")
 
 list_file = [x for x in os.listdir('data3d') if (x.endswith('.csv') and 'ramp' in x and str(friction_coeff) in x )]
 df_vpos = pd.DataFrame()
