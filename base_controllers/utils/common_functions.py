@@ -431,7 +431,6 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
     elif (njoints % 2 == 0): #divisible by 2
         n_rows = int(njoints / 2)
         n_cols = 2
-        print(n_rows)
     else:  # put in a single columnn
         n_rows = njoints
         n_cols = 1

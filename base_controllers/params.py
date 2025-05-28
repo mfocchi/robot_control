@@ -404,7 +404,18 @@ robot_params['mantis'] ={'dt': 0.001,
                       # use real robot or simulation
                       'real_robot': False} # note the frames are all aligned with base for joints = 0
 
-robot_params['jumpleg'] ={'dt': 0.001,
+robot_params['invpend'] ={'dt': 0.001,
+                       'kp': np.array([0, 0 ]),
+                       'kd':  np.array([0,0]),
+                       'q_0':  np.array([ 0.0, 0.1]),
+                       'joint_names': ['slider_to_cart', 'cart_to_pole'],
+                       'ee_frame': 'lf_foot',
+                       'spawn_x' : 0.0,
+                       'spawn_y' : 0.0,
+                       'spawn_z' : 0.0,
+                       'buffer_size': 1000} # note the frames are all aligned with base for joints = 0
+
+robot_params['inv'] ={'dt': 0.001,
                        'kp': np.array([100, 100, 100, 10, 10, 10 ]),
                        'kd':  np.array([10,10,10, 0.2,0.2,0.2]),
                        'q_0':  np.array([ 0.0, 0.0, 0.25, -0.24010055475883635,0.7092776153747403,-1.4185292429491714]),
