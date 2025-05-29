@@ -1293,7 +1293,7 @@ if __name__ == '__main__':
                 rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
                 
                 p.send_command(rl_q_des, np.zeros(12), np.zeros(12))
-                
+                p.grForcesW_des = np.zeros((12))
             else:
                 p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW)
                 
