@@ -54,13 +54,17 @@ class RlVelocityController():
             
             joint_pos_rel = q_ord - self.q_def
             
+            qd_ord = np.zeros(12)
+            for i in range(12):
+                qd_ord[i] = qd[self.ord[i]]
+            
             obs = np.concatenate([
                 base_lin_vel,
                 base_ang_vel,
                 pj_gravity,
                 self.velocity_cmd,
                 joint_pos_rel,
-                qd,
+                qd_ord,
                 self.prev_action
             ]).astype(np.float32)[None]
             
