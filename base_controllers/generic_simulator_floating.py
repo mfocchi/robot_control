@@ -10,14 +10,15 @@ import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from base_controllers.base_controller import BaseController
+from base_controllers.quadruped_controller import QuadrupedController
 from base_controllers.utils.common_functions import plotFrame, plotJoint
 import params as conf
-robotName = "go1" # needs to inherit BaseController
+robotName = "aliengo" # needs to inherit BaseController
 
 #jessica
 import os
 from AlienGo_SDK.example_py.MPS_robot_sensors.mps_code import *
-import  AlienGo_SDK.example_py.MPS_robot_sensors.publish_subscribe
+from   AlienGo_SDK.example_py.MPS_robot_sensors import publish_subscribe
 # Neural network and configuration imports
 from   AlienGo_SDK.example_py.MPS_robot_sensors.config_loader import   load_config, load_actor_network
 from   AlienGo_SDK.example_py.MPS_robot_sensors.utils import scale_axis, quat_rotate_inverse, swap_legs
@@ -45,29 +46,13 @@ import threading
 #    joystick.init()
 #    print(f"Detected joystick: {joystick.get_name()}")
 
-### Configuration and neural network setup
-# Nominal policy
-config_path = os.environ["LOCOSIM_DIR"]+'/robot_control/AlienGo_SDK/example_py/MPS_robot_sensors/config.yaml'
-config = load_config(config_path)
-network_path = os.environ["LOCOSIM_DIR"]+'/robot_control/AlienGo_SDK/example_py/nn/' + config['nominal']['paths']['checkpoint_path']
-actor_network = load_actor_network(config['nominal'], network_path)
-scaling_factors = config['nominal']['scaling']
-default_joint_angles = config['nominal']['robot']['default_joint_angles']
-Kp_n = config['nominal']['robot']['Kp_n']
-Kd_n = config['nominal']['robot']['Kd_n']
-max_pos = config['nominal']['robot']['max_pos']
-min_pos = config['nominal']['robot']['min_pos']
-torque_values = config['nominal']['robot']['torque_values']
-scaling_qdes = scaling_factors['factor']
-
-# Backup policy
-torque_values_b = config['backup']['robot']['torque_values']
 
 
-class GenericSimulator(BaseController):
+
+class GenericSimulator(QuadrupedController):
     
     def __init__(self, robot_name="myrobot"):
-        super().__init__(robot_name=robot_name, external_conf = conf)
+        super().__init__(robot_name=robot_name)
         self.freezeBaseFlag = False
         print("Initialized murobot controller---------------------------------------------------------------")
 
@@ -82,6 +67,25 @@ class GenericSimulator(BaseController):
         super().initVars()
         ## add your variables to initialize here
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
+
+        #jessica stuff
+        ### Configuration and neural network setup
+        # Nominal policy
+        config_path = os.environ["LOCOSIM_DIR"] + '/robot_control/AlienGo_SDK/example_py/MPS_robot_sensors/config.yaml'
+        config = load_config(config_path)
+        network_path = os.environ["LOCOSIM_DIR"] + '/robot_control/AlienGo_SDK/example_py/nn/' + \
+                       config['nominal']['paths']['checkpoint_path']
+        self.actor_network = load_actor_network(config['nominal'], network_path)
+        self.scaling_factors = config['nominal']['scaling']
+        self.default_joint_angles = config['nominal']['robot']['default_joint_angles']
+        self.Kp_n = config['nominal']['robot']['Kp_n']
+        self.Kd_n = config['nominal']['robot']['Kd_n']
+        self.max_pos = config['nominal']['robot']['max_pos']
+        self.min_pos = config['nominal']['robot']['min_pos']
+        self.torque_values = config['nominal']['robot']['torque_values']
+        self.scaling_qdes = self.scaling_factors['factor']
+        # Backup policy
+        self.torque_values_b = config['backup']['robot']['torque_values']
 
         self.d = {'FR_0': 0, 'FR_1': 1, 'FR_2': 2,
              'FL_0': 3, 'FL_1': 4, 'FL_2': 5,
@@ -106,17 +110,17 @@ class GenericSimulator(BaseController):
         self.rate_count = 0
 
         # PD tuning parameters
-        self.Kp = [Kp_n, Kp_n, Kp_n]
-        self.Kd = [Kd_n, Kd_n, Kd_n]
+        self.Kp = [self.Kp_n, self.Kp_n, self.Kp_n]
+        self.Kd = [self.Kd_n, self.Kd_n, self.Kd_n]
 
         self.actions = torch.zeros(12, dtype=torch.float32)
 
         # Decimation factor to reduce the policy update frequency - Number of control action updates @ sim DT per policy DT
         # Decimation changed to 5 to have a 100 Hz main loop, like in the simulations
         self.decimation = 5
-        self.mps = mps_code.MPS(decimation, max_pos, min_pos, torque_values, Kp_n, Kd_n, config['backup'])
-        self.Kp_b = mps.Kp_b
-        self.Kd_b = mps.Kd_b
+        self.mps = MPS(self.decimation, self.max_pos, self.min_pos, self.torque_values, self.Kp_n, self.Kd_n, config)
+        self.Kp_b = self.mps.Kp_b
+        self.Kd_b = self.mps.Kd_b
 
         # state = sdk.LowState()
         self.motiontime = 0
@@ -126,6 +130,11 @@ class GenericSimulator(BaseController):
         # self.threading.Thread(target=self.compute_actions,
         #                  args=(self.pubSub.imu_gyro, self.pubSub.imu_quat, pubSub.joint_pos, pubSub.joint_vel, scaling_factors),
         #                  daemon=True).start()
+        self.pubSub = publish_subscribe.PubSub()
+        self.pubSub.init_subscribers(config['controller']['topics'])
+        self.tau_offset = np.array(config['nominal']['robot']['torque_values'] * 4)
+
+        print('topics to subscribe to from PubSub', config['controller']['topics'])
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -144,17 +153,14 @@ class GenericSimulator(BaseController):
         # commands = get_commands() # The stopping condition here is not evaluated
 
         # Add if the controller is not used
-        commands = np.array([0, 0, 0])  # The stopping condition here is not evaluated
-
+        commands = np.array([0.2, 0, 0])  # The stopping condition here is not evaluated
         # imu = state.imu
         # body_quat = np.array([imu.quaternion[1], imu.quaternion[2], imu.quaternion[3], imu.quaternion[0]])
-        body_quat = np.array([imu_quat[1], imu_quat[2], imu_quat[3], imu_quat[0]])
+        body_quat = imu_quat
         # body_vel = np.array([imu.gyroscope[0], imu.gyroscope[1], imu.gyroscope[2]])
         body_vel = imu_gyro
-        joint_angles1 = joint_pos  # [state.motorState[i].q for i in range(12)]
-        joint_angles = swap_legs(joint_angles1)
-        joint_velocities1 = joint_vel  # [state.motorState[i].dq for i in range(12)]
-        joint_velocities = swap_legs(joint_velocities1)
+        joint_angles = joint_pos
+        joint_velocities = joint_vel
 
         # Gravity vector in body frame
         gravity_body = quat_rotate_inverse(
@@ -162,7 +168,7 @@ class GenericSimulator(BaseController):
             torch.tensor([[0.0, 0.0, -1.0]], dtype=torch.float32)
         ).squeeze().numpy()
 
-        prev_actions1 = np.copy(previous_actions)
+        prev_actions1 = np.copy(self.previous_actions)
         prev_actions = swap_legs(prev_actions1)
 
         # Scale observations
@@ -185,28 +191,21 @@ class GenericSimulator(BaseController):
         SDK order = [FR, FL, RR, RL]
         nn order = [FL, FR, RL, RR]
         """
-        global latest_actions, previous_actions, stop_threads
-        while not stop_threads:
-            # start_time = time.time()
+        #print('Computing actions')
+        # start_time = time.time()
+        obs = self.compute_observation(imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors)
+        obs_tensor = torch.tensor(obs, dtype=torch.float32)
+        obs_normalized = self.actor_network.norm_obs(obs_tensor)
 
-            inference_ready.wait()  # Wait for signal from the main thread
-            inference_ready.clear()
+        with torch.no_grad():
+            new_actions1 = self.actor_network(obs_normalized).numpy()
 
-            obs = compute_observation(imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors)
-            obs_tensor = torch.tensor(obs, dtype=torch.float32)
-            obs_normalized = actor_network.norm_obs(obs_tensor)
+        # Swap the actions to the correct order for SDK/Pinocchio
+        new_actions = swap_legs(new_actions1)
+        self.previous_actions = self.latest_actions
+        self.latest_actions = new_actions
 
-            with torch.no_grad():
-                new_actions1 = actor_network(obs_normalized).numpy()
-
-            # Swap the actions to the correct order for SDK
-            new_actions = swap_legs(new_actions1)
-
-            with lock:
-                previous_actions[:] = latest_actions  # Store current actions as previous
-                latest_actions[:] = new_actions  # Update latest actions
-
-            """ print(f"Inference completed in: {time.time() - start_time:.5f} seconds") """
+        """ print(f"Inference completed in: {time.time() - start_time:.5f} seconds") """
 
     def jointLinearInterpolation(self,initPos, targetPos, rate):
         """
@@ -236,33 +235,33 @@ class GenericSimulator(BaseController):
             return False
 
 def talker(p):
-    p.start()
-    additional_args = None
-    p.startSimulator(additional_args = additional_args)
-    p.loadModelAndPublishers()
-    p.initSubscribers()
-
+    p.use_gui = False
+    additional_args = ['gui:=' + str(p.use_gui),
+                       'go0_conf:=standDown']
+    p.startController(additional_args=additional_args)
+    #p.start()
+    # p.startSimulator(additional_args = additional_args)
+    # p.loadModelAndPublishers()
+    # p.initSubscribers()
     p.initVars()
     p.startupProcedure()
 
     #loop frequency
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     p.q_des = np.copy(p.q_des_q0)
+    p.tau_ffwd = p.tau_offset
 
     while not ros.is_shutdown():
-        p.tau_ffwd = np.zeros(p.robot.na)
-
-        # Trigger inference every `decimation` steps
-        self.compute_actions(self.pubSub.imu_gyro, self.pubSub.imu_quat, self.pubSub.joint_pos, self.pubSub.joint_vel, scaling_factors)
+         # Trigger inference every `decimation` steps
+        p.compute_actions(p.pubSub.imu_gyro, p.pubSub.imu_quat, p.pubSub.joint_pos, p.pubSub.joint_vel, p.scaling_factors)
 
         # Get the latest available actions
-        with lock:
-            current_actions = np.copy(latest_actions)
-        qDes = scaling_qdes * current_actions + np.array(default_joint_angles)
-        # Clip the joint angles to the joint limits
-        qDes = np.clip(qDes, min_pos, max_pos)
+        qDes = p.scaling_qdes * p.latest_actions + np.array(p.default_joint_angles)
 
-        #p.q_des = p.q_des_q0  + 0.3 * np.sin(2*np.pi*0.5*p.time)
+        # Clip the joint angles to the joint limits
+        #qDes = np.clip(qDes, p.min_pos, p.max_pos)
+        p.q_des = qDes
+
         #publishes /command
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 
