@@ -153,7 +153,7 @@ class GenericSimulator(QuadrupedController):
         # commands = get_commands() # The stopping condition here is not evaluated
 
         # Add if the controller is not used
-        commands = np.array([0.2, 0, 0])  # The stopping condition here is not evaluated
+        commands = np.array([0.5, 0., 0.])  # The stopping condition here is not evaluated
         # imu = state.imu
         # body_quat = np.array([imu.quaternion[1], imu.quaternion[2], imu.quaternion[3], imu.quaternion[0]])
         body_quat = imu_quat
@@ -252,16 +252,18 @@ def talker(p):
     p.tau_ffwd = p.tau_offset
 
     while not ros.is_shutdown():
+      #  print(p.pubSub.effort)
+      #  p.motiontime += 1
+      #  if p.motiontime % p.decimation == 0:
          # Trigger inference every `decimation` steps
         p.compute_actions(p.pubSub.imu_gyro, p.pubSub.imu_quat, p.pubSub.joint_pos, p.pubSub.joint_vel, p.scaling_factors)
 
         # Get the latest available actions
         qDes = p.scaling_qdes * p.latest_actions + np.array(p.default_joint_angles)
 
-        # Clip the joint angles to the joint limits
-        #qDes = np.clip(qDes, p.min_pos, p.max_pos)
+    # Clip the joint angles to the joint limits
+        qDes = np.clip(qDes, p.min_pos, p.max_pos)
         p.q_des = qDes
-
         #publishes /command
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
 

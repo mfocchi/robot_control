@@ -120,8 +120,8 @@ robot_params['solo_fw'] ={'dt': 0.002,
                         'buffer_size': 1501} # note the frames are all aligned with base for joints = 0
 
 robot_params['aliengo'] ={'dt': 0.002,
-                          'kp': np.array([60., 90., 60.]*4),
-                          'kd': np.array([10., 10., 10.]*4),
+                          'kp': np.array([100., 100., 100.]*4),#np.array([60., 90., 60.]*4),
+                          'kd': np.array([3., 3., 3.]*4),#np.array([10., 10., 10.]*4),
                           'ki': np.array([0., 0., 0.]*4),
 
 
