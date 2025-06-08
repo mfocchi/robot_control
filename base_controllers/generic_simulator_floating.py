@@ -32,6 +32,7 @@ from sensor_msgs.msg import Imu, JointState
 from geometry_msgs.msg import PoseWithCovarianceStamped, TwistWithCovarianceStamped
 import pygame
 import threading
+import copy
 # Remove if controller is not used
 # Initialize pygame and the joystick module
 #pygame.init()
@@ -115,13 +116,6 @@ class GenericSimulator(QuadrupedController):
 
         self.actions = torch.zeros(12, dtype=torch.float32)
 
-        # Decimation factor to reduce the policy update frequency - Number of control action updates @ sim DT per policy DT
-        # Decimation changed to 5 to have a 100 Hz main loop, like in the simulations
-        self.decimation = 5
-        self.mps = MPS(self.decimation, self.max_pos, self.min_pos, self.torque_values, self.Kp_n, self.Kd_n, config)
-        self.Kp_b = self.mps.Kp_b
-        self.Kd_b = self.mps.Kd_b
-
         # state = sdk.LowState()
         self.motiontime = 0
         self.disable_torques = False  # Flag to disable torques if inclination exceeds threshold or safety button is pressed
@@ -134,6 +128,14 @@ class GenericSimulator(QuadrupedController):
         self.pubSub.init_subscribers(config['controller']['topics'])
         self.tau_offset = np.array(config['nominal']['robot']['torque_values'] * 4)
 
+        # Decimation factor to reduce the policy update frequency - Number of control action updates @ sim DT per policy DT
+        # Decimation changed to 5 to have a 100 Hz main loop, like in the simulations
+        self.decimation = 5
+        self.mps = MPS(self.decimation, self.max_pos, self.min_pos, self.tau_offset, self.Kp_n, self.Kd_n,
+                       self.scaling_qdes, self.default_joint_angles, self.scaling_factors)
+        self.Kp_b = config['backup']['robot']['Kp_b']
+        self.Kd_b = config['backup']['robot']['Kd_b']
+
         print('topics to subscribe to from PubSub', config['controller']['topics'])
 
     def logData(self):
@@ -142,7 +144,7 @@ class GenericSimulator(QuadrupedController):
                 pass
             super().logData()
 
-    def compute_observation(self,imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors):
+    def compute_observation(self,imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors, walk):
         """
         Compute the observation vector from the robot's state.
         Legs are swapped to match the order of the neural network input.
@@ -153,7 +155,10 @@ class GenericSimulator(QuadrupedController):
         # commands = get_commands() # The stopping condition here is not evaluated
 
         # Add if the controller is not used
-        commands = np.array([0.5, 0., 0.])  # The stopping condition here is not evaluated
+        if walk:
+            commands = np.array([0.5, 0., 0.])  # The stopping condition here is not evaluated
+        else:
+            commands = np.array([-0.35, -0.1, 0.])
         # imu = state.imu
         # body_quat = np.array([imu.quaternion[1], imu.quaternion[2], imu.quaternion[3], imu.quaternion[0]])
         body_quat = imu_quat
@@ -184,7 +189,7 @@ class GenericSimulator(QuadrupedController):
         return np.concatenate((scaled_body_vel, scaled_commands, scaled_gravity_body, scaled_joint_angles,
                                scaled_joint_velocities, scaled_actions))
 
-    def compute_actions(self,imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors):
+    def compute_actions(self,imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors, is_rec):
         """
         Inference on the NN to retrive actions from observations.
         Legs are swapped to match the order of the neural network input.
@@ -193,7 +198,7 @@ class GenericSimulator(QuadrupedController):
         """
         #print('Computing actions')
         # start_time = time.time()
-        obs = self.compute_observation(imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors)
+        obs = self.compute_observation(imu_gyro, imu_quat, joint_pos, joint_vel, scaling_factors, is_rec)
         obs_tensor = torch.tensor(obs, dtype=torch.float32)
         obs_normalized = self.actor_network.norm_obs(obs_tensor)
 
@@ -251,18 +256,38 @@ def talker(p):
     p.q_des = np.copy(p.q_des_q0)
     p.tau_ffwd = p.tau_offset
 
+    is_rec = True
+
     while not ros.is_shutdown():
       #  print(p.pubSub.effort)
       #  p.motiontime += 1
       #  if p.motiontime % p.decimation == 0:
          # Trigger inference every `decimation` steps
-        p.compute_actions(p.pubSub.imu_gyro, p.pubSub.imu_quat, p.pubSub.joint_pos, p.pubSub.joint_vel, p.scaling_factors)
+        latest_actions_ant = np.copy(p.latest_actions)
+        previous_actions_ant = np.copy(p.previous_actions)
+        p.compute_actions(p.pubSub.imu_gyro, p.pubSub.imu_quat, p.pubSub.joint_pos, p.pubSub.joint_vel,
+                          p.scaling_factors, is_rec)
 
         # Get the latest available actions
-        qDes = p.scaling_qdes * p.latest_actions + np.array(p.default_joint_angles)
+        qDes = p.scaling_qdes * np.copy(p.latest_actions) + np.array(p.default_joint_angles)
 
     # Clip the joint angles to the joint limits
         qDes = np.clip(qDes, p.min_pos, p.max_pos)
+
+        if is_rec:
+            is_rec, iter_mps = p.mps.is_rec_single(qDes, p.pubSub.pose, p.pubSub.twist, p.pubSub.joint_pos, p.pubSub.joint_vel,
+                                                   copy.deepcopy(p.actor_network), np.copy(p.previous_actions),
+                                               np.copy(p.latest_actions))
+            #is_rec=True
+            if not is_rec:
+                p.latest_actions = np.copy(latest_actions_ant)
+                p.previous_actions = np.copy(previous_actions_ant)
+                p.compute_actions(p.pubSub.imu_gyro, p.pubSub.imu_quat, p.pubSub.joint_pos, p.pubSub.joint_vel,
+                                  p.scaling_factors, is_rec)
+
+                qDes = p.scaling_qdes * np.copy(p.latest_actions) + np.array(p.default_joint_angles)
+                qDes = np.clip(qDes, p.min_pos, p.max_pos)
+
         p.q_des = qDes
         #publishes /command
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
