@@ -398,6 +398,9 @@ class BaseController(threading.Thread):
         # b_X_w = motionVectorTransform(np.zeros(3), self.b_R_w)
         # b_X_w = pin.SE3(self.b_R_w, np.zeros(3)).action
         # self.gen_velocities[:6] = b_X_w.dot(self.baseTwistW)
+
+        #the v (generalized velocities) must follow Pinocchio's internal convention,
+        #which includes the base velocity expressed in the local (body) frame, i.e., the frame of the floating base.
         self.gen_velocities[:3] = self.b_R_w.dot(self.u.linPart(self.baseTwistW))
         self.gen_velocities[3:6] = self.b_R_w.dot(self.u.angPart(self.baseTwistW))
         self.gen_velocities[6:] = self.qd
@@ -410,7 +413,7 @@ class BaseController(threading.Thread):
             self.B_contacts[leg] = self.robot.framePlacement(self.neutral_fb_jointstate,
                                                              self.robot.model.getFrameId(ee_frames[leg]),
                                                              update_kinematics=False ).translation.copy()
-            self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose())
+            self.W_contacts[leg] = self.mapBaseToWorld(self.B_contacts[leg].transpose()) # as an alternative I could have used self.configuration in place of self.neutral_fb_jointstate in framePlacement
         if self.use_ground_truth_contacts:
             for leg in range(4):
                 self.w_R_lowerleg[leg] = self.b_R_w.transpose().dot(self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
@@ -442,7 +445,9 @@ class BaseController(threading.Thread):
         
         #compute contact forces
         self.estimateContactForces()
-        
+        #self.estimateContactForcesFloating()  # Robot Dynamics Lecture Notes, eq. 3.61
+        self.estimateLegContacts()
+
         # compute com / robot inertias
         self.comPosB, self.comVelB = copy.deepcopy(self.robot.robotComB(self.q, self.qd))
         self.comPoseW = copy.deepcopy(self.basePoseW)
@@ -462,18 +467,26 @@ class BaseController(threading.Thread):
             grf = self.wJ_inv[leg].T.dot(self.u.getLegJointState(leg,  self.h_joints-self.tau ))
             self.u.setLegJointState(leg, grf, self.grForcesW)
 
-            if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
-                self.contact_state[leg] = True
+    def estimateContactForcesFloating(self):
+        # #computes contact forces from constraints F = (J*M^-1JT)^-1*(J*M^-1*(S^T*tau -h) +Jd*qd)
+        Jc = np.empty((0,self.robot.nv))
+        Jdqd = np.empty((0))
+        for leg in range(4):
+            frame_id = self.robot.model.getFrameId(conf.robot_params[self.robot_name]['ee_frames'][leg])
+            # I use self.neutral_fb_jointstate otherwise with self.configuration I get wrong results, and rotate for each leg
+            Jdqd =  np.append(Jdqd, self.b_R_w.T @  self.robot.frameClassicAcceleration(self.neutral_fb_jointstate, self.gen_velocities, None, frame_id).linear)
+            # to avoid computing the spatial Jacobian I first compute it in the Base frame (LOCAL_WORLD_ALIGNED) and then I rotate it
+            Jleg = self.b_R_w.T @ self.robot.frameJacobian(self.neutral_fb_jointstate, frame_id, update=False, ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, :]
+            Jc = np.vstack((Jc, Jleg))
+        Lambda = np.linalg.inv(Jc @ (np.linalg.inv(self.M) @ Jc.T))
+        S = np.hstack((np.zeros((self.robot.na, 6)), np.eye(self.robot.na)))
+        self.grForcesW = -Lambda @ ( Jc @ np.linalg.inv(self.M) @ ( S.T @ self.tau -self.h) + Jdqd )
 
-            else:
-                self.contact_state[leg] = False
-                # if self.time % 100:
-                #     print('contact lost on leg: ' + conf.robot_params[self.robot_name]['ee_frames'][leg])
-
+    def estimateLegContacts(self):
         if self.use_ground_truth_contacts:
             for leg in range(4):
-                grfLocal_gt = self.u.getLegJointState(leg,  self.grForcesLocal_gt)
-                if self.publish_contact_gt_in_wf:#if you spawn a robot platform it starts ti publish in WF
+                grfLocal_gt = self.u.getLegJointState(leg, self.grForcesLocal_gt)
+                if self.publish_contact_gt_in_wf:  # if you spawn a robot platform it starts ti publish in WF
                     grf_gt = grfLocal_gt
                 else:
                     grf_gt = self.w_R_lowerleg[leg] @ grfLocal_gt
@@ -485,6 +498,15 @@ class BaseController(threading.Thread):
 
                 else:
                     self.contact_state[leg] = False
+        else:
+            for leg in range(4):
+                grf = self.u.getLegJointState(leg, self.grForcesW)
+                if self.contact_normal[leg].dot(grf) >= conf.robot_params[self.robot_name]['force_th']:
+                    self.contact_state[leg] = True
+                else:
+                    self.contact_state[leg] = False
+                    # if self.time % 100:
+                    #     print('contact lost on leg: ' + conf.robot_params[self.robot_name]['ee_frames'][leg])
 
     def applyForce(self, Fx, Fy, Fz, Mx, My, Mz, duration, link_name="base_link"):
         from geometry_msgs.msg import Wrench, Point
