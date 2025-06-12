@@ -75,6 +75,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.anchor_passive_joints = np.array([0,1, 6,7])
         self.impulse_start_count = 0 # start disturbance at different point of the flight phase
 
+        if self.MPC_control:
+            sys.path.insert(0, './codegen_mpc')
+
         if self.landing == True:
             robot_name+='landing'
             self.force_scale = 150.
@@ -153,6 +156,9 @@ class ClimbingrobotController(BaseControllerFixed):
         # this is for the matlab optim
         self.eng = matlab.engine.start_matlab()
         self.eng.addpath('./codegen', nargout=0)
+        if self.MPC_control:
+            self.eng.addpath('./codegen_mpc', nargout=0)
+
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:

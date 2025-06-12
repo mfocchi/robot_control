@@ -42,10 +42,10 @@ params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
 params['g'] = 9.81
 params['w1']= 1. # smooth
 params['w2']= 1. # hoist work
-params['w3']= 1.
-params['w4']= 1.
-params['w5']= 1.
-params['w6']= 1.
+params['w3']= 0.
+params['w4']= 0.
+params['w5']= 0.
+params['w6']= 0.
 params['T_th'] =  0.05
 params['obstacle_avoidance'] = 'mesh'
 params['jump_clearance'] = 1.
@@ -75,10 +75,11 @@ params['mesh_y'] = mesh_y
 params['mesh_z'] = mesh_z
 params['contact_normal'] = matlab.double(normal)
 
-solution = eng.optimize_cpp_mex(matlab.double(p0), matlab.double(pf), Fleg_max, Fr_max, Fr_min, mu, params)
+solution = eng.optimize_cpp_mex1(matlab.double(p0), matlab.double(pf), Fleg_max, Fr_max, Fr_min, mu, params)
 ref_com  = mat_matrix2python(solution['p'])
+print("Fleg ", solution['Fleg'])
 print("achieved target", solution['achieved_target'])
-print("target errorr", pf- solution['achieved_target'])
+print("target error", pf-solution['achieved_target'].reshape(1,3))
 print("jump duration", solution['Tf'])
 print("consumed_energy", solution['consumed_energy'])
 print("problem converged: ", solution['problem_solved'] in [0, 2])

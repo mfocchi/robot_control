@@ -152,6 +152,82 @@ def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spa
     launch.start()
     process = launch.launch(node)
 
+
+def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
+    try:
+        import trimesh
+    except subprocess.CalledProcessError as process_error:
+        ros.logfatal('You need to install pip install trimesh\n%s', process_error.output)
+
+    # to convert mesh surface done with meshgrid into a 3D mesh.
+    points = np.vstack((mesh_x.flatten(), mesh_y.flatten(), mesh_z.flatten())).T
+
+    # Triangulate manually
+    faces = []
+    res_x, res_y = mesh_x.shape
+    for i in range(res_x - 1):
+        for j in range(res_y - 1):
+            a = i * res_y + j
+            b = a + 1
+            c = a + res_y
+            d = c + 1
+            faces.append([a, b, c])
+            faces.append([b, d, c])
+
+    mesh = trimesh.Trimesh(vertices=points, faces=faces)
+    mesh.fix_normals()
+    mesh.remove_unreferenced_vertices()
+    mesh = mesh.smoothed()
+    # === Step 2: Export STL ===
+    tmp_stl_path = "/tmp/runtime_mesh.stl"
+    mesh.export(tmp_stl_path)  # safer
+
+    # === Step 3: Spawn in Gazebo ===
+    sdf_template = f"""
+    <sdf version="1.6">
+      <model name="runtime_mesh">
+        <static>true</static>
+        <link name="link">
+          <visual name="visual">
+            <geometry>
+              <mesh>
+                <uri>file://{tmp_stl_path}</uri>
+              </mesh>
+            </geometry>
+            <material>
+              <ambient>0.545 0.271 0.075 1.0</ambient>
+              <diffuse>0.545 0.271 0.075 1.0</diffuse>
+              <specular>0.1 0.1 0.1 1.0</specular>
+              <emissive>0.4 0.2 0.1 1.0</emissive>
+            </material>
+          </visual>
+          <collision name="collision">
+            <geometry>
+              <mesh>
+                <uri>file://{tmp_stl_path}</uri>
+              </mesh>
+            </geometry>
+          </collision>
+        </link>
+      </model>
+    </sdf>
+    """
+
+    sdf_path = "/tmp/runtime_mesh.sdf"
+    with open(sdf_path, 'w') as f:
+        f.write(sdf_template)
+    try:
+        command_string = [
+            "rosrun", "gazebo_ros", "spawn_model",
+            "-file", sdf_path,
+            "-sdf", "-model", "runtime_mesh",
+            "-x", f"{position[0]}", "-y", f"{position[1]}", "-z", f"{position[2]}"
+        ]
+        subprocess.run(command_string, stdout=sys.stdout, stderr=sys.stderr, check=True)
+    except subprocess.CalledProcessError as process_error:
+        ros.logfatal('Failed to run spawnModel command with error: \n%s', process_error.output)
+        sys.exit(1)
+
 def sendStaticTransform(parent, child, x_pos = np.zeros(3), quat=np.array([1,0,0,0]), static_broadcaster=None):
     static_transformStamped = TransformStamped()
     static_transformStamped.header.stamp = ros.Time.now()

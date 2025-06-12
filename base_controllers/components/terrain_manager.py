@@ -12,7 +12,7 @@ class TerrainManager:
 
 
 
-    def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, debug=False):
+    def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, debug=False, x_offset = 0):
         """
         Generate a 3D rock wall height map with fractal noise, ridges, and pillars.
 
@@ -101,7 +101,7 @@ class TerrainManager:
             bulge = np.exp(-((Z_mesh - cz) ** 2 + (Y_mesh - cy) ** 2) / (2 * radius ** 2))
 
             # Add pillar to height map
-            X = X + bulge * wall_depth
+            X = X + bulge * wall_depth 
 
 
 

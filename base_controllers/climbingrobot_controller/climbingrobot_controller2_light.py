@@ -12,7 +12,7 @@ import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import matplotlib.pyplot as plt
 from numpy import nan
-from base_controllers.utils.common_functions import plotJoint, plotFrameLinear
+from base_controllers.utils.common_functions import plotJoint, plotFrameLinear, spawnMesh
 from termcolor import colored
 import os
 import tf
@@ -21,14 +21,11 @@ from geometry_msgs.msg import Wrench, Point
 from gazebo_msgs.msg import ContactsState
 import scipy.io.matlab as mio
 import rospkg
-from scipy.linalg import block_diag
 from base_controllers.utils.matlab_conversions import mat_vector2python, mat_matrix2python
 import matlab.engine
-import numpy.matlib
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
-import pandas as pd
 import sys
-sys.path.insert(0,'./codegen')
+np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 
 import  base_controllers.params as conf
 robotName = "climbingrobot2"
@@ -49,10 +46,27 @@ class ClimbingrobotController(BaseControllerFixed):
         self.hip_roll_joint = 13
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
         self.anchor_passive_joints = np.array([0,1, 6,7])
+        self.OBSTACLE_AVOIDANCE = 'none' #'none', 'mesh'
 
-        self.OBSTACLE_AVOIDANCE = False
-        self.obstacle_location = np.array([0, 2.5, -6])
-        self.obstacle_size = np.array([1.5, 1.5, 0.866])
+        if self.MPC_control:
+            sys.path.insert(0, './codegen_mpc')
+
+        if self.OBSTACLE_AVOIDANCE=='mesh':
+            sys.path.insert(0, './codegen_mesh')
+            from base_controllers.components.terrain_manager import TerrainManager
+            # generate terrain
+            # Parameters (direct translation from MATLAB)
+            wall_depth = 1  # how
+            grid_size = 100
+            max_ridge_depth = 0.5
+            seed = "default"
+            Lz = -20  # Height of wall in meters
+            Ly = 5  # Width (horizontal extent) of wall in meters
+            # Generate rock wall map
+            self.terrainManager = TerrainManager()
+            self.mesh_x, self.mesh_y, self.mesh_z = self.terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False)
+        else:
+            sys.path.insert(0, './codegen')
 
         self.force_scale = 60.
         self.mountain_thickness = 0.1 # TODO call the launch file passing this parameter
@@ -105,7 +119,15 @@ class ClimbingrobotController(BaseControllerFixed):
                                              tcp_nodelay=True)
         # this is for the matlab optim
         self.eng = matlab.engine.start_matlab()
-        self.eng.addpath('./codegen', nargout=0)
+
+        if self.OBSTACLE_AVOIDANCE=='mesh':
+            self.eng.addpath('./codegen_mesh', nargout=0)
+        else:
+            self.eng.addpath('./codegen', nargout=0)
+
+        if self.MPC_control:
+            self.eng.addpath('./codegen_mpc', nargout=0)
+
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
@@ -390,9 +412,6 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored(f"mu: {self.mu}", "red"))
         print(colored(f"jump_clearance: {self.optim_params['jump_clearance']}", "red"))
         print(colored(f"mass: {self.optim_params['m']}", "red"))
-        print(colored(f"obstacle_avoidance: {self.optim_params['obstacle_avoidance']}", "red"))
-        print(colored(f"obstacle_location: {self.optim_params['obstacle_location']}", "red"))
-        print(colored(f"obstacle_size: {self.optim_params['obstacle_size']}", "red"))
         print(colored(f"num_params: {self.optim_params['num_params'] }", "red"))
         print(colored(f"int_method: {self.optim_params['int_method']}", "red"))
         print(colored(f"N_dyn: {self.optim_params['N_dyn']}", "red"))
@@ -421,37 +440,72 @@ class ClimbingrobotController(BaseControllerFixed):
         #self.Fr_min = 15.  # had to increas because of slopes downward jumps it used tp be 0
         self.mu = 0.8
         self.optim_params = {}
-        self.optim_params['jump_clearance'] = 1.
-        self.optim_params['m'] = self.getRobotMass()
 
-        #if terrain is inclined we consider only the Y,Z component of the pf and we need to compute a target point consistent with the wall!
-        if conf.robot_params[p.robot_name]['wall_inclination']>0.: #TODO missing normal in matlab wall_constraint!
-            pf[0] = (-pf[2]) * math.tan(conf.robot_params[p.robot_name]['wall_inclination']) +  conf.robot_params[p.robot_name]['spawn_x'] #spawn_x is for the anchor point which is shifted wrt the wall
-            print(f"adjusting landing target to be consistent with wall: {pf}")
+        if self.OBSTACLE_AVOIDANCE=="mesh":
+            self.optim_params['m'] = self.getRobotMass()
+            self.optim_params['num_params'] = 4.
+            self.optim_params['int_method'] = 'rk4'
+            self.optim_params['N_dyn'] = 30.
+            self.optim_params['FRICTION_CONE'] = 1.
+            self.optim_params['int_steps'] = 5.
+            self.optim_params['b'] = self.anchor_distance_y
+            self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
+            self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
+            self.optim_params['g'] = 9.81
+            self.optim_params['w1'] = 1.  # smooth
+            self.optim_params['w2'] = 1.  # hoist work 100.  # hoist work use this for multiple jumps for energetic comparison (test are for 0 or 100)
+            self.optim_params['w3'] = 0.
+            self.optim_params['w4'] = 0.
+            self.optim_params['w5'] = 0.
+            self.optim_params['w6'] = 0.
+            self.optim_params['T_th'] = 0.05
+            self.optim_params['obstacle_avoidance'] = 'mesh'
+            self.optim_params['jump_clearance'] = 1.
+            # Interpolator (note: z must be increasing — here from -10 to 0)
+            #correct initial and final positions
+            p0[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1],  self.mesh_x,  self.mesh_y,  self.mesh_z)
+            pf[0] =  self.terrainManager.wall_surface_eval(pf[2], pf[1],  self.mesh_x,  self.mesh_y,  self.mesh_z)
+            #does not work non matching with test_mex TODO
+            # p0= np.array([0.99103, 2.5, -6.])
+            # pf= np.array([0.40632, 4., -4.])
 
-        self.optim_params['obstacle_avoidance'] = self.OBSTACLE_AVOIDANCE
-        self.optim_params['obstacle_location'] = matlab.double(self.obstacle_location).reshape(3, 1)
-        self.optim_params['obstacle_size'] = matlab.double(self.obstacle_size).reshape(3, 1)
-        self.optim_params['num_params'] = 4.
-        self.optim_params['int_method'] = 'rk4'
-        self.optim_params['N_dyn'] = 30.
-        self.optim_params['FRICTION_CONE'] = 1.
-        self.optim_params['int_steps'] = 5.
-        self.optim_params['contact_normal'] = matlab.double([1,0,0]).reshape(3, 1)
-        self.optim_params['b'] = self.anchor_distance_y
-        self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
-        self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
-        self.optim_params['g'] = 9.81
-        self.optim_params['w1'] = 1. # smooth
-        self.optim_params['w2'] = 0. # hoist work 100.  # hoist work use this for multiple jumps for energetic comparison (test are for 0 or 100)
-        self.optim_params['w3'] = 0.
-        self.optim_params['w4'] = 0.
-        self.optim_params['w5'] = 0.
-        self.optim_params['w6'] = 0.
-        self.optim_params['T_th'] = 0.05
+            # compute consistent normal
+            normal = self.terrainManager.wall_normal_eval(p0[2], p0[1], self.mesh_x, self.mesh_y, self.mesh_z)
+            self.optim_params['mesh_x'] = self.mesh_x
+            self.optim_params['mesh_y'] = self.mesh_y
+            self.optim_params['mesh_z'] = self.mesh_z
+            self.optim_params['contact_normal'] = matlab.double(normal)
+        else:
+            self.optim_params['jump_clearance'] = 1.
+            self.optim_params['m'] = self.getRobotMass()
+            #if terrain is inclined we consider only the Y,Z component of the pf and we need to compute a target point consistent with the wall!
+            if conf.robot_params[p.robot_name]['wall_inclination']>0.: #TODO missing normal in matlab wall_constraint!
+                pf[0] = (-pf[2]) * math.tan(conf.robot_params[p.robot_name]['wall_inclination']) +  conf.robot_params[p.robot_name]['spawn_x'] #spawn_x is for the anchor point which is shifted wrt the wall
+                print(f"adjusting landing target to be consistent with wall: {pf}")
+            #no longer used
+            self.optim_params['obstacle_avoidance'] = False
+            self.optim_params['obstacle_location'] = matlab.double(np.zeros(3)).reshape(3, 1)
+            self.optim_params['obstacle_size'] = matlab.double(np.zeros(3)).reshape(3, 1)
+            self.optim_params['num_params'] = 4.
+            self.optim_params['int_method'] = 'rk4'
+            self.optim_params['N_dyn'] = 30.
+            self.optim_params['FRICTION_CONE'] = 1.
+            self.optim_params['int_steps'] = 5.
+            self.optim_params['contact_normal'] = matlab.double([1,0,0]).reshape(3, 1)
+            self.optim_params['b'] = self.anchor_distance_y
+            self.optim_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
+            self.optim_params['p_a2'] = matlab.double([0., self.optim_params['b'], 0.]).reshape(3, 1)
+            self.optim_params['g'] = 9.81
+            self.optim_params['w1'] = 1. # smooth
+            self.optim_params['w2'] = 0. # hoist work 100.  # hoist work use this for multiple jumps for energetic comparison (test are for 0 or 100)
+            self.optim_params['w3'] = 0.
+            self.optim_params['w4'] = 0.
+            self.optim_params['w5'] = 0.
+            self.optim_params['w6'] = 0.
+            self.optim_params['T_th'] = 0.05
 
         try:
-            self.matvars = self.eng.optimize_cpp_mex(matlab.double(p0.tolist()), matlab.double(pf.tolist()), self.Fleg_max, self.Fr_max,  self.Fr_min, self.mu, self.optim_params)
+            self.matvars = self.eng.optimize_cpp_mex(matlab.double(p0), matlab.double(pf), self.Fleg_max, self.Fr_max,  self.Fr_min, self.mu, self.optim_params)
         except:
             print(colored("Regenerate matlab code issues in calling optimize_cpp_mex","red"))
         # extract variables
@@ -467,7 +521,6 @@ class ClimbingrobotController(BaseControllerFixed):
         #self.targetPos = mat_vector2python(self.matvars['achieved_target'])
         self.targetPos = self.ref_com[:,-1] #output of optumization
         self.targetPosIdeal = self.ref_com[:, -1]
-
         print(colored(f"offline optimization accomplished, p0:{p0}, target(rough integr):{self.targetPos}", "blue"))
         print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
         self.jumps = [{"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
@@ -615,6 +668,10 @@ def talker(p):
     rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     p.updateKinematicsDynamics()
 
+    # spawn mesh in gazebo (needs mat2Gazebo)
+    if p.OBSTACLE_AVOIDANCE=='mesh':
+        spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo)
+
     # jump params
     # jump starting position
     p0 = np.array([0.28,  2.5, -6.10104])  # there is singularity for px = 0!
@@ -631,7 +688,7 @@ def talker(p):
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     p.q_des[:12] = p.computeJointVariables(p0)
-    p.setSimSpeed(dt_sim=0.001, max_update_rate=100, iters=1500)
+    p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
     while not ros.is_shutdown():
         # update the kinematics
@@ -833,6 +890,7 @@ def talker(p):
         except:
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
+        p.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
