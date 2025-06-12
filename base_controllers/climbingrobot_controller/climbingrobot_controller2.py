@@ -505,7 +505,7 @@ class ClimbingrobotController(BaseControllerFixed):
         angle_hip_roll =  math.atan2(self.jumps[self.jumpNumber]["Fleg"][1],
                                 self.jumps[self.jumpNumber]["Fleg"][0])
         angle_hip_pitch =  math.atan2(self.jumps[self.jumpNumber]["Fleg"][2], self.jumps[self.jumpNumber]["Fleg"][0])
-        print(colored(f"Start orienting leg to (pitch, roll)  : {angle_hip_roll, angle_hip_roll}", "blue"))
+        print(colored(f"Start orienting leg to (pitch, roll)  : {angle_hip_pitch, angle_hip_roll}", "blue"))
         angle_hip_pitch +=-1.57
         return angle_hip_pitch, angle_hip_roll
 
