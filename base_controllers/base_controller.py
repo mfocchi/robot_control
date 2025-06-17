@@ -166,6 +166,7 @@ class BaseController(threading.Thread):
         ros.sleep(1.0)
         print(colored('SIMULATION Started', 'blue'))
 
+
     def loadModelAndPublishers(self, xacro_path=None):
 
         # Loading a robot model of robot (Pinocchio)
@@ -274,10 +275,6 @@ class BaseController(threading.Thread):
 
         # compute orientation matrix
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
-        if self.broadcast_world:
-            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
-                                       self.quaternion,
-                                       ros.Time.now(), '/base_link', '/world')
 
     def _receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
@@ -460,6 +457,11 @@ class BaseController(threading.Thread):
         self.centroidalInertiaB = self.robot.centroidalInertiaB(self.configuration, self.gen_velocities)
         # inertia w.r.t the base frame origin
         self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(self.configuration)
+
+        if self.broadcast_world:
+            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                       self.quaternion,
+                                       ros.Time.now(), '/base_link', '/world')
 
     def estimateContactForces(self):           
         # estimate ground reaction forces from tau
