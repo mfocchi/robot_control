@@ -199,9 +199,7 @@ class QuadrupedController(BaseController):
 
         # compute orientation matrix
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
-        self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
-                                       self.quaternion,
-                                       ros.Time.now(), '/base_link', '/world')
+
     def initVars(self):
         super().initVars()
         self.q_des = np.zeros_like(self.q)
@@ -803,10 +801,6 @@ class QuadrupedController(BaseController):
                                                                                       update_legOdom=update_legOdom)
         self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
         super(QuadrupedController, self).updateKinematics()
-        self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
-                                       self.quaternion,
-                                       ros.Time.now(), '/base_link', '/world')
-
 
     def checkBaseCollisions(self):
         # base control points
