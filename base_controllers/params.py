@@ -137,7 +137,7 @@ robot_params['aliengo'] ={'dt': 0.002,
                           'kd_real': np.array([1., 1., 1.]*4),
                           'ki_real': np.array([1., 1., 1.]*4),
 
-                          'kp_real_swing':  np.array([15., 15., 15]*4),
+                          'kp_real_swing':  np.array([15., 20., 20]*4),
                           'kd_real_swing':  np.array([1., 1., 1.]*4),
                           'ki_real_swing':  np.array([0., 0., 0.]*4),
 
@@ -208,6 +208,7 @@ robot_params['aliengo'] ={'dt': 0.002,
                         'spawn_x': 0.0,
                         'spawn_y': 0.0,
                         'spawn_z': 0.37,
+                        'ip': "192.168.123.220",
                         'buffer_size': 50001} # note the frames are all aligned with base for joints = 0
 
 robot_params['go1'] ={'dt': 0.002,
@@ -315,6 +316,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'spawn_R': 0.0,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
+                      'ip': "192.168.123.15", #UDP node is running in the nano computer in the head
                       # use real robot or simulation
                       'real_robot': False} # note the frames are all aligned with base for joints = 0
 
@@ -373,6 +375,7 @@ robot_params['go2'] ={'dt': 0.002,
                       'spawn_R': 0.0,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
+                      'ip': "192.168.123.220",
                       # use real robot or simulation
                       'real_robot': False} # note the frames are all aligned with base for joints = 0
 

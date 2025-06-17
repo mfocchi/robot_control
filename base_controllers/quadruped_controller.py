@@ -446,6 +446,16 @@ class QuadrupedController(BaseController):
 
         self.log_counter += 1
         self.log_counter %= conf.robot_params[self.robot_name]['buffer_size']
+    
+    def check_faulty_ping(self, ip="192.168.1.1"):
+        response = os.system("ping -c 1 " + ip)
+        # and then check the response...
+        if response == 0:
+            pingstatus = f"Robot Network Active: pinging {ip} successful"
+        else:
+            pingstatus = f"Robot Network not Active, cannot ping {ip}, create a local network with gateway {ip}"
+        print(colored(pingstatus, "red"))
+        return response
 
     def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=[]):
 
@@ -455,6 +465,8 @@ class QuadrupedController(BaseController):
         else:
             self.use_ground_truth_pose = False
             self.use_ground_truth_contacts = False
+            if self.check_faulty_ping(conf.robot_params[self.robot_name]['ip']):
+                sys.exit()
 
         self.start()                               # as a thread
 
@@ -852,7 +864,7 @@ class QuadrupedController(BaseController):
     def startupProcedure(self):
         ros.sleep(.5)
         print(colored("Starting up", "blue"))
-        if self.robot_name == 'hyq':
+        if self.robot_name == 'hyq' or self.robot_name == 'solo':
             super(QuadrupedController, self).startupProcedure()
             return
 
