@@ -155,32 +155,53 @@ def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spa
 
 def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
     try:
-        import trimesh
+        import meshio
+        import matplotlib.tri as mtri
     except subprocess.CalledProcessError as process_error:
         ros.logfatal('You need to install pip install trimesh\n%s', process_error.output)
 
-    # to convert mesh surface done with meshgrid into a 3D mesh.
-    points = np.vstack((mesh_x.flatten(), mesh_y.flatten(), mesh_z.flatten())).T
+    # Build triangles
+    n_z = len(z_vals)
+    n_y = len(y_vals)
 
-    # Triangulate manually
-    faces = []
-    res_x, res_y = mesh_x.shape
-    for i in range(res_x - 1):
-        for j in range(res_y - 1):
-            a = i * res_y + j
-            b = a + 1
-            c = a + res_y
-            d = c + 1
-            faces.append([a, b, c])
-            faces.append([b, d, c])
+    triangles = []
+    for j in range(n_y - 1):
+        for i in range(n_z - 1):
+            p1 = j * n_z + i
+            p2 = p1 + 1
+            p3 = p1 + n_z
+            p4 = p3 + 1
+            triangles.append([p1, p2, p3])
+            triangles.append([p2, p4, p3])
 
-    mesh = trimesh.Trimesh(vertices=points, faces=faces)
-    mesh.fix_normals()
-    mesh.remove_unreferenced_vertices()
-    mesh = mesh.smoothed()
-    # === Step 2: Export STL ===
-    tmp_stl_path = "/tmp/runtime_mesh.stl"
-    mesh.export(tmp_stl_path)  # safer
+    triangles = np.array(triangles)
+
+    # 1. to convert mesh surface done with meshgrid into a 3D mesh Create triangulation using matplotlib
+    # 2. Create 2D Delaunay triangulation
+    tri = mtri.Triangulation(mesh_y.flatten(), mesh_z.flatten())
+
+    # 3. Prepare data for meshio
+    points = np.column_stack((x, mesh_y.flatten(), mesh_y.flatten()))
+    triangles = tri.triangles
+
+    mesh = meshio.Mesh(
+        points=points,
+        cells=[("triangle", triangles)]
+    )
+
+    # 4. Export to STL and DAE
+    mesh.write("surface_mesh.stl")
+    mesh.write("surface_mesh.dae")
+
+
+    # 4. Save using meshio
+    mesh = meshio.Mesh(
+        points=points,
+        cells=[("triangle", faces)]
+    )
+
+    mesh.write("/tmp/runtime_mesh.stl")  # STL for Gazebo collision
+
 
     # === Step 3: Spawn in Gazebo ===
     sdf_template = f"""

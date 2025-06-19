@@ -75,8 +75,9 @@ params['mesh_y'] = mesh_y
 params['mesh_z'] = mesh_z
 params['contact_normal'] = matlab.double(normal)
 
-solution = eng.optimize_cpp_mex1(matlab.double(p0), matlab.double(pf), Fleg_max, Fr_max, Fr_min, mu, params)
+solution = eng.optimize_cpp_mex(matlab.double(p0), matlab.double(pf), Fleg_max, Fr_max, Fr_min, mu, params)
 ref_com  = mat_matrix2python(solution['p'])
+achieved_target = mat_matrix2python(solution['achieved_target'])
 print("Fleg ", solution['Fleg'])
 print("achieved target", solution['achieved_target'])
 print("target error", pf-solution['achieved_target'].reshape(1,3))
@@ -99,7 +100,7 @@ ax.set_zlim([-10, 2])
 # ax.set_box_aspect([x_range, y_range, z_range])
 ax.view_init(elev=20, azim=9)
 ax.scatter(p0[0], p0[1], p0[2], color='red', s=500)  # s = size
-ax.scatter(solution['achieved_target'][0], solution['achieved_target'][1], solution['achieved_target'][2], color='red', s=500)  # s = size
+ax.scatter(achieved_target[0], achieved_target[1], achieved_target[2], color='red', s=500)  # s = size
 ax.plot3D(ref_com[0,:], ref_com[1,:],ref_com[2,:],color='red', linewidth=2.5)
 
 eng.exit
