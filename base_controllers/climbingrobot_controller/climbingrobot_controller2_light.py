@@ -46,7 +46,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.hip_roll_joint = 13
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
         self.anchor_passive_joints = np.array([0,1, 6,7])
-        self.OBSTACLE_AVOIDANCE = 'none' #'none', 'mesh'
+        self.OBSTACLE_AVOIDANCE = 'mesh' #'none', 'mesh'
 
         if self.MPC_control:
             sys.path.insert(0, './codegen_mpc')
@@ -64,7 +64,7 @@ class ClimbingrobotController(BaseControllerFixed):
             Ly = 5  # Width (horizontal extent) of wall in meters
             # Generate rock wall map
             self.terrainManager = TerrainManager()
-            self.mesh_x, self.mesh_y, self.mesh_z = self.terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False)
+            self.mesh_x, self.mesh_y, self.mesh_z = self.terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False, x_offset=-0.5)
         else:
             sys.path.insert(0, './codegen')
 
@@ -890,7 +890,7 @@ def talker(p):
         except:
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_mesh("tractor_description", "/meshes/terrain.stl", position=np.array([0., 0., 0.0]), color="red", alpha=1.0)
+        p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.stl", position=p.mat2Gazebo, color="red", alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo

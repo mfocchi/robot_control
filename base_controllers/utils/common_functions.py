@@ -156,14 +156,21 @@ def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spa
 def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
     try:
         import meshio
-        import matplotlib.tri as mtri
-    except subprocess.CalledProcessError as process_error:
-        ros.logfatal('You need to install pip install trimesh\n%s', process_error.output)
+    except ImportError:
+        raise RuntimeError("You need to install meshio with: pip install meshio")
+    print(colored("Spawning mesh"),"red")
 
     # Build triangles
-    n_z = len(z_vals)
-    n_y = len(y_vals)
+    n_z = mesh_x.shape[0]
+    n_y = mesh_y.shape[0]
 
+    #Normals determine which side of a triangle is "front".
+    #RViz and Gazebo render only front-facing surfaces.
+    #By default, a triangle's normal is defined by vertex order: counter-clockwise (CCW) is "front".
+    #If your mesh:
+    # 1) is not a heightfield but rather an arbitrary 3D surface -> trimesh
+    # 2) is a heightfield but it has an unstructured set of 2D points (e.g., scattered or irregular) -> use  Delaunay2D matplotlib.tri.Triangulation(x, y) would flatten the grid
+    # 3) is a heightfield and you have a Structured meshgrid (you already know how the points are connected)-> you can just build triangles row by row
     triangles = []
     for j in range(n_y - 1):
         for i in range(n_z - 1):
@@ -171,36 +178,51 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
             p2 = p1 + 1
             p3 = p1 + n_z
             p4 = p3 + 1
-            triangles.append([p1, p2, p3])
-            triangles.append([p2, p4, p3])
+            triangles.append([p3, p2, p1])
+            triangles.append([p3, p4, p2])
 
     triangles = np.array(triangles)
 
-    # 1. to convert mesh surface done with meshgrid into a 3D mesh Create triangulation using matplotlib
-    # 2. Create 2D Delaunay triangulation
-    tri = mtri.Triangulation(mesh_y.flatten(), mesh_z.flatten())
 
     # 3. Prepare data for meshio
-    points = np.column_stack((x, mesh_y.flatten(), mesh_y.flatten()))
-    triangles = tri.triangles
+    points = np.column_stack((mesh_x.flatten(), mesh_y.flatten(), mesh_z.flatten()))
 
-    mesh = meshio.Mesh(
-        points=points,
-        cells=[("triangle", triangles)]
-    )
+    #debug/ visualize normals
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # ax.plot_trisurf(points[:, 0], points[:, 1], points[:, 2], triangles=triangles, cmap='terrain', alpha=0.8)
+    # centers = []
+    # normals = []
+    # for tri in triangles:
+    #     p1, p2, p3 = points[tri[0]], points[tri[1]], points[tri[2]]
+    #     center = (p1 + p2 + p3) / 3
+    #     normal = np.cross(p2 - p1, p3 - p1)
+    #     normal /= np.linalg.norm(normal) + 1e-8  # normalize
+    #     centers.append(center)
+    #     normals.append(normal)
+    # centers = np.array(centers)
+    # normals = np.array(normals)
+    # # Scale normals for visibility
+    # normal_length = 0.05
+    # ax.quiver(centers[:, 0], centers[:, 1], centers[:, 2],
+    #           normals[:, 0], normals[:, 1], normals[:, 2],
+    #           length=normal_length, color='red', normalize=True)
+    # # Adjust view
+    # ax.set_xlabel("X (height)")
+    # ax.set_ylabel("Y")
+    # ax.set_zlabel("Z")
+    # ax.view_init(elev=45, azim=135)
+    # plt.title("Mesh with Face Normals")
+    # plt.show()
+
+    # Export mesh
+    mesh = meshio.Mesh(points=points, cells=[("triangle", triangles)])
 
     # 4. Export to STL and DAE
-    mesh.write("surface_mesh.stl")
-    mesh.write("surface_mesh.dae")
+    tmp_stl_path = "/tmp/runtime_mesh.stl"  # STL for Gazebo collision
+    mesh.write(tmp_stl_path)  # safer
 
 
-    # 4. Save using meshio
-    mesh = meshio.Mesh(
-        points=points,
-        cells=[("triangle", faces)]
-    )
-
-    mesh.write("/tmp/runtime_mesh.stl")  # STL for Gazebo collision
 
 
     # === Step 3: Spawn in Gazebo ===

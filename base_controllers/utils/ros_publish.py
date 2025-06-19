@@ -306,7 +306,7 @@ class RosPub():
        self.id_arrow += 1
        self.markerArray_arrows.markers.append(marker)
 
-    def add_mesh(self, package, mesh_path, position = np.zeros(3), color = "green", alpha = 1.):
+    def add_mesh(self, package=None, mesh_path="", position = np.zeros(3), color = "green", alpha = 1.):
         marker = Marker()
         if isinstance(color, np.ndarray):
             marker.color.r = color[0]
@@ -329,7 +329,10 @@ class RosPub():
 
         marker.header.frame_id = self.visual_frame
         marker.type = marker.MESH_RESOURCE
-        marker.mesh_resource = "package://" + package + mesh_path
+        if package is not None:
+            marker.mesh_resource = "package://" + package + mesh_path
+        else:
+            marker.mesh_resource =  "file://"+mesh_path
         marker.mesh_use_embedded_materials = True  # Need this to use textures for mesh
         marker.action = marker.ADD
         marker.scale.x = 1

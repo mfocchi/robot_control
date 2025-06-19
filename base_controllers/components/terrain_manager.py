@@ -101,8 +101,9 @@ class TerrainManager:
             bulge = np.exp(-((Z_mesh - cz) ** 2 + (Y_mesh - cy) ** 2) / (2 * radius ** 2))
 
             # Add pillar to height map
-            X = X + bulge * wall_depth 
+            X = X + bulge * wall_depth
 
+        X = X + x_offset
 
 
         # Create physical grid in meters
