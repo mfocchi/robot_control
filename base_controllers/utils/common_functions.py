@@ -27,6 +27,7 @@ import copy
 from base_controllers.utils.utils import Utils
 import subprocess
 import pinocchio
+from operator import itemgetter
 
 #from urdf_parser_py.urdf import URDF
 #make plot interactive
@@ -460,7 +461,7 @@ def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=N
     return ax
 
 def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_log=None, qdd_log=None, qdd_des_log=None, tau_log=None, tau_ffwd_log = None, tau_des_log = None, joint_names = None, q_adm = None,
-              sharex=True, sharey=False, start=0, end=-1, title=None):
+              sharex=True, sharey=False, start=0, end=-1, title=None, subset_index=None):
     plot_var_log = None
     plot_var_des_log = None
     if name=='position':
@@ -540,9 +541,15 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
             labels = labels_flywheel2
         if njoints == 16:
             labels = labels_flywheel4
+        subset_index = range(njoints)
     else:
-        labels = joint_names
-        njoints = len(joint_names)
+        if subset_index is None:
+            njoints = len(joint_names)
+            subset_index = range(njoints)
+            labels = joint_names
+        else:
+            njoints = len(subset_index)
+            labels = itemgetter(*subset_index)(joint_names)
 
     if (njoints % 3 == 0): #divisible by 3
         n_rows = int(njoints/ 3)
@@ -556,7 +563,7 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
 
 
     for jidx in range(njoints):
-
+        print(njoints)
         if jidx == 0:
             ax = subplot(n_rows, n_cols, jidx + 1)
         else:
@@ -569,15 +576,15 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
         plt.ylabel(labels[jidx] + ' '+ unit)
 
         if name == 'torque' and tau_ffwd_log is not None:
-            plt.plot(time_log[start:end], tau_ffwd_log[jidx, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
+            plt.plot(time_log[start:end], tau_ffwd_log[subset_index[jidx], start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_des,
                      color='green')
         if   (plot_var_des_log is not None):
-             plt.plot(time_log[start:end], plot_var_des_log[jidx, start:end], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
+             plt.plot(time_log[start:end], plot_var_des_log[subset_index[jidx], start:end], linestyle='-', marker="o",markersize=marker_size, lw=lw_des,color = 'red')
         if (plot_var_log is not None):
-            plt.plot(time_log[start:end], plot_var_log[jidx,start:end],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
+            plt.plot(time_log[start:end], plot_var_log[subset_index[jidx],start:end],linestyle='-',marker="o",markersize=marker_size, lw=lw_act,color = 'blue')
 
         if (q_adm is not None):
-            plt.plot(time_log[start:end], q_adm[jidx, start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
+            plt.plot(time_log[start:end], q_adm[subset_index[jidx], start:end], linestyle='-', marker="o", markersize=marker_size, lw=lw_act, color='black')
         plt.grid()
 
     if njoints == 12:
