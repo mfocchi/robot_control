@@ -15,67 +15,63 @@ import matplotlib.pyplot as plt
 eng = matlab.engine.start_matlab()
 
 
+def initOptim(p0, pf):
+    mass = 5.
+    params = {}
+    params['m'] = mass
+    anchor_distance = 5.
+    params['num_params'] = 4.
+    params['int_method'] = 'rk4'
+    params['N_dyn'] = 30.
+    params['FRICTION_CONE'] = 1.
+    params['int_steps'] = 5.
+    params['b'] = anchor_distance
+    params['p_a1'] = matlab.double([0.,0.,0.]).reshape(3,1)
+    params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
+    params['g'] = 9.81
+    params['w1']= 1. # smooth
+    params['w2']= 1. # hoist work
+    params['w3']= 0.
+    params['w4']= 0.
+    params['w5']= 0.
+    params['w6']= 0.
+    params['T_th'] =  0.05
+    params['obstacle_avoidance'] = 'mesh'
+    params['jump_clearance'] = 1.
+
+    #terrain
+    # Parameters (direct translation from MATLAB)
+    wall_depth = 1  # how
+    grid_size = 100
+    max_ridge_depth = 0.5
+    seed = "default"
+    Lz = -20  # Height of wall in meters
+    Ly = 5  # Width (horizontal extent) of wall in meters
+    # Generate rock wall map
+    terrainManager = TerrainManager()
+    mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False)
+    # Interpolator (note: z must be increasing — here from -10 to 0)
+    p0[0] = terrainManager.wall_surface_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z)
+    pf[0] = terrainManager.wall_surface_eval(pf[2],pf[1],  mesh_x, mesh_y, mesh_z)
+    # compute consistent normal
+    normal = terrainManager.wall_normal_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z )
+    params['mesh_x'] = mesh_x
+    params['mesh_y'] = mesh_y
+    params['mesh_z'] = mesh_z
+    params['contact_normal'] = matlab.double(normal)
+    return p0, pf, params
 
 #jump params
 p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
 #p0 =  matlab.double([0.27753 , 2.51893, -6.09989]) # actual used p0 = np.array([0.28,  2.5, -6.10104])
 pf=  np.array([0.0, 4,-4])
 
-mass = 4.976936060000001
 Fleg_max = 300.
 Fr_max = 90.
 Fr_min = 0.
 mu = 0.8
-
-
-params = {}
-params['m'] = mass
-anchor_distance = 5.
-params['num_params'] = 4.
-params['int_method'] = 'rk4'
-params['N_dyn'] = 30.
-params['FRICTION_CONE'] = 1.
-params['int_steps'] = 5.
-params['b'] = anchor_distance
-params['p_a1'] = matlab.double([0.,0.,0.]).reshape(3,1)
-params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
-params['g'] = 9.81
-params['w1']= 1. # smooth
-params['w2']= 1. # hoist work
-params['w3']= 0.
-params['w4']= 0.
-params['w5']= 0.
-params['w6']= 0.
-params['T_th'] =  0.05
-params['obstacle_avoidance'] = 'mesh'
-params['jump_clearance'] = 1.
-
-
-#terrain
-# Parameters (direct translation from MATLAB)
-wall_depth = 1  # how
-grid_size = 100
-max_ridge_depth = 0.5
-seed = "default"
-Lz = -20  # Height of wall in meters
-Ly = 5  # Width (horizontal extent) of wall in meters
-
-# Generate rock wall map
-terrainManager = TerrainManager()
-mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False)
-
-# Interpolator (note: z must be increasing — here from -10 to 0)
-p0[0] = terrainManager.wall_surface_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z)
-pf[0] = terrainManager.wall_surface_eval(pf[2],pf[1],  mesh_x, mesh_y, mesh_z)
-
-# compute consistent normal
-normal = terrainManager.wall_normal_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z )
-params['mesh_x'] = mesh_x
-params['mesh_y'] = mesh_y
-params['mesh_z'] = mesh_z
-params['contact_normal'] = matlab.double(normal)
-
-solution = eng.optimize_cpp_mex(matlab.double(p0), matlab.double(pf), Fleg_max, Fr_max, Fr_min, mu, params)
+p0_adj, pf_adj, params = initOptim(p0, pf)
+solution = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
 ref_com  = mat_matrix2python(solution['p'])
 achieved_target = mat_matrix2python(solution['achieved_target'])
 print("Fleg ", solution['Fleg'])
@@ -89,7 +85,7 @@ fig = plt.figure(figsize=(10, 8))
 ax = fig.add_subplot(111, projection='3d')
 
 # Surface plot
-ax.plot_surface(mesh_x, mesh_y, mesh_z,  alpha=0.7, cmap='Blues', edgecolor='k', linewidth=0.2)
+ax.plot_surface(params['mesh_x'], params['mesh_y'], params['mesh_z'],  alpha=0.7, cmap='Blues', edgecolor='k', linewidth=0.2)
 ax.set_xlabel('X (m)')
 ax.set_ylabel('Y (m)')
 ax.set_zlabel('Z (m)')

@@ -8,8 +8,16 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     def __init__(self):
-        pass
 
+        self.number_of_patches_width = 4
+        self.number_of_patches_height = 5
+
+        self.number_of_patches = self.number_of_patches_width*self.number_of_patches_height
+        self.patch_origins = [ np.zeros((2))] * self.number_of_patches #top left corner in absolute coordinates assuming
+
+        self.patch_discretization_width = 20
+        self.patch_discretization_height = 20
+        self.number_of_points_in_patch = self.patch_discretization_width *self.patch_discretization_height
 
 
     def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, debug=False, x_offset = 0):
@@ -130,7 +138,29 @@ class TerrainManager:
             ax.view_init(elev=20, azim=9)
             plt.show()
 
+
+        #patches
+        self.patch_width = Ly / self.number_of_patches_width
+        self.patch_height = Lz / self.number_of_patches_height
+        patch_id = 0
+        for i in range(self.number_of_patches_width):
+            for j in range(self.number_of_patches_height):
+                self.patch_origins[patch_id] = np.array([self.patch_width*i,self.patch_height*j])
+                patch_id +=1
+
         return X, Y, Z
+
+    def getPositionInsidePatch(self, patch_id,  normalized_y, normalized_z):
+        pos_yz = self.patch_origins[patch_id] + np.array([normalized_y * self.patch_width, normalized_z* self.patch_height])
+        pos = np.concatenate(([0.], pos_yz))
+        return pos
+
+    def retrievePatches(self, patch_id): #points are columns
+        y_vec = np.linspace(0, self.patch_width, self.patch_discretization_width)
+        z_vec = np.linspace(0, self.patch_height, self.patch_discretization_height)
+        points_in_patch = self.patch_origins[patch_id].reshape(2,1) + np.vstack((y_vec,z_vec))
+        return points_in_patch
+
 
     def wall_surface_eval(self, z_query, y_query, mesh_x, mesh_y, mesh_z):
 
