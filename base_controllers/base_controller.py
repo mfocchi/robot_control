@@ -70,7 +70,7 @@ class BaseController(threading.Thread):
         baseTwistW : numpy array
             base velocity linear (slice [0:3]) and angular (slice [3:6])
         b_R_w : numpy 2D array
-            rotation matrix from world frame to base_link frame
+            rotation matrix from base_link frame to world frame
         W_contacts : list of numpy arrays
             position of the feet expressed in the world frame
         grForcesW :  list of numpy arrays
@@ -611,9 +611,9 @@ class BaseController(threading.Thread):
         self.wJ = self.u.listOfArrays(4, np.zeros((3,3)))
         self.J_inv = self.u.listOfArrays(4, np.zeros((3,3)))
         self.wJ_inv = self.u.listOfArrays(4, np.zeros((3,3)))
-        self.W_contacts = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.W_contacts = self.u.listOfArrays(4, np.zeros((3)))
         self.W_contacts_des = self.u.full_listOfArrays(4, 3)
-        self.B_contacts = self.u.listOfArrays(4, np.zeros((3,3)))
+        self.B_contacts = self.u.listOfArrays(4, np.zeros((3)))
         self.B_contacts_des = self.u.full_listOfArrays(4, 3)
         self.contact_state = self.u.full_listOfArrays(4, 1, 0, False)
         self.contact_normal = self.u.listOfArrays(4, np.array([0., 0., 1]))
