@@ -7,10 +7,21 @@ from scipy.signal import convolve2d
 from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
-    def __init__(self):
-
-        self.number_of_patches_width = 4
-        self.number_of_patches_height = 5
+    
+    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed=47, Lz=-60, Ly=10):
+        
+        # INPUT VARIABLES
+        self.wall_depth = wall_depth
+        self.grid_size = grid_size
+        self.max_ridge_depth = max_ridge_depth
+        self.seed = seed
+        self.Lz = Lz  # Length in Z direction (vertical extent) of wall in meters
+        self.Ly = Ly  # Length in Y direction (horizontal extent) of wall in meters
+        
+        # other parameters
+        self.debug = True
+        self.number_of_patches_width = 10
+        self.number_of_patches_height = 10
 
         self.number_of_patches = self.number_of_patches_width*self.number_of_patches_height
         self.patch_origins = [ np.zeros((2))] * self.number_of_patches #top left corner in absolute coordinates assuming
@@ -18,9 +29,17 @@ class TerrainManager:
         self.patch_discretization_width = 20
         self.patch_discretization_height = 20
         self.number_of_points_in_patch = self.patch_discretization_width *self.patch_discretization_height
+        
+        # Generate the terrain automatically
+        self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
+            self.Lz, self.Ly, self.grid_size, self.wall_depth, 
+            self.max_ridge_depth, self.seed
+        )
+        
+        # Convert to point cloud format and store
+        self.point_cloud = self.convert_point_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
 
-
-    def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, debug=False, x_offset = 0):
+    def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, x_offset = 0):
         """
         Generate a 3D rock wall height map with fractal noise, ridges, and pillars.
 
@@ -50,7 +69,6 @@ class TerrainManager:
         Z : ndarray
             Z coordinate meshgrid
         """
-
         # Set random seed - handle "default" string like MATLAB
         if seed == "default" or seed is None:
             np.random.seed(47)
@@ -119,37 +137,24 @@ class TerrainManager:
         y = np.linspace(0, Ly, grid_size)
         Z, Y = np.meshgrid(z, y)
 
-        # Debug visualization
-        if debug:
-            fig = plt.figure(figsize=(10, 8))
-            ax = fig.add_subplot(111, projection='3d')
-
-            # Surface plot
-            ax.plot_surface(X, Y, Z,   linewidth = 2, alpha = 1)
-            ax.set_title('Generated Rock Wall Height Map')
-            ax.set_xlabel('X (m)')
-            ax.set_ylabel('Y (m)')
-            ax.set_zlabel('Z (m)')
-            ax.set_xlim([0, 4])
-            ax.set_ylim([0, 7])
-            ax.set_zlim([-10, 2])
-            # Alternative method using set_box_aspect for proportional scaling
-            # ax.set_box_aspect([x_range, y_range, z_range])
-            ax.view_init(elev=20, azim=9)
-            plt.show()
-
-
         #patches
         self.patch_width = Ly / self.number_of_patches_width
         self.patch_height = Lz / self.number_of_patches_height
         patch_id = 0
         for i in range(self.number_of_patches_width):
             for j in range(self.number_of_patches_height):
-                self.patch_origins[patch_id] = np.array([self.patch_width*i,self.patch_height*j])
+                self.patch_origins[patch_id] = np.array([self.patch_width*i,self.patch_height*j]) 
                 patch_id +=1
-
+        
         return X, Y, Z
-
+    
+    def convert_point_to_pc(self, X, Y, Z):
+        x_position = X.flatten()
+        y_position = Y.flatten()
+        z_position = Z.flatten()
+        points = np.vstack((x_position, y_position, z_position)).T
+        return points
+            
     def getPositionInsidePatch(self, patch_id,  normalized_y, normalized_z):
         pos_yz = self.patch_origins[patch_id] + np.array([normalized_y * self.patch_width, normalized_z* self.patch_height])
         pos = np.concatenate(([0.], pos_yz))
@@ -160,7 +165,6 @@ class TerrainManager:
         z_vec = np.linspace(0, self.patch_height, self.patch_discretization_height)
         points_in_patch = self.patch_origins[patch_id].reshape(2,1) + np.vstack((y_vec,z_vec))
         return points_in_patch
-
 
     def wall_surface_eval(self, z_query, y_query, mesh_x, mesh_y, mesh_z):
 
@@ -427,29 +431,174 @@ class TerrainManager:
 
         return ramp_mesh
 
+    def plot_terrain_map(self, X, Y, Z):
+        title='Generated Rock Wall Height Map'
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
 
+        # Surface plot
+        ax.plot_surface(X, Y, Z, linewidth=2, alpha=1)
+        ax.set_title(title)
+        ax.set_xlabel('X (m)')
+        ax.set_ylabel('Y (m)')
+        ax.set_zlabel('Z (m)')
+        ax.view_init(elev=20, azim=9)
+        plt.show()
+
+    def plot_patch_and_center(self, X, Y, Z, normalized_y=0.5, normalized_z=0.5):
+        fig = plt.figure(figsize=(14, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot_surface(X, Y, Z, linewidth=1, alpha=0.7, color='yellow')
+        # ax.plot_surface(X, Y, Z, linewidth=1, alpha=0.7, cmap='terrain')
+        
+        for patch_id in range(self.number_of_patches):
+            # Get the position inside the patch
+            position = self.getPositionInsidePatch(patch_id, normalized_y, normalized_z)
+            pos_x, pos_y, pos_z = position[0], position[1], position[2]
+            
+            # Get the actual surface height at this position
+            surface_height = self.wall_surface_eval(pos_z, pos_y, X, Y, Z)
+            
+            # Highlight the specific patch boundaries
+            patch_y_min = self.patch_origins[patch_id][0]
+            patch_y_max = patch_y_min + self.patch_width
+            patch_z_min = self.patch_origins[patch_id][1]
+            patch_z_max = patch_z_min + self.patch_height
+            
+            # Create patch boundary points
+            patch_y_coords = [patch_y_min, patch_y_max, patch_y_max, patch_y_min, patch_y_min]
+            patch_z_coords = [patch_z_min, patch_z_min, patch_z_max, patch_z_max, patch_z_min]
+            patch_x_coords =  [self.wall_surface_eval(pz, py, X, Y, Z) for py, pz in zip(patch_y_coords, patch_z_coords)]
+            
+            # Plot patch outline
+            ax.plot(patch_x_coords, patch_y_coords, patch_z_coords, 'b-', linewidth=2)
+
+            # Plot the center point
+            ax.scatter([surface_height], [pos_y], [pos_z], color='red', s=50)
+
+        # Add labels and formatting
+        ax.set_title(f'Patch {patch_id} - Position Visualization')
+        ax.set_xlabel('X (m)')
+        ax.set_ylabel('Y (m)')
+        ax.set_zlabel('Z (m)')
+        ax.legend()
+        ax.view_init(elev=20, azim=9)
+        
+        plt.show()
+    
+    def plot_point_cloud(self, X, Y, Z, plot_patches=True, plot_patch_boundaries=False):
+        subsample_factor=1
+        title='Terrain Point Cloud'
+        # Create figure
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        patch_x = []
+        patch_y = []
+        patch_z = []
+        # Subsample the data if needed (for better performance with large grids)
+        if subsample_factor > 1:
+            X_sub = X[::subsample_factor, ::subsample_factor]
+            Y_sub = Y[::subsample_factor, ::subsample_factor]
+            Z_sub = Z[::subsample_factor, ::subsample_factor]
+        else:
+            X_sub = X
+            Y_sub = Y
+            Z_sub = Z
+        
+        # Flatten the arrays to get individual points
+        x_points = X_sub.flatten()
+        y_points = Y_sub.flatten()
+        z_points = Z_sub.flatten()
+        
+        # Create point cloud plot
+        scatter = ax.scatter(x_points, y_points, z_points, 
+                           s=20,  # Point size
+                           alpha=0.7,
+                           color='blue')  # Single color for all points
+        
+        if plot_patches or plot_patch_boundaries:
+            for patch_id in range(self.number_of_patches):
+                # Get patch center position
+                position = self.getPositionInsidePatch(patch_id, 0.5, 0.5)
+                pos_y, pos_z = position[1], position[2]
+                
+                # Get surface height at center
+                surface_height = self.wall_surface_eval(pos_z, pos_y, X, Y, Z)
+                
+                if plot_patches:
+                    patch_x.append(surface_height)
+                    patch_y.append(pos_y)
+                    patch_z.append(pos_z)
+                
+                # Plot patch boundaries (same as plot_patch_and_center)
+                if plot_patch_boundaries:
+                    # Get patch boundaries
+                    patch_y_min = self.patch_origins[patch_id][0]
+                    patch_y_max = patch_y_min + self.patch_width
+                    patch_z_min = self.patch_origins[patch_id][1]
+                    patch_z_max = patch_z_min + self.patch_height
+                    
+                    # Create patch boundary points
+                    patch_y_coords = [patch_y_min, patch_y_max, patch_y_max, patch_y_min, patch_y_min]
+                    patch_z_coords = [patch_z_min, patch_z_min, patch_z_max, patch_z_max, patch_z_min]
+                    patch_x_coords = [self.wall_surface_eval(pz, py, X, Y, Z) for py, pz in zip(patch_y_coords, patch_z_coords)]
+                    
+                    # Plot patch outline (same as plot_patch_and_center)
+                    ax.plot(patch_x_coords, patch_y_coords, patch_z_coords, 'b-', linewidth=2, alpha=0.8)
+            
+            # Plot patch centers
+            if plot_patches and patch_x:
+                ax.scatter(patch_x, patch_y, patch_z, 
+                          c='red', s=100, alpha=0.9, 
+                          marker='o', label='Patch centers')
+        
+        # Set labels and title
+        ax.set_xlabel('X (m) - Height')
+        ax.set_ylabel('Y (m)')
+        ax.set_zlabel('Z (m)')
+        ax.set_title(title)
+        
+        # Set view angle
+        ax.view_init(elev=20, azim=45)
+        
+        # Print statistics
+        print(f"Point cloud statistics:")
+        print(f"  Total points: {len(x_points)}")
+        print(f"  Height range: {np.min(x_points):.2f} to {np.max(x_points):.2f} m")
+        print(f"  Y range: {np.min(y_points):.2f} to {np.max(y_points):.2f} m")
+        print(f"  Z range: {np.min(z_points):.2f} to {np.max(z_points):.2f} m")
+        
+        plt.tight_layout()
+        plt.show()
+           
+    def plot_debug (self, debug=True):
+        if debug:
+            # self.plot_terrain_map( X,Y,Z)
+            self.plot_patch_and_center(self.mesh_x,  self.mesh_y, self.mesh_z )
+            self.plot_point_cloud(self.mesh_x,  self.mesh_y, self.mesh_z, plot_patches=True, plot_patch_boundaries=True)
+        else:
+            print("Debug mode is off. No visualization will be shown.")
+
+            
 if __name__ == '__main__':
-    terrainManager = TerrainManager()
-
-    # Create the ramp mesh
-    # ramp_mesh = create_ramp_mesh(length=50., width=50., inclination=-0.1, origin=np.array([0, 0, 0]))
-    # terrainManager.set_mesh(ramp_mesh)
-
-
-    # Parameters (direct translation from MATLAB)
+    
     wall_depth = 1  # how
-    grid_size = 100
+    grid_size = 50
     max_ridge_depth = 0.5
     seed = 47
-    Lz = -20  # Height of wall in meters
-    Ly = 5  # Width (horizontal extent) of wall in meters
-
-
-    # Generate rock wall map
-    mesh_x, mesh_y, mesh_z = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False)
+    Lz = -60  # Height of wall in meters
+    Ly = 10  # Width (horizontal extent) of wall in meters
+  
+    terrainManager = TerrainManager(grid_size, wall_depth=wall_depth, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
+    
     p0 = np.array([0.0, 2.5, -6])
-    p0[0] = terrainManager.wall_surface_eval(p0[2], p0[1], mesh_x, mesh_y, mesh_z)
+    p0[0] = terrainManager.wall_surface_eval(p0[2], p0[1], terrainManager.mesh_x, terrainManager.mesh_y, terrainManager.mesh_z)
     print(p0)
-    normal = terrainManager.wall_normal_eval(p0[2], p0[1], mesh_x, mesh_y, mesh_z)
+    normal = terrainManager.wall_normal_eval(p0[2], p0[1],  terrainManager.mesh_x, terrainManager.mesh_y, terrainManager.mesh_z)
     print(normal)
+    
+    terrainManager.plot_debug(debug=True)
+    
+    
+    
 
