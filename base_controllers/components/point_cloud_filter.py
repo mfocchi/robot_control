@@ -1,8 +1,9 @@
-from terrain_manager import TerrainManager  # Assicurati che TerrainManager sia in terrain_manager.py
+from terrain_manager import TerrainManager  
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
 from scipy.interpolate import griddata
+from matplotlib.colors import LinearSegmentedColormap
 
 KERNEL_SMOOTHING = 10
 KERNEL_LAPLACIAN = 20
@@ -13,15 +14,16 @@ KERNEL_SOBEL_Y_V2 = 60
 KERNEL_SOBEL_Z_V2 = 70
 
 class PointCloudFilter:
-    def __init__(self, pc, h_min=0, h_max=5):
+    
+    def __init__(self, pc, h_min=0, h_max=5,plane_x=0.0):
         N = len(pc)
         self.pc = pc        
-        self.color = np.full((N, 3), [0, 1, 0])
+        self.color = np.full((N, 3), [0,0,0])
         self.size_point = np.ones(N) *1
         
         self.cost = np.ones(N) * 0.5  # Valore iniziale costo --> cosi evito falsi positivi
         
-        self.light = np.ones(N) * 0.8  # Valore iniziale di luce (media)
+        self.light = np.ones(N) * 0.8 
         
         self.points_t = [
             {
@@ -33,7 +35,8 @@ class PointCloudFilter:
                 
             }
             for i in range(N)
-        ]  
+        ]
+        
         self.x_points = np.array([point['position'][0] for point in self.points_t])
         self.y_points = np.array([point['position'][1] for point in self.points_t])
         self.z_points = np.array([point['position'][2] for point in self.points_t])
@@ -45,7 +48,17 @@ class PointCloudFilter:
         
         # hyper parameters
         self.grid_resolution = 0.1      # Risoluzione della griglia per l'interpolazione
-        self.threshold_extreme = 0.7    # Soglia per evidenziare pendenze estreme
+        self.threshold_extreme = 0.7    # Soglia per evidenziare pendenze estreme --> ancora da usare
+        
+        # Grid/surface cache
+        self.grid_y = None
+        self.grid_z = None
+        self.grid_Y = None
+        self.grid_Z = None
+        self.surface = None     
+        
+        
+        self.print_information()
         self.init_kernel()              
         
     def print_information(self):
@@ -68,32 +81,18 @@ class PointCloudFilter:
             x_points = np.array([point['position'][0] for point in points_t])
             y_points = np.array([point['position'][1] for point in points_t])
             z_points = np.array([point['position'][2] for point in points_t])
+            
         color = np.array([point['color'] for point in points_t])
         size_point = np.array([point['size_point'] for point in points_t])
-        
-        # Apply lighting effect to colors - fix the multiplication
-        color_with_light = np.array([
-            [c * point['light'] for c in point['color']] for point in points_t
-        ])
-        
+                
         fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(111, projection='3d') 
         
-        # Fix the scatter plot by using proper color data
-        scatter = ax.scatter(x_points, y_points, z_points, 
-                           c=x_points,  # Use x coordinates for color mapping
-                           s=size_point,
-                           alpha=0.7,
-                           cmap='viridis')
-        
-        # Add colorbar
-        plt.colorbar(scatter, ax=ax, shrink=0.5, aspect=20)
-        
+        ax.scatter(x_points, y_points, z_points, c=color, s=size_point) 
         ax.set_xlabel('X (m) - Height')
         ax.set_ylabel('Y (m)')
         ax.set_zlabel('Z (m)')
         ax.set_title(f'Point Cloud ({len(x_points)} points)')
-        # ax.view_init(elev=20, azim=45)
         plt.tight_layout()
         plt.show()
            
@@ -101,239 +100,314 @@ class PointCloudFilter:
         
         self.x_points = np.array([point['position'][0] for point in self.points_t])
         mask = (self.x_points >= self.h_min) & (self.x_points <= self.h_max)
-        
         filtered_points_t = [point for i, point in enumerate(self.points_t) if mask[i]]
-    
-        return filtered_points_t
-      
-    def init_kernel(self):
-        # Smoothing kernel  --> like laplacian !???
-        self.smoothing_kernel = np.array([[1, 1, 1],
-                                          [1, 2, 1],
-                                          [1, 1, 1]]) 
-        self.smoothing_kernel = self.smoothing_kernel / self.smoothing_kernel.sum()
+
         
-        # Laplacian kernel
-        self.laplacian_kernel = np.array([[-1, -1, -1],
-                                        [-1, 8., -1],
-                                        [-1, -1, -1]])
+        return filtered_points_t   
+        
+
+    def filter_height_peak(self, profile="logln",x0 = 0.0, scale=0.5):
+        print("equation used: {}".format(profile))
+        x_points = np.array([p['position'][0] for p in self.points_t])
+
+        # epsilon per evitare divisione per zero
+        epsilon = 1e-8
+        x = np.abs(x_points - x0)
+
+        #nota: clip limita i valori quindi non va oltre
+        if profile == "linear_positive":
+            cost_values = np.clip(x / (scale + epsilon), 0.0, 1.0)
+        elif profile == "linear_negative":
+            cost_values = np.clip(1.0 - x / (scale + epsilon), 0.0, 1.0)
+        elif profile == "logln":
+            cost_values = np.log(1.0 + x / (scale + epsilon)) / (x + epsilon)
+        elif profile == "exponential":
+            cost_values = 1.0 - np.exp(- x / (scale + epsilon))
+
+        else:
+            raise ValueError("profile deve essere 'linear_positive', 'linear_negative', 'logln' o 'exponential'")
+
+        # Normalizza su [0, 100]
+        cmin, cmax = cost_values.min(), cost_values.max()
+        if cmax > cmin:
+            normalized_costs = (cost_values - cmin) / (cmax - cmin) * 100.0
+        else:
+            normalized_costs = np.zeros_like(cost_values)
+
+        # Colori
+        cmap = LinearSegmentedColormap.from_list("green_yellow_red", ["green", "yellow", "red"])
+        gradient_colors = cmap(normalized_costs / 100.0)
+
+        # Aggiorna punti
+        for i, p in enumerate(self.points_t):
+            p['cost']  = float(normalized_costs[i])
+            p['color'] = gradient_colors[i][:3]
+
+        return self.points_t
+
+    def init_kernel(self):
         # Blur kernel
         self.blur_kernel = np.ones((3, 3)) / 9
         
+        # Smoothing kernel (like laplacian)
+        self.smoothing_kernel = np.array([[1, 1, 1],
+                                           [1, 2, 1],
+                                           [1, 1, 1]])
+        
+        self.smoothing_kernel = self.smoothing_kernel / self.smoothing_kernel.sum()
+        
         # Sobel kernels
-        self.sobel_y_v2 = np.array([[2, 0, -2],
-                                            [4, 0, -4],
-                                            [2, 0, -2]])
-            
-        self.sobel_z_v2 = np.array([[2, 4, 2],
-                                         [0, 0, 0],
-                                         [-2, -4, -2]])
+        scale_factor = 1
+        self.sobel_y =scale_factor * np.array([[1, 0, -1],
+                                                [2, 0, -2],
+                                                [1, 0, -1]])
+        self.sobel_z =scale_factor * np.array([[1, 2, 1],
+                                                [0, 0, 0],
+                                                [-1, -2, -1]])
         
-        self.sobel_y_v1 = np.array([[1, 0, -1],
-                                [2, 0, -2],
-                                [1, 0, -1]])
+        # Laplacian kernel
+        self.laplacian_kernel = np.array([[0,  1, 0],
+                                            [1, -4, 1],
+                                            [0,  1, 0]])
         
-        self.sobel_z_v1 = np.array([[1, 2, 1],
-                                    [0, 0, 0],
-                                    [-1, -2, -1]])
-        
-        # blur kernel for smoothing
-        self.blur_kernel = np.ones((3, 3)) / 9
+        # Laplacian of Gaussian (LoG) kernel
+        self.log_kernel = np.array([
+                                    [0,  0, -1,  0,  0],
+                                    [0, -1, -2, -1,  0],
+                                    [-1, -2, 16, -2, -1],
+                                    [0, -1, -2, -1,  0],
+                                    [0,  0, -1,  0,  0]
+                                ])
 
-    
-    def convolution(self,source_points ,kernel):
-        if source_points is None:
-            points_conv = self.points_t
-            x_points = np.array([point['position'][0] for point in self.points_t])
-            y_points = np.array([point['position'][1] for point in self.points_t])
-            z_points = np.array([point['position'][2] for point in self.points_t])
-        else:
-            points_conv = source_points
-            x_points = np.array([point['position'][0] for point in points_conv])
-            y_points = np.array([point['position'][1] for point in points_conv])
-            z_points = np.array([point['position'][2] for point in points_conv])
-            
-        grid_y = np.arange(y_points.min(), y_points.max(), self.grid_resolution)
-        grid_z = np.arange(z_points.min(), z_points.max(), self.grid_resolution)
-        grid_Y, grid_Z = np.meshgrid(grid_y, grid_z) 
+    def interpolation_to_surface(self, source_points=None):
         
-        interpolated_x = griddata((y_points, z_points), x_points, 
-                                 (grid_Y, grid_Z), method='linear', fill_value=0)
-        
-        # Initialize grad_result with the correct shape (interpolated grid shape)
-        grad_result = np.zeros((2, *interpolated_x.shape))
-        
-        if len(kernel) ==1:
+        points = self.points_t
+        x_points = np.array([point['position'][0] for point in self.points_t])
+        y_points = np.array([point['position'][1] for point in self.points_t])
+        z_points = np.array([point['position'][2] for point in self.points_t])
+        if source_points is not None:
+            points = source_points
+            x_points = np.array([point['position'][0] for point in points])
+            y_points = np.array([point['position'][1] for point in points])
+            z_points = np.array([point['position'][2] for point in points])
+        self.grid_y = np.arange(y_points.min(), y_points.max(), self.grid_resolution)
+        self.grid_z = np.arange(z_points.min(), z_points.max(), self.grid_resolution)
+        # Create a grid for interpolation
+        self.grid_Y, self.grid_Z = np.meshgrid(self.grid_y, self.grid_z)
+        # Interpolate the surface using griddata
+        self.surface = griddata((y_points,z_points),
+                                x_points,
+                                (self.grid_Y, self.grid_Z),
+                                method="linear",
+                                fill_value=0.0, 
+                                )
+               
+    def convolution_process(self,surface,kernel):
+        mode = 'nearest'
+        # To try: surface = ndimage.gaussian_filter(surface, sigma=smooth_sigma, mode="reflect") and other ndimage filters
+        if len(kernel) == 1:
             print("kernel single")
-            grad_result[0] = ndimage.convolve(interpolated_x, kernel[0], mode='constant') 
-            magnitude = np.abs(grad_result[0])
+            surface_fitered = ndimage.convolve(surface, kernel[0], mode=mode) 
+            magnitude = np.abs(surface_fitered)
+            return surface_fitered
+
         elif len(kernel) == 2:
             print("kernel double")
-            grad_result[0] = ndimage.convolve(interpolated_x, kernel[0], mode='constant')
-            grad_result[1] = ndimage.convolve(interpolated_x, kernel[1], mode='constant')
-            magnitude = np.sqrt(grad_result[0]**2 + grad_result[1]**2)
-            
-        gradient_norm = magnitude / (np.max(magnitude) + 1e-8)
-        gradient_at_points = griddata((grid_Y.flatten(), grid_Z.flatten()),
-                                    gradient_norm.flatten(),
-                                    (y_points, z_points), method='linear', fill_value=0)
+            surface_fitered_0 =  ndimage.convolve(surface, kernel[0], mode=mode)
+            surface_fitered_1 =  ndimage.convolve(surface, kernel[1], mode=mode)
+            surface_fitered = np.sqrt(surface_fitered_0**2 + surface_fitered_1**2)
+            return surface_fitered
+        else:
+            print("kernel not supported")
+            return None
+    
+    def convolution_into_points(self, source_points, surface):
+        
+        if self.grid_Y is None or self.grid_Z is None:
+            raise RuntimeError("Grid not initialized. Call interpolation() first.")
+        
+        points = self.points_t
+        x_points = np.array([point['position'][0] for point in self.points_t])
+        y_points = np.array([point['position'][1] for point in self.points_t])
+        z_points = np.array([point['position'][2] for point in self.points_t])
+        if source_points is not None:
+            points = source_points
+            x_points = np.array([point['position'][0] for point in points])
+            y_points = np.array([point['position'][1] for point in points])
+            z_points = np.array([point['position'][2] for point in points])
+        # Interpolate the surface at the point coordinates
+        gradient_at_points = griddata(
+            (self.grid_Y.flatten(), self.grid_Z.flatten()),
+            surface.flatten(),
+            (y_points, z_points),
+            method="linear",
+            fill_value=0.0,
+        )
+        # Red color scale
         gradient_colors = plt.cm.hot(gradient_at_points)
-        gradient_norm = magnitude / (np.max(magnitude) + 1e-8)
-        
-        for i in range(len(points_conv)):
-            points_conv[i]['color'] = gradient_colors[i][:3] 
-        return points_conv,gradient_norm, grid_y, grid_z, interpolated_x,gradient_at_points
-    
-    def apply_kernel_cost(self, kernel, gradient_at_points=None):
-        cost = np.zeros(len(self.points_t))
-        
-        if len(kernel) == 1:
-            if np.array_equal(kernel[0], self.smoothing_kernel):
-                base_cost_value = KERNEL_SMOOTHING
-            elif np.array_equal(kernel[0], self.laplacian_kernel):
-                base_cost_value = KERNEL_LAPLACIAN
-            elif np.array_equal(kernel[0], self.blur_kernel):
-                base_cost_value = KERNEL_BLUR
-            elif np.array_equal(kernel[0], self.sobel_y_v1):
-                base_cost_value = KERNEL_SOBEL_Y_V1
-            elif np.array_equal(kernel[0], self.sobel_z_v1):
-                base_cost_value = KERNEL_SOBEL_Z_V1
-            elif np.array_equal(kernel[0], self.sobel_y_v2):
-                base_cost_value = KERNEL_SOBEL_Y_V2
-            elif np.array_equal(kernel[0], self.sobel_z_v2):
-                base_cost_value = KERNEL_SOBEL_Z_V2
-            else:
-                base_cost_value = 0 
-                
-        elif len(kernel) == 2:
-            if (np.array_equal(kernel[0], self.sobel_y_v1) and 
-                np.array_equal(kernel[1], self.sobel_z_v1)):
-                base_cost_value = KERNEL_SOBEL_Y_V1 + KERNEL_SOBEL_Z_V1
-            elif (np.array_equal(kernel[0], self.sobel_y_v2) and 
-                  np.array_equal(kernel[1], self.sobel_z_v2)):
-                base_cost_value = KERNEL_SOBEL_Y_V2 + KERNEL_SOBEL_Z_V2
-            else:
-                base_cost_value = 0 
-        else:
-            base_cost_value = 0 
-        
-        if gradient_at_points is not None:
-            for i in range(len(self.points_t)):
-                gradient_multiplier = gradient_at_points[i] if i < len(gradient_at_points) else 0
-                # Modifica: penalità positiva su pendenze alte, negativa su zone piatte
-                cost_increment = base_cost_value * (2 * gradient_multiplier - 1)
-                self.points_t[i]['cost'] += cost_increment
-                cost[i] = self.points_t[i]['cost']
-        else:
-            for i in range(len(self.points_t)):
-                # Se non ho info sul gradiente, lascio il costo invariato oppure applico un valore costante
-                self.points_t[i]['cost'] += 0  # oppure += base_cost_value se vuoi comunque aggiornare
-                cost[i] = self.points_t[i]['cost']
+        for i, point in enumerate(points):
+            point['color'] = gradient_colors[i][:3]
 
-        # Update colors based on cost values
-        self.update_colors_by_cost()
+        return gradient_at_points
         
-        return cost
+    def compute_conv_step(self, kernel, source_points=None,plot=False):
+        if source_points is None:
+            source_points = self.points_t
+        if self.surface is None:
+            # 1. Interpolation
+            self.interpolation_to_surface(source_points)
+        
+        # 2. Convolution
+        self.surface = self.convolution_process(self.surface, kernel)
+        
+        # 3. Convolution into points
+        gradient_at_points = self.convolution_into_points(source_points, self.surface)
+        
+        # 4. Plot
+        if plot:
+            self.visualize_filter_operation(self.surface, source_points, self.grid_y, self.grid_z)
+        return gradient_at_points
     
-    def update_colors_by_cost(self):
-        """Update point colors based on their cost values"""
-        # Get all cost values
-        all_costs = np.array([point['cost'] for point in self.points_t])
-        
-        # Normalize costs to [0, 1] range
-        min_cost = np.min(all_costs)
-        max_cost = np.max(all_costs)
-        
-        # Avoid division by zero
-        if max_cost - min_cost > 1e-8:
-            normalized_costs = (all_costs - min_cost) / (max_cost - min_cost)
+    def compute_cost(self,gradient_at_points,source_points=None,plot=False):
+        if source_points is None:
+            source_points = self.points_t
+        if gradient_at_points is None:
+            raise ValueError("gradient_at_points cannot be None, do the compute_conv_step first")
+        points = source_points
+        grad_min = np.min(gradient_at_points)
+        grad_max = np.max(gradient_at_points)
+        if grad_max > grad_min:  # Avoid division by zero
+            cost_values = (gradient_at_points - grad_min) / (grad_max - grad_min) * 100
         else:
-            normalized_costs = np.zeros_like(all_costs)
-        
-        # Update colors: green for low cost, red for high cost
-        for i, normalized_cost in enumerate(normalized_costs):
-            # Interpolate between green [0, 1, 0] and dark red [0.8, 0, 0]
-            red = normalized_cost * 0.8  # Scale to dark red
-            green = (1 - normalized_cost)  # Full green for low cost, no green for high cost
-            blue = 0  # No blue component
-            
-            self.points_t[i]['color'] = np.array([red, green, blue])
-    
-    def compute_conv_cost(self, source_points, kernel):
-        
-        points_conv, gradient_norm, grid_y, grid_z, interpolated_x, gradient_at_points = self.convolution(source_points, kernel)
-        cost = self.apply_kernel_cost(kernel, gradient_at_points)
-        return points_conv, gradient_norm, grid_y, grid_z, interpolated_x, cost
-    
+            cost_values = np.zeros_like(gradient_at_points)
 
+        cmap = LinearSegmentedColormap.from_list("green_yellow_red", ["green", "yellow", "red"])
+        gradient_colors = cmap(cost_values / 100.0)  # Normalize to [0, 1]
+        
+        for i, point in enumerate(points):
+            point['color'] = gradient_colors[i][:3]  
+            point['cost'] = float(cost_values[i])    
+        if plot:
+            self.visualize_cost_map(source_points)
     
-    def generate_map_filtered(self,kernel, source_points =None):
+    def process_points(self, kernel,source_points=None, plot=False):
+        if source_points is None:
+            source_points = self.points_t
+        gradient_at_points = self.compute_conv_step(kernel, source_points,plot=plot)
+        self.compute_cost(gradient_at_points,source_points,plot=plot)
         
-        points_conv, gradient_norm, grid_y, grid_z, interpolated_x, cost = self.compute_conv_cost(source_points, kernel)
-        fig = plt.figure(figsize=(16, 12))
+    def visualize_filter_operation(self,surface, source_points, grid_y, grid_z):
         
-        # Subplot 1: Gradient map (top-left)
+        fig = plt.figure(figsize=(16, 10))
+        x_points = np.array([point['position'][0] for point in source_points])
+        y_points = np.array([point['position'][1] for point in source_points])
+        z_points = np.array([point['position'][2] for point in source_points])
+        Y_grid, Z_grid = np.meshgrid(grid_y, grid_z)
+        original_surface = griddata(
+            (y_points, z_points),
+            x_points,
+            (Y_grid, Z_grid),
+            method="linear",
+            fill_value=0.0,
+        )
+        
+        # Subplot 1: Filter response map (top-left)
         ax1 = fig.add_subplot(221)
-        im1 = ax1.imshow(gradient_norm, extent=[np.min(grid_y), np.max(grid_y), 
-                                              np.min(grid_z), np.max(grid_z)], 
+        im1 = ax1.imshow(surface, extent=[np.min(grid_y), np.max(grid_y), 
+                                         np.min(grid_z), np.max(grid_z)], 
                         origin='lower', cmap='hot', aspect='auto')
         ax1.set_xlabel('Y (m)')
         ax1.set_ylabel('Z (m)') 
-        ax1.set_title('Mappa delle Pendenze (Gradiente)')
-        plt.colorbar(im1, ax=ax1, label='Intensità Pendenza')
+        ax1.set_title('Filter Response Map')
+        plt.colorbar(im1, ax=ax1, label='Response Intensity')
         
-        # Subplot 2: Point cloud colored by gradient (top-right)
+        # Subplot 2: Point cloud colored by filter response (top-right)
         ax2 = fig.add_subplot(222, projection='3d')
         
-        point_colors = np.array([point['color'] for point in points_conv])
-        point_sizes = np.array([point['size_point'] for point in points_conv])
+        point_colors = np.array([point['color'] for point in source_points])
+        point_sizes = np.array([point['size_point'] for point in source_points])
         
-        x_points = np.array([point['position'][0] for point in points_conv])
-        y_points = np.array([point['position'][1] for point in points_conv])
-        z_points = np.array([point['position'][2] for point in points_conv])
-        
-        scatter2 = ax2.scatter(x_points, y_points, z_points, 
-                              c=point_colors, 
-                              s=point_sizes, 
-                              alpha=0.8)
+        ax2.scatter(x_points, y_points, z_points, 
+                   c=point_colors, 
+                   s=point_sizes, 
+                   alpha=0.8)
         ax2.set_xlabel('X (m)')
         ax2.set_ylabel('Y (m)')
         ax2.set_zlabel('Z (m)')
-        ax2.set_title('Point Cloud - Pendenze Colorate')
+        ax2.set_title('Point Cloud - Colored by Filter Response')
         
-        # Subplot 3: Interpolated surface (bottom-left)
+        # Subplot 3: Filter response as 3D surface (bottom-left)
         ax3 = fig.add_subplot(223, projection='3d')
-        Y_grid, Z_grid = np.meshgrid(grid_y, grid_z)
-        ax3.plot_surface(interpolated_x, Y_grid, Z_grid, 
-                        facecolors=plt.cm.hot(gradient_norm),
+        ax3.plot_surface(Y_grid, Z_grid, surface,
+                        cmap='hot',
                         alpha=0.8, shade=True)
-        ax3.set_xlabel('X (m)')
-        ax3.set_ylabel('Y (m)')
-        ax3.set_zlabel('Z (m)')
-        ax3.set_title('Superficie con Mappa Pendenze')
+        ax3.set_xlabel('Y (m)')
+        ax3.set_ylabel('Z (m)')
+        ax3.set_zlabel('Filter Response')
+        ax3.set_title('3D Filter Response Surface')
         
-        # Subplot 4: Cost map (bottom-right)
-        ax4 = fig.add_subplot(224)
-        cost_values = np.array([point['cost'] for point in points_conv])
-        
-        scatter4 = ax4.scatter(y_points, z_points, 
-                              c=cost_values, 
-                              s=50,  # Point size
-                              cmap='plasma', 
-                              alpha=0.8,
-                              edgecolors='black',
-                              linewidth=0.5)
-        
+        # Subplot 4: Original surface colored by filter response (bottom-right)
+        ax4 = fig.add_subplot(224, projection='3d')
+        # Normalize surface values for coloring
+        norm_surface = (surface - np.min(surface)) / (np.max(surface) - np.min(surface))
+        ax4.plot_surface(Y_grid, Z_grid, original_surface,
+                        facecolors=plt.cm.hot(norm_surface),
+                        alpha=0.8, shade=True)
         ax4.set_xlabel('Y (m)')
         ax4.set_ylabel('Z (m)')
-        ax4.set_title('Mappa dei Costi per Punto')
-        plt.colorbar(scatter4, ax=ax4, label='Valore Costo')
+        ax4.set_zlabel('X (m) - Height')
+        ax4.set_title('Original Terrain Colored by Filter Response')
+        
         plt.tight_layout()
         plt.show()
-        self.print_map_pc()
-        return
+    
+    def visualize_cost_map(self, source_points=None):
+        x_points = np.array([point['position'][0] for point in source_points])
+        y_points = np.array([point['position'][1] for point in source_points])
+        z_points = np.array([point['position'][2] for point in source_points])
+        cost_values = np.array([point['cost'] for point in source_points])
+        point_colors = np.array([point['color'] for point in source_points])
         
-
+        fig = plt.figure(figsize=(16, 8))
+        
+        # Subplot 1: Point cloud colored by cost (3D)
+        ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+        point_sizes = np.array([point['size_point'] for point in source_points])
+        scatter1 = ax1.scatter(
+            x_points, y_points, z_points, 
+            c=point_colors, 
+            s=point_sizes,  
+            alpha=0.8
+        )
+        ax1.set_xlabel('X (m) - Height')
+        ax1.set_ylabel('Y (m)')
+        ax1.set_zlabel('Z (m)')
+        ax1.set_title('Point Cloud - Colored by Cost\n(Green=Low Cost, Red=High Cost)')
+        
+        # Subplot 2: Top-down view of cost map
+        ax2 = fig.add_subplot(1, 2, 2)
+        scatter2 = ax2.scatter(
+            y_points, z_points, 
+            c=point_colors, 
+            s=point_sizes*2, 
+            alpha=0.8
+        )
+        ax2.set_xlabel('Y (m)')
+        ax2.set_ylabel('Z (m)')
+        ax2.set_title('Top-Down Cost Map\n(Green=Low Cost, Red=High Cost)')
+        ax2.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+        
+        # Print cost statistics
+        print(f"Cost Statistics:")
+        print(f" - Min cost: {np.min(cost_values):.3f}")
+        print(f" - Max cost: {np.max(cost_values):.3f}")
+        print(f" - Mean cost: {np.mean(cost_values):.3f}")
+        print(f" - Std cost: {np.std(cost_values):.3f}")
+        
+        return cost_values
+    
     def get_x_coordinates(self):
         return np.array([point['position'][0] for point in self.points_t])
     
@@ -342,12 +416,6 @@ class PointCloudFilter:
     
     def get_z_coordinates(self):
         return np.array([point['position'][2] for point in self.points_t])
-    
-    #to update the cost of a point
-    def update_point_cost(self, index, cost):
-        if 0 <= index < len(self.points_t):
-            self.points_t[index]['cost'] = cost
-            self.cost[index] = cost 
     
     def get_serializable_points(self):
         return [
@@ -363,45 +431,55 @@ class PointCloudFilter:
     
 def main():
     
-    #terrain stuff values
+    # Terrain configuration values
     wall_depth = 1            
     grid_size = 100
     max_ridge_depth = 0.5     
     seed = 47                 
-    Lz = -60                  
+    Lz = 10                  
     Ly = 10                   
     
     terrain = TerrainManager(grid_size, wall_depth=wall_depth, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
     # terrain.plot_debug(debug=True)
 
     pc = terrain.point_cloud
-
-    # point cloud filter test
+    # Point cloud filter test
     pc_filter = PointCloudFilter(pc, h_min=1.0, h_max=4.0)
     
-    print("\n=== original map ===")
+    print("\n=== Original Map ===")
     pc_filter.print_map_pc()
     
-    # print("\n=== height limit ===")
-    # new_points =pc_filter.filter_height()
-    # pc_filter.print_map_pc(new_points)
+    #filtro con cancellazione punti
+    print("\n=== Height Filter ===")
+    new_points = pc_filter.filter_height()
+    pc_filter.print_map_pc(new_points)
     
-    # print("\n=== Blur ===")
-    # kernel = [pc_filter.laplacian_kernel] 
-    # pc_filter.generate_map_filtered(new_points,kernel)
-
-    # print("\n=== Smoothing ===")
-    # kernel = [pc_filter.smoothing_kernel] 
-    # pc_filter.generate_map_filtered(new_points,kernel)
+    print("\n=== Logarithmic Height Cost Filter ===")    
+    #filtro con cambio di costo e colore in base all'altezza
+    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="linear_positive")
+    pc_filter.visualize_cost_map(new_points)
+    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="linear_negative")
+    pc_filter.visualize_cost_map(new_points)
+    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="logln")
+    pc_filter.visualize_cost_map(new_points)
+    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="exponential")
+    pc_filter.visualize_cost_map(new_points)
     
-    # print("\n=== I derivative --> slope ===")
-    # kernel = [pc_filter.sobel_y_v1, pc_filter.sobel_z_v1] 
-    # pc_filter.generate_map_filtered(new_points, kernel)
+    print("\n=== Smoothing Filter ===")
+    kernel = [pc_filter.smoothing_kernel] 
+    pc_filter.process_points(kernel, new_points, plot=False)
     
-    print("\n=== I derivative --> slope ===")
-    kernel = [pc_filter.sobel_y_v2, pc_filter.sobel_z_v2] 
-    pc_filter.generate_map_filtered( kernel=kernel)
+    print("\n=== First Derivative (Gradient) ===")
+    kernel = [pc_filter.sobel_y, pc_filter.sobel_z] 
+    pc_filter.process_points(kernel, new_points, plot=True)
     
+    print("\n=== Second Derivative (Laplacian) ===")
+    kernel = [pc_filter.laplacian_kernel] 
+    pc_filter.process_points(kernel,new_points, plot=True)
+    
+    print("\n=== Laplacian of Gaussian (LoG) ===")
+    kernel = [pc_filter.log_kernel] 
+    pc_filter.process_points(kernel,new_points, plot=True)
     
     
     
