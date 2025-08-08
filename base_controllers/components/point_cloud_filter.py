@@ -106,7 +106,7 @@ class PointCloudFilter:
         return filtered_points_t   
         
 
-    def filter_height_peak(self, profile="logln",x0 = 0.0, scale=0.5):
+    def filter_height_profile(self, profile="logln",x0 = 0.0, scale=0.5):
         print("equation used: {}".format(profile))
         x_points = np.array([p['position'][0] for p in self.points_t])
 
@@ -456,13 +456,13 @@ def main():
     
     print("\n=== Logarithmic Height Cost Filter ===")    
     #filtro con cambio di costo e colore in base all'altezza
-    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="linear_positive")
+    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="linear_positive")
     pc_filter.visualize_cost_map(new_points)
-    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="linear_negative")
+    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="linear_negative")
     pc_filter.visualize_cost_map(new_points)
-    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="logln")
+    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="logln")
     pc_filter.visualize_cost_map(new_points)
-    new_points=pc_filter.filter_height_peak(x0=1.5, scale=0.5, profile="exponential")
+    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
     pc_filter.visualize_cost_map(new_points)
     
     print("\n=== Smoothing Filter ===")
