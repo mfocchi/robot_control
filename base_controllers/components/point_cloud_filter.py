@@ -59,6 +59,7 @@ class PointCloudFilter:
         
         
         self.print_information()
+        
         self.init_kernel()              
         
     def print_information(self):
@@ -101,15 +102,12 @@ class PointCloudFilter:
         self.x_points = np.array([point['position'][0] for point in self.points_t])
         mask = (self.x_points >= self.h_min) & (self.x_points <= self.h_max)
         filtered_points_t = [point for i, point in enumerate(self.points_t) if mask[i]]
-
-        
         return filtered_points_t   
         
 
     def filter_height_profile(self, profile="logln",x0 = 0.0, scale=0.5):
         print("equation used: {}".format(profile))
         x_points = np.array([p['position'][0] for p in self.points_t])
-
         # epsilon per evitare divisione per zero
         epsilon = 1e-8
         x = np.abs(x_points - x0)
@@ -125,20 +123,20 @@ class PointCloudFilter:
             cost_values = 1.0 - np.exp(- x / (scale + epsilon))
 
         else:
-            raise ValueError("profile deve essere 'linear_positive', 'linear_negative', 'logln' o 'exponential'")
+            raise ValueError("profile should be 'linear_positive', 'linear_negative', 'logln' o 'exponential'")
 
-        # Normalizza su [0, 100]
+        # Normalizza on [0, 100]
         cmin, cmax = cost_values.min(), cost_values.max()
         if cmax > cmin:
             normalized_costs = (cost_values - cmin) / (cmax - cmin) * 100.0
         else:
             normalized_costs = np.zeros_like(cost_values)
 
-        # Colori
+        # Colors
         cmap = LinearSegmentedColormap.from_list("green_yellow_red", ["green", "yellow", "red"])
         gradient_colors = cmap(normalized_costs / 100.0)
 
-        # Aggiorna punti
+        # update points
         for i, p in enumerate(self.points_t):
             p['cost']  = float(normalized_costs[i])
             p['color'] = gradient_colors[i][:3]
@@ -256,13 +254,10 @@ class PointCloudFilter:
         if self.surface is None:
             # 1. Interpolation
             self.interpolation_to_surface(source_points)
-        
         # 2. Convolution
         self.surface = self.convolution_process(self.surface, kernel)
-        
         # 3. Convolution into points
         gradient_at_points = self.convolution_into_points(source_points, self.surface)
-        
         # 4. Plot
         if plot:
             self.visualize_filter_operation(self.surface, source_points, self.grid_y, self.grid_z)
@@ -287,6 +282,14 @@ class PointCloudFilter:
         for i, point in enumerate(points):
             point['color'] = gradient_colors[i][:3]  
             point['cost'] = float(cost_values[i])    
+        
+        #con costo incrementale
+        
+        # alpha = 1.0   # peso del nuovo contributo
+        # for i, point in enumerate(points):
+        #     point['cost'] = np.clip(point['cost'] + alpha * float(cost_values[i]), 0.0, 100.0)
+        #     point['color'] = cmap(point['cost'] / 100.0)[:3]
+        
         if plot:
             self.visualize_cost_map(source_points)
     
@@ -456,12 +459,6 @@ def main():
     
     print("\n=== Logarithmic Height Cost Filter ===")    
     #filtro con cambio di costo e colore in base all'altezza
-    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="linear_positive")
-    pc_filter.visualize_cost_map(new_points)
-    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="linear_negative")
-    pc_filter.visualize_cost_map(new_points)
-    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="logln")
-    pc_filter.visualize_cost_map(new_points)
     new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
     pc_filter.visualize_cost_map(new_points)
     
@@ -471,11 +468,11 @@ def main():
     
     print("\n=== First Derivative (Gradient) ===")
     kernel = [pc_filter.sobel_y, pc_filter.sobel_z] 
-    pc_filter.process_points(kernel, new_points, plot=True)
+    pc_filter.process_points(kernel, new_points, plot=False)
     
     print("\n=== Second Derivative (Laplacian) ===")
     kernel = [pc_filter.laplacian_kernel] 
-    pc_filter.process_points(kernel,new_points, plot=True)
+    pc_filter.process_points(kernel,new_points, plot=False)
     
     print("\n=== Laplacian of Gaussian (LoG) ===")
     kernel = [pc_filter.log_kernel] 
