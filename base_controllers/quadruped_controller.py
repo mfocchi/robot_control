@@ -1291,10 +1291,14 @@ if __name__ == '__main__':
             p.updateKinematics()
             
             if use_rl:
-                
-                if p.time > 10:
-                    rl_controller.velocity_cmd = np.array([0.3,0.0,0.0])
-                
+
+
+
+                if p.time > 2:
+                    rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
+                    p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
+                    p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
+
                 lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                 ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
                 proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
@@ -1328,3 +1332,5 @@ if __name__ == '__main__':
                   start=0, end=-1)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
                   title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
+                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
