@@ -13,7 +13,6 @@ from utils.pid_tuner import PIDTuningGui
 from base_controllers.quadruped_controller import QuadrupedController
 from base_controllers.utils.custom_robot_wrapper import RobotWrapper
 from base_controllers.utils.common_functions import *
-from landing_controller.controller.landingManager import LandingManager
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.msg import ModelState
@@ -578,10 +577,13 @@ class QuadrupedJumpController(QuadrupedController):
         if not p.real_robot:
             p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
-        p.lm = LandingManager(p)
+        if p.use_landing_controller:
+            from landing_controller.lib.SLIP_dynamics_lib import SLIP_dynamics
+            from landing_controller.controller.landingManager import LandingManager
+            p.lm = LandingManager(p)
 
         while not ros.is_shutdown():
-            if p.lm.lc is not None:
+            if hasattr(p, 'lm'):
                 p.updateKinematics(update_legOdom=p.lm.lc.lc_events.touch_down.detected)
             else:
                 p.updateKinematics()
