@@ -294,16 +294,18 @@ def getRobotModelFloating(robot_name="hyq"):
     if rosgraph.is_master_online():
         try:
             urdf = ros.get_param('/robot_description')
-            print("URDF generated_commons")
-            os.makedirs(path + "/robot_urdf/generated_urdf/", exist_ok=True)
-            urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
-            print(urdf_location)
-            text_file = open(urdf_location, "w")
-            text_file.write(urdf)
-            text_file.close()
-            robot = RobotWrapper.BuildFromURDF(urdf_location, root_joint=pinocchio.JointModelFreeFlyer())
         except:
             print('Issues in URDF generation for Pinocchio, did not succeed')
+            loadXacro(package_name=robot_name+"_description",model_name=robot_name)
+            #urdf = ros.get_param('/robot_description')
+        print("URDF generated_commons")
+        os.makedirs(path + "/robot_urdf/generated_urdf/", exist_ok=True)
+        urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
+        print(urdf_location)
+        text_file = open(urdf_location, "w")
+        text_file.write(urdf)
+        text_file.close()
+        robot = RobotWrapper.BuildFromURDF(urdf_location, root_joint=pinocchio.JointModelFreeFlyer())
     else: #this is used when you run stuff online (i.e. unit tests)
         try:
             urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
@@ -563,7 +565,6 @@ def plotJoint(name, time_log, q_log=None, q_des_log=None, qd_log=None, qd_des_lo
 
 
     for jidx in range(njoints):
-        print(njoints)
         if jidx == 0:
             ax = subplot(n_rows, n_cols, jidx + 1)
         else:
