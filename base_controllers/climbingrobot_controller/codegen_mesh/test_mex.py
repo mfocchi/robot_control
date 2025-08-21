@@ -49,7 +49,7 @@ def initOptim(p0, pf):
     Ly = 5  # Width (horizontal extent) of wall in meters
     # Generate rock wall map
     terrainManager = TerrainManager()
-    mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False)
+    mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed)
     # Interpolator (note: z must be increasing — here from -10 to 0)
     p0[0] = terrainManager.wall_surface_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z)
     pf[0] = terrainManager.wall_surface_eval(pf[2],pf[1],  mesh_x, mesh_y, mesh_z)

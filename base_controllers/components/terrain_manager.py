@@ -155,7 +155,7 @@ class TerrainManager:
         points = np.vstack((x_position, y_position, z_position)).T
         return points
             
-    def getPositionInsidePatch(self, patch_id,  normalized_y, normalized_z):
+    def getAbsolutePositionOfPointInsidePatch(self, patch_id,  normalized_y, normalized_z):
         pos_yz = self.patch_origins[patch_id] + np.array([normalized_y * self.patch_width, normalized_z* self.patch_height])
         pos = np.concatenate(([0.], pos_yz))
         return pos

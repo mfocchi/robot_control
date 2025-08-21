@@ -12,7 +12,7 @@ from base_controllers.components.terrain_manager import TerrainManager
 from base_controllers.utils.matlab_conversions import mat_vector2python, mat_matrix2python
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 import matplotlib.pyplot as plt
-
+from termcolor import colored
 
 
 
@@ -72,7 +72,7 @@ Lz = -20  # Height of wall in meters
 Ly = 5  # Width (horizontal extent) of wall in meters
 # Generate rock wall map
 terrainManager = TerrainManager()
-mesh_x, mesh_y, mesh_z = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth,   seed, debug=False)
+mesh_x, mesh_y, mesh_z = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth,   seed)
 
 
 
@@ -102,6 +102,8 @@ p.init_mu_continuous = np.full(p.dim_continuous, 0.5)
 p.init_std_continuous = np.full(p.dim_continuous, 1.0)
 p.min_std_continuous = np.full(p.dim_continuous, 1e-3)
 
+fitness_weights =np.array([1., 0.1, 10., 1.]) # convergence, energy, avg_cost, land_cost
+
 algo = CrossEntropyMethodMixed(p)
 
 
@@ -113,7 +115,7 @@ def evalTerrainParams(p0, pf):
     normal = terrainManager.wall_normal_eval(p0[2], p0[1], mesh_x, mesh_y, mesh_z)
     return mesh_x, mesh_y, mesh_z,normal,  p0, pf
 
-def calc_fitness(res, patch_id=None):
+def calc_fitness(res, patch_id=None, contact_abs_pos_yz=None):
     fit_average_costmap_patch = 0.
     fit_landing_costmap = 0.
 
@@ -122,9 +124,9 @@ def calc_fitness(res, patch_id=None):
         Y_range = points_in_patch[0, :]
         Z_range = points_in_patch[1, :]
         # eval avergage cost
-        #fit_average_costmap_patch = sum(p.evalCostMap(y, z) for y in Y_range for z in Z_range)/(terrainManager.number_of_points_in_patch)
+        #fit_average_costmap_patch =  evalAverageCostOfPatch(patch_id)
         #eval actual cost at selected landing location
-        #fit_landing_costmap = p.evalCostMap(pf[1], pf[2])
+        #fit_landing_costmap = evalCostOfPointInPatch(contact_abs_pos_yz)
 
     #print("jump duration", res['Tf'])
     fit_consumed_energy = -res['consumed_energy']
@@ -132,8 +134,8 @@ def calc_fitness(res, patch_id=None):
         fit_problem_converged = 100
     else:
         fit_problem_converged = 0
-    print(f"convergence: {fit_problem_converged}, energy: {fit_consumed_energy}, avg_cost: {fit_average_costmap_patch}, land_cost: {fit_landing_costmap}")
-    fitness =  fit_problem_converged + fit_consumed_energy +fit_landing_costmap +fit_average_costmap_patch
+    print(f"convergence: {fitness_weights[0]*fit_problem_converged}, energy: {fitness_weights[1]*fit_consumed_energy}, avg_cost: {fitness_weights[2]*fit_average_costmap_patch}, land_cost: {fitness_weights[3]*fit_landing_costmap}")
+    fitness =  fitness_weights[0]*fit_problem_converged + fitness_weights[1]*fit_consumed_energy +fitness_weights[2]*fit_average_costmap_patch + fitness_weights[3]*fit_landing_costmap
 
     return fitness
 
@@ -142,7 +144,7 @@ def calc_fitness(res, patch_id=None):
 def eval_pop(input):
     xd = input[0]
     xc = input[1]
-    #first discrete variable is number of jumps
+    #first discrete variable is number of jumps, the next ones are the of the patches
     n_jumps = xd[0] + 1
     ids = []
     fitness = 0.0
@@ -150,19 +152,20 @@ def eval_pop(input):
     ## Run trajectory optimisation here #
     p0 = P0_INIT
     for i in range(n_jumps-1):
+        print(f"Jump n:{i}\n")
         # following discrete variables represent the id of the patches for the intermediate jumps
         patch_id = xd[1 + i]
         # the continue variables contain the X and Y normalized coordinate of the candidate contact points inside the candidate patches
-        contact_relative_to_patch = xc[i*2:i*2+2]
+        contact_relative_to_patch_yz= xc[i*2:i*2+2]
         #print("jump number : ", i)
-        contact_abs_pos = terrainManager.getPositionInsidePatch(patch_id,   contact_relative_to_patch[0], contact_relative_to_patch[1])
-        mesh_x, mesh_y, mesh_z, normal, p0_adj, pf_adj = evalTerrainParams(p0, contact_abs_pos) #get the X consistent with terrain
+        contact_abs_pos_yz = terrainManager.getAbsolutePositionOfPointInsidePatch(patch_id,   contact_relative_to_patch_yz[0], contact_relative_to_patch_yz[1])
+        mesh_x, mesh_y, mesh_z, normal, p0_adj, pf_adj = evalTerrainParams(p0, contact_abs_pos_yz) #get the X consistent with terrain
         params['mesh_x'] = mesh_x
         params['mesh_y'] = mesh_y
         params['mesh_z'] = mesh_z
         params['contact_normal'] = matlab.double(normal)
         res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
-        fitness += calc_fitness(res, patch_id)
+        fitness += calc_fitness(res, patch_id, contact_abs_pos_yz)
         p0 = pf_adj
 
     #print("final jump")
@@ -208,6 +211,7 @@ if __name__ == '__main__':
 
     start = time.time()
     for k in range(p.cem_iters):
+        print(colored(f"Iteration {k}\n","blue"))
         # Generate population by sampling the distributions
         algo.generate_population_discrete()
         algo.generate_population_continuous()
@@ -220,9 +224,11 @@ if __name__ == '__main__':
         # Evaluate population in parallel
         # with ProcessPoolExecutor(max_workers=p.n_threads) as executor:
         #     fitness = list(executor.map(eval_pop, inputs))
-
+        fitness = []
         with ThreadPoolExecutor(max_workers=p.n_threads) as executor:
-            fitness = list(executor.map(eval_pop, inputs))
+            for i, result in enumerate(executor.map(eval_pop, inputs), start=1):
+                fitness.append(result)
+                print(colored(f"Population {i}/{len(inputs)} finished, fitness = {result}\n","red"))
 
         # Evaluate population and update distributions
         algo.evaluate_population(fitness)
