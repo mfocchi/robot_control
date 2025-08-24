@@ -62,41 +62,41 @@ class PointCloudFilter:
         
         self.init_kernel()              
         
-    def print_information(self):
-    
-        print(f"Point cloud statistics:")
-        print(f"  -Total points: {len(self.pc)}")
-        print(f"  -Height range define: {np.min(self.x_points):.2f} to {np.max(self.x_points):.2f} m")
-        print(f"  -Y range: {np.min(self.y_points):.2f} to {np.max(self.y_points):.2f} m")
-        print(f"  -Z range: {np.min(self.z_points):.2f} to {np.max(self.z_points):.2f} m")
-       
-    def print_map_pc(self, points_t=None):
+    def init_kernel(self):
+        # Blur kernel
+        self.blur_kernel = np.ones((3, 3)) / 9
         
-        if points_t is None:
-            points_t = self.points_t
-            x_points = np.array([point['position'][0] for point in self.points_t])
-            y_points = np.array([point['position'][1] for point in self.points_t])
-            z_points = np.array([point['position'][2] for point in self.points_t])
-        else:
-            points_t = points_t
-            x_points = np.array([point['position'][0] for point in points_t])
-            y_points = np.array([point['position'][1] for point in points_t])
-            z_points = np.array([point['position'][2] for point in points_t])
-            
-        color = np.array([point['color'] for point in points_t])
-        size_point = np.array([point['size_point'] for point in points_t])
-                
-        fig = plt.figure(figsize=(12, 10))
-        ax = fig.add_subplot(111, projection='3d') 
+        # Smoothing kernel (like laplacian)
+        self.smoothing_kernel = np.array([[1, 1, 1],
+                                           [1, 2, 1],
+                                           [1, 1, 1]])
         
-        ax.scatter(x_points, y_points, z_points, c=color, s=size_point) 
-        ax.set_xlabel('X (m) - Height')
-        ax.set_ylabel('Y (m)')
-        ax.set_zlabel('Z (m)')
-        ax.set_title(f'Point Cloud ({len(x_points)} points)')
-        plt.tight_layout()
-        plt.show()
-           
+        self.smoothing_kernel = self.smoothing_kernel / self.smoothing_kernel.sum()
+        
+        # Sobel kernels
+        scale_factor = 1
+        self.sobel_y =scale_factor * np.array([[1, 0, -1],
+                                                [2, 0, -2],
+                                                [1, 0, -1]])
+        self.sobel_z =scale_factor * np.array([[1, 2, 1],
+                                                [0, 0, 0],
+                                                [-1, -2, -1]])
+        
+        # Laplacian kernel
+        self.laplacian_kernel = np.array([[0,  1, 0],
+                                            [1, -4, 1],
+                                            [0,  1, 0]])
+        
+        # Laplacian of Gaussian (LoG) kernel
+        self.log_kernel = np.array([
+                                    [0,  0, -1,  0,  0],
+                                    [0, -1, -2, -1,  0],
+                                    [-1, -2, 16, -2, -1],
+                                    [0, -1, -2, -1,  0],
+                                    [0,  0, -1,  0,  0]
+                                ])
+
+    # ==== filter methods           
     def filter_height(self):
         
         self.x_points = np.array([point['position'][0] for point in self.points_t])
@@ -104,7 +104,6 @@ class PointCloudFilter:
         filtered_points_t = [point for i, point in enumerate(self.points_t) if mask[i]]
         return filtered_points_t   
         
-
     def filter_height_profile(self, profile="logln",x0 = 0.0, scale=0.5):
         print("equation used: {}".format(profile))
         x_points = np.array([p['position'][0] for p in self.points_t])
@@ -142,40 +141,6 @@ class PointCloudFilter:
             p['color'] = gradient_colors[i][:3]
 
         return self.points_t
-
-    def init_kernel(self):
-        # Blur kernel
-        self.blur_kernel = np.ones((3, 3)) / 9
-        
-        # Smoothing kernel (like laplacian)
-        self.smoothing_kernel = np.array([[1, 1, 1],
-                                           [1, 2, 1],
-                                           [1, 1, 1]])
-        
-        self.smoothing_kernel = self.smoothing_kernel / self.smoothing_kernel.sum()
-        
-        # Sobel kernels
-        scale_factor = 1
-        self.sobel_y =scale_factor * np.array([[1, 0, -1],
-                                                [2, 0, -2],
-                                                [1, 0, -1]])
-        self.sobel_z =scale_factor * np.array([[1, 2, 1],
-                                                [0, 0, 0],
-                                                [-1, -2, -1]])
-        
-        # Laplacian kernel
-        self.laplacian_kernel = np.array([[0,  1, 0],
-                                            [1, -4, 1],
-                                            [0,  1, 0]])
-        
-        # Laplacian of Gaussian (LoG) kernel
-        self.log_kernel = np.array([
-                                    [0,  0, -1,  0,  0],
-                                    [0, -1, -2, -1,  0],
-                                    [-1, -2, 16, -2, -1],
-                                    [0, -1, -2, -1,  0],
-                                    [0,  0, -1,  0,  0]
-                                ])
 
     def interpolation_to_surface(self, source_points=None):
         
@@ -261,9 +226,12 @@ class PointCloudFilter:
         # 4. Plot
         if plot:
             self.visualize_filter_operation(self.surface, source_points, self.grid_y, self.grid_z)
+        
+        # if you want an incremental convolution commit this: 
+        self.surface = None
         return gradient_at_points
     
-    def compute_cost(self,gradient_at_points,source_points=None,plot=False):
+    def compute_cost(self,gradient_at_points,source_points=None,weight = 0.5,plot=False):
         if source_points is None:
             source_points = self.points_t
         if gradient_at_points is None:
@@ -280,25 +248,79 @@ class PointCloudFilter:
         gradient_colors = cmap(cost_values / 100.0)  # Normalize to [0, 1]
         
         for i, point in enumerate(points):
+            # incremental cost
+            # old_cost = point['cost']
+            # new_cost = float(cost_values[i])
             point['color'] = gradient_colors[i][:3]  
-            point['cost'] = float(cost_values[i])    
-        
-        #con costo incrementale
-        
-        # alpha = 1.0   # peso del nuovo contributo
-        # for i, point in enumerate(points):
-        #     point['cost'] = np.clip(point['cost'] + alpha * float(cost_values[i]), 0.0, 100.0)
-        #     point['color'] = cmap(point['cost'] / 100.0)[:3]
-        
+            point['cost'] = float(cost_values[i])  * weight
+            
         if plot:
             self.visualize_cost_map(source_points)
     
-    def filter_process_points(self, kernel,source_points=None, plot=False):
+    def filter_process_points(self, kernel, source_points=None, weight=0.0, plot=False):
         if source_points is None:
             source_points = self.points_t
         gradient_at_points = self.compute_conv_step(kernel, source_points,plot=plot)
-        self.compute_cost(gradient_at_points,source_points,plot=plot)
+        self.compute_cost(gradient_at_points,source_points,weight = weight,plot=plot)
+
+    # ==== get methods        
+    def get_x_coordinates(self):
+        return np.array([point['position'][0] for point in self.points_t])
+    
+    def get_y_coordinates(self):
+        return np.array([point['position'][1] for point in self.points_t])
+    
+    def get_z_coordinates(self):
+        return np.array([point['position'][2] for point in self.points_t])
+    
+    def get_serializable_points(self):
+        return [
+            {
+                'position': point['position'].tolist() if hasattr(point['position'], 'tolist') else list(point['position']),
+                'color': point['color'].tolist() if hasattr(point['color'], 'tolist') else list(point['color']),
+                'light': float(point['light']),
+                'size_point': float(point['size_point']),
+                'cost': float(point['cost']),
+            }
+            for point in self.points_t
+        ]
+    
+    # ==== print methods
+    def print_information(self):
+    
+        print(f"Point cloud statistics:")
+        print(f"  -Total points: {len(self.pc)}")
+        print(f"  -Height range define: {np.min(self.x_points):.2f} to {np.max(self.x_points):.2f} m")
+        print(f"  -Y range: {np.min(self.y_points):.2f} to {np.max(self.y_points):.2f} m")
+        print(f"  -Z range: {np.min(self.z_points):.2f} to {np.max(self.z_points):.2f} m")
+       
+    def print_map_pc(self, points_t=None):
         
+        if points_t is None:
+            points_t = self.points_t
+            x_points = np.array([point['position'][0] for point in self.points_t])
+            y_points = np.array([point['position'][1] for point in self.points_t])
+            z_points = np.array([point['position'][2] for point in self.points_t])
+        else:
+            points_t = points_t
+            x_points = np.array([point['position'][0] for point in points_t])
+            y_points = np.array([point['position'][1] for point in points_t])
+            z_points = np.array([point['position'][2] for point in points_t])
+            
+        color = np.array([point['color'] for point in points_t])
+        size_point = np.array([point['size_point'] for point in points_t])
+                
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(111, projection='3d') 
+        
+        ax.scatter(x_points, y_points, z_points, c=color, s=size_point) 
+        ax.set_xlabel('X (m) - Height')
+        ax.set_ylabel('Y (m)')
+        ax.set_zlabel('Z (m)')
+        ax.set_title(f'Point Cloud ({len(x_points)} points)')
+        plt.tight_layout()
+        plt.show()
+    
     def visualize_filter_operation(self,surface, source_points, grid_y, grid_z):
         
         fig = plt.figure(figsize=(16, 10))
@@ -411,27 +433,6 @@ class PointCloudFilter:
         
         return cost_values
     
-    def get_x_coordinates(self):
-        return np.array([point['position'][0] for point in self.points_t])
-    
-    def get_y_coordinates(self):
-        return np.array([point['position'][1] for point in self.points_t])
-    
-    def get_z_coordinates(self):
-        return np.array([point['position'][2] for point in self.points_t])
-    
-    def get_serializable_points(self):
-        return [
-            {
-                'position': point['position'].tolist() if hasattr(point['position'], 'tolist') else list(point['position']),
-                'color': point['color'].tolist() if hasattr(point['color'], 'tolist') else list(point['color']),
-                'light': float(point['light']),
-                'size_point': float(point['size_point']),
-                'cost': float(point['cost']),
-            }
-            for point in self.points_t
-        ]
-    
 def main():
     
     # Terrain configuration values
@@ -452,6 +453,7 @@ def main():
     print("\n=== Original Map ===")
     pc_filter.print_map_pc()
     
+    
     #filtro con cancellazione punti
     print("\n=== Height Filter ===")
     new_points = pc_filter.filter_height()
@@ -462,18 +464,17 @@ def main():
     new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
     pc_filter.visualize_cost_map(new_points)
     
-    print("\n=== Smoothing Filter ===")
-    kernel = [pc_filter.smoothing_kernel] 
-    pc_filter.filter_process_points(kernel, new_points, plot=False)
-    
     print("\n=== First Derivative (Gradient) ===")
     kernel = [pc_filter.sobel_y, pc_filter.sobel_z] 
-    pc_filter.filter_process_points(kernel, new_points, plot=False)
+    pc_filter.filter_process_points(kernel, new_points, plot=True)
     
     print("\n=== Second Derivative (Laplacian) ===")
     kernel = [pc_filter.laplacian_kernel] 
-    pc_filter.filter_process_points(kernel,new_points, plot=False)
+    pc_filter.filter_process_points(kernel,new_points, plot=True)
     
+    print("\n=== Smoothing Filter ===")
+    kernel = [pc_filter.smoothing_kernel] 
+    pc_filter.filter_process_points(kernel, new_points, weight=0.1, plot=True)
     print("\n=== Laplacian of Gaussian (LoG) ===")
     kernel = [pc_filter.log_kernel] 
     pc_filter.filter_process_points(kernel,new_points, plot=True)
