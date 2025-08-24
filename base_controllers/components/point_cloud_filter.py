@@ -15,11 +15,11 @@ KERNEL_SOBEL_Z_V2 = 70
 
 class PointCloudFilter:
     
-    def __init__(self, pc, h_min=0, h_max=5,plane_x=0.0):
+    def __init__(self, pc, h_min=0, h_max=5):
         N = len(pc)
         self.pc = pc        
         self.color = np.full((N, 3), [0,0,0])
-        self.size_point = np.ones(N) *1
+        self.size_point = np.ones(N) *4
         
         self.cost = np.ones(N) * 0.5  # Valore iniziale costo --> cosi evito falsi positivi
         
@@ -37,7 +37,7 @@ class PointCloudFilter:
             for i in range(N)
         ]
         
-        self.x_points = np.array([point['position'][0] for point in self.points_t])
+        self.x_points = np.array([point['position'][0] for point in self.points_t]) 
         self.y_points = np.array([point['position'][1] for point in self.points_t])
         self.z_points = np.array([point['position'][2] for point in self.points_t])
         
@@ -293,7 +293,7 @@ class PointCloudFilter:
         if plot:
             self.visualize_cost_map(source_points)
     
-    def process_points(self, kernel,source_points=None, plot=False):
+    def filter_process_points(self, kernel,source_points=None, plot=False):
         if source_points is None:
             source_points = self.points_t
         gradient_at_points = self.compute_conv_step(kernel, source_points,plot=plot)
@@ -464,19 +464,19 @@ def main():
     
     print("\n=== Smoothing Filter ===")
     kernel = [pc_filter.smoothing_kernel] 
-    pc_filter.process_points(kernel, new_points, plot=False)
+    pc_filter.filter_process_points(kernel, new_points, plot=False)
     
     print("\n=== First Derivative (Gradient) ===")
     kernel = [pc_filter.sobel_y, pc_filter.sobel_z] 
-    pc_filter.process_points(kernel, new_points, plot=False)
+    pc_filter.filter_process_points(kernel, new_points, plot=False)
     
     print("\n=== Second Derivative (Laplacian) ===")
     kernel = [pc_filter.laplacian_kernel] 
-    pc_filter.process_points(kernel,new_points, plot=False)
+    pc_filter.filter_process_points(kernel,new_points, plot=False)
     
     print("\n=== Laplacian of Gaussian (LoG) ===")
     kernel = [pc_filter.log_kernel] 
-    pc_filter.process_points(kernel,new_points, plot=True)
+    pc_filter.filter_process_points(kernel,new_points, plot=True)
     
     
     
