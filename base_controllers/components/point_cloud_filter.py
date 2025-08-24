@@ -227,7 +227,7 @@ class PointCloudFilter:
         if plot:
             self.visualize_filter_operation(self.surface, source_points, self.grid_y, self.grid_z)
         
-        # if you want an incremental convolution commit this: 
+        # 5. if you want an incremental convolution commit this: 
         self.surface = None
         return gradient_at_points
     
