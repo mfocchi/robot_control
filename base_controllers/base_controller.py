@@ -34,7 +34,6 @@ from gazebo_msgs.srv import SetPhysicsPropertiesRequest
 import roslaunch
 import rospkg
 from gazebo_msgs.srv import ApplyBodyWrench
-import tf
 
 #other utils
 from base_controllers.utils.ros_publish import RosPub
@@ -48,6 +47,7 @@ from ros_impedance_controller.msg import EffortPid
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
 robotName = "solo"
+
 
 
 class BaseController(threading.Thread):
@@ -118,7 +118,7 @@ class BaseController(threading.Thread):
         self.use_ground_truth_contacts = False
         self.apply_external_wrench = False
         self.time_external_wrench = 0.6
-        self.broadcaster = tf.TransformBroadcaster()
+
         self.use_torque_control = False
         self.real_robot = conf.robot_params[self.robot_name].get('real_robot', False)
         self.broadcast_world = broadcast_world
@@ -191,7 +191,7 @@ class BaseController(threading.Thread):
 
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
 
-
+        self.broadcaster = SafeTFBroadcaster()
 
     def initSubscribers(self):
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
@@ -461,6 +461,7 @@ class BaseController(threading.Thread):
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                        self.quaternion,
                                        ros.Time.now(), '/base_link', '/world')
+
 
     def estimateContactForces(self):           
         # estimate ground reaction forces from tau

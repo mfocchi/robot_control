@@ -449,8 +449,39 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, ad
     
     return robot                    
 
+class SafeTFBroadcaster:
+    ''' avoids the annoying TF_REPEATED issue when the message is published twice with the same timestamp '''
+    def __init__(self):
+        self.br = tf2_ros.TransformBroadcaster()
+        self.last_stamp = ros.Time(0)
+        self.last_payload = None  # (tx,ty,tz,qx,qy,qz,qw)
+        # If sim time is enabled, wait until /clock has published
+        if ros.get_param("/use_sim_time", False):
+            while ros.Time.now() == ros.Time(0) and not ros.is_shutdown():
+                ros.sleep(0.01)
+    def sendTransform(self, trans, quat, stamp, child="base_link", parent="world"):
+        # 1) enforce monotonic time
+        if stamp <= self.last_stamp:
+            stamp = self.last_stamp + ros.Duration(nsecs=1)
+
+        # 2) skip exact duplicates (same pose + same stamp after fix)
+        payload = tuple(trans) + tuple(quat)
+        if self.last_payload == payload and stamp == self.last_stamp:
+            return  # duplicate
+
+        msg = TransformStamped()
+        msg.header.stamp = stamp
+        msg.header.frame_id = parent
+        msg.child_frame_id  = child
+        msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z = trans
+        msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z, msg.transform.rotation.w = quat
+
+        self.br.sendTransform(msg)
+        self.last_stamp = stamp
+        self.last_payload = payload
 
 
+#plot functions
 def subplot(n_rows, n_cols, n_subplot, sharex=False, sharey=False, ax_to_share=None):
     if sharex and sharey:
         ax = plt.subplot(n_rows, n_cols, n_subplot, sharex=ax_to_share, sharey=ax_to_share)
