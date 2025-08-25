@@ -103,20 +103,20 @@ class Utils:
  
 #########################################################################
 
-    def getIdx(self, leg, coord):
-        return self.leg_map[leg]*3 + self.crd[coord]
+    def getIdx(self, leg, coord, numberOfJointsPerLeg = 3):
+        return self.leg_map[leg]*numberOfJointsPerLeg + self.crd[coord]
 
-    def setLegJointState(self, legid,  input, jointState):
+    def setLegJointState(self, legid,  input, jointState, numberOfJointsPerLeg = 3):
         if isinstance(legid, str):
-            jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3] = input
+            jointState[self.leg_map[legid]*3:self.leg_map[legid]*numberOfJointsPerLeg+numberOfJointsPerLeg] = input
         elif isinstance(legid, int):
-            jointState[legid*3:legid*3+3] = input
+            jointState[legid*numberOfJointsPerLeg:(legid+1)*numberOfJointsPerLeg] = input
 
-    def getLegJointState(self, legid,  jointState):
+    def getLegJointState(self, legid,  jointState, numberOfJointsPerLeg = 3):
         if isinstance(legid, str):
-            return jointState[self.leg_map[legid]*3:self.leg_map[legid]*3+3]
+            return jointState[self.leg_map[legid]*numberOfJointsPerLeg:(self.leg_map[legid]+1)*numberOfJointsPerLeg]
         elif isinstance(legid, int):
-            return jointState[legid * 3:legid * 3 + 3]
+            return jointState[legid * numberOfJointsPerLeg:(legid+1) * numberOfJointsPerLeg]
 
     def spy(self, var):
         plt.spy(var)

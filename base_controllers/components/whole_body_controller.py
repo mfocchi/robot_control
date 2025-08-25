@@ -69,7 +69,7 @@ class WholeBodyController():
         # require the call to updateKinematics
         return self.computeWBC(W_contacts, wJ, h_joints, basePoseW, comPoseW, baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None, comControlled = comControlled, type = 'projection')
 
-    def gravityCompensationBase(self, B_contacts, wJ, h_joints, basePoseW, stance_legs=[True, True, True, True]):
+    def gravityCompensationBase(self, B_contacts, wJ, h_joints, basePoseW, stance_legs=[True, True, True, True], numberOfJointsPerLeg=3):
         self.wrench_desW = np.zeros(6)
         self.wrench_desW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
         w_R_b = pin.rpy.rpyToMatrix(self.u.angPart(basePoseW))
@@ -98,9 +98,9 @@ class WholeBodyController():
 
         for leg in range(
                 4):  # (where there are zeros in the Matrix, the grf will be zero and so the torques, no need to check stance legs here)
-            tau_leg = self.u.getLegJointState(leg, h_joints) - \
-                      wJ[leg].T @ self.u.getLegJointState(leg, grForcesW_wbc)
-            self.u.setLegJointState(leg, tau_leg, tau_ffwd)
+            tau_leg = self.u.getLegJointState(leg, h_joints,numberOfJointsPerLeg=numberOfJointsPerLeg) - \
+                      wJ[leg].T @ self.u.getLegJointState(leg, grForcesW_wbc,numberOfJointsPerLeg=numberOfJointsPerLeg)
+            self.u.setLegJointState(leg, tau_leg, tau_ffwd, numberOfJointsPerLeg=numberOfJointsPerLeg)
 
         return tau_ffwd, grForcesW_wbc
 
@@ -183,7 +183,7 @@ class WholeBodyController():
 
     # Whole body controller that includes ffwd wrench + fb wrench (Virtual PD) + gravity compensation
     # all vector is in the wf
-    def computeWBC(self, W_contacts, wJ, h_joints,  basePoseW= np.zeros(6), comPoseW= np.zeros(6), baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None,centroidalInertiaB = np.eye(6), comControlled = True,  type = 'projection', stance_legs=[True, True, True, True]):
+    def computeWBC(self, W_contacts, wJ, h_joints,  basePoseW= np.zeros(6), comPoseW= np.zeros(6), baseTwistW = np.zeros(6), comTwistW= np.zeros(6), des_pose = None, des_twist = None, des_acc = None,centroidalInertiaB = np.eye(6), comControlled = True,  type = 'projection', stance_legs=[True, True, True, True], numberOfJointsPerLeg = 3):
         # does side effect on tau_ffwd
         self.virtualImpedanceWrench(basePoseW, comPoseW, baseTwistW, comTwistW, des_pose, des_twist, des_acc, centroidalInertiaB, comControlled)
         if self.real_robot:
@@ -225,9 +225,9 @@ class WholeBodyController():
         tau_ffwd = np.zeros(self.robot.na)
 
         for leg in range(4):#(where there are zeros in the Matrix, the grf will be zero and so the torques, no need to check stance legs here)
-            tau_leg = self.u.getLegJointState(leg, h_joints) - \
-                      wJ[leg].T @ self.u.getLegJointState(leg, grForcesW_wbc)
-            self.u.setLegJointState(leg, tau_leg, tau_ffwd)
+            tau_leg = self.u.getLegJointState(leg, h_joints, numberOfJointsPerLeg=numberOfJointsPerLeg) - \
+                      wJ[leg].T @ self.u.getLegJointState(leg, grForcesW_wbc, numberOfJointsPerLeg=numberOfJointsPerLeg)
+            self.u.setLegJointState(leg, tau_leg, tau_ffwd, numberOfJointsPerLeg=numberOfJointsPerLeg)
 
         return tau_ffwd, grForcesW_wbc
 

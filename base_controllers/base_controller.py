@@ -416,11 +416,10 @@ class BaseController(threading.Thread):
                 self.w_R_lowerleg[leg] = self.b_R_w.transpose().dot(self.robot.data.oMf[self.lowerleg_index[leg]].rotation)
 
         for leg in range(4):
-            # TODO fix for different number of joint per leg
             self.J[leg] = self.robot.frameJacobian(self.neutral_fb_jointstate,
                                                    self.robot.model.getFrameId(ee_frames[leg]),
                                                    update=False,
-                                                   ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,6+leg*3:6+leg*3+3]
+                                                   ref_frame=pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3,6+leg*self.numberOfJointsPerLeg:6+(leg+1)*self.numberOfJointsPerLeg]
             self.wJ[leg] = self.b_R_w.transpose().dot(self.J[leg])
             try:
                 self.J_inv[leg] = np.linalg.inv(self.J[leg])
@@ -651,6 +650,19 @@ class BaseController(threading.Thread):
             for legid in self.u.leg_map.keys():
                 leg = self.u.leg_map[legid]
                 self.lowerleg_index[leg] =  self.robot.model.getFrameId(self.lowerleg_frame_names[leg])
+
+        self.numberOfJointsPerLeg = self.getNumberOfJointsPerLeg()
+
+    def getNumberOfJointsPerLeg(self):
+        ee_frames = conf.robot_params[self.robot_name]['ee_frames']
+        first_foot_frame_id = self.robot.model.getFrameId(ee_frames[0])
+        joint_id = self.robot.model.frames[first_foot_frame_id].parent
+        # Walk up the kinematic tree starting from the parent joint
+        count = 0
+        while joint_id != 1:
+            count += 1
+            joint_id = self.robot.model.parents[joint_id]
+        return count
 
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
