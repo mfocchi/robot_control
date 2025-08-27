@@ -1,4 +1,4 @@
-from terrain_manager import TerrainManager  
+from .terrain_manager import TerrainManager  
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
@@ -43,8 +43,6 @@ class PointCloudFilter:
         
         self.h_min = h_min
         self.h_max = h_max    
-        
-        self.print_information()
         
         # hyper parameters
         self.grid_resolution = 0.1      # Risoluzione della griglia per l'interpolazione
@@ -101,16 +99,21 @@ class PointCloudFilter:
         
         self.x_points = np.array([point['position'][0] for point in self.points_t])
         mask = (self.x_points >= self.h_min) & (self.x_points <= self.h_max)
-        filtered_points_t = [point for i, point in enumerate(self.points_t) if mask[i]]
-        return filtered_points_t   
-        
-    def filter_height_profile(self, profile="logln",x0 = 0.0, scale=0.5):
+        self.points_t  = [point for i, point in enumerate(self.points_t) if mask[i]]
+                  
+    def filter_height_profile(self, profile="logln",x0 = 0.0, scale=0.5, side_application="deep"):
         print("equation used: {}".format(profile))
         x_points = np.array([p['position'][0] for p in self.points_t])
-        # epsilon per evitare divisione per zero
+        # epsilon per evitare divisione per zero 
         epsilon = 1e-8
-        x = np.abs(x_points - x0)
-
+        if (side_application == "both"):
+            x = np.abs(x_points - x0)
+        elif (side_application == "up"):
+            x = np.where(x_points >= x0, x_points - x0, 0.0)
+        elif (side_application == "deep"):
+            x = np.where(x_points <= x0, x0 - x_points, 0.0)
+        else:
+            raise ValueError("side_application should be 'both', 'right' or 'left'")
         #nota: clip limita i valori quindi non va oltre
         if profile == "linear_positive":
             cost_values = np.clip(x / (scale + epsilon), 0.0, 1.0)
@@ -140,7 +143,7 @@ class PointCloudFilter:
             p['cost']  = float(normalized_costs[i])
             p['color'] = gradient_colors[i][:3]
 
-        return self.points_t
+
 
     def interpolation_to_surface(self, source_points=None):
         
@@ -236,7 +239,7 @@ class PointCloudFilter:
             source_points = self.points_t
         if gradient_at_points is None:
             raise ValueError("gradient_at_points cannot be None, do the compute_conv_step first")
-        points = source_points
+        
         grad_min = np.min(gradient_at_points)
         grad_max = np.max(gradient_at_points)
         if grad_max > grad_min:  # Avoid division by zero
@@ -247,22 +250,21 @@ class PointCloudFilter:
         cmap = LinearSegmentedColormap.from_list("green_yellow_red", ["green", "yellow", "red"])
         gradient_colors = cmap(cost_values / 100.0)  # Normalize to [0, 1]
         
-        for i, point in enumerate(points):
+        for i, point in enumerate(source_points):
             # incremental cost
             # old_cost = point['cost']
             # new_cost = float(cost_values[i])
             point['color'] = gradient_colors[i][:3]  
             point['cost'] = float(cost_values[i])  * weight
-            
         if plot:
-            self.visualize_cost_map(source_points)
-    
+            self.visualize_cost_map(self.points_t)
+           
     def filter_process_points(self, kernel, source_points=None, weight=0.0, plot=False):
         if source_points is None:
             source_points = self.points_t
         gradient_at_points = self.compute_conv_step(kernel, source_points,plot=plot)
         self.compute_cost(gradient_at_points,source_points,weight = weight,plot=plot)
-
+        
     # ==== get methods        
     def get_x_coordinates(self):
         return np.array([point['position'][0] for point in self.points_t])
@@ -284,6 +286,9 @@ class PointCloudFilter:
             }
             for point in self.points_t
         ]
+    
+    def get_all_cost(self):
+        return np.array([point['cost'] for point in self.points_t])
     
     # ==== print methods
     def print_information(self):
@@ -387,6 +392,8 @@ class PointCloudFilter:
         plt.show()
     
     def visualize_cost_map(self, source_points=None):
+        if source_points is None:
+            source_points = self.points_t
         x_points = np.array([point['position'][0] for point in source_points])
         y_points = np.array([point['position'][1] for point in source_points])
         z_points = np.array([point['position'][2] for point in source_points])
@@ -431,8 +438,7 @@ class PointCloudFilter:
         print(f" - Mean cost: {np.mean(cost_values):.3f}")
         print(f" - Std cost: {np.std(cost_values):.3f}")
         
-        return cost_values
-    
+   
 def main():
     
     # Terrain configuration values
@@ -453,31 +459,31 @@ def main():
     print("\n=== Original Map ===")
     pc_filter.print_map_pc()
     
-    
     #filtro con cancellazione punti
     print("\n=== Height Filter ===")
-    new_points = pc_filter.filter_height()
-    pc_filter.print_map_pc(new_points)
+    pc_filter.filter_height()
+    pc_filter.print_map_pc()
     
     print("\n=== Logarithmic Height Cost Filter ===")    
     #filtro con cambio di costo e colore in base all'altezza
-    new_points=pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
-    pc_filter.visualize_cost_map(new_points)
+    pc_filter.filter_height_profile(x0=1.5, scale=0.5, profile="logln")
+    pc_filter.visualize_cost_map(pc_filter.points_t)
     
     print("\n=== First Derivative (Gradient) ===")
     kernel = [pc_filter.sobel_y, pc_filter.sobel_z] 
-    pc_filter.filter_process_points(kernel, new_points, plot=True)
+    pc_filter.filter_process_points(kernel, plot=True)
     
     print("\n=== Second Derivative (Laplacian) ===")
     kernel = [pc_filter.laplacian_kernel] 
-    pc_filter.filter_process_points(kernel,new_points, plot=True)
+    pc_filter.filter_process_points(kernel, plot=True)
     
-    print("\n=== Smoothing Filter ===")
+    # print("\n=== Smoothing Filter ===")
     kernel = [pc_filter.smoothing_kernel] 
-    pc_filter.filter_process_points(kernel, new_points, weight=0.1, plot=True)
-    print("\n=== Laplacian of Gaussian (LoG) ===")
+    pc_filter.filter_process_points(kernel, weight=0.1, plot=True)
+    
+    # print("\n=== Laplacian of Gaussian (LoG) ===")
     kernel = [pc_filter.log_kernel] 
-    pc_filter.filter_process_points(kernel,new_points, plot=True)
+    pc_filter.filter_process_points(kernel, plot=True)
     
     
     

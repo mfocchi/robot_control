@@ -75,22 +75,55 @@ p.min_std_continuous = np.full(p.dim_continuous, 1e-3)
 
 algo = CrossEntropyMethodMixed(p)
 
-def calc_fitness():
-    pass
+fitness_weights = np.array([1., 0.1, 10., 1.])
 
-def eval_pop():
-    pass
+class BiLevelOptmizer:
 
-def inner_loop():
-    pass
+    def __init__(self, in_point_clouds):
 
-def outer_loop():
-    pass
+        # === point cloud initialization
+        self.in_point_clouds = in_point_clouds
+        self.point_clouds = PointCloudFilter(self.in_point_clouds)
+        #self.point_clouds.print_map_pc()
 
-def save_date_json():
-    pass
+        self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel],weight=0.5, plot=False)
+        pc_t = self.point_clouds.points_t
+        self.point_clouds.visualize_cost_map()
 
 
+        # === patch initializaiton
+        self.patches = PatchSurface(pc_t)
+
+        self.patches.cost_color()
+        self.patches.plot_patches()
+        #self.patches.random_color()
+        #self.patches.plot_patches()
+
+        # ===
+
+    def calc_fitness(res, patch_id=None, contact_abs_pos_yz=None):
+        fit_average_costmap_patch = 0.
+        fit_landing_costmap = 0.
+
+        if patch_id is not None:
+            points_in_patch = terrainManager.retrievePatches(patch_id)
+            Y_range = points_in_patch[0, :]
+            Z_range = points_in_patch[1, :]
+            # eval avergage cost
+            #fit_average_costmap_patch =  evalAverageCostOfPatch(patch_id)
+            #eval actual cost at selected landing location
+            #fit_landing_costmap = evalCostOfPointInPatch(contact_abs_pos_yz)
+
+        #print("jump duration", res['Tf'])
+        fit_consumed_energy = -res['consumed_energy']
+        if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
+            fit_problem_converged = 100
+        else:
+            fit_problem_converged = 0
+        print(f"convergence: {fitness_weights[0]*fit_problem_converged}, energy: {fitness_weights[1]*fit_consumed_energy}, avg_cost: {fitness_weights[2]*fit_average_costmap_patch}, land_cost: {fitness_weights[3]*fit_landing_costmap}")
+        fitness =  fitness_weights[0]*fit_problem_converged + fitness_weights[1]*fit_consumed_energy +fitness_weights[2]*fit_average_costmap_patch + fitness_weights[3]*fit_landing_costmap
+
+        return fitness
 
 def main():
 
@@ -100,29 +133,39 @@ def main():
 
     # point cloud filter
     pc_terrain = terrain.point_cloud
-    pc = PointCloudFilter(pc_terrain)
-    pc.print_map_pc()
-    pc.filter_process_points([pc.smoothing_kernel],plot=True)
 
-    # generation patch
-    patches = PatchSurface(pc.points_t)
-    patches.create_patches()
-    patches.cost_color()
-    patches.plot_patches()
+    optimizer = BiLevelOptmizer(pc_terrain)
 
-    # test best patches
-    random_indices = np.random.choice(len(patches.patches), size=5, replace=False)
-    patch_list = [patches.patches[i] for i in random_indices]
-    print(f"Selected 3 random patches from {len(patches.patches)} total patches")
-    patches.color_targhet_patches(patch_list)
-    patches.plot_patches_target()
 
-    # test best point for planning
-    random_indices = np.random.choice(len(pc.points_t), size=5, replace=False)
-    point_list = [pc.points_t[i] for i in random_indices]
-    print(f"Selected 3 random points from {len(pc.points_t)} total points")
-    patches.color_targhet_points_jump(point_list)
-    patches.plot_patches_points_target()
+
+    # # create terrain:
+    # terrain = TerrainManager()
+
+    # # point cloud filter
+    # pc_terrain = terrain.point_cloud
+    # pc = PointCloudFilter(pc_terrain)
+    # pc.print_map_pc()
+    # pc.filter_process_points([pc.smoothing_kernel],plot=True)
+
+    # # generation patch
+    # patches = PatchSurface(pc.points_t)
+    # patches.create_patches()
+    # patches.cost_color()
+    # patches.plot_patches()
+
+    # # test best patches
+    # random_indices = np.random.choice(len(patches.patches), size=5, replace=False)
+    # patch_list = [patches.patches[i] for i in random_indices]
+    # print(f"Selected 3 random patches from {len(patches.patches)} total patches")
+    # patches.color_targhet_patches(patch_list)
+    # patches.plot_patches_target()
+
+    # # test best point for planning
+    # random_indices = np.random.choice(len(pc.points_t), size=5, replace=False)
+    # point_list = [pc.points_t[i] for i in random_indices]
+    # print(f"Selected 3 random points from {len(pc.points_t)} total points")
+    # patches.color_targhet_points_jump(point_list)
+    # patches.plot_patches_points_target()
 
 if __name__ == "__main__":
     main()

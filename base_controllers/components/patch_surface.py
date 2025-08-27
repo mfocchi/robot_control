@@ -1,5 +1,5 @@
-from terrain_manager import TerrainManager
-from point_cloud_filter import PointCloudFilter
+from .terrain_manager import TerrainManager
+from .point_cloud_filter import PointCloudFilter
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -85,11 +85,15 @@ class PatchSurface:
                     'points_in_patch': points_in_patch,
                     'cost_patch': mean_cost,
                 })
+                
                 patch_id += 1
     
     # === Methods Functionality            
     def cost_patch(self, some_points):               
         costs = [p['cost'] for p in some_points if 'cost' in p]
+        if not costs:
+            # nessun costo disponibile per questa patch
+           return None
         return float(np.mean(costs))
     
     def centroid_patch(self, points_in_patch, y_min, y_max, z_min, z_max):
@@ -105,7 +109,12 @@ class PatchSurface:
         
         return np.array([x_centroid, y_centroid, z_centroid])
         
-    def is_point_in_patch(self, patch_id, point):        
+    def is_point_in_patch(self, patch_id, point): 
+        
+        if not self.patches[patch_id]['points_in_patch']:
+            print(f"Patch {patch_id} has no points, cannot contain any point")
+            return False 
+               
         if patch_id < 0 or patch_id >= len(self.patches):
             return False
         
@@ -228,6 +237,8 @@ class PatchSurface:
         
         if plot_normal_patch:
             
+            normal_unit_scale = normal_unit * 0.5  # normal vectro scale for better visualization
+            
             fig = plt.figure(figsize=(12, 8))
             ax = fig.add_subplot(111, projection='3d')
             ax.plot_surface(X_grid, Y_grid, Z_grid, alpha=0.6, cmap='viridis')
@@ -237,8 +248,9 @@ class PatchSurface:
             closest_grid_point = np.array([X_grid[i, j], Y_grid[i, j], Z_grid[i, j]])
             ax.scatter(closest_grid_point[0], closest_grid_point[1], closest_grid_point[2], 
                         c='orange', s=80, marker='s', label='Closest Grid Point')
+            
             ax.quiver(closest_grid_point[0], closest_grid_point[1], closest_grid_point[2],
-                        normal_unit[0], normal_unit[1], normal_unit[2],
+                        normal_unit_scale[0], normal_unit_scale[1], normal_unit_scale[2],
                         color='purple', arrow_length_ratio=0.15, linewidth=2,
                         label='Normal Vector')
             
@@ -307,6 +319,15 @@ class PatchSurface:
             print(f"Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
             return None
         return self.patches[patch_id].get('centroid', None)
+    
+    def get_avarege_cost(self,patch_id=None):
+        
+        cost = self.patches[patch_id]['cost_patch']
+        
+        if not cost:
+            print("cost not found")
+            return None
+        return cost
     
     def get_patch_cost(self, patch_id):
         if patch_id < 0 or patch_id >= len(self.patches):
@@ -433,6 +454,14 @@ class PatchSurface:
 
         return point_t
 
+    def get_patch_id_from_point(self, point):
+        for patch in self.patches:
+            patch_id = patch['id']
+            if self.is_point_in_patch(patch_id, point):
+                return patch_id
+        print("Point does not belong to any patch")
+        return None
+    
     #  ==== Set Methods
     def set_new_point_in_patch(self, patch_id, y_point, z_point, update_centroid=True, update_cost=True, plot=True, k_neighbors=5):
         if patch_id < 0 or patch_id >= len(self.patches):
@@ -716,32 +745,39 @@ class PatchSurface:
         plt.tight_layout()
         plt.show()
     
+    
 def main():
     terrain = TerrainManager()
     # terrain.plot_debug(debug=True)
     pc = terrain.point_cloud
     # Point cloud filter test
-    pcs = PointCloudFilter(pc, h_min=1.0, h_max=4.0)
+    pcs = PointCloudFilter(pc, h_min=1.0, h_max=4.0)    
+    
     print("\n=== Original Map ===")
-    # pcs.print_map_pc()
-    #filtro con cancellazione punti
+    pcs.print_map_pc()
+    
+    # NOTA : questo filter height non funziona sul resto del codice in quanto crea patch vuote
     print("\n=== Height Filter ===")
-    new_points = pcs.filter_height()
-    # pcs.print_map_pc(new_points)
+    pcs.filter_height()
+    pcs.print_map_pc()
+    
     print("\n=== Logarithmic Height Cost Filter ===")
-    #filtro con cambio di costo e colore in base all'altezza
-    new_points=pcs.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
-    # pcs.visualize_cost_map(new_points)
+    pcs.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
+    pcs.visualize_cost_map()
     
+    print("\n=== Smoothing Filter ===")
+    kernel = [pcs.smoothing_kernel] 
+    pcs.filter_process_points(kernel, weight=0.5, plot=False)
     
-    #TEST DIMENSION OF MAP
-    patch_surface = PatchSurface(new_points)
+    pcs.print_map_pc()
+    pcs.visualize_cost_map()
     
-    
-    patch_surface.random_color()
+    patch_surface = PatchSurface(pcs.points_t)
+
+    # patch_surface.random_color()
     # patch_surface.plot_patches()
     patch_surface.cost_color()     
-    # patch_surface.plot_patches()
+    patch_surface.plot_patches()
     
     #test color_targhet_points_jump 
     
@@ -749,34 +785,44 @@ def main():
     point_list = [pcs.points_t[i] for i in random_indices]
     print(f"Selected 3 random points from {len(pcs.points_t)} total points")
     patch_surface.color_targhet_points_jump(point_list)
-    # patch_surface.plot_patches_points_target()
+    patch_surface.plot_patches_points_target()
 
     #test color_targhet_patches
     random_indices = np.random.choice(len(patch_surface.patches), size=5, replace=False)
     patch_list = [patch_surface.patches[i] for i in random_indices]
     print(f"Selected 3 random patches from {len(patch_surface.patches)} total patches")
     patch_surface.color_targhet_patches(patch_list)
-    # patch_surface.plot_patches_target()
+    patch_surface.plot_patches_target()
     patch_surface.get_mesh_grid_patch(0)
     
     
     #test normal vector
     
     point_t = {
-        'position': np.array([0.8, 0.5, -25.0]),
+        'position': np.array([10.0, 2.0, 0.0]),
         'color': np.array([0, 0, 0]),
         'light': 0.8,
         'size_point': 4.0,
         'cost': 0.5
     }    
-    patch_id = 5
+    patch_id = patch_surface.get_patch_id_from_point(point_t)
+    
     # patch_surface.plot_patch(5)
-    # print(patch_surface.is_point_in_patch(patch_id, point_t))
+    
+    print(patch_surface.is_point_in_patch(patch_id, point_t))
     print (patch_surface.is_point_2D_in_patch(patch_id, point_t['position'][1], point_t['position'][2]))
-    # normal_outside = patch_surface.normal_vector_of_point_in_patch(patch_id, point_t)
+    normal_outside = patch_surface.normal_vector_of_point_in_patch(patch_id, point_t, print_info=True, plot_normal_patch=True)
     # piton = patch_surface.get_point_in_surface(patch_id, point_t, print_info=True, plot_patch=True)
     punto = patch_surface.get_point_t_in_surface(patch_id, point_t['position'][1], point_t['position'][2], print_info=True, plot_patch=True)
     
     patch_surface.set_new_point_in_patch(patch_id, point_t['position'][1], point_t['position'][2], update_centroid=True, update_cost=True, plot=True,k_neighbors=5)
+    patch_surface.get_avarege_cost(patch_id)
+    
+    
+        
+    # per richiamare un valroe dentro la patches_______patch_surface.patches[patch_id]['cost_patch']
+    # per richiamare un punto dentro la patches _______print (patch_surface.patches[patch_id]['points_in_patch'][2])
+
+
 if __name__ == "__main__":
     main()
