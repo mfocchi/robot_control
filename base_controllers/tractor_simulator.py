@@ -934,7 +934,7 @@ class GenericSimulator(BaseController):
             self.pub_des_jstate.publish(msg) #publish in /commands
 
         # I comment because it slows loop down TODO
-        if np.mod(self.pub_counter, self.decimate_publish) == 0:
+        if self.SIMULATOR != 'gazebo' and np.mod(self.pub_counter, self.decimate_publish) == 0:
             self.joint_pub.publish(msg)  # this publishes in tractor/joint_state q = q_des, it is just for rviz to see the joints of the wheels moving
 
         #trigger simulators
