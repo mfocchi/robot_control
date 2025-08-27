@@ -108,7 +108,7 @@ class Utils:
 
     def setLegJointState(self, legid,  input, jointState, numberOfJointsPerLeg = 3):
         if isinstance(legid, str):
-            jointState[self.leg_map[legid]*3:self.leg_map[legid]*numberOfJointsPerLeg+numberOfJointsPerLeg] = input
+            jointState[self.leg_map[legid]*numberOfJointsPerLeg:self.leg_map[legid]*numberOfJointsPerLeg+numberOfJointsPerLeg] = input
         elif isinstance(legid, int):
             jointState[legid*numberOfJointsPerLeg:(legid+1)*numberOfJointsPerLeg] = input
 

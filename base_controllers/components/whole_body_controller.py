@@ -51,7 +51,7 @@ class WholeBodyController():
         self.wrench_gW_log = np.full((6, self.robot_params['buffer_size']), np.nan)
         self.wrench_desW_log = np.full((6, self.robot_params['buffer_size']), np.nan)
 
-        self.NEMatrix = np.zeros([6, 3 * self.robot.nee])  # Newton-Euler matrix
+        self.NEMatrix = np.zeros([6, 3 * len(self.robot_params['ee_frames'])])  # Newton-Euler matrix
 
     def setGains(self, kp_lin, kd_lin, kp_ang, kd_ang):
         self.kp_lin = np.diag(kp_lin)
@@ -74,7 +74,7 @@ class WholeBodyController():
         self.wrench_desW[self.u.sp_crd["LZ"]] = self.robot.robotMass * self.g_mag
         w_R_b = pin.rpy.rpyToMatrix(self.u.angPart(basePoseW))
         # wrench = NEMatrix @ grfs
-        for leg in range(self.robot.nee):
+        for leg in range(len(self.robot_params['ee_frames'])):
             start_col = 3 * leg
             end_col = 3 * (leg + 1)
             if stance_legs[leg]:  # self.contact_state[leg]:
@@ -193,7 +193,7 @@ class WholeBodyController():
             self.wrench_desW = self.wrench_fbW + self.wrench_gW + self.wrench_ffW
 
         # wrench = NEMatrix @ grfs
-        for leg in range(self.robot.nee):
+        for leg in range(len(self.robot_params['ee_frames'])):
             start_col = 3 * leg
             end_col = 3 * (leg + 1)
             if stance_legs[leg]:#self.contact_state[leg]:
