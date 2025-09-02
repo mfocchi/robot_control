@@ -143,8 +143,6 @@ class PointCloudFilter:
             p['cost']  = float(normalized_costs[i])
             p['color'] = gradient_colors[i][:3]
 
-
-
     def interpolation_to_surface(self, source_points=None):
         
         points = self.points_t
@@ -436,8 +434,7 @@ class PointCloudFilter:
         print(f" - Min cost: {np.min(cost_values):.3f}")
         print(f" - Max cost: {np.max(cost_values):.3f}")
         print(f" - Mean cost: {np.mean(cost_values):.3f}")
-        print(f" - Std cost: {np.std(cost_values):.3f}")
-        
+        print(f" - Std cost: {np.std(cost_values):.3f}")     
    
 def main():
     
