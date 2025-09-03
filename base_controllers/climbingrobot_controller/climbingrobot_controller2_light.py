@@ -5,7 +5,6 @@ Created on Fri Nov  2 16:52:08 2018
 @author: mfocchi
 """
 
-
 import rospy as ros
 from base_controllers.utils.math_tools import *
 import pinocchio as pin
@@ -26,9 +25,17 @@ import matlab.engine
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 import sys
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
-
+from base_controllers.utils.common_functions import checkRosMaster
 import  base_controllers.params as conf
 robotName = "climbingrobot2"
+
+# real robot stuff
+from climbingrobot_description.msg import RopeCommand
+from climbingrobot_description.msg import PropellerCommand
+from climbingrobot_description.msg import RopeTelemetry
+from climbingrobot_description.msg import AlpineBodyTelemetry
+from climbingrobot_description.srv import AlpineBodyCommand
+
 
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
@@ -91,17 +98,23 @@ class ClimbingrobotController(BaseControllerFixed):
         self.pub_prop_force.publish(wrench)
 
     def apply_propeller_force(self, ext_force):
-        # create force per to ropes plane
-        self.prop_forceW  = self.n_bar * ext_force
-        self.ros_pub.add_arrow(self.base_pos, self.prop_forceW/self.force_scale , "blue", scale=1.5)
-        wrench = Wrench()
-        wrench.force.x = self.prop_forceW [0]
-        wrench.force.y = self.prop_forceW [1]
-        wrench.force.z = self.prop_forceW [2]
-        wrench.torque.x = 0.
-        wrench.torque.y = 0.
-        wrench.torque.z = 0.
-        self.pub_prop_force.publish(wrench)
+        if self.real_robot:
+            msg =  std_msgs.msg.Float32()
+            msg.propeller_force = ext_force
+            self.pub_propeller_force(msg)
+        else:
+            # create force per to ropes plane
+            self.prop_forceW  = self.n_bar * ext_force
+            self.ros_pub.add_arrow(self.base_pos, self.prop_forceW/self.force_scale , "blue", scale=1.5)
+            wrench = Wrench()
+            wrench.force.x = self.prop_forceW [0]
+            wrench.force.y = self.prop_forceW [1]
+            wrench.force.z = self.prop_forceW [2]
+            wrench.torque.x = 0.
+            wrench.torque.y = 0.
+            wrench.torque.z = 0.
+            self.pub_prop_force.publish(wrench)
+
 
     def loadModelAndPublishers(self, xacro_path=None):
         xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -268,6 +281,11 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mpc_index = 0
         self.mpc_index_old = 0
         self.mpc_index_ffwd = 0 # updated only when we stop recomputing mpc
+
+        if self.real_robot:
+            self.targetReceived = False
+        else:
+            self.targetReceived = True
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -637,9 +655,78 @@ class ClimbingrobotController(BaseControllerFixed):
                         abs(self.Fr_r_log[i] * self.l_2d_log[i]) + abs(self.Fr_l_log[i] * self.l_1d_log[i])) * conf.robot_params[p.robot_name]['dt']
         return impulse_work + hoist_work
 
+    def send_command(self, q_des, qd_des, tau_ffwd):
+        if self.real_robot:
+            msg = RopeCommand()
+            msg.rope_force = p.tau_ffwd[p.rope_index[0]]
+            msg.rope_force = p.q_des[p.rope_index[0]]
+            msg.rope_velocity = p.qd_des[p.rope_index[0]]
+            msg.stamp = ros.Time.now()
+            self.pub_rope_command_r()
+            msg.rope_force = p.tau_ffwd[p.rope_index[1]]
+            msg.rope_force = p.q_des[p.rope_index[1]]
+            msg.rope_velocity = p.qd_des[p.rope_index[1]]
+            self.pub_rope_command_l()
+        else:
+            self.send_des_jstate(q_des, qd_des, tau_ffwd)
+
+
+        # REAL ROBOT FUNCTIONS
     def startRealRobot(self):
-        #TODO
-        pass
+        checkRosMaster()
+        self.startRealRobotPublisherSubscribers()
+
+    def startRealRobotPublisherSubscribers(self):
+
+
+        self.sub_rope_telemetry_l = ros.Subscriber("/winch/left/telemetry", RopeTelemetry,  callback=self._receive_rope_telemetry_l, queue_size=1,  tcp_nodelay=True)
+        self.sub_rope_telemetry_r = ros.Subscriber("/winch/right/telemetry", RopeTelemetry, callback=self._receive_rope_telemetry_r, queue_size=1,  tcp_nodelay=True)
+        self.pub_rope_command_l = ros.Publisher("/winch/left/command", RopeCommand,   queue_size=1,  tcp_nodelay=True)
+        self.pub_rope_command_r = ros.Publisher("/winch/right/command", RopeCommand,   queue_size=1,  tcp_nodelay=True)
+
+        # to orchestrator
+        self.sub_des_target = ros.Subscriber("/planner/desired_target", geometry_msgs.msg.Vector3, callback=self._receive_target, queue_size=1, tcp_nodelay=True)
+        self.pub_goal_status = ros.Subscriber("/planner/goal_status", std_msgs.msg.String,   queue_size=1, tcp_nodelay=True)
+
+        #communication to alpine
+        self.sub_alpine_telemetry = ros.Subscriber("/alpine_body/telemetry", AlpineBodyTelemetry, callback=self._receive_alpine_telemetry, queue_size=1, tcp_nodelay=True)
+        self.pub_propeller_force = ros.Publisher("/alpine_body/propeller_command", PropellerCommand,   queue_size=1,  tcp_nodelay=True)
+        self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand)
+
+    def _receive_rope_telemetry_l(self, msg):
+        self.Fr_l_meas = msg.rope_force
+        self.l_1 = msg.rope_length
+        self.l_1d = msg.rope_velocity
+        self.brake_status_l = msg.brake_status
+
+    def _receive_rope_telemetry_r(self, msg):
+        self.Fr_r_meas = msg.rope_force
+        self.l_2 = msg.rope_length
+        self.l_2d = msg.rope_velocity
+        self.brake_status_r = msg.brake_status
+
+    def _receive_target(self, msg):
+        self.target = np.array([msg.x,msg.y,msg.z])
+        self.targetReceived = True
+
+    def _receive_alpine_telemetry(self, msg):
+        self.rope_l_imu_orient = np.array([
+            msg.rope_imu_orientation.x,
+            msg.rope_imu_orientation.y,
+            msg.rope_imu_orientation.z,
+            msg.rope_imu_orientation.w
+        ])
+        self.rope_l_imu_angular_velocity = np.array([ msg.rope_imu_angular_velocity.x, msg.rope_imu_angular_velocity.y,msg.rope_imu_angular_velocity.z])
+        self.rope_l_imu_rpy = np.array([msg.rope_imu_rpy.x, msg.rope_imu_rpy.y, msg.rope_imu_rpy.z])
+        self.rope_l_imu_rpy_d = np.array([msg.rope_imu_rpy_d.x, msg.rope_imu_rpy_d.y, msg.rope_imu_rpy_d.z])
+        self.body_imu_orientation =  np.array([
+                                        msg.body_imu_orientation.x,
+                                        msg.body_imu_orientation.y,
+                                        msg.body_imu_orientation.z,
+                                        msg.body_imu_orientation.w
+                                    ])
+        self.body_imu_angular_velocity =np.array([msg.body_imu_angular_velocity.x, msg.body_imu_angular_velocity.y, msg.body_imu_angular_velocity.z])
+
 
 def talker(p):
     p.start()
@@ -676,9 +763,9 @@ def talker(p):
     # jump starting position
     p0 = np.array([0.28,  2.5, -6.10104])  # there is singularity for px = 0!
     #jump landing position
-    pf = np.array([0.28, 4, -4])
+    p.target = np.array([0.28, 4, -4])
 
-    print(colored(f"---------------Ideal Target landing: {pf}", "green"))
+    print(colored(f"---------------Ideal Target landing: {p.target}", "green"))
     p.startJump = 2.5
     p.orientTime = 1.0
     p.stateMachine = 'idle'
@@ -695,19 +782,20 @@ def talker(p):
         p.updateKinematicsDynamics()
         # jump state machine
         if ( p.stateMachine == 'idle') and (p.time >= p.startJump):
-            # first run optim and fill in jump variable
-            p.pause_physics_client()
-            p.initOptim(p.base_pos - p.mat2Gazebo, pf)
-            p.unpause_physics_client()
-            p.des_leg_orient = p.getImpulseAngle()
+            if p.targetReceived:
+                # first run optim and fill in jump variable
+                p.pause_physics_client()
+                p.initOptim(p.base_pos - p.mat2Gazebo, p.target)
+                p.unpause_physics_client()
+                p.des_leg_orient = p.getImpulseAngle()
 
-            #set the end of orienting
-            p.end_orienting = p.startJump + p.orientTime
-            p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
-            p.start_logging = p.end_orienting
-            p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
-            if p.SAVE_BAG:
-                p.recorder.start_recording_srv()
+                #set the end of orienting
+                p.end_orienting = p.startJump + p.orientTime
+                p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
+                p.start_logging = p.end_orienting
+                p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
+                if p.SAVE_BAG:
+                    p.recorder.start_recording_srv()
 
         if (p.stateMachine == 'orienting_leg'):
             # use propellers (review)
@@ -779,6 +867,7 @@ def talker(p):
                 deltaFr_l0, deltaFr_r0, prop_force = p.computeMPC(delta_t)
                 if p.PROPELLERS:
                     p.apply_propeller_force(prop_force)
+
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
@@ -807,22 +896,7 @@ def talker(p):
                     p.startJump = p.time
                 else:
                     #p.pause_physics_client()
-                    landing_location = p.base_pos-p.mat2Gazebo
-                    print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
-                    print(colored(f" while from optim it should be  {p.targetPos}", "blue"))
-
-                    print(colored(f" the landing error is  {np.linalg.norm(landing_location - p.targetPos)}", "blue"))
-                    jump_length = np.linalg.norm(p0[:2] - p.targetPos[:2])
-                    MSE = np.square(np.array(p.MPC_tracking_error)).mean()
-                    RMSE = math.sqrt(MSE)
-                    print(colored(
-                        f" the relative landing error (norm per jump lenghth)  is {100*np.linalg.norm(landing_location - p.targetPos) / jump_length}%",
-                        "blue"))
-                    print(colored(f" the energy consumption is  {energy}", "blue"))
-                    print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
-                    print(colored(f" the leg impulse  is  {p.Fleg}", "blue"))
-                    print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(p.Fleg)}", "blue"))
-                    p.plotStuff()
+                    p.printLandingInfo()
                     if p.SAVE_BAG:
                         p.recorder.stop_recording_srv()
                     break
@@ -872,6 +946,14 @@ def talker(p):
                 print(colored("Start landing", "blue"))
                 p.prop_force = (-25.)  # push against the wall
                 p.apply_propeller_force(p.prop_force)
+                landing_error = p.printLandingInfo()
+                if p.real_robot:
+                    msg = std_msgs.msg.String()
+                    if np.linalg.norm(landing_error) < 0.5:
+                        msg.data = 'achieved'
+                    else:
+                        msg.data = 'error'
+                    p.pub_goal_status(msg)
                 ####TODO
                 pass
 
@@ -894,12 +976,31 @@ def talker(p):
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+        p.send_command(p.q_des, p.qd_des, p.tau_ffwd)
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),4)  # to avoid issues of dt 0.0009999
         if (p.time > p.start_logging):
             p.logData()
         # wait for synconization of the control loop
         rate.sleep()
+
+    def printLandingInfo(self):
+        landing_location = self.base_pos - self.mat2Gazebo
+        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
+        print(colored(f" while from optim it should be  {self.targetPos}", "blue"))
+
+        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "blue"))
+        jump_length = np.linalg.norm(p0[:2] - self.targetPos[:2])
+        MSE = np.square(np.array(p.MPC_tracking_error)).mean()
+        RMSE = math.sqrt(MSE)
+        print(colored(
+            f" the relative landing error (norm per jump lenghth)  is {100 * np.linalg.norm(landing_location - self.targetPos) / jump_length}%",
+            "blue"))
+        print(colored(f" the energy consumption is  {energy}", "blue"))
+        print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
+        print(colored(f" the leg impulse  is  {self.Fleg}", "blue"))
+        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "blue"))
+        self.plotStuff()
+        return self.targetPos - landing_location
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
     fig = plt.figure()
