@@ -64,7 +64,7 @@ class ClimbingrobotController(BaseControllerFixed):
             Ly = 5  # Width (horizontal extent) of wall in meters
             # Generate rock wall map
             self.terrainManager = TerrainManager()
-            self.mesh_x, self.mesh_y, self.mesh_z = self.terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, debug=False, x_offset=-0.5)
+            self.mesh_x, self.mesh_y, self.mesh_z = self.terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed)
         else:
             sys.path.insert(0, './codegen')
 
