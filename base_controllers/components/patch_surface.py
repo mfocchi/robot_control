@@ -3,7 +3,8 @@ from .point_cloud_filter import PointCloudFilter
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-
+import numpy as np
+from scipy.interpolate import griddata
 
 class PatchSurface:
     def __init__(self, points_t, number_of_patches_width=10, number_of_patches_height=10):
@@ -119,13 +120,16 @@ class PatchSurface:
             return False
         
         # Calculate patch boundaries
-        patch_row = patch_id // self.number_of_patches_height
-        patch_col = patch_id % self.number_of_patches_height
+        i = patch_id // self.number_of_patches_height
+        j = patch_id % self.number_of_patches_height
+        # Calcola i confini usando gli stessi edges di create_patches()
+        y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
+        z_edges = self.z_min + np.arange(self.number_of_patches_height + 1) * self.patch_height
         
-        y_min = self.y_min + patch_row * self.patch_width
-        y_max = y_min + self.patch_width
-        z_min = self.z_min + patch_col * self.patch_height
-        z_max = z_min + self.patch_height
+        y_min = y_edges[i]
+        y_max = y_edges[i + 1] 
+        z_min = z_edges[j]
+        z_max = z_edges[j + 1]
         
         # Get patch centroid for x reference
         patch_centroid = self.patches[patch_id]['centroid']
@@ -160,14 +164,18 @@ class PatchSurface:
     def is_point_2D_in_patch(self, patch_id, y_point, z_point):
         if patch_id < 0 or patch_id >= len(self.patches):
             return False
-
-        patch_row = patch_id // self.number_of_patches_height
-        patch_col = patch_id % self.number_of_patches_height
         
-        y_min = self.y_min + patch_row * self.patch_width
-        y_max = y_min + self.patch_width
-        z_min = self.z_min + patch_col * self.patch_height
-        z_max = z_min + self.patch_height
+        # Calculate patch boundaries
+        i = patch_id // self.number_of_patches_height
+        j = patch_id % self.number_of_patches_height
+        # Calcola i confini usando gli stessi edges di create_patches()
+        y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
+        z_edges = self.z_min + np.arange(self.number_of_patches_height + 1) * self.patch_height
+        
+        y_min = y_edges[i]
+        y_max = y_edges[i + 1] 
+        z_min = z_edges[j]
+        z_max = z_edges[j + 1]
     
         y_coord = y_point
         z_coord = z_point
@@ -263,46 +271,6 @@ class PatchSurface:
             plt.show()
         return normal_unit
             
-    # def calculate_normal_from_nearest_points_wall(self, patch_id, point):
-    #     points_in_patch = self.patches[patch_id]['points_in_patch']
-        
-    #     if len(points_in_patch) < 3:
-    #         print(f"Patch {patch_id} has insufficient points ({len(points_in_patch)}) to calculate normal vector")
-    #         return None
-        
-    #     # Estrai le coordinate dei punti
-    #     patch_points = np.array([p['position'] for p in points_in_patch])
-    #     target_point = point['position']
-        
-    #     # Trova i 3 punti più vicini al punto target
-    #     distances = np.linalg.norm(patch_points - target_point, axis=1)
-    #     closest_indices = np.argsort(distances)[:3]
-    #     closest_points = patch_points[closest_indices]
-        
-    #     # Calcola due vettori dal primo punto agli altri due
-    #     v1 = closest_points[1] - closest_points[0]
-    #     v2 = closest_points[2] - closest_points[0]
-        
-    #     # Calcola la normale come prodotto vettoriale
-    #     normal = np.cross(v1, v2)
-        
-    #     # Normalizza il vettore normale
-    #     normal_magnitude = np.linalg.norm(normal)
-    #     if normal_magnitude == 0:
-    #         print("Cannot calculate normal vector: points are collinear")
-    #         return None
-        
-    #     normal_unit = normal / normal_magnitude
-        
-    #     # Per una parete, assicurati che la normale punti lontano dalla parete (componente X positiva)
-    #     if normal_unit[0] < 0:
-    #         normal_unit = -normal_unit
-        
-    #     print(f"Fallback method: Normal vector calculated using 3 nearest points for wall")
-    #     print(f"Normal vector: {normal_unit}")
-        
-    #     return normal_unit
-    
     #  ==== Get Methods
     def get_patches(self):
         return self.patches
@@ -336,6 +304,38 @@ class PatchSurface:
             print(f"Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
             return False
         return self.is_point_in_patch(patch_id, point)
+    
+    def get_all_mesh_wall(self):
+        if len(self.all_pc) == 0:
+            print("Error: No points available to create mesh")
+            return None, None, None
+        
+        # Extract coordinates from all points
+        x_coords = self.all_pc[:, 0]
+        y_coords = self.all_pc[:, 1] 
+        z_coords = self.all_pc[:, 2]
+        # Determine grid resolution based on number of points
+        total_points = len(self.all_pc)
+        
+        grid_resolution = int(np.sqrt(total_points))
+        
+        y_grid_vector = np.linspace(np.min(y_coords), np.max(y_coords), grid_resolution)
+        z_grid_vector = np.linspace(np.min(z_coords), np.max(z_coords), grid_resolution)
+        
+        # Usiamo meshgrid per creare le matrici di coordinate Y e Z
+        Y_grid, Z_grid = np.meshgrid(y_grid_vector, z_grid_vector)
+        
+        # 3. INTERPOLARE I VALORI X (PROFONDITÀ) SULLA GRIGLIA
+        # Usiamo griddata per stimare i valori di X su ogni punto della nuova griglia Y-Z
+        # basandoci sui punti originali sparsi.
+        points = np.vstack((y_coords, z_coords)).T
+        values = x_coords
+        
+        X_grid = griddata(points, values, (Y_grid, Z_grid), method='linear')
+        
+        print(f"Mesh grid: {len(X_grid)} - {len(Y_grid)} - {len(Z_grid)} from {total_points} points")
+        
+        return X_grid, Y_grid, Z_grid
     
     def get_mesh_grid_patch(self, patch_id, plot_patch=False):
         # Recupera i punti della patch
@@ -491,40 +491,66 @@ class PatchSurface:
         print("Point (y,z) does not belong to any patch")   
         return None
     
-    def getAbsolutePoseOfPointInsidePatch (self, patch_id, point_local_y, point_local_z):
+    def getAbsolutePoseOfPointInsidePatch (self, patch_id, point_local_y, point_local_z, scale=1.0):
         if patch_id < 0 or patch_id >= len(self.patches):
             print(f"Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
             return None
+    
+        # Step 1: Validate input coordinates
+        max_coord = scale
+        if point_local_y < 0 or point_local_y > max_coord or point_local_z < 0 or point_local_z > max_coord:
+            print(f"Invalid local coordinates ({point_local_y}, {point_local_z}). Must be in range [0, {max_coord}].")
+            return None
         
-        # Clamp delle coordinate relative tra 0 e 1
-        point_local_y = np.clip(point_local_y, 0.0, 1.0)
-        point_local_z = np.clip(point_local_z, 0.0, 1.0)
+        # Step 2: Calculate patch boundaries using the same logic as create_patches()
+        i = patch_id // self.number_of_patches_height
+        j = patch_id % self.number_of_patches_height
         
-        # Calcola i confini della patch
-        patch_row = patch_id // self.number_of_patches_height
-        patch_col = patch_id % self.number_of_patches_height
-        #bbox della patch
-        y_min = self.y_min + patch_row * self.patch_width
-        y_max = y_min + self.patch_width
-        z_min = self.z_min + patch_col * self.patch_height
-        z_max = z_min + self.patch_height
+        # Calculate edges using the same method as create_patches()
+        y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
+        z_edges = self.z_min + np.arange(self.number_of_patches_height + 1) * self.patch_height
         
-        y_absolute = y_min + point_local_y * (y_max - y_min)
-        z_absolute = z_min + point_local_z * (z_max - z_min)
+        y_min_patch = y_edges[i]
+        y_max_patch = y_edges[i + 1]
+        z_min_patch = z_edges[j]
+        z_max_patch = z_edges[j + 1]
         
+        # Step 3: Convert relative coordinates to absolute coordinates
+        actual_patch_width = y_max_patch - y_min_patch
+        actual_patch_height = z_max_patch - z_min_patch
+        
+        y_absolute = y_min_patch + (point_local_y / scale) * actual_patch_width
+        z_absolute = z_min_patch + (point_local_z / scale) * actual_patch_height
+        
+        # Step 4: Validate that the absolute coordinates are within patch boundaries
+        if not (y_min_patch <= y_absolute <= y_max_patch and z_min_patch <= z_absolute <= z_max_patch):
+            print(f"Warning: Calculated absolute coordinates ({y_absolute:.3f}, {z_absolute:.3f}) are outside patch {patch_id} boundaries.")
+            print(f"Patch boundaries: Y[{y_min_patch:.3f}, {y_max_patch:.3f}], Z[{z_min_patch:.3f}, {z_max_patch:.3f}]")
+        
+        
+        # Step 5: Use get_point_t_in_surface to find the corresponding x value on the surface.
         point_t = self.get_point_t_in_surface(patch_id, y_absolute, z_absolute)
-        
         if point_t is None:
-            print(f"Warning: Could not interpolate X coordinate, using patch centroid X = {x_absolute:.3f}")
+            # If interpolation fails, use the patch's centroid X as a fallback.
+            x_absolute = self.patches[patch_id]['centroid'][0]
+            print(f"Warning: Could not interpolate X coordinate for absolute point ({y_absolute:.3f}, {z_absolute:.3f}). Using patch centroid X = {x_absolute:.3f}")
         else:
             x_absolute = point_t['position'][0]
-        
+
         absolute_position = np.array([x_absolute, y_absolute, z_absolute])
         
-        print(f"Patch {patch_id}: relative ({point_local_y:.3f}, {point_local_z:.3f}) -> absolute {absolute_position}")
-        
+        # Debugging information
+        print(f"Patch {patch_id}: relative point ({point_local_y}, {point_local_z}) with scale {scale} -> absolute {absolute_position}")
+        print(f"  Patch boundaries: Y[{y_min_patch:.3f}, {y_max_patch:.3f}], Z[{z_min_patch:.3f}, {z_max_patch:.3f}]")
+    
         return absolute_position
-        
+
+    def get_points_in_patch(self, patch_id):
+        if patch_id < 0 or patch_id >= len(self.patches):
+            print(f"Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
+            return None
+        return self.patches[patch_id].get('points_in_patch', [])
+    
     # def get_cost_of_point_in_patch(self, point): # TOTEST
     #     patch_id = self.get_patch_id_from_point(point)
     #     if patch_id is None:
@@ -907,26 +933,37 @@ def main():
         
     # per richiamare un valroe dentro la patches_______patch_surface.patches[patch_id]['cost_patch']
     # per richiamare un punto dentro la patches _______print (patch_surface.patches[patch_id]['points_in_patch'][2])
+    # per richiamare il costo del punto dentro una patch ______print (patch_surface.patches[patch_id]['points_in_patch'][2]['cost'])
 
 
-
-    P0_INIT = np.array([0.0, 2.5, -6])
-    PF_INIT = np.array([0.0, 4, -4])
+    # P0_INIT = np.array([0.0, 2.5, -6])
+    # PF_INIT = np.array([0.0, 4, -4])
     # select y and z
-    p0_y = P0_INIT[1]
-    p0_z = P0_INIT[2]
-    pf_y = PF_INIT[1]
-    pf_z = PF_INIT[2]
-    # find patch from points
-    patch_p0=patch_surface.get_patch_id_from_point_2D(p0_y,p0_z)
-    patch_pf=patch_surface.get_patch_id_from_point_2D(pf_y, pf_z)
-    #update p0 point on surface
-    new_p0= patch_surface.get_point_t_in_surface(patch_p0 , p0_y, p0_z, plot_patch=True)
-    new_p0 = patch_surface.get_point_t_in_surface(patch_pf , pf_y, pf_z, plot_patch=True)
-    patch_surface.set_new_point_in_patch(patch_p0, p0_y, p0_z, update_cost=True, plot=True,k_neighbors=5)
-    patch_surface.plot_patch(patch_p0)
-    #extract the mesh grid
-    mesh_x, mesh_y, mesh_z = patch_surface.get_mesh_grid_patch(patch_p0)
+    # p0_y = P0_INIT[1]
+    # p0_z = P0_INIT[2]
+    # pf_y = PF_INIT[1]
+    # pf_z = PF_INIT[2]
+    # # find patch from points
+    # patch_p0=patch_surface.get_patch_id_from_point_2D(p0_y,p0_z)
+    # patch_pf=patch_surface.get_patch_id_from_point_2D(pf_y, pf_z)
+    # #take points in patch
+    # points_in_patch_p0= patch_surface.get_points_in_patch(patch_p0)
+    # breakpoint()
+    # #update p0 point on surface
+    # new_p0= patch_surface.get_point_t_in_surface(patch_p0 , p0_y, p0_z, plot_patch=True)
+    # new_p0 = patch_surface.get_point_t_in_surface(patch_pf , pf_y, pf_z, plot_patch=True)
+    # patch_surface.set_new_point_in_patch(patch_p0, p0_y, p0_z, update_cost=True, plot=True,k_neighbors=5)
+    # patch_surface.set_new_point_in_patch(patch_pf, pf_y, pf_z, update_cost=True, plot=True,k_neighbors=5)
+    
+    # #extract the mesh grid
+    # mesh_x, mesh_y, mesh_z = patch_surface.get_mesh_grid_patch(patch_p0)
+    
+    # test getAbsolutePoseOfPointInsidePatch (self, patch_id, point_local_y, point_local_z, scale=1.0)
+    patch_id = 25
+    local_y = 0.5
+    local_z = 0.5
+    absolute_position = patch_surface.getAbsolutePoseOfPointInsidePatch(patch_id, local_y, local_z, scale=1.0)
+    print(f"Absolute position in patch {patch_id} for local ({local_y}, {local_z}): {absolute_position}")
 
 if __name__ == "__main__":
     main()

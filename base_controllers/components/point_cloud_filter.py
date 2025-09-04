@@ -49,6 +49,7 @@ class PointCloudFilter:
         self.threshold_extreme = 0.7    # Soglia per evidenziare pendenze estreme --> ancora da usare
         
         # Grid/surface cache
+        self.grid_x = None
         self.grid_y = None
         self.grid_z = None
         self.grid_Y = None
@@ -156,9 +157,11 @@ class PointCloudFilter:
             z_points = np.array([point['position'][2] for point in points])
         self.grid_y = np.arange(y_points.min(), y_points.max(), self.grid_resolution)
         self.grid_z = np.arange(z_points.min(), z_points.max(), self.grid_resolution)
+        self.grid_x = np.arange(x_points.min(), x_points.max(), self.grid_resolution)
         # Create a grid for interpolation
         self.grid_Y, self.grid_Z = np.meshgrid(self.grid_y, self.grid_z)
         # Interpolate the surface using griddata
+        
         self.surface = griddata((y_points,z_points),
                                 x_points,
                                 (self.grid_Y, self.grid_Z),
