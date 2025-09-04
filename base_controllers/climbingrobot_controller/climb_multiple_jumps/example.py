@@ -72,7 +72,7 @@ Lz = -20  # Height of wall in meters
 Ly = 5  # Width (horizontal extent) of wall in meters
 # Generate rock wall map
 terrainManager = TerrainManager()
-mesh_x, mesh_y, mesh_z = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth,   seed)
+mesh_x, mesh_y, mesh_z = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth,   seed, x_offset=-0.5)
 
 
 

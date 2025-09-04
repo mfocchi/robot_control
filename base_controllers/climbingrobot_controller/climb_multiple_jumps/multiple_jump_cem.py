@@ -76,54 +76,44 @@ p.min_std_continuous = np.full(p.dim_continuous, 1e-3)
 
 fitness_weights = np.array([1., 0.1, 10., 1.])
 
-
-
 class BiLevelOptmizer:
 
     def __init__(self, in_point_clouds,p0,pf):
-
         self.p0 = p0
         self.pf = pf
         # === point cloud initialization
         self.in_point_clouds = in_point_clouds
         self.point_clouds = PointCloudFilter(self.in_point_clouds)
         #self.point_clouds.print_map_pc()
-
         self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel],weight=0.5, plot=False)
         pc_t = self.point_clouds.points_t
-        self.point_clouds.visualize_cost_map()
-
-
+        #self.point_clouds.visualize_cost_map()
         # === patch initializaiton
         self.patches = PatchSurface(pc_t)
-
         self.patches.cost_color()
-        self.patches.plot_patches()
+        #self.patches.plot_patches()
         #self.patches.random_color()
         #self.patches.plot_patches()
-        # ===
 
-    def evalPatchParams(self): #evalTerrainParams
-
+    def evalPatchParams(self,p0_,pf_):
         # select y and z
-        p0_y = self.p0[1]
-        p0_z = self.p0[2]
-        pf_y = self.pf[1]
-        pf_z = self.pf[2]
+        p0_y = p0_[1]
+        p0_z = p0_[2]
+        pf_y = pf_[1]
+        pf_z = pf_[2]
         # find patch from points
         patch_p0=self.patches.get_patch_id_from_point_2D(p0_y,p0_z)
         patch_pf=self.patches.get_patch_id_from_point_2D(pf_y, pf_z)
-        #update p0 point on surface
+        # new p0 --> is a p0 with type point_t
         new_p0= self.patches.get_point_t_in_surface(patch_p0 , p0_y, p0_z, plot_patch=False)
         new_pf = self.patches.get_point_t_in_surface(patch_pf , pf_y, pf_z, plot_patch=False)
         #add points to patches
         self.patches.set_new_point_in_patch(patch_p0, p0_y, p0_z, update_cost=True, plot=False, k_neighbors=5)
         self.patches.set_new_point_in_patch(patch_pf, pf_y, pf_z, update_cost=True, plot=False, k_neighbors=5)
         #extract the mesh grid
-        mesh_x, mesh_y, mesh_z = self.patches.get_mesh_grid_patch(patch_p0)
+        mesh_x, mesh_y, mesh_z =self.patches.get_all_mesh_wall()
         #extract the normal vector
-        normal_p0 = self.patches.normal_vector_of_point_in_patch(patch_p0, new_p0,plot_normal_patch = True)
-
+        normal_p0 = self.patches.normal_vector_of_point_in_patch(patch_p0, new_p0,plot_normal_patch = False)
         return mesh_x, mesh_y, mesh_z, normal_p0, new_p0, new_pf,
 
     def eval_pop(self,input_data):
@@ -134,8 +124,6 @@ class BiLevelOptmizer:
         ids = []
         fitness = 0.0
         print(f"Number of jumps {n_jumps}\n")
-        ## Run trajectory optimisation here #
-
         #p0_current = self.p0.copy()
         for i in range(n_jumps-1):
             print(f"Jump n:{i}\n")
@@ -144,64 +132,51 @@ class BiLevelOptmizer:
             # the continue variables contain the X and Y normalized coordinate of the candidate contact points inside the candidate patches
             contact_relative_to_patch_yz= xc[i*2:i*2+2]
             #print("jump number : ", i)
+            contact_abs_pos_yz = self.patches.getAbsolutePoseOfPointInsidePatch(patch_id, contact_relative_to_patch_yz[0], contact_relative_to_patch_yz[1], scale=1.0)
 
-            contact_abs_pos_yz = self.patches.getAbsolutePoseOfPointInsidePatch(patch_id, contact_relative_to_patch_yz[0], contact_relative_to_patch_yz[1])
+            mesh_x, mesh_y, mesh_z, normal, p0_adj, pf_adj = self.evalPatchParams(self.p0,contact_abs_pos_yz)
 
-            # ?????????????? perche mi serve avere contact_abs_pos_yz?????
-            mesh_x, mesh_y, mesh_z, normal, p0_adj, pf_adj = self.evalPatchParams(self.p0, contact_abs_pos_yz) #get the X consistent with terrain
+            # ora il punto assoluto è in pf_adj
             params['mesh_x'] = mesh_x
             params['mesh_y'] = mesh_y
             params['mesh_z'] = mesh_z
             params['contact_normal'] = matlab.double(normal)
 
-            # che tipo di dato vuole ? optimize_cpp_mex ?
-            res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
-            # ??????????????? perche mi serve avere contact_abs_pos_yz?????
-            fitness += self.calc_fitness(res, patch_id, contact_abs_pos_yz)
+            print("y =", p0_adj["position"][1])
+            print("z =", p0_adj["position"][2])
+            p0_to_matlab = p0_adj["position"]
+            pf_to_matlab = pf_adj["position"]
 
-            self.p0 = pf_adj
+            res = eng.optimize_cpp_mex(matlab.double(p0_to_matlab), matlab.double(pf_to_matlab), Fleg_max, Fr_max, Fr_min, mu, params)
+
+            fitness += self.calc_fitness(res, patch_id=patch_id, contact_abs_pos_yz=pf_adj)
+            self.p0 = pf_adj["position"]
 
         #print("final jump")
         #last jump is to pf
-        mesh_x, mesh_y, mesh_z, normal, p0_adj, pf_adj = self.evalPatchParams()
+        mesh_x, mesh_y, mesh_z, normal, p0_adj, pf_adj = self.evalPatchParams(self.p0, PF_INIT)
+
         params['mesh_x'] = mesh_x
         params['mesh_y'] = mesh_y
         params['mesh_z'] = mesh_z
         params['contact_normal'] = matlab.double(normal)
+
         res = eng.optimize_cpp_mex(matlab.double(self.p0), matlab.double(self.pf), Fleg_max, Fr_max, Fr_min, mu, params)
         fitness += self.calc_fitness(res)
-
-        #print("population evaluation finished")
-        #to debug
-        ## Calculate fitness (by default the algorithm maximises) ##
-        # if xd[0] == 0:
-        #     fitness += 50
-        # if xd[1] == 1:
-        #     fitness += 100
-        # for num in xc:
-        #     fitness += -((num - 1.5) ** 2)
         return fitness
 
-
-    def calc_fitness(self, patch_id=None, contact_abs_pos_yz=None):
+    def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
         fit_average_costmap_patch = 0.
         fit_landing_costmap = 0.
-
-        if patch_id is not None:
-            points_in_patch = terrainManager.retrievePatches(patch_id)
-            Y_range = points_in_patch[0, :]
-            Z_range = points_in_patch[1, :]
-            # eval avergage cost
-            #fit_average_costmap_patch =  evalAverageCostOfPatch(patch_id)
-            #eval actual cost at selected landing location
-            #fit_landing_costmap = evalCostOfPointInPatch(contact_abs_pos_yz)
-
-        #print("jump duration", res['Tf'])
+        if (patch_id is not None and contact_abs_pos_yz is not None):
+                fit_landing_costmap = contact_abs_pos_yz['cost']
+                fit_average_costmap_patch = self.patches.get_patch_cost(patch_id)
         fit_consumed_energy = -res['consumed_energy']
         if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
             fit_problem_converged = 100
         else:
             fit_problem_converged = 0
+        # print("jump duration", res['Tf'])
         print(f"convergence: {fitness_weights[0]*fit_problem_converged}, energy: {fitness_weights[1]*fit_consumed_energy}, avg_cost: {fitness_weights[2]*fit_average_costmap_patch}, land_cost: {fitness_weights[3]*fit_landing_costmap}")
         fitness =  fitness_weights[0]*fit_problem_converged + fitness_weights[1]*fit_consumed_energy +fitness_weights[2]*fit_average_costmap_patch + fitness_weights[3]*fit_landing_costmap
 
@@ -217,7 +192,7 @@ def main():
     pc_terrain = terrain.point_cloud
     # Optimizer part
     optimizer = BiLevelOptmizer(pc_terrain,P0_INIT,PF_INIT)
-    optimizer.evalPatchParams()
+    optimizer.evalPatchParams(P0_INIT,PF_INIT)
 
     cost_hist = np.zeros(p.cem_iters)
 
@@ -237,11 +212,10 @@ def main():
         # with ProcessPoolExecutor(max_workers=p.n_threads) as executor:
         #     fitness = list(executor.map(eval_pop, inputs))
         fitness = []
-        with ThreadPoolExecutor(max_workers=p.n_threads) as executor:
-
-            for i, result in enumerate(executor.map(optimizer.eval_pop,inputs), start=1):
-                fitness.append(result)
-                print(colored(f"Population {i}/{len(inputs)} finished, fitness = {result}\n","red"))
+        for i, inp in enumerate(inputs, start=1):
+            result = optimizer.eval_pop(inp)
+            fitness.append(result)
+            print(colored(f"Population {i}/{len(inputs)} finished, fitness = {result}\n", "red"))
 
         # Evaluate population and update distributions
         algo.evaluate_population(fitness)
