@@ -719,23 +719,31 @@ def euler_from_quaternion(quaternion, axes='sxyz'):
     return euler_from_matrix(quaternion_matrix(quaternion), axes)
 
 def quaternion_matrix(quaternion):
-    """Return homogeneous rotation matrix from quaternion.
+    """Convert a quaternion [x, y, z, w] into a 4×4 homogeneous rotation matrix (suitable for transformations in 3D space).
 
     >>> R = quaternion_matrix([0.06146124, 0, 0, 0.99810947])
     >>> np.allclose(R, rotation_matrix(0.123, (1, 0, 0)))
     True
 
     """
+    # Takes the first 4 elements of quaternion (in case the input has extra values).
     q = np.array(quaternion[:4], dtype=np.float64, copy=True)
+    #compute the squared norm of the quaternion
     nq = np.dot(q, q)
+    #If the quaternion is extremely close to zero (bad input, degenerate case), just return the identity transform (no rotation).
     if nq < _EPS:
         return np.identity(4)
+    #Normalizes the quaternion so it has unit length. if q is normalized this is just sqrt(2), this trick enables to have x2 inside the  
+    #The outer product gives all possible products qiqj at once,Then the final rotation matrix is just an arrangement of those precomputed terms
     q *= math.sqrt(2.0 / nq)
-    q = np.outer(q, q)
+    #Faster execution in NumPy
+    M = np.outer(q, q)
+    #This is mathematically equivalent to the classic formula for quaternion → rotation (https://www.astro.rug.nl/software/kapteyn-beta/_downloads/attitude.pdf eq. 127)
+    # but written with the outer product (you can derive they are the same)
     return np.array((
-        (1.0-q[1, 1]-q[2, 2],     q[0, 1]-q[2, 3],     q[0, 2]+q[1, 3], 0.0),
-        (    q[0, 1]+q[2, 3], 1.0-q[0, 0]-q[2, 2],     q[1, 2]-q[0, 3], 0.0),
-        (    q[0, 2]-q[1, 3],     q[1, 2]+q[0, 3], 1.0-q[0, 0]-q[1, 1], 0.0),
+        (1.0-M[1, 1]-M[2, 2],     M[0, 1]-M[2, 3],     M[0, 2]+M[1, 3], 0.0),
+        (    M[0, 1]+M[2, 3], 1.0-M[0, 0]-M[2, 2],     M[1, 2]-M[0, 3], 0.0),
+        (    M[0, 2]-M[1, 3],     M[1, 2]+M[0, 3], 1.0-M[0, 0]-M[1, 1], 0.0),
         (                0.0,                 0.0,                 0.0, 1.0)
         ), dtype=np.float64)
 
