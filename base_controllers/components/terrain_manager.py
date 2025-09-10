@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed=47, Lz=-60, Ly=10):
+    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
@@ -32,10 +32,13 @@ class TerrainManager:
         
         # Generate the terrain automatically
         self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
-            self.Lz, self.Ly, self.grid_size, self.wall_depth, 
+            self.Lz, self.Ly, self.grid_size, self.wall_depth,
             self.max_ridge_depth, self.seed
         )
-        
+
+        #self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size)
+        self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
+
         # Convert to point cloud format and store
         self.point_cloud = self.convert_meshgrid_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
 
@@ -148,6 +151,25 @@ class TerrainManager:
         
         return X, Y, Z
     
+    def generate_hemisferic_map(self, Lz, Ly, cz = -10, cy = 2.5, radius = 3, grid_size=100, x_offset = 0):
+
+
+        X = np.zeros((grid_size, grid_size))
+
+        # Add hemispherical bulge
+        # Create physical grid in meters
+        z = np.linspace(Lz, 0, grid_size)
+        y = np.linspace(0, Ly, grid_size)
+
+        Z, Y = np.meshgrid(z, y)
+        dist2 = (Z - cz) ** 2 + (Y - cy) ** 2
+        mask = dist2 <= radius ** 2
+        hemisphere = np.zeros_like(X)
+        hemisphere[mask] = np.sqrt(radius ** 2 - dist2[mask])
+        X += hemisphere
+
+        return X, Y, Z
+
     def convert_meshgrid_to_pc(self, X, Y, Z):
         x_position = X.flatten()
         y_position = Y.flatten()
@@ -442,7 +464,15 @@ class TerrainManager:
         ax.set_xlabel('X (m)')
         ax.set_ylabel('Y (m)')
         ax.set_zlabel('Z (m)')
+
+        ax.set_xlim([0, 4])
+        ax.set_ylim([0, 7])
+        ax.set_zlim([-15, -5])
+        # Alternative method using set_box_aspect for proportional scaling
+        # ax.set_box_aspect([x_range, y_range, z_range])
         ax.view_init(elev=20, azim=9)
+        plt.show()
+
         plt.show()
 
     def plot_patch_and_center(self, X, Y, Z, normalized_y=0.5, normalized_z=0.5):

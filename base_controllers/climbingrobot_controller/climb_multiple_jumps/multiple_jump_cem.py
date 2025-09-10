@@ -19,7 +19,9 @@ sys.path.insert(0, '../codegen_mesh')
 
 # start and goal point
 P0_INIT = np.array([0.0, 2.5, -5])
-PF_INIT = np.array([0.0, 4, -3])
+#PF_INIT = np.array([0.0, 4, -3])
+PF_INIT = np.array([0.0, 2.5, -15])
+
 
 # inner_opt_params for optimizer:
 Fleg_max = 300.
@@ -80,10 +82,13 @@ fitness_weights = np.array([1., 0.1, 10., 1.])
 class BiLevelOptmizer:
 
     def __init__(self, terrain_manager,p0,pf):
+
         # point cloud filter
         self.terrain_manager = terrain_manager
         self.p0 = p0
         self.pf = pf
+
+
         # === point cloud initialization
         self.in_point_clouds = self.terrain_manager.point_cloud
         self.point_clouds = PointCloudFilter(self.in_point_clouds)
@@ -114,17 +119,17 @@ class BiLevelOptmizer:
         #self.patches.plot_patches()
 
     def eval_pop(self,input_data):
+        jump_log = []
         xd = input_data[0]
         xc = input_data[1]
         #first discrete variable is number of jumps, the next ones are the of the patches
         n_jumps = xd[0] + 1
         ids = []
         fitness = 0.0
-        print(f"Number of jumps {n_jumps}\n")
-        #p0_current = self.p0.copy()
+        #print(f"Number of jumps {n_jumps}\n")
 
         for i in range(n_jumps-1):
-            print(f"Jump n:{i}\n")
+            #print(f"Jump n:{i}\n")
             # following discrete variables represent the id of the patches for the intermediate jumps
             patch_id = xd[1 + i]
             # the continue variables contain the X and Y normalized coordinate of the candidate contact landing points inside the candidate patches
@@ -152,6 +157,8 @@ class BiLevelOptmizer:
             res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, inner_opt_params)
 
             fitness += self.calc_fitness(res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
+            jump_log.append(p0_adj)
+            jump_log.append(pf_adj)
             self.p0 = pf_adj.copy()
 
         #print("final jump")
@@ -172,6 +179,14 @@ class BiLevelOptmizer:
 
         res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, inner_opt_params)
         fitness += self.calc_fitness(res)
+
+        jump_log.append(pf_adj)
+        #plot traj
+        # plot starting final points
+        ax = plt.gca()
+        for point in jump_log:
+            ax.scatter(point[0], point[1], point[2], color='red', s=500)
+
         return fitness
 
     def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
