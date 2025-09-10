@@ -291,6 +291,11 @@ class PointCloudFilter:
     def get_all_cost(self):
         return np.array([point['cost'] for point in self.points_t])
     
+    def get_cost_in_pointyz(self, y, z):
+        for point in self.points_t:
+            if np.isclose(point['position'][1], y) and np.isclose(point['position'][2], z):
+                return point['cost']
+        return None
     # ==== print methods
     def print_information(self):
     
