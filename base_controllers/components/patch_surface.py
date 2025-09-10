@@ -390,7 +390,7 @@ class PatchSurface:
             Z_grid = z_coords.reshape((grid_size, grid_size))
         else:
             # Not a perfect square - create interpolated grid
-            print(f"Patch {patch_id} has {num_points} points, creating interpolated {grid_size}x{grid_size} grid")
+            #print(f"Patch {patch_id} has {num_points} points, creating interpolated {grid_size}x{grid_size} grid")
             
             # Find boundaries of the patch
             patch_row = patch_id // self.number_of_patches_height
@@ -568,8 +568,8 @@ class PatchSurface:
         absolute_position = np.array([0.,  y_absolute, z_absolute])
         
         # Debugging information
-        print(f"Patch {patch_id}: relative point ({point_local_y}, {point_local_z}) with scale {scale} -> absolute {absolute_position}")
-        print(f"  Patch boundaries: Y[{y_min_patch:.3f}, {y_max_patch:.3f}], Z[{z_min_patch:.3f}, {z_max_patch:.3f}]")
+        #print(f"Patch {patch_id}: relative point ({point_local_y}, {point_local_z}) with scale {scale} -> absolute {absolute_position}")
+        #print(f"  Patch boundaries: Y[{y_min_patch:.3f}, {y_max_patch:.3f}], Z[{z_min_patch:.3f}, {z_max_patch:.3f}]")
     
         return absolute_position
 
