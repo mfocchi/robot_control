@@ -304,39 +304,66 @@ class PatchSurface:
             print(f"Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
             return False
         return self.is_point_in_patch(patch_id, point)
-    
-    def get_all_mesh_wall(self):
-        if len(self.all_pc) == 0:
-            print("Error: No points available to create mesh")
-            return None, None, None
-        
-        # Extract coordinates from all points
-        x_coords = self.all_pc[:, 0]
-        y_coords = self.all_pc[:, 1] 
-        z_coords = self.all_pc[:, 2]
-        # Determine grid resolution based on number of points
-        total_points = len(self.all_pc)
-        
-        grid_resolution = int(np.sqrt(total_points))
-        
-        y_grid_vector = np.linspace(np.min(y_coords), np.max(y_coords), grid_resolution)
-        z_grid_vector = np.linspace(np.min(z_coords), np.max(z_coords), grid_resolution)
-        
-        # Usiamo meshgrid per creare le matrici di coordinate Y e Z
-        Y_grid, Z_grid = np.meshgrid(y_grid_vector, z_grid_vector)
-        
-        # 3. INTERPOLARE I VALORI X (PROFONDITÀ) SULLA GRIGLIA
-        # Usiamo griddata per stimare i valori di X su ogni punto della nuova griglia Y-Z
-        # basandoci sui punti originali sparsi.
-        points = np.vstack((y_coords, z_coords)).T
-        values = x_coords
-        
-        X_grid = griddata(points, values, (Y_grid, Z_grid), method='linear')
-        
-        print(f"Mesh grid: {len(X_grid)} - {len(Y_grid)} - {len(Z_grid)} from {total_points} points")
-        
-        return X_grid, Y_grid, Z_grid
-    
+
+    def get_cost_in_point(self, patch_id, abs_pointyz):
+        y_point = abs_pointyz[0]
+        z_point = abs_pointyz[1]
+        k_neighbors = 4
+
+        # get near points in patch
+        X_grid, Y_grid, Z_grid = self.get_mesh_grid_patch(patch_id, plot_patch=False)
+        distances_yz = np.sqrt((Y_grid - y_point) * 2 + (Z_grid - z_point) * 2)
+        min_idx = np.unravel_index(np.argmin(distances_yz), distances_yz.shape)
+        i, j = min_idx
+        x_estimated = X_grid[i, j]
+
+        points_in_patch = self.patches[patch_id]['points_in_patch']
+
+        new_position = np.array([x_estimated, y_point, z_point])
+        distances_pc = [
+            (idx, np.sqrt((p['position'][1] - y_point) * 2 + (p['position'][2] - z_point) * 2))
+            for idx, p in enumerate(points_in_patch)
+        ]
+        distances_pc.sort(key=lambda x: x[1])
+        neighbors_idx = [idx for idx, _ in distances_pc[:k_neighbors]]
+
+        neighbors = [points_in_patch[idx] for idx in neighbors_idx]
+        cost_avg = float(np.mean([n['cost'] for n in neighbors]))
+
+        return cost_avg
+    # deprecated
+    # def get_all_mesh_wall(self):
+    #     if len(self.all_pc) == 0:
+    #         print("Error: No points available to create mesh")
+    #         return None, None, None
+    #
+    #     # Extract coordinates from all points
+    #     x_coords = self.all_pc[:, 0]
+    #     y_coords = self.all_pc[:, 1]
+    #     z_coords = self.all_pc[:, 2]
+    #     # Determine grid resolution based on number of points
+    #     total_points = len(self.all_pc)
+    #
+    #     grid_resolution = int(np.sqrt(total_points))
+    #
+    #     y_grid_vector = np.linspace(np.min(y_coords), np.max(y_coords), grid_resolution)
+    #     z_grid_vector = np.linspace(np.min(z_coords), np.max(z_coords), grid_resolution)
+    #
+    #     # Usiamo meshgrid per creare le matrici di coordinate Y e Z
+    #     Y_grid, Z_grid = np.meshgrid(y_grid_vector, z_grid_vector)
+    #
+    #     # 3. INTERPOLARE I VALORI X (PROFONDITÀ) SULLA GRIGLIA
+    #     # Usiamo griddata per stimare i valori di X su ogni punto della nuova griglia Y-Z
+    #     # basandoci sui punti originali sparsi.
+    #     points = np.vstack((y_coords, z_coords)).T
+    #     values = x_coords
+    #
+    #     X_grid = griddata(points, values, (Y_grid, Z_grid), method='linear')
+    #
+    #     print(f"Mesh grid: {len(X_grid)} - {len(Y_grid)} - {len(Z_grid)} from {total_points} points")
+    #
+    #     return X_grid, Y_grid, Z_grid
+    #
     def get_mesh_grid_patch(self, patch_id, plot_patch=False):
         # Recupera i punti della patch
         points_in_patch = self.patches[patch_id]['points_in_patch']
@@ -490,7 +517,7 @@ class PatchSurface:
                 return patch_id
         print("Point (y,z) does not belong to any patch")   
         return None
-    
+
     def getAbsolutePoseOfPointInsidePatch (self, patch_id, point_local_y, point_local_z, scale=1.0):
         if patch_id < 0 or patch_id >= len(self.patches):
             print(f"Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
@@ -527,17 +554,18 @@ class PatchSurface:
             print(f"Warning: Calculated absolute coordinates ({y_absolute:.3f}, {z_absolute:.3f}) are outside patch {patch_id} boundaries.")
             print(f"Patch boundaries: Y[{y_min_patch:.3f}, {y_max_patch:.3f}], Z[{z_min_patch:.3f}, {z_max_patch:.3f}]")
         
-        
-        # Step 5: Use get_point_t_in_surface to find the corresponding x value on the surface.
-        point_t = self.get_point_t_in_surface(patch_id, y_absolute, z_absolute)
-        if point_t is None:
-            # If interpolation fails, use the patch's centroid X as a fallback.
-            x_absolute = self.patches[patch_id]['centroid'][0]
-            print(f"Warning: Could not interpolate X coordinate for absolute point ({y_absolute:.3f}, {z_absolute:.3f}). Using patch centroid X = {x_absolute:.3f}")
-        else:
-            x_absolute = point_t['position'][0]
+        # we have already the function
+        # # Step 5: Use get_point_t_in_surface to find the corresponding x value on the surface.
+        # point_t = self.get_point_t_in_surface(patch_id, y_absolute, z_absolute)
+        # if point_t is None:
+        #     # If interpolation fails, use the patch's centroid X as a fallback.
+        #     x_absolute = self.patches[patch_id]['centroid'][0]
+        #     print(f"Warning: Could not interpolate X coordinate for absolute point ({y_absolute:.3f}, {z_absolute:.3f}). Using patch centroid X = {x_absolute:.3f}")
+        # else:
+        #     x_absolute = point_t['position'][0]
+        #
 
-        absolute_position = np.array([x_absolute, y_absolute, z_absolute])
+        absolute_position = np.array([0.,  y_absolute, z_absolute])
         
         # Debugging information
         print(f"Patch {patch_id}: relative point ({point_local_y}, {point_local_z}) with scale {scale} -> absolute {absolute_position}")

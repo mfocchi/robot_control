@@ -102,7 +102,7 @@ class PointCloudFilter:
         mask = (self.x_points >= self.h_min) & (self.x_points <= self.h_max)
         self.points_t  = [point for i, point in enumerate(self.points_t) if mask[i]]
                   
-    def filter_height_profile(self, profile="logln",x0 = 0.0, scale=0.5, side_application="deep"):
+    def filter_height_profile(self, profile="logln",x0 = 0.0, scale=0.5, side_application="depth", weight = 1.0):
         print("equation used: {}".format(profile))
         x_points = np.array([p['position'][0] for p in self.points_t])
         # epsilon per evitare divisione per zero 
@@ -111,7 +111,7 @@ class PointCloudFilter:
             x = np.abs(x_points - x0)
         elif (side_application == "up"):
             x = np.where(x_points >= x0, x_points - x0, 0.0)
-        elif (side_application == "deep"):
+        elif (side_application == "depth"):
             x = np.where(x_points <= x0, x0 - x_points, 0.0)
         else:
             raise ValueError("side_application should be 'both', 'right' or 'left'")
@@ -141,7 +141,7 @@ class PointCloudFilter:
 
         # update points
         for i, p in enumerate(self.points_t):
-            p['cost']  = float(normalized_costs[i])
+            p['cost']  = weight*float(normalized_costs[i])
             p['color'] = gradient_colors[i][:3]
 
     def interpolation_to_surface(self, source_points=None):
@@ -235,7 +235,7 @@ class PointCloudFilter:
         self.surface = None
         return gradient_at_points
     
-    def compute_cost(self,gradient_at_points,source_points=None,weight = 0.5,plot=False):
+    def compute_cost(self,gradient_at_points,source_points=None,weight = 1.0,plot=False):
         if source_points is None:
             source_points = self.points_t
         if gradient_at_points is None:
@@ -253,14 +253,15 @@ class PointCloudFilter:
         
         for i, point in enumerate(source_points):
             # incremental cost
-            # old_cost = point['cost']
-            # new_cost = float(cost_values[i])
-            point['color'] = gradient_colors[i][:3]  
-            point['cost'] = float(cost_values[i])  * weight
+            old_cost = point['cost']
+            new_cost = float(cost_values[i])
+            point['color'] = gradient_colors[i][:3]
+            point['cost'] = (old_cost + new_cost) * weight
         if plot:
             self.visualize_cost_map(self.points_t)
+
            
-    def filter_process_points(self, kernel, source_points=None, weight=0.0, plot=False):
+    def filter_process_points(self, kernel, source_points=None, weight=1.0, plot=False):
         if source_points is None:
             source_points = self.points_t
         gradient_at_points = self.compute_conv_step(kernel, source_points,plot=plot)
@@ -290,12 +291,15 @@ class PointCloudFilter:
     
     def get_all_cost(self):
         return np.array([point['cost'] for point in self.points_t])
-    
-    def get_cost_in_pointyz(self, y, z):
-        for point in self.points_t:
-            if np.isclose(point['position'][1], y) and np.isclose(point['position'][2], z):
-                return point['cost']
-        return None
+
+
+
+    #deprecated use    get_cost_for_point
+    # def get_cost_in_pointyz(self, y, z):
+    #     for point in self.points_t:
+    #         if np.isclose(point['position'][1], y) and np.isclose(point['position'][2], z):
+    #             return point['cost']
+    #     return None
     # ==== print methods
     def print_information(self):
     
