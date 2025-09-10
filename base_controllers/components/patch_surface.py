@@ -579,15 +579,21 @@ class PatchSurface:
     def set_new_point_in_patch(self, patch_id, y_point, z_point, update_centroid=True, update_cost=True, plot=True, k_neighbors=5):
         if patch_id < 0 or patch_id >= len(self.patches):
             print(f"Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
+            print("A")
+            breakpoint()
             return None
         #check if the point (y,z) is in the patch
         if not self.is_point_2D_in_patch(patch_id, y_point, z_point):
             print(f"(y={y_point}, z={z_point}) is not in patch {patch_id}, cannot add new point")
+            print("B")
+            breakpoint()
             return None    
         patch = self.patches[patch_id]
         points_in_patch = patch.get('points_in_patch', [])
         if len(points_in_patch) < 4:
             print(f"Patch {patch_id} has too few points ({len(points_in_patch)}) to create new point reliably")
+            print("C")
+            breakpoint()
             return None
 
         X_grid, Y_grid, Z_grid = self.get_mesh_grid_patch(patch_id, plot_patch=False)

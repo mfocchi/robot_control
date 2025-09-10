@@ -74,6 +74,7 @@ p.init_mu_continuous = np.full(p.dim_continuous, 0.5)
 p.init_std_continuous = np.full(p.dim_continuous, 1.0)
 p.min_std_continuous = np.full(p.dim_continuous, 1e-3)
 
+# [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap ]
 fitness_weights = np.array([1., 0.1, 10., 1.])
 
 class BiLevelOptmizer:
@@ -94,6 +95,9 @@ class BiLevelOptmizer:
         #self.patches.plot_patches()
         #self.patches.random_color()
         #self.patches.plot_patches()
+
+        # [ smooth | I_derivative | II_derivative | ... ]
+        self.filter_weights = np.array([1., 0.5, 10., 1.])
 
     def evalPatchParams(self,p0_,pf_):
         # select y and z
@@ -130,9 +134,11 @@ class BiLevelOptmizer:
             # following discrete variables represent the id of the patches for the intermediate jumps
             patch_id = xd[1 + i]
             # the continue variables contain the X and Y normalized coordinate of the candidate contact points inside the candidate patches
-            contact_relative_to_patch_yz= xc[i*2:i*2+2]
+            contact_relative_to_patch_yz= xc[i*2:i*2+2] # tra 0 - 1  upper left corner patch
+
             #print("jump number : ", i)
             contact_abs_pos_yz = self.patches.getAbsolutePoseOfPointInsidePatch(patch_id, contact_relative_to_patch_yz[0], contact_relative_to_patch_yz[1], scale=1.0)
+            self.patches.set_new_point_in_patch(patch_id, contact_abs_pos_yz[1], contact_abs_pos_yz[2], update_cost=True, plot=False, k_neighbors=5)
 
             mesh_x, mesh_y, mesh_z, normal, p0_adj, pf_adj = self.evalPatchParams(self.p0,contact_abs_pos_yz)
 
@@ -168,9 +174,20 @@ class BiLevelOptmizer:
     def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
         fit_average_costmap_patch = 0.
         fit_landing_costmap = 0.
+        # filter apply
+        # fare un nuovo pc filter e poi aggiungere i punti presi sopra
         if (patch_id is not None and contact_abs_pos_yz is not None):
-                fit_landing_costmap = contact_abs_pos_yz['cost']
-                fit_average_costmap_patch = self.patches.get_patch_cost(patch_id)
+            points_t_patch = self.patches.get_points_in_patch(patch_id)
+            positions = [point['position'] for point in points_t_patch]
+            pc_t_patch = PointCloudFilter(positions)
+            pc_t_patch.filter_process_points([pc_t_patch.smoothing_kernel], weight=self.filter_weights[1], plot=False)
+            cost_in_point = pc_t_patch.get_cost_in_pointyz(contact_abs_pos_yz['position'][1],contact_abs_pos_yz['position'][2])
+
+            fit_landing_costmap = cost_in_point
+            fit_average_costmap_patch = self.patches.get_patch_cost(patch_id)
+            #if fit_landing_costmap is None:
+            #    breakpoint()
+
         fit_consumed_energy = -res['consumed_energy']
         if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
             fit_problem_converged = 100
