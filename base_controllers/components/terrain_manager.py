@@ -37,7 +37,7 @@ class TerrainManager:
         )
         
         # Convert to point cloud format and store
-        self.point_cloud = self.convert_point_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
+        self.point_cloud = self.convert_meshgrid_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
 
     def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, x_offset = 0):
         """
@@ -148,7 +148,7 @@ class TerrainManager:
         
         return X, Y, Z
     
-    def convert_point_to_pc(self, X, Y, Z):
+    def convert_meshgrid_to_pc(self, X, Y, Z):
         x_position = X.flatten()
         y_position = Y.flatten()
         z_position = Z.flatten()
