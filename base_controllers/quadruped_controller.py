@@ -69,10 +69,7 @@ class QuadrupedController(BaseController):
     # startupProcedure
 
     def initSubscribers(self):
-        self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
-                                         callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
-        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid,
-                                             callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
+        super().initSubscribers()
 
         if self.real_robot:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
@@ -93,20 +90,9 @@ class QuadrupedController(BaseController):
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
                                                callback=self._receive_pose_real,
                                                queue_size=1, tcp_nodelay=True)
-            if self.use_ground_truth_contacts:
-                self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
-                                                     callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
-                                                     tcp_nodelay=True)
-                self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState,
-                                                     callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,
-                                                     tcp_nodelay=True)
-                self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,
-                                                     callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 24,
-                                                     tcp_nodelay=True)
-                self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
-                                                     callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
-                                                     tcp_nodelay=True)
-        
+
+
+
         # if self.real_robot:
         #     self.sub_contact_force_z = ros.Subscriber("/" + self.robot_name + "/contact_force_z", Float64MultiArray,
         #                             callback=self._receive_contact_force_real, queue_size=1, tcp_nodelay=True)
@@ -210,7 +196,7 @@ class QuadrupedController(BaseController):
         self.IK = AnalyticInverseKinematics(self.robot)
         self.leg_odom = LegOdometry(self.robot, self.real_robot)
         self.legConfig = {}
-        if 'solo' in self.robot_name or  self.robot_name == 'hyq':  # either solo or solo_fw
+        if 'solo' in self.robot_name or  self.robot_name == 'hyq' or self.robot_name == 'anymal_d':  # either solo or solo_fw
             self.legConfig['lf'] = ['HipDown', 'KneeInward']
             self.legConfig['lh'] = ['HipDown', 'KneeInward']
             self.legConfig['rf'] = ['HipDown', 'KneeInward']
@@ -1279,7 +1265,7 @@ if __name__ == '__main__':
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
                           use_ground_truth_pose=True,
-                          use_ground_truth_contacts=True,
+                          use_ground_truth_contacts=False,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
         p.startupProcedure()

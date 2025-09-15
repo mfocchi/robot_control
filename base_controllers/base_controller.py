@@ -202,16 +202,17 @@ class BaseController(threading.Thread):
                                        queue_size=1, tcp_nodelay=True)
 
         if self.use_ground_truth_contacts:
-            self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
+
+            self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/"+conf.robot_params[self.robot_name]['ee_frames'][0]+"_bumper", ContactsState,
                                                  callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
-            self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState,
+            self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/"+conf.robot_params[self.robot_name]['ee_frames'][1]+"_bumper", ContactsState,
                                                  callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
-            self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,
+            self.sub_contact_lh = ros.Subscriber("/" + self.robot_name +  "/"+conf.robot_params[self.robot_name]['ee_frames'][2]+"_bumper", ContactsState,
                                                  callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
-            self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
+            self.sub_contact_rh = ros.Subscriber("/" + self.robot_name +  "/"+conf.robot_params[self.robot_name]['ee_frames'][3]+"_bumper", ContactsState,
                                                  callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
                                                  tcp_nodelay=True)
 

@@ -379,6 +379,78 @@ robot_params['go2'] ={'dt': 0.002,
                       # use real robot or simulation
                       'real_robot': False} # note the frames are all aligned with base for joints = 0
 
+robot_params['anymal_d'] ={'dt': 0.002,
+                        'kp': np.array([200., 200., 200.]*4),
+                        'kd': np.array([10., 10., 10.]*4),
+                        'ki': np.array([0., 0., 0.]*4),
+                           'kp_swing':  np.array([20., 30., 20.]*4),
+                        'kd_swing':  np.array([1., 1., 1.]*4),
+                        'ki_swing':  np.array([0., 0., 0.]*4),
+                           'kp_land': np.array([60., 90., 60.]*4),
+                        'kd_land': np.array([10., 10., 10.]*4),
+                        'ki_land': np.array([0., 0., 0.]*4),
+                           'kp_real': np.array([20., 30., 30.]*4),
+                        'kd_real': np.array([1., 1., 1.]*4),
+                        'ki_real': np.array([1., 1., 1.]*4),
+                           'kp_real_swing':  np.array([15., 20., 20]*4),
+                        'kd_real_swing':  np.array([1., 1., 1.]*4),
+                        'ki_real_swing':  np.array([0., 0., 0.]*4),
+                           'kp_real_land': np.array([15., 15., 15]*4),
+                        'kd_real_land': np.array([1., 1., 1.]*4),
+                        'ki_real_land': np.array([0., 0., 0.]*4),    # SIM ---------------------------    # joint pid + wbc (optional)
+                        'kp_wbc': np.array([60., 60., 60.]*4),
+                        'kd_wbc': np.array([10., 10., 10.]*4),
+                        'ki_wbc': np.array([0., 0., 0.]*4),
+                        # virtual impedance wrench control
+                        'kp_lin': np.array([1000., 1000., 800.]),
+                        'kd_lin': np.array([150., 150., 100.]),
+                        'kp_ang': np.array([200., 200., 100.]),
+                        'kd_ang': np.array([10., 20., 20.]),    # REAL---------------------------
+                        # joint pid for landing contoller after td + wbc (optional)
+                        'kp_wbc_real': np.array([10., 10., 10.]*4),
+                        'kd_wbc_real': np.array([1., 1., 1.]*4),
+                        'ki_wbc_real': np.array([0., 0., 0.]*4),    'kp_lin_real': np.array([1000., 1000., 1000.]),
+                        'kd_lin_real': np.array([200., 150., 200.]),
+                        'kp_ang_real': np.array([300., 300., 200.]),
+                        'kd_ang_real': np.array([10., 20., 20.]),    #joint configuration
+                        'q_0': np.array([ -0.1, 0.7, -1.,
+                                          -0.1 , -0.7 , 1.,
+                                          0.1, 0.7, -1.,
+                                          0.1, -0.7, 1.]),
+                        'q_retraction': np.array([0.2867, 1.48, -2.6,
+                              0.2867, 1.8, -2.48,
+                              -0.2867, 1.48, -2.6,
+                              -0.2867, 1.8, -2.48]),
+                        # default
+                        #'q_final': np.array([0.2, 1.1, -1.8, 0.2, 1.1, -1.8, -0.2, 1.1, -1.8, -0.2, 1.1, -1.8]),
+                        # orbit
+                        'q_final': np.array([0.1, 0.8, -1.6,  # lf
+                                              0.1, 1.0, -1.6,  # lh
+                                              -0.1, 0.8, -1.6,  # rf
+                                              -0.1, 1.0, -1.6]),  # rh    #forward
+                        'q_land_fwd':  np.array([0.1, 0.6, -1.8,  0.1, 0.6, -1.8, -0.1, 0.6, -1.8, -0.1, 0.6, -1.8]),
+                        #backward
+                        'q_land_bwd':  np.array([0.1, 1., -1.8,  0.1, 1., -1.8, -0.1, 1., -1.8, -0.1, 1., -1.8]),
+                        'landing_duration': 1.4,
+                        'com_z0_training' : 0.375,
+                        'q_0_td': np.array([0.1789, 1.2234, -2.2329, 0.1867, 1.4733, -2.1055, -0.1784, 1.2230, -2.2327, -0.1861, 1.4733, -2.1053]),
+                        'q_fold': np.array([0.2, 1.7, -2.7, #lf
+                                            0.2,  -1.7, 2.7, #lf
+                                            -0.2, 1.7,  -2.7,
+                                            -0.2, -1.7, 2.7]),  #thjis is for the startup phase
+                       'joint_names': ['lf_haa_joint', 'lf_hfe_joint', 'lf_kfe_joint',
+                                       'lh_haa_joint', 'lh_hfe_joint', 'lh_kfe_joint',
+                                       'rf_haa_joint', 'rf_hfe_joint', 'rf_kfe_joint',
+                                       'rh_haa_joint', 'rh_hfe_joint', 'rh_kfe_joint'],
+                       # ee params
+                       'ee_frames': ['lf_foot', 'lh_foot', 'rf_foot', 'rh_foot'],
+                        'real_robot': False,
+                        'force_th': 5.,
+                        'spawn_x': 0.0,
+                        'spawn_y': 0.0,
+                        'spawn_z': 0.9,
+                        'buffer_size': 50001
+                    } # note the
 
 robot_params['mantis'] ={'dt': 0.001,
                       'buffer_size': 5001, # 120 seconds
