@@ -87,8 +87,8 @@ class BiLevelOptmizer:
 
         # point cloud filter
         self.terrain_manager = terrain_manager
-        self.p0 = p0
-        self.pf = pf
+        self.p0_init = p0
+        self.pf_init = pf
 
 
         # === point cloud initialization
@@ -127,6 +127,9 @@ class BiLevelOptmizer:
         ids = []
         fitness = 0.0
         #print(f"Number of jumps {n_jumps}\n")
+        #reset initial final points
+        self.p0 = self.p0_init
+        self.pf = self.pf_init
 
         for i in range(n_jumps-1):
             #print(f"Jump n:{i}\n")
@@ -135,14 +138,17 @@ class BiLevelOptmizer:
             # the continue variables contain the X and Y normalized coordinate of the candidate contact landing points inside the candidate patches
             contact_relative_to_patch_yz= xc[i*2:i*2+2] # tra 0 - 1  upper left corner patch
 
-            #print("jump number : ", i)
+            print("jump number : ", i)
             #computes 0, Y, Z  absolute coordinates of candidate landing location
             landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(patch_id, contact_relative_to_patch_yz[0], contact_relative_to_patch_yz[1], scale=1.0)
             pf_adj = landing_abs_pos.copy()
+
+
             p0_adj = self.p0.copy()
             #adjust X coordinate to terrain shape for both liftoff and landing points
+            p0_adj[0] = self.terrain_manager.wall_surface_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x, self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
             pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-            p0_adj[0] = self.terrain_manager.wall_surface_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+
             jump_log_points.append(p0_adj)
             #compute normal at liftoff
             liftoff_normal = self.terrain_manager.wall_normal_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
@@ -155,10 +161,8 @@ class BiLevelOptmizer:
 
 
             res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, inner_opt_params)
-
-            jump_log_traj.append(mat_matrix2python(res['p']))
             fitness += self.calc_fitness(res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
-          
+            jump_log_traj.append(mat_matrix2python(res['p']))
             self.p0 = pf_adj.copy()
 
         #print("final jump")
@@ -181,7 +185,6 @@ class BiLevelOptmizer:
         fitness += self.calc_fitness(res)
         ref_com = mat_matrix2python(res['p'])
         jump_log_traj.append(ref_com)
-
         jump_log_points.append(pf_adj)
 
         #plot traj
@@ -201,16 +204,16 @@ class BiLevelOptmizer:
         # fare un nuovo pc filter e poi aggiungere i punti presi sopra
         if (patch_id is not None and  contact_abs_pos_yz is not None):
             #compute cost for landing candidate
-            fit_landing_cost = self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
+            fit_landing_cost = -self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
             #compute average cost on patch to see how bad /good is terrain there
-            fit_average_cost_patch = self.patches.get_patch_cost(patch_id)
+            fit_average_cost_patch = -self.patches.get_patch_cost(patch_id)
             #if fit_landing_costmap is None:
             #    breakpoint()
 
         fit_consumed_energy = -res['consumed_energy']
         if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
             fit_problem_converged = 100
-        else:
+        else: #problem did not converge
             fit_problem_converged = 0
         # print("jump duration", res['Tf'])
         print(f"convergence: {fitness_weights[0]*fit_problem_converged}, energy: {fitness_weights[1]*fit_consumed_energy}, avg_cost: {fitness_weights[2]*fit_average_cost_patch}, land_cost: {fitness_weights[3]*fit_landing_cost}")
