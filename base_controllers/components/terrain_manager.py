@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5):
+    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='rock'):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
@@ -29,18 +29,21 @@ class TerrainManager:
         self.patch_discretization_width = 20
         self.patch_discretization_height = 20
         self.number_of_points_in_patch = self.patch_discretization_width *self.patch_discretization_height
-        
-        # Generate the terrain automatically
-        self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
-            self.Lz, self.Ly, self.grid_size, self.wall_depth,
-            self.max_ridge_depth, self.seed
-        )
 
-        #self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size)
-        self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
+        if generate_terrain:
+            if terrain_type=='rock':
+                # Generate the terrain automatically
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
+                    self.Lz, self.Ly, self.grid_size, self.wall_depth,
+                    self.max_ridge_depth, self.seed
+                )
+            if terrain_type=='hemisphere':
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size)
 
-        # Convert to point cloud format and store
-        self.point_cloud = self.convert_meshgrid_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
+            self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
+
+            # Convert to point cloud format and store
+            self.point_cloud = self.convert_meshgrid_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
 
     def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, x_offset = 0):
         """
@@ -151,11 +154,8 @@ class TerrainManager:
         
         return X, Y, Z
     
-    def generate_hemisferic_map(self, Lz, Ly, cz = -10, cy = 2.5, radius = 3, grid_size=100, x_offset = 0):
-
-
+    def generate_hemisferic_map(self, Lz, Ly, cz = -10, cy = 2.5, radius = 3, grid_size=100, x_offset = 0.1):
         X = np.zeros((grid_size, grid_size))
-
         # Add hemispherical bulge
         # Create physical grid in meters
         z = np.linspace(Lz, 0, grid_size)
@@ -167,6 +167,9 @@ class TerrainManager:
         hemisphere = np.zeros_like(X)
         hemisphere[mask] = np.sqrt(radius ** 2 - dist2[mask])
         X += hemisphere
+        X = X + x_offset
+
+        assert x_offset != 0,  "hemisphere X offset should not be 0 otherwise the dynamics becomes singular"
 
         return X, Y, Z
 
