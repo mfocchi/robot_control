@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from concurrent.futures import ThreadPoolExecutor
 # Import CEM algorithm
 from cem.algo import CemParams, CrossEntropyMethodMixed
+from base_controllers.utils.matlab_conversions import mat_matrix2python,mat_vector2python
+
 import matlab.engine
 #eng must not be created in a __main__ guard if you're using threads — otherwise it's not visible to other threads.
 eng = matlab.engine.start_matlab()
@@ -95,19 +97,16 @@ class BiLevelOptmizer:
         #self.point_clouds.print_map_pc()
 
         # [ smooth | I_derivative | II_derivative | ... ]
-        self.filter_weights = np.array([1., 0.5, 10., 0.])
+        self.filter_weights = np.array([1., 1., 1., 1.])
         # apply filters on point cloud
         # smoothing
         self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel],weight=self.filter_weights[0], plot=False)
-        # first derivative
-        kernel = [self.point_clouds.sobel_y, self.point_clouds.sobel_z]
-        self.point_clouds.filter_process_points(kernel, weight=self.filter_weights[1], plot=False)
-        # second derivative
-        kernel = [self.point_clouds.laplacian_kernel]
-        self.point_clouds.filter_process_points(kernel, weight=self.filter_weights[2], plot=False)
         # avoid X under the anchor
         anchor_location = np.array(inner_opt_params['p_a1'])
         self.point_clouds.filter_height_profile(profile="logln", x0 = anchor_location[0], weight=self.filter_weights[3], side_application="depth")
+        # first derivative
+        kernel = [self.point_clouds.sobel_y, self.point_clouds.sobel_z]
+        self.point_clouds.filter_process_points(kernel, weight=self.filter_weights[1], plot=False)
 
         pc_t = self.point_clouds.points_t
         #self.point_clouds.visualize_cost_map()
@@ -119,7 +118,8 @@ class BiLevelOptmizer:
         #self.patches.plot_patches()
 
     def eval_pop(self,input_data):
-        jump_log = []
+        jump_log_points = []
+        jump_log_traj = []
         xd = input_data[0]
         xc = input_data[1]
         #first discrete variable is number of jumps, the next ones are the of the patches
@@ -143,7 +143,7 @@ class BiLevelOptmizer:
             #adjust X coordinate to terrain shape for both liftoff and landing points
             pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
             p0_adj[0] = self.terrain_manager.wall_surface_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-
+            jump_log_points.append(p0_adj)
             #compute normal at liftoff
             liftoff_normal = self.terrain_manager.wall_normal_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
 
@@ -156,9 +156,9 @@ class BiLevelOptmizer:
 
             res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, inner_opt_params)
 
+            jump_log_traj.append(mat_matrix2python(res['p']))
             fitness += self.calc_fitness(res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
-            jump_log.append(p0_adj)
-            jump_log.append(pf_adj)
+          
             self.p0 = pf_adj.copy()
 
         #print("final jump")
@@ -179,14 +179,19 @@ class BiLevelOptmizer:
 
         res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, inner_opt_params)
         fitness += self.calc_fitness(res)
+        ref_com = mat_matrix2python(res['p'])
+        jump_log_traj.append(ref_com)
 
-        jump_log.append(pf_adj)
+        jump_log_points.append(pf_adj)
+
         #plot traj
         # plot starting final points
-        ax = plt.gca()
-        for point in jump_log:
-            ax.scatter(point[0], point[1], point[2], color='red', s=500)
+        #ax = plt.gca()
+        #for point in jump_log:
+        #    ax.scatter(point[0], point[1], point[2], color='red', s=500)
 
+        #self.point_clouds.plot_map_with_target(jump_log_points)
+        self.point_clouds.animate_plot_map_with_target_and_trajectory(jump_log_points,jump_log_traj)
         return fitness
 
     def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):

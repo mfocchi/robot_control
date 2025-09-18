@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='rock'):
+    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='hemisphere'):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
