@@ -243,6 +243,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.psid_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.contactForceW_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         w_R_wall = self.math_utils.eul2Rot(np.array([0,-conf.robot_params[p.robot_name]['wall_inclination'],0]))
         self.wall_normal = w_R_wall[:,0].copy() #take X axis, I need to use copy otherwise matlab complains is not contiguous
@@ -915,9 +916,12 @@ def talker(p):
                     print(colored("Trajectory finished, expecting delayed TD", "blue"))
                     # start again pid gains and reset qdes
                     p.resetRope()
+
                 else:
                     p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] +deltaFr_l0
                     p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
+
+
                 # check for early td and in case reset rope
                 if p.detectTouchDown():
                     p.resetRope()
@@ -948,6 +952,7 @@ def talker(p):
                 else:
                     msg.data = 'error'
                 p.pub_goal_status(msg)
+
                 ####TODO
                 pass
 
