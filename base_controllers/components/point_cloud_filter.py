@@ -59,7 +59,10 @@ class PointCloudFilter:
         
         self.print_information()
         
-        self.init_kernel()              
+        self.init_kernel()
+
+        self.fig = plt.figure(figsize=(12, 10))
+        self.ax = self.fig.add_subplot(111, projection='3d')
         
     def init_kernel(self):
         # Blur kernel
@@ -538,23 +541,20 @@ class PointCloudFilter:
         color = np.array([point['color'] for point in self.points_t])
         size_point = np.array([point['size_point'] for point in self.points_t])
         
-        plt.ion()
-        
-        fig = plt.figure(figsize=(12, 10))
-        ax = fig.add_subplot(111, projection='3d')
-        ax.set_xlim([0, 4])
-        ax.set_ylim([0, 7])
-        ax.set_zlim([-10, 2])
-        ax.set_xlabel('X (m) - Height')
-        ax.set_ylabel('Y (m)')
-        ax.set_zlabel('Z (m)')
-        ax.set_title('Point Cloud with Target Points - Animated')
-        ax.scatter(x_points, y_points, z_points, c=color, s=size_point, alpha=0.6)
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        time.sleep(1.0) 
+    
+
+        self.ax.clear()
+        self.ax.set_xlim([0, 4])
+        self.ax.set_ylim([0, 7])
+        self.ax.set_zlim([-10, 2])
+        self.ax.set_xlabel('X (m) - Height')
+        self.ax.set_ylabel('Y (m)')
+        self.ax.set_zlabel('Z (m)')
+        self.ax.set_title('Point Cloud with Target Points - Animated')
+        self.ax.scatter(x_points, y_points, z_points, c=color, s=size_point, alpha=0.6)
+
         for i, point in enumerate(point_xyz):
-            print(f"Adding target point {i+1}/{len(point_xyz)}: {point}")
+            #print(f"Adding target point {i+1}/{len(point_xyz)}: {point}")
             if i == 0:  
                 marker_color = 'green'
                 marker = 'X'
@@ -568,25 +568,26 @@ class PointCloudFilter:
                 marker = 'X'
                 point_name = f"Waypoint {i}"
             
-            ax.scatter(point[0], point[1], point[2], 
+            self.ax.scatter(point[0], point[1], point[2],
                     c=marker_color, s=100, marker=marker, 
                     label=point_name if i < 3 else None) 
             
             ref_com = np.array(trajectory_xyz[i])
-            ax.plot3D(ref_com[0,:], ref_com[1,:],ref_com[2,:],color=marker_color, linewidth=2.5)
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            # delay tra ogni punto
-            time.sleep(0.3)
-        
-        ax.set_title(f'Point Cloud with Target Points - Complete Path\n'
+            self.ax.plot3D(ref_com[0,:], ref_com[1,:],ref_com[2,:],color=marker_color, linewidth=2.5)
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+
+
+        self.ax.set_title(f'Point Cloud with Target Points - Complete Path\n'
                     f'Total points: {len(point_xyz)}')
         
-        ax.legend()
+        self.ax.legend()
         plt.tight_layout()
         # Disabilita modalità interattiva e mostra il plot finale
-        plt.ioff()
+
         plt.show()
+        # delay tra ogni punto
+        time.sleep(3)
 
     def plot_color_cost_given_cost(self, source_points=None):
         if source_points is None:
