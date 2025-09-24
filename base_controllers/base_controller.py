@@ -277,7 +277,13 @@ class BaseController(threading.Thread):
         # compute orientation matrix
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
 
+        if self.broadcast_world:
+            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                       self.quaternion,
+                                       ros.Time.now(), '/base_link', '/world')
+
     def _receive_jstate(self, msg):
+
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
                 if self.joint_names[joint_idx] == msg.name[msg_idx]:
@@ -458,10 +464,6 @@ class BaseController(threading.Thread):
         # inertia w.r.t the base frame origin
         self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(self.configuration)
 
-        if self.broadcast_world:
-            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
-                                       self.quaternion,
-                                       ros.Time.now(), '/base_link', '/world')
 
 
     def estimateContactForces(self):           
@@ -665,6 +667,8 @@ class BaseController(threading.Thread):
             count += 1
             joint_id = self.robot.model.parents[joint_id]
         return count
+
+
 
     def logData(self):
         if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):

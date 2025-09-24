@@ -98,6 +98,7 @@ class GenericSimulator(BaseController):
             #add custom models from wolf, need to clone git@github.com:graiola/wolf_gazebo_resources.git
             custom_models_path = rospkg.RosPack().get_path('wolf_gazebo_resources') + "/models/"
             os.environ["GAZEBO_MODEL_PATH"] += ":" + custom_models_path
+        self.use_ground_truth_contacts = False
 
     def initVars(self):
         super().initVars()

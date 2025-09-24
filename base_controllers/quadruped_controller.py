@@ -731,7 +731,7 @@ class QuadrupedController(BaseController):
         self.time = np.round(self.time + self.dt, 4)#np.array([self.loop_time]), 3)
 
 
-    def visualizeContacts(self, delete_markers=False):
+    def visualizeContacts(self, delete_markers=True):
         for legid in self.u.leg_map.keys():
 
             leg = self.u.leg_map[legid]
