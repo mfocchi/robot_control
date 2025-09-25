@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 
-from ..utils.constants import DT
+from ..utils.maxxi_constants import DT
 from ..environment.trajectory import Trajectory, ModelsList
 from ..utils.tools import normalize_angle
 import math

@@ -20,7 +20,7 @@ from gazebo_msgs.srv import SetModelConfigurationRequest
 from numpy import nan
 from matplotlib import pyplot as plt
 from base_controllers.utils.math_tools import unwrap_angle
-from  base_controllers.tracked_robot.utils import constants as constants
+from  base_controllers.tracked_robot.utils import maxxi_constants as constants
 from base_controllers.tracked_robot.controllers.lyapunov import LyapunovController, LyapunovParams, Robot
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 from base_controllers.tracked_robot.velocity_generator import VelocityGenerator
@@ -299,7 +299,7 @@ class GenericSimulator(BaseController):
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
-        self.des_vel = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
+        self.des_vel_pub = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
 
         #self.clock_pub = ros.Publisher('/clock', Clock, queue_size=10)
 
@@ -678,7 +678,7 @@ class GenericSimulator(BaseController):
         msg.name = self.joint_names
         msg.header.stamp = ros.Time.from_sec(self.time)
         msg.velocity = np.array([v_des, omega_des])
-        self.des_vel.publish(msg)
+        self.des_vel_pub.publish(msg)
 
 
         return qd_des

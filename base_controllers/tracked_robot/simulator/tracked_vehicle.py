@@ -1,7 +1,7 @@
 
 import numpy as np
 from base_controllers.tracked_robot.simulator.track import Track
-from  base_controllers.tracked_robot.utils import constants as constants
+from  base_controllers.tracked_robot.utils import maxxi_constants as constants
 
 class VehicleParam:
     def __init__(self):

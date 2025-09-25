@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 
-from base_controllers.tracked_robot.utils import constants as constants
+from base_controllers.tracked_robot.utils import maxxi_constants as constants
 from base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 from base_controllers.tracked_robot.models.unicycle import Unicycle
 from base_controllers.tracked_robot.controllers.lyapunov import LyapunovController, LyapunovParams

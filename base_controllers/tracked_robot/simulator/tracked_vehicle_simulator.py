@@ -4,7 +4,7 @@ from base_controllers.tracked_robot.simulator.track import TrackParams
 from numpy.testing import assert_almost_equal
 from matplotlib import pyplot as plt
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
-import base_controllers.tracked_robot.utils.constants as constants
+import base_controllers.tracked_robot.utils.maxxi_constants as constants
 from base_controllers.utils.unit_test import UnitTest
 
 

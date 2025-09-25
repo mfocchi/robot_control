@@ -5,7 +5,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
-import base_controllers.tracked_robot.utils.constants as constants
+import base_controllers.tracked_robot.utils.maxxi_constants as constants
 from base_controllers.utils.math_tools import computeOrientationError
 from base_controllers.utils.math_tools import Math
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
