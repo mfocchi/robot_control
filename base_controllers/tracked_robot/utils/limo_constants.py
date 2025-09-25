@@ -1,0 +1,9 @@
+import numpy as np
+
+MAX_LINEAR_VELOCITY = 1.0  # m/s
+MAX_ANGULAR_VELOCITY = 2.0  # radians per second
+TRACK_WIDTH = 0.164
+TRACK_LENGTH = 0.3
+SPROCKET_RADIUS = 0.045
+MAXSPEED_RADS_PULLEY = 20
+

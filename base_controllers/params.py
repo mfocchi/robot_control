@@ -42,6 +42,20 @@ robot_params['tractor'] ={'dt': 0.01,
                         'spawn_z': 1.5,
                         'buffer_size': 7000}
 
+robot_params['limo0'] ={'dt': 0.01,
+                        'kp': np.array([100.,   100.,    100.,  100.]),
+                        'kd':  np.array([10.,    10.,    10.,   10.  ]),
+                        'q_0':  np.array([0, 0, 0, 0]),
+                        'joint_names': ['limo0/front_left_wheel', 'limo0/front_right_wheel', 'limo0/rear_left_wheel','limo0/rear_right_wheel',],
+                        'ee_frames': ['limo0/front_left_wheel_link', 'limo0/front_right_wheel_link'],
+                        'spawn_x': -0.,
+                        'spawn_y': 0.0,
+                        'spawn_z': 0.5,
+                        'spawn_Y': 0.,
+                        'real_robot': True,
+                        'buffer_size': 7000}
+
+
 robot_params['ur5'] ={'dt': 0.001,
                        'kp': np.array([300, 300, 300,30,30,1]),
                        'kd':  np.array([20,20,20,5, 5,0.5]),
