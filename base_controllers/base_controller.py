@@ -168,13 +168,7 @@ class BaseController(threading.Thread):
 
 
     def loadModelAndPublishers(self, xacro_path=None):
-
         # Loading a robot model of robot (Pinocchio)
-        if xacro_path is None:
-            xacro_path = rospkg.RosPack().get_path(
-                self.robot_name + '_description') + '/robots/' + self.robot_name + '.urdf.xacro'
-        else:
-            print("loading custom xacro path: ", xacro_path)
         self.robot = getRobotModelFloating(self.robot_name)
 
         # instantiating objects
@@ -249,7 +243,6 @@ class BaseController(threading.Thread):
         self.u.setLegJointState(self.u.leg_map["RH"], grf, self.grForcesLocal_gt)
 
     def _receive_pose(self, msg):
-
         self.quaternion = np.array([
             msg.pose.pose.orientation.x,
             msg.pose.pose.orientation.y,
@@ -283,7 +276,6 @@ class BaseController(threading.Thread):
                                        ros.Time.now(), '/base_link', '/world')
 
     def _receive_jstate(self, msg):
-
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
                 if self.joint_names[joint_idx] == msg.name[msg_idx]:
@@ -660,7 +652,7 @@ class BaseController(threading.Thread):
     def getNumberOfJointsPerLeg(self):
         ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         first_foot_frame_id = self.robot.model.getFrameId(ee_frames[0])
-        joint_id = self.robot.model.frames[first_foot_frame_id].parent
+        joint_id = self.robot.model.frames[first_foot_frame_id].parentJoint
         # Walk up the kinematic tree starting from the parent joint
         count = 0
         while joint_id != 1:
