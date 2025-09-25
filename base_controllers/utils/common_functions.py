@@ -293,9 +293,9 @@ def getRobotModelFloating(robot_name="hyq"):
     path = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
     if rosgraph.is_master_online():
         try:
-            urdf = ros.get_param('/robot_description')
+            urdf = ros.get_param('/robot_description', None) or ros.get_param('/' + robot_name + '/robot_description', None)
         except:
-            print('Issues in URDF generation for Pinocchio, did not succeed')
+            print('Failed to retrieve robot_description: issues in URDF generation for Pinocchio, did not succeed')
             loadXacro(package_name=robot_name+"_description",model_name=robot_name)
             #urdf = ros.get_param('/robot_description')
         print("URDF generated_commons")
