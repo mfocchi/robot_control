@@ -53,7 +53,7 @@ robot_params['limo0'] ={'dt': 0.01,
                         'spawn_z': 0.5,
                         'spawn_Y': 0.,
                         'real_robot': True,
-                        'buffer_size': 7000}
+                        'buffer_size': 15000}
 
 
 robot_params['ur5'] ={'dt': 0.001,

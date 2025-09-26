@@ -58,10 +58,8 @@ class GenericSimulator(BaseController):
         self.IDENT_LONG_SPEED = 0.3  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
 
-        self.friction_coefficient = 0.4 # 0.1 (used only in 2d) / 0.4 (2d and 3d) (used for planning in paper)/ 0.6 (only 3d)  with slopes we need high friction otherwise alpha is too high
-         # initial pose (sim)
+        # initial pose (sim)
         self.p0 = np.array([0., 0., 0.])
-
         self.SAVE_BAGS = False
         # to avoid issues with contacts
         self.use_ground_truth_contacts = False
@@ -77,16 +75,16 @@ class GenericSimulator(BaseController):
                 self.regressor_beta_l = cb.CatBoostRegressor()
                 self.regressor_beta_r = cb.CatBoostRegressor()
                 self.regressor_alpha = cb.CatBoostRegressor()
-                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/limo/model_beta_l'+str(self.friction_coefficient)+'.cb')
-                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/limo/model_beta_r'+str(self.friction_coefficient)+'.cb')
-                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/limo/model_alpha'+str(self.friction_coefficient)+'.cb')
+                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/limo/model_limo_beta_l.cb')
+                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/limo/model_limo_beta_r.cb')
+                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/limo/model_limo_alpha.cb')
             elif  self.SLIPPAGE_INFERENCE_TYPE=='NN':
                 self.model_beta_l = SlipNN(output='beta_l')
                 self.model_beta_r = SlipNN(output='beta_r')
                 self.model_alpha = SlipNN(output='alpha')
             elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
                 from scipy.interpolate import RBFInterpolator
-                data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/limo/ident_wheels_sim_2d_'+str(self.friction_coefficient)+'.csv'
+                data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/limo/ident_wheels_sim_2d.csv'
                 df = pd.read_csv(data, skiprows=1, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha']) #skiprows skips the first row which are the labels
                 x = df[['wheel_l', 'wheel_r']].values
                 y = df[['beta_l', 'beta_r', 'alpha']].values
@@ -100,7 +98,7 @@ class GenericSimulator(BaseController):
             self.model_beta_l = None
             self.model_beta_r = None
             self.model_alpha = None
-            print(colored(f"No Machine Learning  model for need for friction coefficient {self.friction_coefficient}, you need to generate the models by running tracked_robot/regressor/model_slippage_updated.py","red"))
+            print(colored(f"No Machine Learning  model, you need to generate the models by running tracked_robot/regressor/model_slippage_updated.py","red"))
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -221,9 +219,9 @@ class GenericSimulator(BaseController):
         if self.SAVE_BAGS:
             if p.ControlType=='OPEN_LOOP':
                 if p.IDENT_TYPE=='V_OMEGA':
-                    bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}_fr_{p.friction_coefficient}.bag"
+                    bag_name= f"ident_sim_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}_.bag"
                 if p.IDENT_TYPE == 'WHEELS':
-                   bag_name = f"ident_sim_fr_{p.friction_coefficient}_wheelL_{p.IDENT_WHEEL_L}.bag"
+                    bag_name = f"ident_sim_fr_wheelL_{p.IDENT_WHEEL_L}.bag"
             else:
                 bag_name = f"{p.ControlType}_Long_{self.LONG_SLIP_COMPENSATION}_Side_{p.SIDE_SLIP_COMPENSATION}.bag"
             self.recorder = RosbagControlledRecorder(bag_name=bag_name)
@@ -458,9 +456,9 @@ class GenericSimulator(BaseController):
         wheel_r_vec.append(0.0)
         return wheel_l_vec,wheel_r_vec
 
-    def generateOpenLoopTraj(self, R_initial= 0.05, R_final=0.6, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
+    def generateSpiralTraj(self, R_initial= 0.05, R_final=0.6, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
-        change_interval = 3.
+        change_interval = 2.
         increment = increment
         turning_radius_vec = np.arange(R_final, R_initial, -increment)
         if direction=='left':
@@ -639,15 +637,13 @@ def talker(p):
 
 def main_loop(p):
     p.loadModelAndPublishers()
-
     p.initVars()
-
     p.initSubscribers()
     p.startupProcedure()
-
     p.q_old = np.zeros(p.robot.na)
     robot_state = Robot()
-
+    if p.real_robot:
+        ros.sleep(6.)
     if p.SAVE_BAGS:
         p.recorder.start_recording_srv()
 
@@ -658,13 +654,14 @@ def main_loop(p):
             # generic open loop test for comparison with matlab
             #vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
             #v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth() #velocity_straight
-            v_ol = np.linspace(0.1, 0.1, np.int32(10./conf.robot_params[p.robot_name]['dt']))
-            omega_ol = np.linspace(0.2, 0.2, np.int32(10./conf.robot_params[p.robot_name]['dt']))
+            v_ol = np.linspace(0.2, 0.2, np.int32(10./conf.robot_params[p.robot_name]['dt']))
+            omega_ol = np.linspace(-1., -1., np.int32(10./conf.robot_params[p.robot_name]['dt']))
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'V_OMEGA':
             #identification repeat long_v = 0.05:0.05:0.4
-            v_ol, omega_ol = p.generateOpenLoopTraj(R_initial= 0.1, R_final=0.4, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
+            v_ol, omega_ol = p.generateSpiralTraj(R_initial= 0.21, R_final=0.51, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
             traj_length = len(v_ol)
+
         if p.IDENT_TYPE == 'WHEELS':
             wheel_l_ol, wheel_r_ol  = p.generateWheelTraj(p.IDENT_WHEEL_L)
             v_ol, omega_ol = p.mapFromWheels(wheel_l_ol, wheel_r_ol)
@@ -688,6 +685,7 @@ def main_loop(p):
             else:
                 _, _, _, p.v_d, p.omega_d, _, _, traj_finished = p.traj.evalTraj(p.time)
                 p.qd_des = p.publishControlCommand(p.v_d, p.omega_d)
+
                 if traj_finished:
                     break
 
@@ -766,8 +764,8 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 4) # to avoid issues of dt 0.0009999
 
-    # always save csv when you do ident
-    if p.IDENT_TYPE == 'WHEELS':
+    # always save csv when you do ident (bag file deprecated)
+    if p.IDENT_TYPE != 'NONE':
         not_nans = ~np.isnan(p.time_log)
         data = pd.DataFrame({
             "time": p.time_log[not_nans],
@@ -780,8 +778,14 @@ def main_loop(p):
             "beta_r": p.beta_r_log[not_nans],
             "alpha": p.alpha_log[not_nans]})
 
-        output_file = os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/data2d/' + str(p.friction_coefficient) + \
-                      f"/ident_wheels_fr_{p.friction_coefficient}_wheelL_{p.IDENT_WHEEL_L}.csv"
+        if p.IDENT_TYPE =='WHEELS':
+            output_file = os.environ['LOCOSIM_DIR'] + f'/robot_control/base_controllers/tracked_robot/regressor/limo/ident_wheels_wheelL_{p.IDENT_WHEEL_L}.csv'
+        if p.IDENT_TYPE == 'V_OMEGA':
+            output_file = os.environ['LOCOSIM_DIR'] + f'/robot_control/base_controllers/tracked_robot/regressor/limo/ident_vomega_longv_{p.IDENT_LONG_SPEED}_{p.IDENT_DIRECTION}.csv'
+
+        output_dir = os.path.dirname(output_file)
+        #creates all missing directories in the path (and won’t complain if they already exist).
+        os.makedirs(output_dir, exist_ok=True)
         data.to_csv(output_file, index=False)
         print(colored(f"Data saved to {output_file}", "red"))
 
