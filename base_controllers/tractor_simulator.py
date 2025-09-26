@@ -55,12 +55,12 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'distributed2d'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'distributed2d'(2d) 'distributed3d'
+        self.SIMULATOR = 'gazebo'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'distributed2d'(2d) 'distributed3d'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
         self.TERRAIN = False #True: Slopes False: Flat terrain
 
         self.STATISTICAL_ANALYSIS = False #samples targets and orientations in a given space around the robot and compute average tracking error
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.LONG_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
@@ -138,7 +138,7 @@ class GenericSimulator(BaseController):
             self.model_beta_l = None
             self.model_beta_r = None
             self.model_alpha = None
-            print(colored(f"No Machine Learning  model for need for friction coefficient {self.friction_coefficient}, you need to generate the models by running tracked_robot/regressor/model_slippage_updated.py","red"))
+            print(colored(f"No Machine Learning  model for need for friction coefficient {self.friction_coefficient}, you need to generate the models by running tracked_robot/regressor/generate_slippage_regressor/3d.py","red"))
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -1339,7 +1339,7 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 4) # to avoid issues of dt 0.0009999
 
-    # always save csv when you do ident
+    # always save csv when you do ident (bag file deprecated)
     if p.IDENT_TYPE == 'WHEELS':
         not_nans = ~np.isnan(p.time_log)
         data = pd.DataFrame({
@@ -1359,6 +1359,9 @@ def main_loop(p):
         else:
             output_file = os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/data2d/' + str(p.friction_coefficient) + \
                           f"/ident_wheels_fr_{p.friction_coefficient}_wheelL_{p.IDENT_WHEEL_L}.csv"
+        output_dir = os.path.dirname(output_file)
+        # creates all missing directories in the path (and won’t complain if they already exist).
+        os.makedirs(output_dir, exist_ok=True)
         data.to_csv(output_file, index=False)
         print(colored(f"Data saved to {output_file}", "red"))
 

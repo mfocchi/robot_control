@@ -46,7 +46,7 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized limo controller---------------------------------------------------------------")
 
-        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
         self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.LONG_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
@@ -54,8 +54,8 @@ class GenericSimulator(BaseController):
 
         self.SENSORS = 'false' #'true',  'false'
         # Parameters for open loop identification
-        self.IDENT_TYPE = 'NONE' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
-        self.IDENT_LONG_SPEED = 0.3  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
+        self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
         self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
 
         # initial pose (sim)
@@ -75,9 +75,9 @@ class GenericSimulator(BaseController):
                 self.regressor_beta_l = cb.CatBoostRegressor()
                 self.regressor_beta_r = cb.CatBoostRegressor()
                 self.regressor_alpha = cb.CatBoostRegressor()
-                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/limo/model_limo_beta_l.cb')
-                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/limo/model_limo_beta_r.cb')
-                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/limo/model_limo_alpha.cb')
+                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_limo_beta_l.cb')
+                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_limo_beta_r.cb')
+                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_limo_alpha.cb')
             elif  self.SLIPPAGE_INFERENCE_TYPE=='NN':
                 self.model_beta_l = SlipNN(output='beta_l')
                 self.model_beta_r = SlipNN(output='beta_r')
@@ -213,7 +213,6 @@ class GenericSimulator(BaseController):
     def loadModelAndPublishers(self):
         super().loadModelAndPublishers()
         self.reset_joints_client = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
-        self.des_vel_pub = ros.Publisher("/des_vel", JointState, queue_size=1, tcp_nodelay=True)
         self.cmd_vel_pub = ros.Publisher("/"+self.robot_name+"/cmd_vel", Twist, queue_size=1, tcp_nodelay=True)
 
         if self.SAVE_BAGS:
@@ -404,25 +403,19 @@ class GenericSimulator(BaseController):
                 omega[i] = constants.SPROCKET_RADIUS/constants.TRACK_WIDTH*(wheel_r[i] -wheel_l[i])
             return v, omega
 
-
-    def publishControlCommand(self, v_des,omega_des):
+    def mapToWheels(self, v_des,omega_des):
         qd_des = np.zeros(4)
-        qd_des[0] = (v_des - omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # left front
-        qd_des[1] = (v_des + omega_des * constants.TRACK_WIDTH / 2)/constants.SPROCKET_RADIUS  # right front
+        qd_des[0] = (v_des - omega_des * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
+        qd_des[1] = (v_des + omega_des * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
         qd_des[2] = qd_des[0].copy()
         qd_des[3] = qd_des[1].copy()
-        #publish des commands as well
-        msg = JointState()
-        msg.name = self.joint_names
-        msg.header.stamp = ros.Time.from_sec(self.time)
-        msg.velocity = np.array([v_des, omega_des])
-        self.des_vel_pub.publish(msg)
+        return qd_des
 
+    def publishControlCommand(self, v_des,omega_des):
         msg = Twist()
         msg.linear.x = v_des
         msg.angular.z = omega_des
         self.cmd_vel_pub.publish(msg)
-        return qd_des
 
     #unwrap the joints states
     def unwrap(self):
@@ -560,10 +553,8 @@ class GenericSimulator(BaseController):
 
         return qd_comp, beta_l, beta_r
 
-    def computeLongSlipCompensationMachineLearning(self,  qd_des, constants):
-        # compute track velocity from encoder
-        v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
-        v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
+    def computeLongSlipCompensationMachineLearning(self, v_des, omega_des, qd_des, constants):
+        #compute beta
         if  self.SLIPPAGE_INFERENCE_TYPE == 'decision_trees':
             # predict the betas from NN
             if len(self.model_beta_l.feature_names_)>2:
@@ -575,19 +566,18 @@ class GenericSimulator(BaseController):
         elif self.SLIPPAGE_INFERENCE_TYPE == 'interpolator':
             beta_l = (self.model_beta_l([qd_des])).squeeze()
             beta_r = (self.model_beta_r([qd_des])).squeeze()
-        #matlab
-        # beta_l = self.eng.feval(self.model_beta_l['predictFcn'], qd_des)
-        # beta_r = self.eng.feval(self.model_beta_r['predictFcn'], qd_des)
-        v_enc_l += beta_l
-        v_enc_r += beta_r
 
+        # compute track velocity from v m
+        v_track_l = (v_des - omega_des * constants.TRACK_WIDTH / 2)
+        v_track_r = (v_des + omega_des * constants.TRACK_WIDTH / 2)
+        #add compensation
+        v_track_l += beta_l
+        v_track_r += beta_r
+        #compute compensated values
+        v_des_comp = (v_track_l + v_track_r) / 2.
+        omega_des_comp = (-v_track_l + v_track_r) / constants.TRACK_WIDTH
 
-        qd_comp = np.zeros(4)
-        qd_comp[0] = 1 / constants.SPROCKET_RADIUS * v_enc_l
-        qd_comp[1] = 1 / constants.SPROCKET_RADIUS * v_enc_r
-        qd_comp[2] = qd_comp[0].copy()
-        qd_comp[3] = qd_comp[1].copy()
-        return qd_comp, beta_l, beta_r
+        return v_des_comp, omega_des_comp, beta_l, beta_r
     
     def monitor_time(self):
         self.checkLoopFrequency()
@@ -684,8 +674,8 @@ def main_loop(p):
                 counter += 1
             else:
                 _, _, _, p.v_d, p.omega_d, _, _, traj_finished = p.traj.evalTraj(p.time)
-                p.qd_des = p.publishControlCommand(p.v_d, p.omega_d)
-
+                p.qd_des = p.mapToWheels(p.v_d, p.omega_d)
+                p.publishControlCommand(p.v_d, p.omega_d)
                 if traj_finished:
                     break
 
@@ -703,7 +693,6 @@ def main_loop(p):
             p.rate.sleep()
             p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  4)  # to avoid issues of dt 0.0009999
     else:
-
         # CLOSE loop control
         # generate reference trajectory
         vel_gen = VelocityGenerator(simulation_time=10.,    DT=conf.robot_params[p.robot_name]['dt'])
@@ -744,16 +733,22 @@ def main_loop(p):
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
 
-            p.qd_des = p.publishControlCommand(p.ctrl_v, p.ctrl_omega)
 
             if not p.ControlType=='CLOSED_LOOP_UNICYCLE'  and not traj_finished:
+                #compute qd_des needed input by regressor
+                p.q_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
                 if p.LONG_SLIP_COMPENSATION=='MACHINE_LEARNING':
-                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, constants)
+                    # update p.ctrl_v and  p.ctrl_omega with compensation
+                    p.ctrl_v, p.ctrl_omega, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
                 if p.LONG_SLIP_COMPENSATION == 'EXP':
                     p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationExp(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
 
-              # note there is only a ros_impedance controller, not a joint_group_vel controller, so I can only set velocity by integrating the wheel speed and
-            # senting it to be tracked from the impedance loop
+            # send command
+            p.publishControlCommand(p.ctrl_v, p.ctrl_omega)
+
+            #recompute qd_des after log slippage compensation
+            p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
+
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
             p.monitor_time()
             p.ros_pub.publishVisual(delete_markers=False)

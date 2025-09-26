@@ -52,7 +52,7 @@ class QuadrupedController(BaseController):
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         self.leg_names = [foot[:2] for foot in self.ee_frames]
 
-        self.use_ground_truth_pose = True
+        self.use_ground_truth_pose = False
         if not self.real_robot:
             self.gravity_comp_duration = 0.5 #1.5
             self.standup_period = 1. #3
@@ -1256,7 +1256,7 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    use_rl = False
+    use_rl = True
 
     if use_rl:
         rl_controller = RlVelocityController(p.robot_name, p.dt)
@@ -1277,13 +1277,9 @@ if __name__ == '__main__':
             p.updateKinematics()
             
             if use_rl:
-
-
-
-                if p.time > 2:
-                    rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
-                    p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
-                    p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
+                rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
+                p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
+                p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
                 lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                 ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])

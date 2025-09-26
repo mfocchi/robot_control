@@ -65,8 +65,14 @@ class VelocityGenerator:
         #v_max = 0.4
         omega_max =omega_max_
         v_max = v_max_
+
         for i in range(t.shape[0]):
-            if (t[i] < t1):
+            if (t[i] <= 0.2):
+                v.append(0)
+                o.append(0)
+                v_dot.append(0)
+                omega_dot.append(0)
+            elif (0.2 < t[i] < t1):
                 v.append(v_max * t[i])
                 o.append(0)
                 v_dot.append(v_max / t1)
