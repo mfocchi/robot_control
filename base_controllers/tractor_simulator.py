@@ -104,41 +104,43 @@ class GenericSimulator(BaseController):
         super().initVars()
         # load model
         try:
-            if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
-                # regressor
-                self.regressor_beta_l = cb.CatBoostRegressor()
-                self.regressor_beta_r = cb.CatBoostRegressor()
-                self.regressor_alpha = cb.CatBoostRegressor()
-                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+self.flag3D+str(self.friction_coefficient)+'.cb')
-                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+self.flag3D+str(self.friction_coefficient)+'.cb')
-                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+self.flag3D+str(self.friction_coefficient)+'.cb')
-                # loading with matlab
-                # import matlab.engine
-                # self.eng = matlab.engine.start_matlab()
-                # self.model_alpha = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['alpha_model_18']
-                # self.model_beta_l = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_l_model_18']
-                # self.model_beta_r = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_r_model_18']
-            elif  self.SLIPPAGE_INFERENCE_TYPE=='NN':
-                self.model_beta_l = SlipNN(output='beta_l')
-                self.model_beta_r = SlipNN(output='beta_r')
-                self.model_alpha = SlipNN(output='alpha')
-            elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
-                from scipy.interpolate import RBFInterpolator
-                data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/ident_wheels_sim_2d_'+str(self.friction_coefficient)+'.csv'
-                df = pd.read_csv(data, skiprows=1, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha']) #skiprows skips the first row which are the labels
-                x = df[['wheel_l', 'wheel_r']].values
-                y = df[['beta_l', 'beta_r', 'alpha']].values
-                # upsampling
-                # Fit an interpolator for each output dimension
-                self.model_beta_l = RBFInterpolator(x, y[:, 0], smoothing=0.1)
-                self.model_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
-                self.model_alpha = RBFInterpolator(x, y[:, 2], smoothing=0.1)
+            if self.SIDE_SLIP_COMPENSATION != 'NONE' and self.LONG_SLIP_COMPENSATION != 'NONE':
+                if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
+                    # regressor
+                    self.regressor_beta_l = cb.CatBoostRegressor()
+                    self.regressor_beta_r = cb.CatBoostRegressor()
+                    self.regressor_alpha = cb.CatBoostRegressor()
+                    self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_beta_l'+self.flag3D+str(self.friction_coefficient)+'.cb')
+                    self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_beta_r'+self.flag3D+str(self.friction_coefficient)+'.cb')
+                    self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_alpha'+self.flag3D+str(self.friction_coefficient)+'.cb')
+                    # loading with matlab
+                    # import matlab.engine
+                    # self.eng = matlab.engine.start_matlab()
+                    # self.model_alpha = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['alpha_model_18']
+                    # self.model_beta_l = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_l_model_18']
+                    # self.model_beta_r = self.eng.load(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/training.mat')['beta_r_model_18']
+                elif  self.SLIPPAGE_INFERENCE_TYPE=='NN':
+                    self.model_beta_l = SlipNN(output='beta_l')
+                    self.model_beta_r = SlipNN(output='beta_r')
+                    self.model_alpha = SlipNN(output='alpha')
+                elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
+                    from scipy.interpolate import RBFInterpolator
+                    data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/ident_wheels_sim_2d_'+str(self.friction_coefficient)+'.csv'
+                    df = pd.read_csv(data, skiprows=1, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha']) #skiprows skips the first row which are the labels
+                    x = df[['wheel_l', 'wheel_r']].values
+                    y = df[['beta_l', 'beta_r', 'alpha']].values
+                    # upsampling
+                    # Fit an interpolator for each output dimension
+                    self.model_beta_l = RBFInterpolator(x, y[:, 0], smoothing=0.1)
+                    self.model_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
+                    self.model_alpha = RBFInterpolator(x, y[:, 2], smoothing=0.1)
         except Exception as e:
             print(colored(f"Error initializing slippage inference model:{e}","red"))
             self.model_beta_l = None
             self.model_beta_r = None
             self.model_alpha = None
             print(colored(f"No Machine Learning  model for need for friction coefficient {self.friction_coefficient}, you need to generate the models by running tracked_robot/regressor/generate_slippage_regressor/3d.py","red"))
+            sys.exit()
         ## add your variables to initialize here
         self.ctrl_v = 0.
         self.ctrl_omega = 0.0
@@ -576,46 +578,46 @@ class GenericSimulator(BaseController):
                 plotFrameLinear(name='position',time_log=p.time_log,des_Pose_log = p.des_state_log, Pose_log=p.state_log, custom_labels=(["X","Y","THETA"]))
                 #plotFrameLinear(name='velocity', time_log=p.time_log, Twist_log=np.vstack((p.baseTwistW_log[:2,:],p.baseTwistW_log[5,:])))
 
-            if self.SIMULATOR != 'gazebo':
-                #plot velocities in the base frame
-                plt.figure()
-                ax1 = plt.subplot(2, 1, 1)
-                plt.plot(self.time_log, self.b_base_vel_log[0, :], "-b", label="vx")
-                plt.ylabel("b_vx")
-                plt.legend()
-                plt.grid(True)
-                plt.subplot(2, 1, 2, sharex=ax1)
-                plt.plot(self.time_log, self.b_base_vel_log[1, :], "-b", label="vy")
-                plt.ylabel("b_vy")
-                plt.legend()
-                plt.grid(True)
+            #if self.SIMULATOR != 'gazebo':
+            #plot velocities in the base frame
+            plt.figure()
+            ax1 = plt.subplot(2, 1, 1)
+            plt.plot(self.time_log, self.b_base_vel_log[0, :], "-b", label="vx")
+            plt.ylabel("b_vx")
+            plt.legend()
+            plt.grid(True)
+            plt.subplot(2, 1, 2, sharex=ax1)
+            plt.plot(self.time_log, self.b_base_vel_log[1, :], "-b", label="vy")
+            plt.ylabel("b_vy")
+            plt.legend()
+            plt.grid(True)
 
-                #slippage vars
-                plt.figure()
-                ax2 = plt.subplot(4, 1, 1)
-                plt.plot(self.time_log, self.beta_l_log, "-b", label="real")
-                plt.plot(self.time_log, self.beta_l_control_log, "-r", label="control")
-                plt.ylabel("beta_l")
-                plt.legend()
-                plt.grid(True)
-                plt.subplot(4, 1, 2,  sharex=ax2)
-                plt.plot(self.time_log, self.beta_r_log, "-b", label="real")
-                plt.plot(self.time_log, self.beta_r_control_log, "-r", label="control")
-                plt.ylabel("beta_r")
-                plt.legend()
-                plt.grid(True)
-                plt.subplot(4, 1, 3,  sharex=ax2)
-                plt.plot(self.time_log, self.alpha_log, "-b", label="real")
-                plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
-                plt.ylabel("alpha")
-                #plt.ylim([-0.4, 0.4])
-                plt.grid(True)
-                plt.legend()
-                plt.subplot(4, 1, 4,  sharex=ax2)
-                plt.plot(self.time_log, self.radius_log, "-b")
-                plt.ylim([-1,1])
-                plt.ylabel("radius")
-                plt.grid(True)
+            #slippage vars
+            plt.figure()
+            ax2 = plt.subplot(4, 1, 1)
+            plt.plot(self.time_log, self.beta_l_log, "-b", label="real")
+            plt.plot(self.time_log, self.beta_l_control_log, "-r", label="control")
+            plt.ylabel("beta_l")
+            plt.legend()
+            plt.grid(True)
+            plt.subplot(4, 1, 2,  sharex=ax2)
+            plt.plot(self.time_log, self.beta_r_log, "-b", label="real")
+            plt.plot(self.time_log, self.beta_r_control_log, "-r", label="control")
+            plt.ylabel("beta_r")
+            plt.legend()
+            plt.grid(True)
+            plt.subplot(4, 1, 3,  sharex=ax2)
+            plt.plot(self.time_log, self.alpha_log, "-b", label="real")
+            plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
+            plt.ylabel("alpha")
+            #plt.ylim([-0.4, 0.4])
+            plt.grid(True)
+            plt.legend()
+            plt.subplot(4, 1, 4,  sharex=ax2)
+            plt.plot(self.time_log, self.radius_log, "-b")
+            plt.ylim([-1,1])
+            plt.ylabel("radius")
+            plt.grid(True)
 
             if p.ControlType != 'OPEN_LOOP':
                 # tracking errors

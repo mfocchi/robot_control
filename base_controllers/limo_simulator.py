@@ -47,16 +47,16 @@ class GenericSimulator(BaseController):
         print("Initialized limo controller---------------------------------------------------------------")
 
         self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
-        self.LONG_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
+        self.SIDE_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
+        self.LONG_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
         self.SENSORS = 'false' #'true',  'false'
         # Parameters for open loop identification
         self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
-        self.IDENT_LONG_SPEED = 0.2  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
-        self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_LONG_SPEED = 0.3  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_DIRECTION = 'right' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
 
         # initial pose (sim)
         self.p0 = np.array([0., 0., 0.])
@@ -69,30 +69,32 @@ class GenericSimulator(BaseController):
     def initVars(self):
         super().initVars()
         # load model
+
         try:
-            if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
-                # regressor
-                self.regressor_beta_l = cb.CatBoostRegressor()
-                self.regressor_beta_r = cb.CatBoostRegressor()
-                self.regressor_alpha = cb.CatBoostRegressor()
-                self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_limo_beta_l.cb')
-                self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_limo_beta_r.cb')
-                self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_limo_alpha.cb')
-            elif  self.SLIPPAGE_INFERENCE_TYPE=='NN':
-                self.model_beta_l = SlipNN(output='beta_l')
-                self.model_beta_r = SlipNN(output='beta_r')
-                self.model_alpha = SlipNN(output='alpha')
-            elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
-                from scipy.interpolate import RBFInterpolator
-                data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/limo/ident_wheels_sim_2d.csv'
-                df = pd.read_csv(data, skiprows=1, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha']) #skiprows skips the first row which are the labels
-                x = df[['wheel_l', 'wheel_r']].values
-                y = df[['beta_l', 'beta_r', 'alpha']].values
-                # upsampling
-                # Fit an interpolator for each output dimension
-                self.model_beta_l = RBFInterpolator(x, y[:, 0], smoothing=0.1)
-                self.model_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
-                self.model_alpha = RBFInterpolator(x, y[:, 2], smoothing=0.1)
+            if self.SIDE_SLIP_COMPENSATION != 'NONE' and self.LONG_SLIP_COMPENSATION != 'NONE':
+                if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
+                    # regressor
+                    self.regressor_beta_l = cb.CatBoostRegressor()
+                    self.regressor_beta_r = cb.CatBoostRegressor()
+                    self.regressor_alpha = cb.CatBoostRegressor()
+                    self.model_beta_l = self.regressor_beta_l.load_model(os.environ['LOCOSIM_DIR']+'/robot_control/base_controllers/tracked_robot/regressor/model_limo_beta_l.cb')
+                    self.model_beta_r = self.regressor_beta_r.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_limo_beta_r.cb')
+                    self.model_alpha = self.regressor_alpha.load_model(os.environ['LOCOSIM_DIR'] + '/robot_control/base_controllers/tracked_robot/regressor/model_limo_alpha.cb')
+                elif  self.SLIPPAGE_INFERENCE_TYPE=='NN':
+                    self.model_beta_l = SlipNN(output='beta_l')
+                    self.model_beta_r = SlipNN(output='beta_r')
+                    self.model_alpha = SlipNN(output='alpha')
+                elif self.SLIPPAGE_INFERENCE_TYPE=='interpolator':
+                    from scipy.interpolate import RBFInterpolator
+                    data = os.environ['LOCOSIM_DIR']+f'/robot_control/base_controllers/tracked_robot/regressor/limo/ident_wheels_sim_2d.csv'
+                    df = pd.read_csv(data, skiprows=1, names=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha']) #skiprows skips the first row which are the labels
+                    x = df[['wheel_l', 'wheel_r']].values
+                    y = df[['beta_l', 'beta_r', 'alpha']].values
+                    # upsampling
+                    # Fit an interpolator for each output dimension
+                    self.model_beta_l = RBFInterpolator(x, y[:, 0], smoothing=0.1)
+                    self.model_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
+                    self.model_alpha = RBFInterpolator(x, y[:, 2], smoothing=0.1)
         except Exception as e:
             print(colored(f"Error initializing slippage inference model:{e}","red"))
             self.model_beta_l = None
@@ -481,6 +483,7 @@ class GenericSimulator(BaseController):
         w_vel_xy = np.zeros(2)
         w_vel_xy[0] = W_baseTwist[self.u.sp_crd["LX"]]
         w_vel_xy[1] = W_baseTwist[self.u.sp_crd["LY"]]
+
         omega = W_baseTwist[self.u.sp_crd["AZ"]]
         # compute BF velocity
         w_R_b = np.array([[np.cos(theta), -np.sin(theta)],
@@ -489,6 +492,11 @@ class GenericSimulator(BaseController):
 
         b_vel_x = b_vel_xy[0]
         v = np.linalg.norm(b_vel_xy)
+
+        if (abs(b_vel_x) < 0.00001):
+            side_slip = 0.
+        else:
+            side_slip = math.atan2(b_vel_xy[1], b_vel_xy[0])
 
         # compute turning radius for logging
         # in the case radius is infinite, betas are zero (this is to avoid Nans)
@@ -511,10 +519,7 @@ class GenericSimulator(BaseController):
         # should be (desired) from encoder
         beta_l = v_enc_l-v_track_l
         beta_r = v_enc_r-v_track_r  
-        if (abs(b_vel_xy[1])<0.00001) or (abs(b_vel_xy[0])<0.00001):
-            side_slip = 0.
-        else:
-            side_slip = math.atan2(b_vel_xy[1],b_vel_xy[0])
+
 
         return beta_l, beta_r, side_slip, radius, b_vel_xy
 
@@ -584,23 +589,7 @@ class GenericSimulator(BaseController):
         if np.mod(self.time,1) == 0:
             print(colored(f"TIME: {self.time}","red"))
 
-    def pub_odom_msg(self, odom_publisher):
-        msg = Odometry()
-        msg.header.stamp = ros.Time.from_sec(self.time)
-        msg.pose.pose.orientation.x = self.quaternion[0]
-        msg.pose.pose.orientation.y = self.quaternion[1]
-        msg.pose.pose.orientation.z = self.quaternion[2]
-        msg.pose.pose.orientation.w = self.quaternion[3]
-        msg.pose.pose.position.x = self.basePoseW[self.u.sp_crd["LX"]]
-        msg.pose.pose.position.y = self.basePoseW[self.u.sp_crd["LY"]]
-        msg.pose.pose.position.z = self.basePoseW[self.u.sp_crd["LZ"]]
-        msg.twist.twist.linear.x = self.baseTwistW[self.u.sp_crd["LX"]]
-        msg.twist.twist.linear.y = self.baseTwistW[self.u.sp_crd["LY"]]
-        msg.twist.twist.linear.z = self.baseTwistW[self.u.sp_crd["LZ"]]
-        msg.twist.twist.angular.x = self.baseTwistW[self.u.sp_crd["AX"]]
-        msg.twist.twist.angular.y = self.baseTwistW[self.u.sp_crd["AY"]]
-        msg.twist.twist.angular.z = self.baseTwistW[self.u.sp_crd["AZ"]]
-        odom_publisher.publish(msg)
+
 
     def initSubscribers(self):
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
@@ -676,6 +665,7 @@ def main_loop(p):
                 _, _, _, p.v_d, p.omega_d, _, _, traj_finished = p.traj.evalTraj(p.time)
                 p.qd_des = p.mapToWheels(p.v_d, p.omega_d)
                 p.publishControlCommand(p.v_d, p.omega_d)
+
                 if traj_finished:
                     break
 
