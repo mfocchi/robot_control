@@ -464,19 +464,43 @@ class SafeTFBroadcaster:
         if stamp <= self.last_stamp:
             stamp = self.last_stamp + ros.Duration(nsecs=1)
 
-        # 2) skip exact duplicates (same pose + same stamp after fix)
+        # 2) translation: flatten + check
+        trans = np.asarray(trans).flatten()
+        if trans.shape[0] != 3:
+            raise ValueError(f"Translation must have 3 elements, got {trans}")
+
+        # 3) quaternion: unwrap, flatten + check
+        if hasattr(quat, "coeffs"):  # Pinocchio Quaternion
+            quat = quat.coeffs()
+        if len(quat) == 1 and isinstance(quat[0], (tuple, list, np.ndarray)):
+            quat = quat[0]
+
+        quat = np.asarray(quat).flatten()
+        if quat.shape[0] != 4:
+            raise ValueError(f"Quaternion must have 4 elements (x,y,z,w), got {quat}")
+
+        # normalize (optional but safe)
+        norm = np.linalg.norm(quat)
+        if not np.isclose(norm, 1.0, atol=1e-6) and norm > 0:
+            quat = quat / norm
+
+        # 4) skip exact duplicates
         payload = tuple(trans) + tuple(quat)
         if self.last_payload == payload and stamp == self.last_stamp:
-            return  # duplicate
+            return
 
+        # 5) build message
         msg = TransformStamped()
         msg.header.stamp = stamp
         msg.header.frame_id = parent
-        msg.child_frame_id  = child
+        msg.child_frame_id = child
         msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z = trans
         msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z, msg.transform.rotation.w = quat
 
+        # 6) broadcast
         self.br.sendTransform(msg)
+
+        # 7) update state
         self.last_stamp = stamp
         self.last_payload = payload
 
