@@ -476,7 +476,7 @@ class GenericSimulator(BaseController):
         wheel_r_vec.append(0.0)
         return wheel_l_vec,wheel_r_vec
 
-    def genOmegaTraj(self, omega_initial=0.51, omega_final=0.21, increment=0.3,  dt = 0.005, long_v = 0.1, direction="left"):
+    def generateOmegaTraj(self, omega_initial=0.51, omega_final=0.21, increment=0.3,  dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
         change_interval = 1.
         increment = increment
@@ -488,6 +488,12 @@ class GenericSimulator(BaseController):
         v_vec = []
         time = 0
         i = 0
+
+        long_v_rampup = np.linspace(0, long_v, 100)
+        for ramp_count in range(100):
+            time = np.round(time + dt, 3)
+            omega_vec.append(0)
+            v_vec.append(long_v_rampup[ramp_count])
         while True:
             time = np.round(time + dt, 3)
             omega_vec.append(ang_w_vec[i])
@@ -690,7 +696,7 @@ def main_loop(p):
             omega_ol = np.linspace(0., 0., np.int32(10./conf.robot_params[p.robot_name]['dt']))
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'V_OMEGA':
-            v_ol, omega_ol = p.genOmegaTraj(omega_initial=0, omega_final=2., increment=0.3, dt=conf.robot_params[p.robot_name]['dt'],  long_v=p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
+            v_ol, omega_ol = p.generateOmegaTraj(omega_initial=0, omega_final=2., increment=0.3, dt=conf.robot_params[p.robot_name]['dt'],  long_v=p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
             #v_ol, omega_ol = p.generateSpiralTraj(R_initial= 0.51, R_final=0.21, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
             traj_length = len(v_ol)
 
