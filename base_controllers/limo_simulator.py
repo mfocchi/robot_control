@@ -20,7 +20,7 @@ from gazebo_msgs.srv import SetModelConfigurationRequest
 from numpy import nan
 from matplotlib import pyplot as plt
 from base_controllers.utils.math_tools import unwrap_angle
-from  base_controllers.tracked_robot.utils import limo_constants as constants
+from  base_controllers.tracked_robot.utils import limo_constants as robot_constants
 from base_controllers.tracked_robot.controllers.lyapunov import LyapunovController, LyapunovParams, Robot
 from  base_controllers.tracked_robot.environment.trajectory import Trajectory, ModelsList
 from base_controllers.tracked_robot.velocity_generator import VelocityGenerator
@@ -50,13 +50,16 @@ class GenericSimulator(BaseController):
         self.SIDE_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.LONG_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
-        self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
+        self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = False # makes difference for v >= 0.4
 
         self.SENSORS = 'false' #'true',  'false'
         # Parameters for open loop identification
         self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
-        self.IDENT_LONG_SPEED = 0.3  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
-        self.IDENT_DIRECTION = 'right' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_LONG_SPEED = 0.7  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+
+        self.IDENT_MAX_WHEEL_SPEED = 25
+        self.IDENT_WHEEL_L = -10
 
         # initial pose (sim)
         self.p0 = np.array([0., 0., 0.])
@@ -65,13 +68,18 @@ class GenericSimulator(BaseController):
         self.use_ground_truth_contacts = False
         # to avoid redundant TF on baselink (world -> baselink)
         self.broadcast_world = False
+        self.alpha_f = 0
+        self.beta_l_f = 0
+        self.beta_r_f = 0
+        ta = 0.05
+        self.beta = conf.robot_params[self.robot_name]['dt'] / (conf.robot_params[self.robot_name]['dt'] + ta)
 
     def initVars(self):
         super().initVars()
         # load model
 
         try:
-            if self.SIDE_SLIP_COMPENSATION != 'NONE' and self.LONG_SLIP_COMPENSATION != 'NONE':
+            if self.SIDE_SLIP_COMPENSATION != 'NONE' or self.LONG_SLIP_COMPENSATION != 'NONE':
                 if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
                     # regressor
                     self.regressor_beta_l = cb.CatBoostRegressor()
@@ -195,9 +203,9 @@ class GenericSimulator(BaseController):
                 self.basePoseW_des_log[:, self.log_counter] = self.basePoseW_des #basepose is logged in base controller
                 self.b_base_vel_log[:, self.log_counter] = self.b_base_vel  # basepose is logged in base controller
 
-                self.alpha_log[self.log_counter] = self.alpha
-                self.beta_l_log[self.log_counter] = self.beta_l
-                self.beta_r_log[self.log_counter] = self.beta_r
+                self.alpha_log[self.log_counter] = self.alpha_f
+                self.beta_l_log[self.log_counter] = self.beta_l_f
+                self.beta_r_log[self.log_counter] = self.beta_r_f
 
                 self.alpha_control_log[self.log_counter] = self.alpha_control
                 self.beta_l_control_log[self.log_counter] = self.beta_l_control
@@ -303,14 +311,14 @@ class GenericSimulator(BaseController):
             plt.plot(p.time_log, p.v_d_log, "-r", label="desired")
             plt.legend()
             plt.title("v and omega")
-            plt.ylabel("linear velocity[m/s]")
+            plt.ylabel("command linear velocity[m/s]")
             plt.grid(True)
             plt.subplot(2, 1, 2)
             plt.plot(p.time_log, p.ctrl_omega_log, "-b", label="REAL")
             plt.plot(p.time_log, p.omega_d_log, "-r", label="desired")
             plt.legend()
             plt.xlabel("time[sec]")
-            plt.ylabel("angular velocity[rad/s]")
+            plt.ylabel("command angular velocity[rad/s]")
             plt.grid(True)
 
             #plotJoint('position', p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
@@ -319,15 +327,15 @@ class GenericSimulator(BaseController):
 
             axs[0].plot(p.time_log, p.qd_log[0, :], "-b", linewidth=3)
             axs[0].plot(p.time_log, p.qd_des_log[0, :], "-r", linewidth=4)
-            axs[0].plot(p.time_log, constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
-            axs[0].plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[0].plot(p.time_log, robot_constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[0].plot(p.time_log, -robot_constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
             axs[0].set_ylabel("WHEEL_L")
             axs[0].grid(True)
 
             axs[1].plot(p.time_log, p.qd_log[1, :], "-b", linewidth=3)
             axs[1].plot(p.time_log, p.qd_des_log[1, :], "-r", linewidth=4)
-            axs[1].plot(p.time_log, constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
-            axs[1].plot(p.time_log, -constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[1].plot(p.time_log, robot_constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
+            axs[1].plot(p.time_log, -robot_constants.MAXSPEED_RADS_PULLEY * np.ones(len(p.time_log)), "-k", linewidth=4)
             axs[1].set_ylabel("WHEEL_R")
             axs[1].grid(True)
 
@@ -355,32 +363,49 @@ class GenericSimulator(BaseController):
             plt.legend()
             plt.grid(True)
 
+            # for debug
+            # plt.figure()
+            # ax1 = plt.subplot(3, 1, 1)
+            # plt.plot(self.time_log, self.baseTwistW_log[0, :], "-b", label="vx")
+            # plt.ylabel("w_vx")
+            # plt.legend()
+            # plt.grid(True)
+            # plt.subplot(3, 1, 2, sharex=ax1)
+            # plt.plot(self.time_log, self.baseTwistW_log[1, :], "-b", label="vy")
+            # plt.ylabel("w_vy")
+            # plt.grid(True)
+            # plt.subplot(3, 1, 3, sharex=ax1)
+            # plt.plot(self.time_log, self.baseTwistW_log[5, :], "-b", label="omega_z")
+            # plt.ylabel("w_omega_z")
+            # plt.legend()
+            # plt.grid(True)
+
             #slippage vars
             plt.figure()
-            ax2 = plt.subplot(4, 1, 1)
+            ax2 = plt.subplot(3, 1, 1)
             plt.plot(self.time_log, self.beta_l_log, "-b", label="real")
             plt.plot(self.time_log, self.beta_l_control_log, "-r", label="control")
             plt.ylabel("beta_l")
             plt.legend()
             plt.grid(True)
-            plt.subplot(4, 1, 2,  sharex=ax2)
+            plt.subplot(3, 1, 2,  sharex=ax2)
             plt.plot(self.time_log, self.beta_r_log, "-b", label="real")
             plt.plot(self.time_log, self.beta_r_control_log, "-r", label="control")
             plt.ylabel("beta_r")
             plt.legend()
             plt.grid(True)
-            plt.subplot(4, 1, 3,  sharex=ax2)
+            plt.subplot(3, 1, 3,  sharex=ax2)
             plt.plot(self.time_log, self.alpha_log, "-b", label="real")
             plt.plot(self.time_log, self.alpha_control_log, "-r", label="control")
             plt.ylabel("alpha")
             #plt.ylim([-0.4, 0.4])
             plt.grid(True)
             plt.legend()
-            plt.subplot(4, 1, 4,  sharex=ax2)
-            plt.plot(self.time_log, self.radius_log, "-b")
-            plt.ylim([-1,1])
-            plt.ylabel("radius")
-            plt.grid(True)
+            # plt.subplot(4, 1, 4,  sharex=ax2)
+            # plt.plot(self.time_log, self.radius_log, "-b")
+            # plt.ylim([-1,1])
+            # plt.ylabel("radius")
+            # plt.grid(True)
 
             if p.ControlType != 'OPEN_LOOP':
                 # tracking errors
@@ -401,14 +426,14 @@ class GenericSimulator(BaseController):
             v = np.zeros_like(wheel_l)
             omega = np.zeros_like(wheel_l)
             for i in range(len(wheel_l)):
-                v[i] = constants.SPROCKET_RADIUS*(wheel_l[i] + wheel_r[i])/2
-                omega[i] = constants.SPROCKET_RADIUS/constants.TRACK_WIDTH*(wheel_r[i] -wheel_l[i])
+                v[i] = robot_constants.SPROCKET_RADIUS*(wheel_l[i] + wheel_r[i])/2
+                omega[i] = robot_constants.SPROCKET_RADIUS/robot_constants.TRACK_WIDTH*(wheel_r[i] -wheel_l[i])
             return v, omega
 
     def mapToWheels(self, v_des,omega_des):
         qd_des = np.zeros(4)
-        qd_des[0] = (v_des - omega_des * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # left front
-        qd_des[1] = (v_des + omega_des * constants.TRACK_WIDTH / 2) / constants.SPROCKET_RADIUS  # right front
+        qd_des[0] = (v_des - omega_des * robot_constants.TRACK_WIDTH / 2) / robot_constants.SPROCKET_RADIUS  # left front
+        qd_des[1] = (v_des + omega_des * robot_constants.TRACK_WIDTH / 2) / robot_constants.SPROCKET_RADIUS  # right front
         qd_des[2] = qd_des[0].copy()
         qd_des[3] = qd_des[1].copy()
         return qd_des
@@ -430,7 +455,7 @@ class GenericSimulator(BaseController):
         ####################################
         wheel_l_vec = []
         wheel_r_vec = []
-        change_interval = 2.
+        change_interval = 0.5
         if wheel_l <= 0.: #this is to make such that the ID starts always with no rotational speed
             wheel_r = np.linspace(-self.IDENT_MAX_WHEEL_SPEED, self.IDENT_MAX_WHEEL_SPEED, 32) #it if passes from 0 for some reason there is a non linear
                 #behaviour in the long slippage
@@ -451,7 +476,32 @@ class GenericSimulator(BaseController):
         wheel_r_vec.append(0.0)
         return wheel_l_vec,wheel_r_vec
 
-    def generateSpiralTraj(self, R_initial= 0.05, R_final=0.6, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
+    def genOmegaTraj(self, omega_initial=0.51, omega_final=0.21, increment=0.3,  dt = 0.005, long_v = 0.1, direction="left"):
+        # only around 0.3
+        change_interval = 1.
+        increment = increment
+        ang_w_vec = np.arange(omega_initial, omega_final,increment)
+        if direction == 'right':
+            ang_w_vec *= -1
+
+        omega_vec = []
+        v_vec = []
+        time = 0
+        i = 0
+        while True:
+            time = np.round(time + dt, 3)
+            omega_vec.append(ang_w_vec[i])
+            v_vec.append(long_v)
+            # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
+            if time > ((1 + i) * change_interval):
+                i += 1
+            if i == len(ang_w_vec):
+                break
+        v_vec.append(0.0)
+        omega_vec.append(0.0)
+        return v_vec, omega_vec
+
+    def generateSpiralTraj(self, R_initial= 2, R_final=0.05, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
         # only around 0.3
         change_interval = 2.
         increment = increment
@@ -493,7 +543,7 @@ class GenericSimulator(BaseController):
         b_vel_x = b_vel_xy[0]
         v = np.linalg.norm(b_vel_xy)
 
-        if (abs(b_vel_x) < 0.00001):
+        if (abs(b_vel_x) < 0.03):
             side_slip = 0.
         else:
             side_slip = math.atan2(b_vel_xy[1], b_vel_xy[0])
@@ -508,9 +558,9 @@ class GenericSimulator(BaseController):
             radius = v / (omega)
 
         # track velocity  from encoder
-        v_enc_l = constants.SPROCKET_RADIUS *  wheel_L
-        v_enc_r = constants.SPROCKET_RADIUS *  wheel_R
-        B = constants.TRACK_WIDTH
+        v_enc_l = robot_constants.SPROCKET_RADIUS *  wheel_L
+        v_enc_r = robot_constants.SPROCKET_RADIUS *  wheel_R
+        B = robot_constants.TRACK_WIDTH
 
         v_track_l = b_vel_x - omega* B / 2
         v_track_r = b_vel_x + omega* B / 2
@@ -558,7 +608,7 @@ class GenericSimulator(BaseController):
 
         return qd_comp, beta_l, beta_r
 
-    def computeLongSlipCompensationMachineLearning(self, v_des, omega_des, qd_des, constants):
+    def computeLongSlipCompensationMachineLearning(self, qd_des, constants):
         #compute beta
         if  self.SLIPPAGE_INFERENCE_TYPE == 'decision_trees':
             # predict the betas from NN
@@ -572,17 +622,17 @@ class GenericSimulator(BaseController):
             beta_l = (self.model_beta_l([qd_des])).squeeze()
             beta_r = (self.model_beta_r([qd_des])).squeeze()
 
-        # compute track velocity from v m
-        v_track_l = (v_des - omega_des * constants.TRACK_WIDTH / 2)
-        v_track_r = (v_des + omega_des * constants.TRACK_WIDTH / 2)
+        # compute track velocity from encoder
+        v_enc_l = constants.SPROCKET_RADIUS * qd_des[0]
+        v_enc_r = constants.SPROCKET_RADIUS * qd_des[1]
         #add compensation
-        v_track_l += beta_l
-        v_track_r += beta_r
+        v_enc_l += beta_l
+        v_enc_r += beta_r
         #compute compensated values
-        v_des_comp = (v_track_l + v_track_r) / 2.
-        omega_des_comp = (-v_track_l + v_track_r) / constants.TRACK_WIDTH
+        v_des_comp = (v_enc_l + v_enc_r) / 2.
+        omega_des_comp = (v_enc_r -v_enc_l) / constants.TRACK_WIDTH
 
-        return v_des_comp, omega_des_comp, beta_l, beta_r
+        return v_des_comp , omega_des_comp, beta_l, beta_r
     
     def monitor_time(self):
         self.checkLoopFrequency()
@@ -606,13 +656,16 @@ class GenericSimulator(BaseController):
 def talker(p):
     p.start()
     p.startFramework()
-    if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
-        wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 32)
-        for speed in range(len(wheel_l)):
-            p.IDENT_WHEEL_L = wheel_l[speed]
-            main_loop(p)
-    else:
-        main_loop(p)
+    # if p.ControlType == "OPEN_LOOP" and p.IDENT_TYPE == 'WHEELS':
+    #     wheel_l = np.linspace(-p.IDENT_MAX_WHEEL_SPEED, p.IDENT_MAX_WHEEL_SPEED, 32)
+    #     for speed in range(len(wheel_l)):
+    #         p.IDENT_WHEEL_L = wheel_l[speed]
+    #         main_loop(p)
+    #
+    # else:
+    #     main_loop(p)
+    main_loop(p)
+
 
 def main_loop(p):
     p.loadModelAndPublishers()
@@ -622,7 +675,7 @@ def main_loop(p):
     p.q_old = np.zeros(p.robot.na)
     robot_state = Robot()
     if p.real_robot:
-        ros.sleep(6.)
+        ros.sleep(2.)
     if p.SAVE_BAGS:
         p.recorder.start_recording_srv()
 
@@ -633,12 +686,12 @@ def main_loop(p):
             # generic open loop test for comparison with matlab
             #vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
             #v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth() #velocity_straight
-            v_ol = np.linspace(0.2, 0.2, np.int32(10./conf.robot_params[p.robot_name]['dt']))
-            omega_ol = np.linspace(-1., -1., np.int32(10./conf.robot_params[p.robot_name]['dt']))
+            v_ol = np.linspace(0.5, 0.5, np.int32(10./conf.robot_params[p.robot_name]['dt']))
+            omega_ol = np.linspace(0., 0., np.int32(10./conf.robot_params[p.robot_name]['dt']))
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'V_OMEGA':
-            #identification repeat long_v = 0.05:0.05:0.4
-            v_ol, omega_ol = p.generateSpiralTraj(R_initial= 0.21, R_final=0.51, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
+            v_ol, omega_ol = p.genOmegaTraj(omega_initial=0, omega_final=2., increment=0.3, dt=conf.robot_params[p.robot_name]['dt'],  long_v=p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
+            #v_ol, omega_ol = p.generateSpiralTraj(R_initial= 0.51, R_final=0.21, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
             traj_length = len(v_ol)
 
         if p.IDENT_TYPE == 'WHEELS':
@@ -659,7 +712,10 @@ def main_loop(p):
                 if counter>=traj_length:
                     print(colored("Open loop test accomplished", "red"))
                     break
-                p.qd_des = np.array([wheel_l_ol[counter], wheel_r_ol[counter]])
+                p.v_d = v_ol[counter]
+                p.omega_d = omega_ol[counter]
+                p.qd_des = p.mapToWheels(p.v_d, p.omega_d)
+                p.publishControlCommand(p.v_d, p.omega_d)
                 counter += 1
             else:
                 _, _, _, p.v_d, p.omega_d, _, _, traj_finished = p.traj.evalTraj(p.time)
@@ -677,6 +733,10 @@ def main_loop(p):
             p.ros_pub.publishVisual(delete_markers=False)
             p.beta_l, p.beta_r, p.alpha, p.radius, p.b_base_vel = p.estimateSlippages(p.baseTwistW, p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
 
+            p.alpha_f = p.beta * p.alpha + (1. - p.beta) * p.alpha_f
+            p.beta_l_f = p.beta * p.beta_l + (1. - p.beta) * p.beta_l_f
+            p.beta_r_f = p.beta * p.beta_r + (1. - p.beta) * p.beta_r_f
+
             # log variables
             p.logData()
             # wait for synconization of the control loop
@@ -689,7 +749,7 @@ def main_loop(p):
         p.des_x = p.p0[0]
         p.des_y = p.p0[1]
         p.des_theta = p.p0[2]
-        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.1, omega_max_=0.2)
+        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.4, omega_max_=0.4)
         p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                             v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
 
@@ -713,36 +773,43 @@ def main_loop(p):
                 break
 
             if p.ControlType=='CLOSED_LOOP_SLIP_0':
-                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,p.model_alpha,approx=True)
+                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,robot_constants,p.model_alpha,approx=True)
                 #p.des_theta -=  p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType == 'CLOSED_LOOP_SLIP':
-                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,p.model_alpha, approx=False)
+                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,robot_constants,p.model_alpha, approx=False)
                 #p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
 
 
+            #compute qd_des after control computation
+            p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
+
             if not p.ControlType=='CLOSED_LOOP_UNICYCLE'  and not traj_finished:
                 #compute qd_des needed input by regressor
                 p.q_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
                 if p.LONG_SLIP_COMPENSATION=='MACHINE_LEARNING':
                     # update p.ctrl_v and  p.ctrl_omega with compensation
-                    p.ctrl_v, p.ctrl_omega, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
+                    p.ctrl_v, p.ctrl_omega, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, robot_constants)
                 if p.LONG_SLIP_COMPENSATION == 'EXP':
-                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationExp(p.ctrl_v, p.ctrl_omega, p.qd_des, constants)
+                    p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationExp(p.ctrl_v, p.ctrl_omega, p.qd_des, robot_constants)
 
             # send command
             p.publishControlCommand(p.ctrl_v, p.ctrl_omega)
 
-            #recompute qd_des after log slippage compensation
+            #recompute qd_des after long slippage compensation for plot
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
-
             p.q_des = p.q_des + p.qd_des * conf.robot_params[p.robot_name]['dt']
             p.monitor_time()
             p.ros_pub.publishVisual(delete_markers=False)
             p.beta_l, p.beta_r, p.alpha, p.radius, p.b_base_vel = p.estimateSlippages(p.baseTwistW,p.basePoseW[p.u.sp_crd["AZ"]], p.qd)
+
+            p.alpha_f = p.beta * p.alpha + (1. - p.beta) * p.alpha_f
+            p.beta_l_f = p.beta * p.beta_l + (1. - p.beta) * p.beta_l_f
+            p.beta_r_f = p.beta * p.beta_r + (1. - p.beta) * p.beta_r_f
+
             # log variables
             p.logData()
             # wait for synconization of the control loop
@@ -754,8 +821,10 @@ def main_loop(p):
         not_nans = ~np.isnan(p.time_log)
         data = pd.DataFrame({
             "time": p.time_log[not_nans],
-            "wheel_l": p.qd_des_log[0, not_nans],
-            "wheel_r": p.qd_des_log[1, not_nans],
+            "wheel_l": p.qd_log[0, not_nans],
+            "wheel_r": p.qd_log[1, not_nans],
+            "des_wheel_l": p.qd_des_log[0, not_nans],
+            "des_wheel_r": p.qd_des_log[1, not_nans],
             "roll": p.basePoseW_log[3, not_nans],
             "pitch": p.basePoseW_log[4, not_nans],
             "yaw": p.basePoseW_log[5, not_nans],

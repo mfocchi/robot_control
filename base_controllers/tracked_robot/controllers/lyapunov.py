@@ -1,7 +1,6 @@
 import numpy as np
 import math
 from base_controllers.utils.math_tools import unwrap_angle
-from base_controllers.tracked_robot.utils import maxxi_constants
 from base_controllers.utils.math_tools import Math
 from scipy.optimize import fsolve
 # ------------------------------------ #
@@ -27,8 +26,7 @@ class LyapunovController:
         self.K_P = params.K_P
         self.K_THETA = params.K_THETA
 
-        self.C1 = maxxi_constants.side_slip_angle_coefficients[0]
-        self.C2 = maxxi_constants.side_slip_angle_coefficients[1]
+
         self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING'
         self.log_e_x = []
         self.log_e_y = []
@@ -116,11 +114,14 @@ class LyapunovController:
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
         return v, omega,  V, V_dot
 
-    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, model_alpha=None, approx=False):
+    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished,robot_constants, model_alpha=None, approx=False):
         """
         ritorna i valori di linear e angular velocity
         """
         self.actual_state = actual_state
+        self.C1 = robot_constants.side_slip_angle_coefficients[0]
+        self.C2 = robot_constants.side_slip_angle_coefficients[1]
+        self.robot_constants = robot_constants
 
         if traj_finished:
             # save errors for plotting
@@ -223,8 +224,8 @@ class LyapunovController:
 
         elif self.SIDE_SLIP_COMPENSATION=='MACHINE_LEARNING':
             qd = np.zeros(2)
-            qd[0] = (v - omega * maxxi_constants.TRACK_WIDTH / 2) / maxxi_constants.SPROCKET_RADIUS  # left front
-            qd[1] = (v + omega * maxxi_constants.TRACK_WIDTH / 2) / maxxi_constants.SPROCKET_RADIUS  # right front
+            qd[0] = (v - omega * self.robot_constants.TRACK_WIDTH / 2) / self.robot_constants.SPROCKET_RADIUS  # left front
+            qd[1] = (v + omega * self.robot_constants.TRACK_WIDTH / 2) / self.robot_constants.SPROCKET_RADIUS  # right front
 
             if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
                 if len(model_alpha.feature_names_)>2:

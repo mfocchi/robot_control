@@ -39,61 +39,43 @@ beta_l_log = []
 beta_r_log = []
 alpha_log = []
 
+samples_to_discard = 50
+
 for file in list_file:
     print("reading...",file)
-    tmp_df = pd.read_csv(os.path.join('limo/',file),header=1, names=['time', 'wheel_l','wheel_r','roll', 'pitch', 'yaw', 'beta_l','beta_r','alpha'])
+    tmp_df = pd.read_csv(os.path.join('limo/',file),header=1, names=['time', 'wheel_l','wheel_r','des_wheel_l','des_wheel_r','roll', 'pitch', 'yaw', 'beta_l','beta_r','alpha'])
 
-    des_wheel_R = tmp_df['wheel_r']
-    des_wheel_L = tmp_df['wheel_l']
+
+    des_wheel_L = tmp_df['des_wheel_l']
+    des_wheel_R = tmp_df['des_wheel_r']
     alpha = tmp_df['alpha']
     beta_l = tmp_df['beta_l']
     beta_r = tmp_df['beta_r']
 
-    # Get switch indices where des_wheel_R changes
-    switch_idx = np.where(np.diff(des_wheel_R) != 0)[0] + 1  # +1 to match MATLAB's diff behavior
-    switch_idx = np.concatenate(([0], switch_idx))  # prepend 0 (equivalent to 1 in MATLAB)
-
-    number_of_samples_per_batch = np.diff(switch_idx)
-    margin = round(number_of_samples_per_batch[0] * 0.2)
-
-    number_of_samples = len(switch_idx) - 1
-
-    # Preallocate "steady" arrays as lists of np arrays
-    beta_l_steady = [None] * number_of_samples
-    beta_r_steady = [None] * number_of_samples
-    alpha_steady = [None] * number_of_samples
-    des_wheel_L_steady = [None] * number_of_samples
-    des_wheel_R_steady = [None] * number_of_samples
-
-    for idx in range(number_of_samples):
-        start = switch_idx[idx] + margin
-        end = switch_idx[idx + 1] - margin
-
-        beta_l_steady[idx] = beta_l[start:end]
-        beta_r_steady[idx] = beta_r[start:end]
-        alpha_steady[idx] = alpha[start:end]
-        des_wheel_L_steady[idx] = des_wheel_L[start:end]
-        des_wheel_R_steady[idx] = des_wheel_R[start:end]
-
-    beta_l_vec = []
-    beta_r_vec = []
-    avg_alpha_vec = []
-    des_wheel_L_vec = []
-    des_wheel_R_vec = []
-
-    for i in range(number_of_samples):
-        beta_l_vec.append(np.mean(beta_l_steady[i]))
-        beta_r_vec.append(np.mean(beta_r_steady[i]))
-        avg_alpha_vec.append(np.mean(alpha_steady[i]))
-        des_wheel_L_vec.append(np.mean(des_wheel_L_steady[i]))
-        des_wheel_R_vec.append(np.mean(des_wheel_R_steady[i]))
-
     # Append to logs
-    des_wheel_l_log.extend(des_wheel_L_vec)
-    des_wheel_r_log.extend(des_wheel_R_vec)
-    beta_l_log.extend(beta_l_vec)
-    beta_r_log.extend(beta_r_vec)
-    alpha_log.extend(avg_alpha_vec)
+    des_wheel_l_log.extend(des_wheel_L[samples_to_discard:])
+    des_wheel_r_log.extend(des_wheel_R[samples_to_discard:])
+    beta_l_log.extend(beta_l[samples_to_discard:])
+    beta_r_log.extend(beta_r[samples_to_discard:])
+    alpha_log.extend(alpha[samples_to_discard:])
+
+    plt.figure()
+    plt.subplot(4,1,1)
+    plt.title(file)
+    plt.ylabel("wheel")
+    plt.plot(des_wheel_L[samples_to_discard:])
+    plt.plot(des_wheel_R[samples_to_discard:])
+    plt.subplot(4,1,2)
+    plt.plot(beta_l[samples_to_discard:])
+    plt.ylabel("beta_l")
+    plt.subplot(4,1,3)
+    plt.plot(beta_r[samples_to_discard:])
+    plt.ylabel("beta_r")
+    plt.subplot(4,1,4)
+    plt.plot(alpha[samples_to_discard:])
+    plt.ylabel("alpha")
+    plt.show()
+
 
 # Convert logs to arrays
 wheel_l = np.array(des_wheel_l_log)
@@ -104,8 +86,8 @@ alpha = np.array(alpha_log)    # assuming you meant avg_alpha_log here
 
 x = np.column_stack((wheel_l, wheel_r))
 y = np.column_stack((beta_l, beta_r, alpha))
-df = pd.DataFrame(np.hstack([x, y]), columns=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha'])
-
+df = pd.DataFrame(np.hstack([x, y]), columns=['des_wheel_l', 'des_wheel_r', 'beta_l', 'beta_r', 'alpha'])
+#
 # #upsampling
 #Fit an interpolator for each output dimension
 interpolator_beta_l = RBFInterpolator(x, y[:, 0], smoothing=0.1)
@@ -113,8 +95,8 @@ interpolator_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
 interpolator_alpha  = RBFInterpolator(x, y[:, 2], smoothing=0.1)
 #
 # Create a dense grid of inputs
-wl_dense = np.linspace(-10, 10, 200)
-wr_dense = np.linspace(-10, 10, 200)
+wl_dense = np.linspace(0, 18, 100)
+wr_dense = np.linspace(0, 18, 100)
 wl_mesh, wr_mesh = np.meshgrid(wl_dense, wr_dense)
 x_dense = np.stack([wl_mesh.ravel(), wr_mesh.ravel()], axis=1)
 
@@ -126,13 +108,14 @@ y_dense = np.stack([beta_l_dense, beta_r_dense, alpha_dense], axis=1)
 data_dense = np.hstack([x_dense, y_dense])
 #
 # # Create DataFrame with proper column names
-df_dense = pd.DataFrame(data_dense, columns=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha'])
+df_dense = pd.DataFrame(data_dense, columns=['des_wheel_l', 'des_wheel_r', 'beta_l', 'beta_r', 'alpha'])
 
-x = df_dense[['wheel_l','wheel_r']].values
+x = df_dense[['des_wheel_l','des_wheel_r']].values
 y = df_dense[['beta_l','beta_r','alpha']].values
 
 # %%compute input correlation
 df_dense.corr()
+
 
 # %% plot histogram to see if input distribution is well behaved, to see if it is neeeded a scaling
 fig, ax = plt.subplots(1, 5, figsize=(20, 4))
@@ -162,35 +145,32 @@ len(y_train), len(y_valid), len(y_test)
 
 # %% [markdown]
 # # %% create model of regressor Beta_l
-model_beta_l = cb.CatBoostRegressor()
+model_beta_l = cb.CatBoostRegressor(learning_rate=1e-2, max_depth=5)
 # %% train the model
-model_beta_l.fit(x_train, y_train[..., 0].reshape(-1, 1), verbose=100,
-                 eval_set=(x_valid, y_valid[..., 0].reshape(-1, 1)), use_best_model=True)
+model_beta_l.fit(x_train, y_train[..., 0].reshape(-1, 1), verbose=100,  eval_set=(x_valid, y_valid[..., 0].reshape(-1, 1)), use_best_model=True)
 preds_train_beta_l = model_beta_l.predict(x_train)
 preds_beta_l = model_beta_l.predict(x_test)
-
 print(f'R2 metric train beta_l: {r2_score(y_train[...,0], preds_train_beta_l)}')
 print(f'R2 metric test beta_l: {r2_score(y_test[...,0], preds_beta_l)}')
-
-
 # %% save the model python
 model_name_beta_l = 'model_limo_beta_l.cb'
 model_beta_l.save_model(model_name_beta_l)
-model_beta_r = cb.CatBoostRegressor()
-model_beta_r.fit(x_train, y_train[..., 1].reshape(-1, 1), verbose=100,
-                 eval_set=(x_valid, y_valid[..., 1].reshape(-1, 1)), use_best_model=True)
+
+
+
+model_beta_r = cb.CatBoostRegressor(learning_rate=1e-2, max_depth=5)
+model_beta_r.fit(x_train, y_train[..., 1].reshape(-1, 1), verbose=100,     eval_set=(x_valid, y_valid[..., 1].reshape(-1, 1)), use_best_model=True)
 preds_train_beta_r = model_beta_r.predict(x_train)
 preds_beta_r = model_beta_r.predict(x_test)
-
 print(f'R2 metric train beta_r: {r2_score(y_train[...,1], preds_train_beta_r)}')
 print(f'R2 metric test beta_r: {r2_score(y_test[...,1], preds_beta_r)}')
-
 # %% save the model python
 model_name_beta_r = 'model_limo_beta_r.cb'
 model_beta_r.save_model(model_name_beta_r)
-model_alpha = cb.CatBoostRegressor()
-model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=100,
-                eval_set=(x_valid, y_valid[..., 2].reshape(-1, 1)), use_best_model=True)
+
+
+model_alpha = cb.CatBoostRegressor(learning_rate=1e-2, max_depth=5)
+model_alpha.fit(x_train, y_train[..., 2].reshape(-1, 1), verbose=100,        eval_set=(x_valid, y_valid[..., 2].reshape(-1, 1)), use_best_model=True)
 preds_train_alpha = model_alpha.predict(x_train)
 preds_alpha = model_alpha.predict(x_test)
 print(f'R2 metric train alpha: {r2_score(y_train[...,2], preds_train_alpha)}')
@@ -273,19 +253,32 @@ import numpy as np
 import catboost as cb
 model_beta_l = cb.CatBoostRegressor()
 model_beta_l.load_model(model_name_beta_l)
-beta_l = model_beta_l.predict(np.array([-3.4,3.4]))
-
 model_beta_r = cb.CatBoostRegressor()
 model_beta_r.load_model(model_name_beta_r)
-beta_r =  model_beta_r.predict(np.array([-3.4,3.4]))
-
 model_alpha = cb.CatBoostRegressor()
 model_alpha.load_model(model_name_alpha)
+
+
+print("test left")
+beta_l = model_beta_l.predict(np.array([-3.4,3.4]))
+beta_r =  model_beta_r.predict(np.array([-3.4,3.4]))
 alpha = model_alpha.predict(np.array([-3.4,3.4]))
 print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")
 
 #test check directly with interpolators for comparison turn left
-beta_l = interpolator_beta_l(np.array([[-3.4,3.4]]))
-beta_r = interpolator_beta_r(np.array([[-3.4,3.4]]))
-alpha = interpolator_alpha(np.array([[-3.4,3.4]]))
+# beta_l = interpolator_beta_l(np.array([[-3.4,3.4]]))
+# beta_r = interpolator_beta_r(np.array([[-3.4,3.4]]))
+# alpha = interpolator_alpha(np.array([[-3.4,3.4]]))
+# print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")
+
+print("test right")
+beta_l = model_beta_l.predict(np.array([3.4,-3.4]))
+beta_r =  model_beta_r.predict(np.array([3.4,-3.4]))
+alpha = model_alpha.predict(np.array([3.4,-3.4]))
 print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")
+
+#test check directly with interpolators for comparison turn left
+# beta_l = interpolator_beta_l(np.array([[3.4,-3.4]]))
+# beta_r = interpolator_beta_r(np.array([[3.4,-3.4]]))
+# alpha = interpolator_alpha(np.array([[3.4,-3.4]]))
+# print(f" alpha {alpha}, Beta_l {beta_l}, Beta_r {beta_r}")
