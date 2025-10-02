@@ -46,17 +46,18 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized limo controller---------------------------------------------------------------")
 
-        self.ControlType = 'OPEN_LOOP' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
+        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.LONG_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
-        self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = False # makes difference for v >= 0.4
+        self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
+        self.ODOMETRY = 'false' #'true',  'false' (optitrack node)
         self.SENSORS = 'false' #'true',  'false'
         # Parameters for open loop identification
         self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
-        self.IDENT_LONG_SPEED = 0.7  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
-        self.IDENT_DIRECTION = 'left' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_LONG_SPEED = 0.6  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
+        self.IDENT_DIRECTION = 'right' #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
 
         self.IDENT_MAX_WHEEL_SPEED = 25
         self.IDENT_WHEEL_L = -10
@@ -64,6 +65,9 @@ class GenericSimulator(BaseController):
         # initial pose (sim)
         self.p0 = np.array([0., 0., 0.])
         self.SAVE_BAGS = False
+
+
+
         # to avoid issues with contacts
         self.use_ground_truth_contacts = False
         # to avoid redundant TF on baselink (world -> baselink)
@@ -71,7 +75,7 @@ class GenericSimulator(BaseController):
         self.alpha_f = 0
         self.beta_l_f = 0
         self.beta_r_f = 0
-        ta = 0.05
+        ta = 0.1
         self.beta = conf.robot_params[self.robot_name]['dt'] / (conf.robot_params[self.robot_name]['dt'] + ta)
 
     def initVars(self):
@@ -216,7 +220,7 @@ class GenericSimulator(BaseController):
     def startFramework(self):
         self.decimate_publish = 1
         world_name = None #'ramps.world'
-        additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]),'sensors:='+self.SENSORS]
+        additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]),'sensors:='+self.SENSORS, 'odometry:='+self.ODOMETRY]
         launch_file = rospkg.RosPack().get_path('limo_description') + '/launch/start_locosim.launch'
         super().startSimulator(world_name=world_name, launch_file=launch_file, additional_args=additional_args)
 
@@ -242,6 +246,7 @@ class GenericSimulator(BaseController):
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w
         ])
+
         self.euler = np.array(euler_from_quaternion(self.quaternion))
         #unwrap
         self.euler, self.euler_old = unwrap_vector(self.euler, self.euler_old)
@@ -614,7 +619,7 @@ class GenericSimulator(BaseController):
 
         return qd_comp, beta_l, beta_r
 
-    def computeLongSlipCompensationMachineLearning(self, qd_des, constants):
+    def computeLongSlipCompensationMachineLearning(self, qd_des, qd, constants):
         #compute beta
         if  self.SLIPPAGE_INFERENCE_TYPE == 'decision_trees':
             # predict the betas from NN
@@ -650,14 +655,14 @@ class GenericSimulator(BaseController):
     def initSubscribers(self):
         self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
                                          callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+        self.sub_pose_limo = ros.Subscriber("/" + self.robot_name + "/odom", Odometry, callback=self._receive_pose,
+                                            queue_size=1, tcp_nodelay=True)
+
         if self.real_robot:
             print(colored("IMPORTANT: Real robot ON,  be sure param use_sim_time = false","red"))
             # for limo the publisher in on limo0/odom not groundtruth
-            self.sub_pose_limo = ros.Subscriber("/" + self.robot_name + "/odom", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
             self.p0[0], self.p0[1], self.p0[2] = getInitialStateFromOdom(self.robot_name)
             self.q_des = getInitialStateFromJoints(robot_name=self.robot_name, joint_names=self.joint_names)
-        else:
-            self.sub_pose_limo = ros.Subscriber("/" + self.robot_name +  "/ground_truth", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
 
 def talker(p):
     p.start()
@@ -755,14 +760,13 @@ def main_loop(p):
         p.des_x = p.p0[0]
         p.des_y = p.p0[1]
         p.des_theta = p.p0[2]
-        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.4, omega_max_=0.4)
+        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.5, omega_max_=0.7)
         p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                             v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
 
-
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=1., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'], ESTIMATE_ALPHA_WITH_ACTUAL_VALUES=p.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES) #high gains 15 5 / low gains 10 1 (default)
-        p.controller = LyapunovController(params=params)#, matlab_engine = p.eng)
+        p.controller = LyapunovController(params=params, robot_constants=robot_constants)#, matlab_engine = p.eng)
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.controller.setSlippageInferenceType(p.SLIPPAGE_INFERENCE_TYPE)
         p.traj.set_initial_time(start_time=p.time)
@@ -779,16 +783,17 @@ def main_loop(p):
                 break
 
             if p.ControlType=='CLOSED_LOOP_SLIP_0':
-                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,robot_constants,p.model_alpha,approx=True)
-                #p.des_theta -=  p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
+                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,p.model_alpha,approx=True)
+                # p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType == 'CLOSED_LOOP_SLIP':
-                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,robot_constants,p.model_alpha, approx=False)
+                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished,p.model_alpha, approx=False)
                 #p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
-
+                _,_, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, p.qd, robot_constants)
+                p.alpha_control = p.model_alpha.predict(p.qd)
 
             #compute qd_des after control computation
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
@@ -798,7 +803,7 @@ def main_loop(p):
                 p.q_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
                 if p.LONG_SLIP_COMPENSATION=='MACHINE_LEARNING':
                     # update p.ctrl_v and  p.ctrl_omega with compensation
-                    p.ctrl_v, p.ctrl_omega, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, robot_constants)
+                    p.ctrl_v, p.ctrl_omega, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, p.qd, robot_constants)
                 if p.LONG_SLIP_COMPENSATION == 'EXP':
                     p.qd_des, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationExp(p.ctrl_v, p.ctrl_omega, p.qd_des, robot_constants)
 

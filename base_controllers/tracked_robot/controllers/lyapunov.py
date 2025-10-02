@@ -21,7 +21,7 @@ class Robot:
     pass
 
 class LyapunovController:
-    def __init__(self, params: LyapunovParams): #, matlab_engine = None):
+    def __init__(self, params: LyapunovParams,robot_constants = None): #, matlab_engine = None):
 
         self.K_P = params.K_P
         self.K_THETA = params.K_THETA
@@ -35,7 +35,7 @@ class LyapunovController:
         self.theta_old = 0.
         self.v_old = 0.
         self.omega_old = 0.
-
+        self.robot_constants = robot_constants
         self.params = params
         self.math_utils = Math()
         #self.eng = matlab_engine
@@ -114,14 +114,13 @@ class LyapunovController:
         # print("VELS -> v:%.2f, o:%.2f" % (v_ref + dv, o_ref + domega))
         return v, omega,  V, V_dot
 
-    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished,robot_constants, model_alpha=None, approx=False):
+    def control_alpha(self, actual_state, current_time,  des_x, des_y, des_theta, v_d, omega_d,  v_dot_d, omega_dot_d, traj_finished, model_alpha=None, approx=False):
         """
         ritorna i valori di linear e angular velocity
         """
         self.actual_state = actual_state
-        self.C1 = robot_constants.side_slip_angle_coefficients[0]
-        self.C2 = robot_constants.side_slip_angle_coefficients[1]
-        self.robot_constants = robot_constants
+        self.C1 = self.robot_constants.side_slip_angle_coefficients[0]
+        self.C2 = self.robot_constants.side_slip_angle_coefficients[1]
 
         if traj_finished:
             # save errors for plotting

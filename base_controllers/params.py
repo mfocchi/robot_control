@@ -52,7 +52,7 @@ robot_params['limo0'] ={'dt': 0.01,
                         'spawn_y': 0.0,
                         'spawn_z': 0.5,
                         'spawn_Y': 0.,
-                        'real_robot': True,
+                        'real_robot': False,
                         'buffer_size': 15000}
 
 

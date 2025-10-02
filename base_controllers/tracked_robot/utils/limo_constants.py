@@ -4,7 +4,8 @@ MAX_LINEAR_VELOCITY = 1.0  # m/s
 MAX_ANGULAR_VELOCITY = 2.0  # radians per second
 TRACK_WIDTH = 0.172
 TRACK_LENGTH = 0.22
-SPROCKET_RADIUS = 0.0475
+SPROCKET_RADIUS = 0.0475 # without tracks
+#SPROCKET_RADIUS = 0.055 # with tracks
 MAXSPEED_RADS_PULLEY = 25
 
 #identified with v = 0.2 friction coeff 0.1

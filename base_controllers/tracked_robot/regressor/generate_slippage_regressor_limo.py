@@ -17,6 +17,7 @@ import pandas as pd
 from termcolor import colored
 import glob
 import sys
+from scipy.signal import butter, filtfilt
 
 pattern = "model_limo*.cb"
 # Search in the current directory
@@ -29,7 +30,9 @@ if matching_files:
 # Continue with script if file does not exist or user agrees to overwrite
 print("Proceeding...")
 
-list_file = [x for x in os.listdir('limo/') if (x.endswith('.csv') )]
+folder = 'limo/'
+
+list_file = [x for x in os.listdir(folder) if (x.endswith('.csv') )]
 df_vpos = pd.DataFrame()
 
 # Initialize logs
@@ -39,18 +42,30 @@ beta_l_log = []
 beta_r_log = []
 alpha_log = []
 
-samples_to_discard = 50
+samples_to_discard = 0
+
+# Design a low-pass Butterworth filter
+fs = 100
+cutoff = 3.0  # Hz
+order = 4
+nyq = 0.5 * fs
+normal_cutoff = cutoff / nyq
+b, a = butter(order, normal_cutoff, btype='low', analog=False)
+
+
 
 for file in list_file:
     print("reading...",file)
-    tmp_df = pd.read_csv(os.path.join('limo/',file),header=1, names=['time', 'wheel_l','wheel_r','des_wheel_l','des_wheel_r','roll', 'pitch', 'yaw', 'beta_l','beta_r','alpha'])
+    tmp_df = pd.read_csv(os.path.join(folder,file),header=1, names=['time', 'wheel_l','wheel_r','des_wheel_l','des_wheel_r','roll', 'pitch', 'yaw', 'beta_l','beta_r','alpha'])
 
-
+    # with actual
+    # des_wheel_L = filtfilt(b,a,tmp_df['wheel_l'])
+    # des_wheel_R = filtfilt(b,a,tmp_df['wheel_r'])
     des_wheel_L = tmp_df['des_wheel_l']
-    des_wheel_R = tmp_df['des_wheel_r']
-    alpha = tmp_df['alpha']
-    beta_l = tmp_df['beta_l']
-    beta_r = tmp_df['beta_r']
+    des_wheel_R =  tmp_df['des_wheel_r']
+    alpha = filtfilt(b,a,tmp_df['alpha'])
+    beta_l = filtfilt(b,a,tmp_df['beta_l'])
+    beta_r = filtfilt(b,a,tmp_df['beta_r'])
 
     # Append to logs
     des_wheel_l_log.extend(des_wheel_L[samples_to_discard:])
@@ -95,8 +110,8 @@ interpolator_beta_r = RBFInterpolator(x, y[:, 1], smoothing=0.1)
 interpolator_alpha  = RBFInterpolator(x, y[:, 2], smoothing=0.1)
 #
 # Create a dense grid of inputs
-wl_dense = np.linspace(0, 18, 100)
-wr_dense = np.linspace(0, 18, 100)
+wl_dense = np.linspace(np.min(wheel_l), np.max(wheel_l), 100)
+wr_dense = np.linspace(np.min(wheel_r), np.max(wheel_r), 100)
 wl_mesh, wr_mesh = np.meshgrid(wl_dense, wr_dense)
 x_dense = np.stack([wl_mesh.ravel(), wr_mesh.ravel()], axis=1)
 

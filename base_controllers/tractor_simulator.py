@@ -55,7 +55,7 @@ class GenericSimulator(BaseController):
         super().__init__(robot_name=robot_name, external_conf = conf)
         self.torque_control = False
         print("Initialized tractor controller---------------------------------------------------------------")
-        self.SIMULATOR = 'gazebo'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'distributed2d'(2d) 'distributed3d'
+        self.SIMULATOR = 'distributed2d'#, 'gazebo(unicycle)', 'coppelia'(deprecated), 'distributed2d'(2d) 'distributed3d'
         self.NAVIGATION = 'none'  # 'none', '2d' , '3d'
         self.TERRAIN = False #True: Slopes False: Flat terrain
 
@@ -91,6 +91,7 @@ class GenericSimulator(BaseController):
         self.ADD_NOISE = False #FOR PAPER user_defined_reference
         self.coppeliaModel=f'tractor_ros_0.3_slope.ttt'
 
+        self.flag3D = ''
         if self.SIMULATOR == 'gazebo' and not self.ControlType=='CLOSED_LOOP_UNICYCLE' and not self.ControlType=='OPEN_LOOP':
             print(colored("Gazebo Model has no slippage, use self.SIMULATOR:=distributed2d","red"))
             sys.exit()
@@ -104,7 +105,7 @@ class GenericSimulator(BaseController):
         super().initVars()
         # load model
         try:
-            if self.SIDE_SLIP_COMPENSATION != 'NONE' and self.LONG_SLIP_COMPENSATION != 'NONE':
+            if self.SIDE_SLIP_COMPENSATION != 'NONE' or self.LONG_SLIP_COMPENSATION != 'NONE':
                 if self.SLIPPAGE_INFERENCE_TYPE=='decision_trees':
                     # regressor
                     self.regressor_beta_l = cb.CatBoostRegressor()
@@ -279,7 +280,7 @@ class GenericSimulator(BaseController):
                     print(colored("wrong friction coeff, can be 0.1 or 0.4"))
                 groundParams = Ground(friction_coefficient=self.friction_coefficient)
                 self.tracked_vehicle_simulator = TrackedVehicleSimulator(dt=conf.robot_params[p.robot_name]['dt'], ground=groundParams)
-                self.flag3D=''
+
             self.robot = getRobotModelFloating(self.robot_name)
             # instantiating additional publishers
             self.joint_pub = ros.Publisher("/" + self.robot_name + "/joint_states", JointState, queue_size=1)
@@ -1265,7 +1266,7 @@ def main_loop(p):
 
         # Lyapunov controller parameters
         params = LyapunovParams(K_P=10., K_THETA=1., DT=conf.robot_params[p.robot_name]['dt'], ESTIMATE_ALPHA_WITH_ACTUAL_VALUES=p.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES) #high gains 15 5 / low gains 10 1 (default)
-        p.controller = LyapunovController(params=params)#, matlab_engine = p.eng)
+        p.controller = LyapunovController(params=params, robot_constants=constants)#, matlab_engine = p.eng)
         p.controller.setSideSlipCompensationType(p.SIDE_SLIP_COMPENSATION)
         p.controller.setSlippageInferenceType(p.SLIPPAGE_INFERENCE_TYPE)
         p.traj.set_initial_time(start_time=p.time)
@@ -1295,11 +1296,11 @@ def main_loop(p):
                 if traj_finished:
                     break
             if p.ControlType=='CLOSED_LOOP_SLIP_0':
-                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, constants, p.model_alpha,approx=True)
+                p.ctrl_v, p.ctrl_omega,  p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, p.model_alpha,approx=True)
                 #p.des_theta -=  p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType == 'CLOSED_LOOP_SLIP':
-                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, constants, p.model_alpha, approx=False)
+                p.ctrl_v, p.ctrl_omega, p.V, p.V_dot, p.alpha_control = p.controller.control_alpha(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d,  p.v_dot_d, p.omega_dot_d, traj_finished, p.model_alpha, approx=False)
                 #p.des_theta -= p.controller.alpha_exp(p.v_d, p.omega_d, p.model_alpha)  # we track theta_d -alpha_d
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
