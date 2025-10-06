@@ -146,7 +146,8 @@ y = np.column_stack((beta_l[idx_filter], beta_r[idx_filter], alpha[idx_filter]))
 df = pd.DataFrame(np.hstack([x, y]), columns=['wheel_l', 'wheel_r', 'beta_l', 'beta_r', 'alpha'])
 df.to_csv('data2d/csv/ident_wheels_sim_'+friction_coeff+'_long_v_positive_WLmax_'+str(WLmax)+'.csv', index=False, header=False)
 
-
+import time
+start = time.time()
 #########################################
 
 # #upsampling
@@ -165,6 +166,10 @@ x_dense = np.stack([wl_mesh.ravel(), wr_mesh.ravel()], axis=1)
 beta_l_dense = interpolator_beta_l(x_dense)
 beta_r_dense = interpolator_beta_r(x_dense)
 alpha_dense  = interpolator_alpha(x_dense)
+
+end = time.time()
+print(f"Execution time interpolator: {end - start:.4f} seconds")
+
 y_dense = np.stack([beta_l_dense, beta_r_dense, alpha_dense], axis=1)
 data_dense = np.hstack([x_dense, y_dense])
 #
@@ -196,7 +201,7 @@ ax[4].hist(y[..., 2])
 ax[4].set_title('alpha')
 plt.show()
 
-# %% spit dataset in train and valid+test set (10%)
+# %% spit dataset in train and valid+test set (20%)
 x_train, x_valid, y_train, y_valid = train_test_split(
     x, y, random_state=13, test_size=0.2)
 
@@ -267,6 +272,8 @@ model_beta_r.save_model(model_name_beta_r)
 #         'onnx_graph_name': 'CatBoostModel_for_Regression'
 #     }
 # )
+end = time.time()
+print(f"Execution time Decision trees: {end - start:.4f} seconds")
 
 # regressor for Alpha (cannot
 model_alpha = cb.CatBoostRegressor()
