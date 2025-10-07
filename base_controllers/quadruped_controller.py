@@ -52,7 +52,7 @@ class QuadrupedController(BaseController):
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         self.leg_names = [foot[:2] for foot in self.ee_frames]
 
-        self.use_ground_truth_pose = False
+        self.use_ground_truth_pose = True
         if not self.real_robot:
             self.gravity_comp_duration = 0.5 #1.5
             self.standup_period = 1. #3
@@ -69,7 +69,10 @@ class QuadrupedController(BaseController):
     # startupProcedure
 
     def initSubscribers(self):
-        super().initSubscribers()
+        self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
+                                         callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid,
+                                             callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
 
         if self.real_robot:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
@@ -90,9 +93,20 @@ class QuadrupedController(BaseController):
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
                                                callback=self._receive_pose_real,
                                                queue_size=1, tcp_nodelay=True)
-
-
-
+            if self.use_ground_truth_contacts:
+                self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
+                self.sub_contact_rf = ros.Subscriber("/" + self.robot_name + "/rf_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_rf, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
+                self.sub_contact_lh = ros.Subscriber("/" + self.robot_name + "/lh_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_lh, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
+                self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
+                                                     callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
+                                                     tcp_nodelay=True)
+        
         # if self.real_robot:
         #     self.sub_contact_force_z = ros.Subscriber("/" + self.robot_name + "/contact_force_z", Float64MultiArray,
         #                             callback=self._receive_contact_force_real, queue_size=1, tcp_nodelay=True)
@@ -117,34 +131,6 @@ class QuadrupedController(BaseController):
         self.euler[0] = msg.x
         self.euler[1] = msg.y
         self.euler[2] = msg.z
-
-    def _receive_pose(self, msg):
-        self.quaternion[0] = msg.pose.pose.orientation.x
-        self.quaternion[1] = msg.pose.pose.orientation.y
-        self.quaternion[2] = msg.pose.pose.orientation.z
-        self.quaternion[3] = msg.pose.pose.orientation.w
-
-        self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
-        self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
-        self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
-
-        self.euler = np.array(euler_from_quaternion(self.quaternion))
-
-        self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
-        self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
-        self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
-
-        self.baseTwistW[self.u.sp_crd["LX"]] = msg.twist.twist.linear.x
-        self.baseTwistW[self.u.sp_crd["LY"]] = msg.twist.twist.linear.y
-        self.baseTwistW[self.u.sp_crd["LZ"]] = msg.twist.twist.linear.z
-        self.baseTwistW[self.u.sp_crd["AX"]] = msg.twist.twist.angular.x
-        self.baseTwistW[self.u.sp_crd["AY"]] = msg.twist.twist.angular.y
-        self.baseTwistW[self.u.sp_crd["AZ"]] = msg.twist.twist.angular.z
-
-        # compute orientation matrix
-        self.b_R_w = self.math_utils.rpyToRot(self.euler)
-
-
 
 
     # def _receive_contact_force_real(self, msg):
@@ -731,7 +717,7 @@ class QuadrupedController(BaseController):
         self.time = np.round(self.time + self.dt, 4)#np.array([self.loop_time]), 3)
 
 
-    def visualizeContacts(self, delete_markers=True):
+    def visualizeContacts(self, delete_markers=False):
         for legid in self.u.leg_map.keys():
 
             leg = self.u.leg_map[legid]
@@ -1256,7 +1242,7 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    use_rl = True
+    use_rl = False
 
     if use_rl:
         rl_controller = RlVelocityController(p.robot_name, p.dt)
@@ -1265,7 +1251,7 @@ if __name__ == '__main__':
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
                           use_ground_truth_pose=True,
-                          use_ground_truth_contacts=False,
+                          use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
         p.startupProcedure()
@@ -1277,9 +1263,13 @@ if __name__ == '__main__':
             p.updateKinematics()
             
             if use_rl:
-                rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
-                p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
-                p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
+
+
+
+                if p.time > 2:
+                    rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
+                    p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
+                    p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
                 lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                 ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])

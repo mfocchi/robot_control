@@ -184,7 +184,6 @@ class BaseController(threading.Thread):
         self.u.putIntoGlobalParamServer("verbose", self.verbose)
 
         self.apply_body_wrench = ros.ServiceProxy('/gazebo/apply_body_wrench', ApplyBodyWrench)
-
         self.broadcaster = SafeTFBroadcaster()
 
     def initSubscribers(self):
@@ -243,19 +242,17 @@ class BaseController(threading.Thread):
         self.u.setLegJointState(self.u.leg_map["RH"], grf, self.grForcesLocal_gt)
 
     def _receive_pose(self, msg):
-        self.quaternion = np.array([
-            msg.pose.pose.orientation.x,
-            msg.pose.pose.orientation.y,
-            msg.pose.pose.orientation.z,
-            msg.pose.pose.orientation.w
-        ])
-        self.euler = np.array(euler_from_quaternion(self.quaternion))
-        #unwrap
-        self.euler, self.euler_old = unwrap_vector(self.euler, self.euler_old)
+        self.quaternion[0] = msg.pose.pose.orientation.x
+        self.quaternion[1] = msg.pose.pose.orientation.y
+        self.quaternion[2] = msg.pose.pose.orientation.z
+        self.quaternion[3] = msg.pose.pose.orientation.w
 
         self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.pose.position.x
         self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.pose.position.y
         self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.pose.position.z
+
+        self.euler = np.array(euler_from_quaternion(self.quaternion))
+
         self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
         self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
         self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
@@ -270,10 +267,6 @@ class BaseController(threading.Thread):
         # compute orientation matrix
         self.b_R_w = self.math_utils.rpyToRot(self.euler)
 
-        if self.broadcast_world:
-            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
-                                       self.quaternion,
-                                       ros.Time.now(), '/base_link', '/world')
 
     def _receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
@@ -457,6 +450,10 @@ class BaseController(threading.Thread):
         self.compositeRobotInertiaB = self.robot.compositeRobotInertiaB(self.configuration)
 
 
+        if self.broadcast_world:
+            self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
+                                       self.quaternion,
+                                       ros.Time.now(), '/base_link', '/world')
 
     def estimateContactForces(self):           
         # estimate ground reaction forces from tau
