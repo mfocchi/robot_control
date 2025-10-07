@@ -16,7 +16,7 @@ from  scipy.linalg import block_diag
 from base_controllers.utils.pidManager import PidManager
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.math_tools import *
-
+from base_controllers.utils.joyManager import JoyManager
 from base_controllers.components.whole_body_controller import WholeBodyController
 from base_controllers.utils.common_functions import *
 from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped import InverseKinematics as AnalyticInverseKinematics
@@ -1243,6 +1243,7 @@ if __name__ == '__main__':
     world_name = 'fast.world'
     use_gui = False
     use_rl = False
+    use_joy = False
 
     if use_rl:
         rl_controller = RlVelocityController(p.robot_name, p.dt)
@@ -1254,8 +1255,9 @@ if __name__ == '__main__':
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
+        if use_joy:
+            joy = JoyManager()
         p.startupProcedure()
-        
         if use_rl:
             p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12,0))
 
@@ -1264,12 +1266,16 @@ if __name__ == '__main__':
             
             if use_rl:
 
-
-
-                if p.time > 2:
+                if use_joy:
+                    axes, buttons = joy.get_commands()
+                    lx = axes[0]
+                    ly = axes[1]
+                    ry = axes[3]
+                    rl_controller.velocity_cmd = np.array([lx, ly, ry])
+                else:
                     rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
-                    p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
-                    p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
+                p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
+                p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
                 lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                 ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
