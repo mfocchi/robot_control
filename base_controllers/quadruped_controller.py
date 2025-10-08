@@ -40,6 +40,7 @@ from sensor_msgs.msg import Imu
 from ros_impedance_controller.msg import EffortPid
 
 from base_controllers.components.imu_utils import IMU_utils
+#from base_controllers.components.quadruped_tasks import QuadrupedTasks
 
 import datetime
 
@@ -60,6 +61,8 @@ class QuadrupedController(BaseController):
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
 
+        self.state_estimation = True
+
 
     #####################
     # OVERRIDEN METHODS #
@@ -75,13 +78,23 @@ class QuadrupedController(BaseController):
                                              callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
 
         if self.real_robot:
-            self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
-                                                  callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
-            self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,
-                                                callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
-            self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
-                                           callback=self._receive_pose_real,
-                                           queue_size=1, tcp_nodelay=True)
+            if self.state_estimation:
+                #start stateest node
+                launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
+                self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry,
+                                               callback=self._receive_pose,
+                                               queue_size=1, tcp_nodelay=True)
+
+                self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
+                                                      callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
+            else:
+                self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
+                                                      callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
+                self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,
+                                                    callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
+                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
+                                               callback=self._receive_pose_real,
+                                               queue_size=1, tcp_nodelay=True)
         else:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,
                                                   callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
@@ -110,7 +123,7 @@ class QuadrupedController(BaseController):
         # if self.real_robot:
         #     self.sub_contact_force_z = ros.Subscriber("/" + self.robot_name + "/contact_force_z", Float64MultiArray,
         #                             callback=self._receive_contact_force_real, queue_size=1, tcp_nodelay=True)
-           
+
 
     def _receive_imu_acc_real(self, msg):
         # baseLinAccB is with gravity
@@ -140,7 +153,6 @@ class QuadrupedController(BaseController):
     #     self.contact_state[2] = msg.data[2] > 107
     #     self.contact_state[3] = msg.data[3] > 98
     #     #print(self.contact_state)
-
 
     def _receive_pose_real(self, msg):
         self.quaternion[0] = msg.pose.pose.orientation.x
@@ -352,7 +364,7 @@ class QuadrupedController(BaseController):
                                 np.array([-half_lenght, -half_width, half_height])]  # rf_top
 
         self.kfe_idx = [self.robot.model.getFrameId(leg + '_kfe_joint') for leg in ['lf', 'lh', 'rf', 'rh']]
-
+        #self.ref_gen = QuadrupedTasks(task='pushup', robot_conf = conf, gui = True)
 
     def logData(self):
         # full with new values
@@ -869,7 +881,10 @@ class QuadrupedController(BaseController):
                     if alpha < 1:
                         alpha = GCTime/self.gravity_comp_duration
 
-                self.send_command(self.q_des, self.qd_des, alpha*p.wbc.gravityCompensation(p.W_contacts, p.wJ, p.h_joints, p.basePoseW, p.comPoseW))
+                self.send_command(self.q_des, self.qd_des, alpha*p.wbc.gravityCompensationBase(self.B_contacts,
+                                                            self.wJ,
+                                                            self.h_joints,
+                                                            self.basePoseW))
 
             # IMU BIAS ESTIMATION
             if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2' or self.robot_name == 'aliengo'):
@@ -1034,6 +1049,7 @@ class QuadrupedController(BaseController):
                         print(colored(f"[startupProcedure to make RobotHeight {self.robot_height+0.02} t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height+0.02, 3)) +" m)", "blue"))
                         HStarttime = self.time
                         # 5-th order polynomial
+                        #start
                         final_comPose_des = self.comPoseW.copy()
                         final_comPose_des[2] = self.robot_height+0.02
                         pos, vel, acc = polynomialRef(self.comPoseW, final_comPose_des,
