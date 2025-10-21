@@ -22,6 +22,7 @@ from base_controllers.components.inverse_kinematics.inv_kinematics_quadruped imp
 from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics as PinocchioInverseKinematics
 from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
 from base_controllers.components.rl_velocity_controller.rl_controller import RlVelocityController
+from base_controllers.components.rl_velocity_controller.LocomotionPolicyWrapper import LocomotionPolicyWrapper
 from termcolor import colored
 from std_msgs.msg import Float64MultiArray
 import base_controllers.params as conf
@@ -1613,6 +1614,12 @@ if __name__ == '__main__':
 
     if use_rl:
         rl_controller = RlVelocityController(p.robot_name, p.dt)
+        q_home = np.array([0, 0.9, -1.8,
+                           0, 0.9, -1.8,
+                           0, 0.9, -1.8,
+                           0, 0.9, -1.8])
+        agent = LocomotionPolicyWrapper(q_home=q_home)
+
     
     try:
         #p.startController(world_name='slow.world')
@@ -1627,6 +1634,7 @@ if __name__ == '__main__':
         if use_rl:
             p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12,0))
 
+        p.counter = 0
         while not ros.is_shutdown():
             p.updateKinematics()
             
@@ -1639,20 +1647,29 @@ if __name__ == '__main__':
                     ry = axes[3]
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
-
-
+                    rl_controller.velocity_cmd = np.array([0.3, 0.0, 0.2])
 
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
-
                 lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                 ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
                 proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
+                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
 
-                rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
-                
-                p.send_command(rl_q_des, np.zeros(12), np.zeros(12), log_data_in_send_command=True)
+                p.tau_ffwd = np.zeros(12)
+                # if np.mod(p.counter, 10) == 0:
+                #     p.rl_q_des =  agent.compute_action(base_quat_wxyz=np.array([p.quaternion[3],p.quaternion[0],p.quaternion[1],p.quaternion[2]]),
+                #                          base_linear_velocity = p.baseTwistW[:3],
+                #                          imu_angular_velocity=p.baseTwistW[3:],
+                #                          imu_linear_acceleration=np.zeros(3),
+                #                          h_R_b=np.eye(3),
+                #                          joints_pos=p.q,
+                #                          joints_vel=p.qd,
+                #                          ref_base_lin_vel=rl_controller.velocity_cmd,
+                #                          ref_base_ang_vel=np.zeros(3))
+                #     print(p.rl_q_des)
+                # p.counter+=1
+                p.send_command(p.rl_q_des, np.zeros(12), np.zeros(12), log_data_in_send_command=True)
                 p.grForcesW_des = np.zeros((12))
             else:
 
