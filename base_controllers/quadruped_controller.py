@@ -5,7 +5,6 @@ import os
 
 import rospy as ros
 import sys
-import time
 import threading
 
 import numpy as np
@@ -41,6 +40,7 @@ from ros_impedance_controller.msg import EffortPid
 
 from base_controllers.components.imu_utils import IMU_utils
 #from base_controllers.components.quadruped_tasks import QuadrupedTasks
+from base_controllers.components.state_machine import StateMachine
 
 import datetime
 
@@ -61,7 +61,9 @@ class QuadrupedController(BaseController):
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
 
-        self.state_estimation = True
+        self.state_estimation = False
+
+
 
 
     #####################
@@ -521,15 +523,6 @@ class QuadrupedController(BaseController):
 
 
 
-    def self_weightCompensation(self):
-        # require the call to updateKinematics
-        gravity_torques = np.zeros(12)#self.g_joints
-        return gravity_torques
-
-    def gravityCompensation(self):
-        # require the call to updateKinematics
-        return self.WBC(des_pose = None, des_twist = None, des_acc = None, comControlled = True, type = 'projection')
-
 
     def Hframe2World(self, poseH, dposeH=None, ddposeH=None):
         # returns variables from Hframe to World frame
@@ -599,14 +592,6 @@ class QuadrupedController(BaseController):
         return poseH
 
 
-    def WBCgainsInWorld(self):
-        # this function is equivalent to execute R.T @ K @ R, but faster
-        w_R_hf = pin.rpy.rpyToMatrix(0, 0, self.u.angPart(self.basePoseW)[2])
-
-        self.kp_linW = w_R_hf.T @ self.kp_lin @ w_R_hf
-        self.kd_linW = w_R_hf.T @ self.kd_lin @ w_R_hf
-        self.kp_angW = w_R_hf.T @ self.kp_ang @ w_R_hf
-        self.kd_angW = w_R_hf.T @ self.kd_ang @ w_R_hf
 
 
     def Wcom2Wbase_des(self):
@@ -676,10 +661,6 @@ class QuadrupedController(BaseController):
         # base ref in W
         self.Wcom2Wbase_des()
         self.Wbase2Joints_des()
-
-
-        
-        
         
 
     def support_poly(self, contacts):
@@ -839,6 +820,161 @@ class QuadrupedController(BaseController):
         # return -1
         return False
 
+    def IMUBiasEstimation(self, sm, time):
+        if sm.first_time:
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
+        #on loop
+        #print(f"Estimating Bias {time}")
+        self.updateKinematics()
+        self.imu_utils.IMU_bias_estimation(self.b_R_w, self.baseLinAccB)
+        self.tau_ffwd[:] = 0.
+        self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+        self.imu_utils.counter+=1
+        #event driven termination
+        if self.imu_utils.counter >= self.imu_utils.timeout:
+            print("Estimating Bias Accomplished → next state")
+            sm.next(time)
+
+    def goFoldConfig(self, sm , time):
+        if sm.first_time:
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Going to fold configuration", "blue"))
+            # go from where you are to q_fold
+            self.q_ref = np.zeros_like(self.q)
+            # Going to fold config
+            for i in range(12):
+               if (i % 3) != 0:
+                    self.q_ref[i] = conf.robot_params[self.robot_name]['q_fold'][i]
+            self.q_init = self.q.copy()
+
+        # on loop
+        #print(f"Go fold...{time}")
+        self.updateKinematics()
+        self.tau_ffwd[:] = 0.
+        alpha  = sm.timer.get_elapsed_time(time)/sm.get_state_duration()
+        self.q_des = (1 - alpha) * self.q_init + alpha * self.q_ref
+        self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+
+        #termination
+        if sm.timer.is_elapsed(time):
+            print("Go fold Accomplished → next state")
+            sm.next(time)
+
+    def contactsAchieved(self):
+        contacts_achieved = True
+        for leg in range(4):
+            if self.B_contacts[leg][2] > -0.04:
+                contacts_achieved = False
+            elif not self.contact_state[leg]:
+                contacts_achieved = False
+        return  contacts_achieved
+
+    def searchingContacts(self, sm, time):
+        if sm.first_time:
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "Searching contacts", "blue"))
+            # sample feet position
+            self.B_feet_vel = self.u.full_listOfArrays(4, 3, 0, 0.)
+            neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.q))
+            pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate)
+            pin.updateFramePlacements(self.robot.model, self.robot.data)
+            for leg in range(4):
+                foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
+                foot_id = self.robot.model.getFrameId(foot)
+                self.B_contacts_des[leg] = self.robot.data.oMf[foot_id].translation.copy()
+            # increase of the motion (m/s)
+            if self.real_robot:
+                self.delta_z = 0.005
+            else:
+                self.delta_z = 0.1
+        #on loop
+        #print(f"Searching contacts leg...{time}")
+        h_R_w = self.b_R_w @ pin.rpy.rpyToMatrix(0, 0, self.u.angPart(self.basePoseW)[2])
+        for leg in range(4):
+            # update feet task to extend feet to acquire contact
+            self.B_contacts_des[leg][2] -= self.delta_z * self.dt
+            q_des_leg, isFeasible = self.IK.ik_leg(h_R_w.T @ self.B_contacts_des[leg],
+                                                   self.leg_names[leg],
+                                                   self.legConfig[self.leg_names[leg]][0],
+                                                   self.legConfig[self.leg_names[leg]][1])
+            self.u.setLegJointState(leg, q_des_leg, self.q_des)
+        for leg in range(4):
+            self.B_feet_vel[leg][2] = -self.delta_z
+            qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
+                                             B_v_foot=self.B_feet_vel[leg],
+                                             leg=self.leg_names[leg],
+                                             update=leg == 0)
+            self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
+        self.tau_ffwd[:] = 0.
+        self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+        #terminate
+        if self.contactsAchieved():
+            print("Searching contacts → next state")
+            self.basePoseW_des = self.basePoseW.copy()
+            self.baseTwistW_des[:] = 0
+            self.comPoseW_des = self.comPoseW.copy()
+            self.comTwistW_des[:] = 0
+            self.q_des = self.q.copy()
+            self.qd_des[:] = 0
+            # base height
+            base_height = 0.
+            for leg in range(4):
+                base_height -= self.B_contacts[leg][2]
+            self.leg_odom.reset(np.hstack([0., 0., base_height / 4, self.quaternion, self.q]))
+            sm.next(time)
+
+    def applyGravityComp(self, sm, time):
+        if sm.first_time:
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] appling gravity compensation", "blue"))
+
+        #on loop
+        #print(f"gravity comp...{time}")
+        alpha = sm.timer.get_elapsed_time(time)/sm.get_state_duration()
+        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
+                                                                             self.wJ,
+                                                                             self.h_joints,
+                                                                             self.basePoseW)
+        self.visualizeContacts()
+        self.tau_ffwd *= alpha
+        self.qd_des[:] = 0
+        self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+
+        #termination
+        if sm.timer.is_elapsed(time):
+            print("gravity comp Accomplished → next state")
+            sm.next(time)
+
+    def standUp(self, sm, time):
+        if sm.first_time:
+            print(colored(f"[startupProcedure to make RobotHeight {self.robot_height+0.02} t: " + str(self.time[0]) + "s] moving to desired height (" + str(np.around(self.robot_height+0.02, 3)) +" m)", "blue"))
+            #compute desired feet position associated to desired robot height
+            #1 sample B_contacts_des = actual
+            self.B_contacts_sampled = self.u.full_listOfArrays(4, 3)
+            for leg in range(4):
+                self.B_contacts_sampled[leg] = self.B_contacts[leg].copy()
+                self.B_contacts_des[leg] = self.B_contacts[leg].copy()
+
+        #on loop
+        #print(f"standUp leg...{time}")
+        alpha = sm.timer.get_elapsed_time(time)/sm.get_state_duration()
+        #update des feet positions Z component
+        for leg in range(4):
+            self.B_contacts_des[leg][2] = (1-alpha) *self.B_contacts_sampled[leg][2] + alpha * (-self.robot_height)
+
+        #compute ik
+        for leg in range(4):
+            q_des_leg, isFeasible = self.IK.ik_leg(self.B_contacts_des[leg],
+                                                   self.leg_names[leg],
+                                                   self.legConfig[self.leg_names[leg]][0],
+                                                   self.legConfig[self.leg_names[leg]][1])
+            if isFeasible:
+                self.u.setLegJointState(leg, q_des_leg, self.q_des)
+        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,  self.wJ, self.h_joints,  self.basePoseW)
+        self.visualizeContacts()
+        self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+        #termination
+        if sm.timer.is_elapsed(time):
+            print("standUp Accomplished → next state")
+            sm.next(time)
+
     def startupProcedure(self):
         ros.sleep(.5)
         print(colored("Starting up", "blue"))
@@ -846,24 +982,40 @@ class QuadrupedController(BaseController):
             super(QuadrupedController, self).startupProcedure()
             return
 
-        if self.go0_conf == 'standUp':
-            self._startup_from_stand_up()
-        elif self.go0_conf == 'standDown':
-            self._startup_from_stand_down()
 
-        # reset time to zero (I don't want to log startup)
-        # self.time = np.zeros(1)
-        # self.log_counter = 0
 
-    def _startup_from_stand_up(self):
         self.q_des = self.q.copy()
         self.pid = PidManager(self.joint_names)
         self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
 
+        if self.go0_conf == 'standUp':
+            self._startup_from_stand_up()
+        elif self.go0_conf == 'standDown':
+            #deprecated
+            #self._startup_from_stand_down()
+            self.homing_sm = StateMachine(verbose=0)
+            # IMU BIAS ESTIMATION
+            if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2' or self.robot_name == 'aliengo'):
+                self.homing_sm.add_state("IMUBiasEstimation", self.IMUBiasEstimation, 1.)
+            self.homing_sm.add_state("goFold", self.goFoldConfig, 1.)
+            self.homing_sm.add_state("searchingContacts", self.searchingContacts)
+            self.homing_sm.add_state("applyGravityComp", self.applyGravityComp, 1.)
+            self.homing_sm.add_state("standUp", self.standUp, 2.)
+            self.homing_sm.start(start_time=self.time)
+            try:
+                while not ros.is_shutdown() and self.homing_sm.running:
+                    self.updateKinematics()
+                    self.homing_sm.step(self.time)
+                    self.rate.sleep()
+                    self.time = np.round(self.time + self.dt, 4)  # np.array([self.loop_time]), 3)
+            except (ros.ROSInterruptException, ros.service.ServiceException):
+                ros.signal_shutdown("killed")
+                self.deregister_node()
+
+    def _startup_from_stand_up(self):
         for i in range(10):
             self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
             ros.sleep(0.01)
-
         self.q_des = conf.robot_params[self.robot_name]['q_0']
         alpha = 0.
         try:
@@ -1036,7 +1188,7 @@ class QuadrupedController(BaseController):
                     if GCTime <= self.gravity_comp_duration:
                         if alpha < 1:
                             alpha = GCTime
-                        # self.tau_ffwd = alpha* self.self_weightCompensation()
+
                         self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
                                                             self.wJ,
                                                             self.h_joints,
@@ -1102,7 +1254,205 @@ class QuadrupedController(BaseController):
             ros.signal_shutdown("killed")
             self.deregister_node()
 
+    def _startup_from_stand_down(self):
+        self.q_des = self.q.copy()
+        self.pid = PidManager(self.joint_names)
 
+        for i in range(10):
+            self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+            ros.sleep(0.01)
+
+        q_init = self.q.copy()
+        q_ref = self.q.copy()
+        for i in range(12):
+            # modify HFEs & KFEs
+            if (i % 3) != 0:
+                q_ref[i] = conf.robot_params[self.robot_name]['q_fold'][i]
+        # IMU BIAS ESTIMATION
+        if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2' or self.robot_name == 'aliengo'):
+            print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Imu bias estimation", "blue"))
+            # print('counter: ' + self.imu_utils.counter + ', timeout: ' + self.imu_utils.timeout)
+            while self.imu_utils.counter < self.imu_utils.timeout:
+                self.updateKinematics()
+                self.imu_utils.IMU_bias_estimation(self.b_R_w, self.baseLinAccB)
+                self.tau_ffwd[:] = 0.
+                self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+
+        self.pid.setPDjoints(self.kp_j, self.kd_j, self.ki_j)
+
+        # Going to fold config
+        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] Going to fold configuration", "blue"))
+        ref_timeout = int(self.imu_utils.timeout / 2)
+        ref_counter = 0
+        while ref_counter < ref_timeout:
+            self.updateKinematics()
+            self.tau_ffwd[:] = 0.
+            sigma = ref_counter / ref_timeout
+            self.q_des = (1 - sigma) * q_init + sigma * q_ref
+            self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+            ref_counter += 1
+
+        # initial feet position
+        B_feet_vel = self.u.full_listOfArrays(4, 3, 0, 0.)
+        neutral_fb_jointstate = np.hstack((pin.neutral(self.robot.model)[0:7], self.q))
+        pin.forwardKinematics(self.robot.model, self.robot.data, neutral_fb_jointstate)
+        pin.updateFramePlacements(self.robot.model, self.robot.data)
+
+        for leg in range(4):
+            foot = conf.robot_params[self.robot_name]['ee_frames'][leg]
+            foot_id = self.robot.model.getFrameId(foot)
+            self.B_contacts_des[leg] = self.robot.data.oMf[foot_id].translation.copy()
+        # desired final height
+        neutral_fb_jointstate[7:] = self.q.copy()  # conf.robot_params[self.robot_name]['q_0']
+
+        # increase of the motion (m/s)
+        if self.real_robot:
+            delta_z = 0.005
+        else:
+            delta_z = 0.1
+        update = [True, True, True, True]
+        ########################
+        # FINITE STATE MACHINE #
+        ########################
+        # state = -1: initialize pid
+        # state = 0: not all the contacts are active, move the feet in order to activate all the contacts (use IK+PD)
+        # state = 1: apply gravity compensation for 1 second
+        # state = 2: apply PD + gravity compensation
+        # state = 3: exit
+        state = 0
+        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] searching contacts", "blue"))
+        try:
+            while not ros.is_shutdown() and state != 4:
+                self.updateKinematics()
+                # self.visualizeContacts()
+
+                if state == 0:
+                    switch_cond = True
+                    for leg in range(4):
+                        if self.B_contacts[leg][2] > -0.04:
+                            switch_cond = False
+                        elif not self.contact_state[leg]:
+                            switch_cond = False
+                        if switch_cond == False:
+                            break
+
+                    if not switch_cond:
+                        h_R_w = self.b_R_w @ pin.rpy.rpyToMatrix(0, 0, self.u.angPart(self.basePoseW)[2])
+
+                        for leg in range(4):
+                            # update feet task
+                            self.B_contacts_des[leg][2] -= delta_z * self.dt
+                            q_des_leg, isFeasible = self.IK.ik_leg(h_R_w.T @ self.B_contacts_des[leg],
+                                                                   self.leg_names[leg],
+                                                                   self.legConfig[self.leg_names[leg]][0],
+                                                                   self.legConfig[self.leg_names[leg]][1])
+
+                            self.u.setLegJointState(leg, q_des_leg, self.q_des)
+
+                        for leg in range(4):
+                            B_feet_vel[leg][2] = -delta_z
+                            qd_leg_des = self.IK.diff_ik_leg(q_des=self.q_des,
+                                                             B_v_foot=B_feet_vel[leg],
+                                                             leg=self.leg_names[leg],
+                                                             update=leg == 0)
+                            self.u.setLegJointState(leg, qd_leg_des, self.qd_des)
+                        # if self.log_counter != 0:
+                        #     self.qd_des = (self.q_des - self.q_des_log[:, self.log_counter]) / self.dt
+                        self.tau_ffwd[:] = 0.
+
+                    else:
+                        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] appling gravity compensation",
+                                      "blue"))
+                        self.basePoseW_des = self.basePoseW.copy()
+                        self.baseTwistW_des[:] = 0
+                        self.comPoseW_des = self.comPoseW.copy()
+                        self.comTwistW_des[:] = 0
+                        self.q_des = self.q.copy()
+                        self.qd_des[:] = 0
+                        # base height
+                        base_height = 0.
+                        for leg in range(4):
+                            base_height -= self.B_contacts[leg][2]
+                        self.leg_odom.reset(np.hstack([0., 0., base_height / 4, self.quaternion, self.q]))
+
+                        state = 1
+                        GCStartTime = self.time
+                        alpha = 0.
+
+                if state == 1:
+                    GCTime = self.time - GCStartTime
+                    self.qd_des[:] = 0
+                    if GCTime <= self.gravity_comp_duration:
+                        if alpha < 1:
+                            alpha = GCTime
+
+                        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
+                                                                                             self.wJ,
+                                                                                             self.h_joints,
+                                                                                             self.basePoseW)
+
+                        self.visualizeContacts()
+
+                        self.tau_ffwd *= alpha
+                    else:
+                        print(colored(f"[startupProcedure to make RobotHeight {self.robot_height + 0.02} t: " + str(
+                            self.time[0]) + "s] moving to desired height (" + str(
+                            np.around(self.robot_height + 0.02, 3)) + " m)", "blue"))
+                        HStarttime = self.time
+                        # 5-th order polynomial
+                        # start
+                        final_comPose_des = self.comPoseW.copy()
+                        final_comPose_des[2] = self.robot_height + 0.02
+                        pos, vel, acc = polynomialRef(self.comPoseW, final_comPose_des,
+                                                      np.zeros(6), np.zeros(6),
+                                                      np.zeros(6), np.zeros(6),
+                                                      self.standup_period)
+                        self.W_contacts_des = self.W_contacts.copy()
+                        state = 2
+
+                if state == 2:
+                    if self.time - HStarttime < self.standup_period:
+                        self.comPoseW_des = pos(self.time - HStarttime)
+                        self.comTwistW_des = vel(self.time - HStarttime)
+                        self.Wcom2Joints_des()
+                        # self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
+                        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
+                                                                                             self.wJ,
+                                                                                             self.h_joints,
+                                                                                             self.basePoseW)
+
+                        self.visualizeContacts()
+
+                    else:
+                        print(
+                            colored("[startupProcedure t: " + str(self.time[0]) + "s] desired height reached", "blue"))
+                        self.baseTwistW_des[:] = 0.
+                        self.comTwistW_des[:] = 0.
+                        state = 3
+                        WTime = self.time
+
+                if state == 3:
+                    self.qd_des[:] = 0.
+                    if all(np.abs(self.qd) < 0.025) and (self.time - WTime) > 0.5:
+                        print(colored("[startupProcedure t: " + str(self.time[0]) + "s] completed", "green"))
+                        state = 4
+                    else:
+                        # enter
+                        # if any of the joint velocities is larger than 0.02 or
+                        # if the watchdog timer is not expired (0.5 sec)
+                        # self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints, self.basePoseW, self.comPoseW)
+                        self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,
+                                                                                             self.wJ,
+                                                                                             self.h_joints,
+                                                                                             self.basePoseW)
+
+                        self.visualizeContacts()
+
+                self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
+
+        except (ros.ROSInterruptException, ros.service.ServiceException):
+            ros.signal_shutdown("killed")
+            self.deregister_node()
 
     def saveData(self, path, filename='DATA.mat', EXTRADATA={},start=0, stop=-1, verbose = conf.verbose):
         DATA = {}
@@ -1290,6 +1640,9 @@ if __name__ == '__main__':
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
                     rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.5])
+
+
+
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
