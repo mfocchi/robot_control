@@ -57,13 +57,20 @@ class JoyManager:
             return np.zeros(4), np.zeros(4, dtype=int)
 
         try:
-            # Left stick
-            rx = self.latest_msg.axes[5]
-            ry = self.latest_msg.axes[4]
-
             # Right stick
-            lx = self.latest_msg.axes[3]
-            ly = self.latest_msg.axes[2]
+            #jessica joy
+            rx = self.latest_msg.axes[4]
+            ry = self.latest_msg.axes[3]
+            # rx = self.latest_msg.axes[5]
+            # ry = self.latest_msg.axes[4]
+
+            # Left stick
+            #jessica joy
+            lx = self.latest_msg.axes[1]
+            ly = self.latest_msg.axes[0]
+
+            # lx = self.latest_msg.axes[3]
+            # ly = self.latest_msg.axes[2]
 
             threshold = 0.05
             axes = np.array([
