@@ -75,40 +75,26 @@ class QuadrupedController(BaseController):
     # startupProcedure
 
     def initSubscribers(self):
-        self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState,
-                                         callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
-        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid,
-                                             callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
+        self.sub_jstate = ros.Subscriber("/" + self.robot_name + "/joint_states", JointState, callback=self._receive_jstate, queue_size=1, tcp_nodelay=True)
+        self.sub_pid_effort = ros.Subscriber("/" + self.robot_name + "/effort_pid", EffortPid, callback=self._receive_pid_effort, queue_size=1, tcp_nodelay=True)
 
         if self.real_robot:
-            if self.state_estimation:
+            self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,  callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
+            if self.state_estimation:#use state estimation
                 #start stateest node
                 launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
-                self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry,
-                                               callback=self._receive_pose,
-                                               queue_size=1, tcp_nodelay=True)
+                self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry,  callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
+            else:#use odometry
+                self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,  callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
+                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,   callback=self._receive_pose_real, queue_size=1, tcp_nodelay=True)
+        else:#simulation
+            self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,  callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
 
-                self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
-                                                      callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
-            else:
-                self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,
-                                                      callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
-                self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,
-                                                    callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
-                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
-                                               callback=self._receive_pose_real,
-                                               queue_size=1, tcp_nodelay=True)
-        else:
-            self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,
-                                                  callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
             if self.use_ground_truth_pose:
-                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
-                                               callback=self._receive_pose,
-                                               queue_size=1, tcp_nodelay=True)
-            else:
-                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,
-                                               callback=self._receive_pose_real,
-                                               queue_size=1, tcp_nodelay=True)
+                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,  callback=self._receive_pose,  queue_size=1, tcp_nodelay=True)
+            else:#use odometry
+                self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose_real, queue_size=1, tcp_nodelay=True)
+
             if self.use_ground_truth_contacts:
                 self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
                                                      callback=self._receive_contact_lf, queue_size=1, buff_size=2 ** 24,
@@ -122,25 +108,23 @@ class QuadrupedController(BaseController):
                 self.sub_contact_rh = ros.Subscriber("/" + self.robot_name + "/rh_foot_bumper", ContactsState,
                                                      callback=self._receive_contact_rh, queue_size=1, buff_size=2 ** 24,
                                                      tcp_nodelay=True)
-        
         # if self.real_robot:
         #     self.sub_contact_force_z = ros.Subscriber("/" + self.robot_name + "/contact_force_z", Float64MultiArray,
         #                             callback=self._receive_contact_force_real, queue_size=1, tcp_nodelay=True)
 
-
     def _receive_imu_acc_real(self, msg):
-        # baseLinAccB is with gravity
         self.baseLinAccB[0] = msg.x
         self.baseLinAccB[1] = msg.y
         self.baseLinAccB[2] = msg.z
         # baseLinAccW is without gravity
         self.baseLinAccW = self.b_R_w.T @ (self.baseLinAccB - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
+
     def _receive_imu_acc(self, msg):
         self.baseLinAccB[0] = msg.linear_acceleration.x
         self.baseLinAccB[1] = msg.linear_acceleration.y
         self.baseLinAccB[2] = msg.linear_acceleration.z
-
+        # baseLinAccW is without gravity
         self.baseLinAccW = self.b_R_w.T @ (self.baseLinAccB - self.imu_utils.IMU_accelerometer_bias) - self.imu_utils.g0
 
     def _receive_euler(self, msg):
@@ -1609,18 +1593,17 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    use_rl = False
+    rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = False
 
-    if use_rl:
+    if rl_control == 'state_est_based':
+        if p.real_robot and p.state_estimation == False:
+            print(colored("RL is state_est based need to start state estimation!","red"))
+            sys.exit()
         rl_controller = RlVelocityController(p.robot_name, p.dt)
-        q_home = np.array([0, 0.9, -1.8,
-                           0, 0.9, -1.8,
-                           0, 0.9, -1.8,
-                           0, 0.9, -1.8])
-        agent = LocomotionPolicyWrapper(q_home=q_home)
+    if rl_control == 'sensor_based':
+        rl_controller = LocomotionPolicyWrapper(use_state_est=True, dt = p.dt)
 
-    
     try:
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
@@ -1631,15 +1614,14 @@ if __name__ == '__main__':
         if use_joy:
             joy = JoyManager()
         p.startupProcedure()
-        if use_rl:
+        if rl_control != 'none':
             p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12,0))
 
         p.counter = 0
         while not ros.is_shutdown():
             p.updateKinematics()
             
-            if use_rl:
-
+            if rl_control != 'none':
                 if use_joy:
                     axes, buttons = joy.get_commands()
                     lx = axes[0]
@@ -1648,36 +1630,33 @@ if __name__ == '__main__':
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
                     rl_controller.velocity_cmd = np.array([0.3, 0.0, 0.2])
-
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
-                lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
-                ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
-                proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
-                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
 
-                p.tau_ffwd = np.zeros(12)
-                # if np.mod(p.counter, 10) == 0:
-                #     p.rl_q_des =  agent.compute_action(base_quat_wxyz=np.array([p.quaternion[3],p.quaternion[0],p.quaternion[1],p.quaternion[2]]),
-                #                          base_linear_velocity = p.baseTwistW[:3],
-                #                          imu_angular_velocity=p.baseTwistW[3:],
-                #                          imu_linear_acceleration=np.zeros(3),
-                #                          h_R_b=np.eye(3),
-                #                          joints_pos=p.q,
-                #                          joints_vel=p.qd,
-                #                          ref_base_lin_vel=rl_controller.velocity_cmd,
-                #                          ref_base_ang_vel=np.zeros(3))
-                #     print(p.rl_q_des)
-                # p.counter+=1
-                p.send_command(p.rl_q_des, np.zeros(12), np.zeros(12), log_data_in_send_command=True)
+                if rl_control == 'state_est_based':
+                    lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
+                    ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
+                    proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
+                    p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
+                if rl_control == 'sensor_based':
+                    h_R_b = p.math_utils.eul2Rot(np.array([p.euler[0],p.euler[1],0.]))
+                    p.rl_q_des =  rl_controller.compute_control(h_R_b=h_R_b,
+                                                             joints_pos=p.q,
+                                                             joints_vel=p.qd,
+                                                             ref_base_lin_vel=np.array([rl_controller.velocity_cmd[0], rl_controller.velocity_cmd[1], 0.]),
+                                                             ref_base_ang_vel=np.array([0., 0., rl_controller.velocity_cmd[2]]),
+                                                             imu_linear_acceleration=p.baseLinAccB,
+                                                             imu_angular_velocity= p.b_R_w @ p.baseTwistW[3:],
+                                                             imu_orientation=np.array([p.quaternion[3],p.quaternion[0],p.quaternion[1],p.quaternion[2]]))
+                #switch off wbc
                 p.grForcesW_des = np.zeros((12))
+                p.tau_ffwd = np.zeros(12)
+                p.send_command(p.rl_q_des, np.zeros(12), np.zeros(12), log_data_in_send_command=True)
             else:
-
                 p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
                                                                             p.wJ,
                                                                             p.h_joints,
                                                                             p.comPoseW)
-
                 p.send_command(p.q_des, p.qd_des, p.tau_ffwd, log_data_in_send_command=True)
 
             p.visualizeContacts()
