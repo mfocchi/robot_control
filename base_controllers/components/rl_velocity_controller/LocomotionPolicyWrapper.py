@@ -243,7 +243,7 @@ if __name__ == '__main__':
 
     joints_vel = np.zeros(12)
 
-    desired_joint_pos = agent.compute_control(heading_orientation_SO3=np.eye(3),
+    desired_joint_pos = agent.compute_control(h_R_b=np.eye(3),
             joints_pos=joints_pos,
             joints_vel=joints_vel,
             ref_base_lin_vel=np.zeros(3),

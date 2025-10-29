@@ -1624,12 +1624,13 @@ if __name__ == '__main__':
             if rl_control != 'none':
                 if use_joy:
                     axes, buttons = joy.get_commands()
-                    lx = axes[0]
-                    ly = axes[1]
-                    ry = axes[3]
+                    #use a scaling to make the joy input less reactive
+                    lx = 0.5*axes[0]
+                    ly = 0.5*axes[1]
+                    ry = 0.5*axes[3]
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.3, 0.0, 0.2])
+                    rl_controller.velocity_cmd = np.array([0.2, 0.0, 0.1])
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
