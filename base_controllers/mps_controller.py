@@ -59,7 +59,7 @@ class MpsSimulator(QuadrupedController):
 
     def __init__(self, robot_name="myrobot"):
         super().__init__(robot_name=robot_name)
-        self.freezeBaseFlag = False
+        self.state_estimation = 'imu' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
         print("Initialized murobot controller---------------------------------------------------------------")
 
     def initVars(self):
@@ -137,7 +137,7 @@ def talker(p):
         p.logData()
         # wait for synchronization of the control loop
         p.rate.sleep()
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),  3)  # to avoid issues of dt 0.0009999
+        p.time = np.round(p.time + np.array([p.dt]),  3)  # to avoid issues of dt 0.0009999
         p.visualizeContacts()
 
 if __name__ == '__main__':
@@ -147,6 +147,9 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
-
+        #plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
+        plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
+                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
+                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
 
