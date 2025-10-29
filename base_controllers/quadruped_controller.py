@@ -54,7 +54,7 @@ class QuadrupedController(BaseController):
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         self.leg_names = [foot[:2] for foot in self.ee_frames]
 
-        self.use_ground_truth_pose = True
+
         if not self.real_robot:
             self.gravity_comp_duration = 0.5 #1.5
             self.standup_period = 1. #3
@@ -62,10 +62,7 @@ class QuadrupedController(BaseController):
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
 
-        self.state_estimation = False
-
-
-
+        self.state_estimation = 'imu' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
 
     #####################
     # OVERRIDEN METHODS #
@@ -80,20 +77,30 @@ class QuadrupedController(BaseController):
 
         if self.real_robot:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,  callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
-            if self.state_estimation:#use state estimation
+            if self.state_estimation == 'pronto':#use pronto for state estimation
                 #start stateest node
                 launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
                 self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry,  callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
-            else:#use odometry
+            elif self.state_estimation=='odometry':#use odometry
                 self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,  callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,   callback=self._receive_pose_real, queue_size=1, tcp_nodelay=True)
+            elif self.state_estimation=='imu':#use angular velocity and quaternion coming from IMU (robot_name/imu topic) and write BasePose BaseTwist variables
+                self.sub_imu = ros.Subscriber("/" + self.robot_name + "/imu", Imu,  callback=self._receive_imu, queue_size=1, tcp_nodelay=True)
+            if self.state_estimation=='ground_truth':
+                print(f"state_estimation ground truth  not possible on real robot!")
+            else:
+                print(f"state_estimation type not known {self.state_estimation}")
         else:#simulation
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,  callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
 
-            if self.use_ground_truth_pose:
+            if self.state_estimation=='ground_truth':
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,  callback=self._receive_pose,  queue_size=1, tcp_nodelay=True)
-            else:#use odometry
+            elif self.state_estimation=='odometry':
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose_real, queue_size=1, tcp_nodelay=True)
+            elif self.state_estimation=='imu':
+                self.sub_imu = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,  callback=self._receive_imu, queue_size=1, tcp_nodelay=True)
+            else:
+                print(f"state_estimation type not known {self.state_estimation}")
 
             if self.use_ground_truth_contacts:
                 self.sub_contact_lf = ros.Subscriber("/" + self.robot_name + "/lf_foot_bumper", ContactsState,
@@ -140,6 +147,23 @@ class QuadrupedController(BaseController):
     #     self.contact_state[2] = msg.data[2] > 107
     #     self.contact_state[3] = msg.data[3] > 98
     #     #print(self.contact_state)
+
+    def _receive_imu(self, msg):
+        self.quaternion[0] = msg.orientation.x
+        self.quaternion[1] = msg.orientation.y
+        self.quaternion[2] = msg.orientation.z
+        self.quaternion[3] = msg.orientation.w
+
+        self.euler = np.array(euler_from_quaternion(self.quaternion))
+        self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
+        self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
+        self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
+        # compute orientation matrix
+        self.b_R_w = self.math_utils.rpyToRot(self.euler)
+        self.angVelB[0] = msg.angular_velocity.x
+        self.angVelB[1] = msg.angular_velocity.y
+        self.angVelB[2] = msg.angular_velocity.z
+        self.baseTwistW[3:] = self.b_R_w.T.dot(self.angVelB)
 
     def _receive_pose_real(self, msg):
         self.quaternion[0] = msg.pose.pose.orientation.x
@@ -325,6 +349,8 @@ class QuadrupedController(BaseController):
 
         self.baseLinTwistImuW_log = np.full((3, conf.robot_params[self.robot_name]['buffer_size']),  np.nan)
 
+        self.angVelB = np.zeros(3)
+
         # robot height is the height of the robot base frame in home configuration
         self.robot_height = 0.
 
@@ -426,13 +452,11 @@ class QuadrupedController(BaseController):
         print(colored(pingstatus, "red"))
         return response
 
-    def startController(self, world_name=None, xacro_path=None, use_ground_truth_pose=True, use_ground_truth_contacts=True, additional_args=[]):
+    def startController(self, world_name=None, xacro_path=None,   use_ground_truth_contacts=True, additional_args=[]):
 
         if self.real_robot == False:
-            self.use_ground_truth_pose = use_ground_truth_pose
             self.use_ground_truth_contacts = use_ground_truth_contacts
         else:
-            self.use_ground_truth_pose = False
             self.use_ground_truth_contacts = False
             if self.check_faulty_ping(conf.robot_params[self.robot_name]['ip']):
                 sys.exit()
@@ -1593,11 +1617,11 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
+    rl_control = 'sensor_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = False
 
     if rl_control == 'state_est_based':
-        if p.real_robot and p.state_estimation == False:
+        if p.real_robot and p.state_estimation != 'pronto':
             print(colored("RL is state_est based need to start state estimation!","red"))
             sys.exit()
         rl_controller = RlVelocityController(p.robot_name, p.dt)
@@ -1607,7 +1631,6 @@ if __name__ == '__main__':
     try:
         #p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
-                          use_ground_truth_pose=True,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
@@ -1630,7 +1653,7 @@ if __name__ == '__main__':
                     ry = 0.5*axes[3]
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.2, 0.0, 0.1])
+                    rl_controller.velocity_cmd = np.array([0.1, 0.0, 0.1])
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
@@ -1674,7 +1697,7 @@ if __name__ == '__main__':
     if conf.plotting:
         plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
                   start=0, end=-1)
-        plotFrame('position', time_log=p.time_log, des_Pose_log=p.comPoseW_des_log, Pose_log=p.comPoseW_log,
-                  title='CoM', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
+                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
         plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
