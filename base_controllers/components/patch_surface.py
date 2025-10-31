@@ -312,7 +312,7 @@ class PatchSurface:
 
         # get near points in patch
         X_grid, Y_grid, Z_grid = self.get_mesh_grid_patch(patch_id, plot_patch=False)
-        distances_yz = np.sqrt((Y_grid - y_point) * 2 + (Z_grid - z_point) * 2)
+        distances_yz = np.sqrt((Y_grid - y_point) ** 2 + (Z_grid - z_point) ** 2)
         min_idx = np.unravel_index(np.argmin(distances_yz), distances_yz.shape)
         i, j = min_idx
         x_estimated = X_grid[i, j]
@@ -321,7 +321,7 @@ class PatchSurface:
 
         new_position = np.array([x_estimated, y_point, z_point])
         distances_pc = [
-            (idx, np.sqrt((p['position'][1] - y_point) * 2 + (p['position'][2] - z_point) * 2))
+            (idx, np.sqrt((p['position'][1] - y_point) ** 2 + (p['position'][2] - z_point) ** 2))
             for idx, p in enumerate(points_in_patch)
         ]
         distances_pc.sort(key=lambda x: x[1])
