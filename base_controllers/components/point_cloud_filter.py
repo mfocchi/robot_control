@@ -59,10 +59,7 @@ class PointCloudFilter:
         
         self.print_information()
         
-        self.init_kernel()
-
-        self.fig = plt.figure(figsize=(12, 10))
-        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.init_kernel()              
         
     def init_kernel(self):
         # Blur kernel
@@ -588,7 +585,6 @@ class PointCloudFilter:
         plt.show()
         # delay tra ogni punto
         time.sleep(3)
-
     def plot_color_cost_given_cost(self, source_points=None):
         if source_points is None:
             source_points = self.points_t
