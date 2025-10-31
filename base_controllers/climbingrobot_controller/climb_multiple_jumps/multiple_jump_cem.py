@@ -1,7 +1,8 @@
-
 import sys
 import os
 import time
+from datetime import datetime  
+import json  
 from base_controllers.components.terrain_manager import TerrainManager
 from base_controllers.components.point_cloud_filter import PointCloudFilter
 from base_controllers.components.patch_surface import PatchSurface
@@ -32,9 +33,9 @@ Fr_min = 0.
 mu = 0.8
 
 mass = 5.
+anchor_distance = 5.
 inner_opt_params = {}
 inner_opt_params['m'] = mass
-anchor_distance = 5.
 inner_opt_params['num_params'] = 4.
 inner_opt_params['int_method'] = 'rk4'
 inner_opt_params['N_dyn'] = 30.
@@ -87,71 +88,72 @@ class BiLevelOptmizer:
 
         # point cloud filter
         self.terrain_manager = terrain_manager
-        self.p0_init = p0
-        self.pf_init = pf
+        self.p0 = p0
+        self.pf = pf
 
 
-        # === point cloud initialization
+        # === 1 POINT CLOUD INITIALIZATION ===
         self.in_point_clouds = self.terrain_manager.point_cloud
         self.point_clouds = PointCloudFilter(self.in_point_clouds)
         #self.point_clouds.print_map_pc()
-
         # [ smooth | I_derivative | II_derivative | ... ]
         self.filter_weights = np.array([1., 1., 1., 1.])
-        # apply filters on point cloud
-        # smoothing
-        self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel],weight=self.filter_weights[0], plot=False)
-        # avoid X under the anchor
         anchor_location = np.array(inner_opt_params['p_a1'])
         self.point_clouds.filter_height_profile(profile="logln", x0 = anchor_location[0], weight=self.filter_weights[3], side_application="depth")
-        # first derivative
+        self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel],weight=self.filter_weights[0], plot=False)
         kernel = [self.point_clouds.sobel_y, self.point_clouds.sobel_z]
         self.point_clouds.filter_process_points(kernel, weight=self.filter_weights[1], plot=False)
 
-        pc_t = self.point_clouds.points_t
         #self.point_clouds.visualize_cost_map()
-        # === patch initializaiton
+
+        # === 2 PATCHES INITIALIZATION ===
+        pc_t = self.point_clouds.points_t
         self.patches = PatchSurface(pc_t)
         self.patches.cost_color()
         #self.patches.plot_patches()
         #self.patches.random_color()
         #self.patches.plot_patches()
+        # ================================
 
-    def eval_pop(self,input_data):
+    def eval_pop(self, input_data):
         jump_log_points = []
         jump_log_traj = []
         xd = input_data[0]
         xc = input_data[1]
-        #first discrete variable is number of jumps, the next ones are the of the patches
-        n_jumps = xd[0] + 1
+        # first discrete variable is number of jumps, the next ones are the of the patches
+        n_jumps = xd[0]
         ids = []
         fitness = 0.0
-        #print(f"Number of jumps {n_jumps}\n")
-        #reset initial final points
-        self.p0 = self.p0_init
-        self.pf = self.pf_init
+        # print(f"Number of jumps {n_jumps}\n")
 
-        for i in range(n_jumps-1):
-            #print(f"Jump n:{i}\n")
+        p0_adj = self.p0.copy()
+
+        # Add initial point
+        jump_log_points.append(p0_adj.copy())
+
+        for i in range(n_jumps):
+            # print(f"Jump n:{i}\n")
             # following discrete variables represent the id of the patches for the intermediate jumps
             patch_id = xd[1 + i]
             # the continue variables contain the X and Y normalized coordinate of the candidate contact landing points inside the candidate patches
-            contact_relative_to_patch_yz= xc[i*2:i*2+2] # tra 0 - 1  upper left corner patch
+            contact_relative_to_patch_yz = xc[i * 2:i * 2 + 2]  # tra 0 - 1  upper left corner patch
 
-            print("jump number : ", i)
-            #computes 0, Y, Z  absolute coordinates of candidate landing location
-            landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(patch_id, contact_relative_to_patch_yz[0], contact_relative_to_patch_yz[1], scale=1.0)
+            # print("jump number : ", i)
+            # computes 0, Y, Z  absolute coordinates of candidate landing location
+            landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(patch_id, contact_relative_to_patch_yz[0],
+                                                                             contact_relative_to_patch_yz[1], scale=1.0)
             pf_adj = landing_abs_pos.copy()
 
+            # adjust X coordinate to terrain shape for both liftoff and landing points
+            pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,
+                                                               self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+            p0_adj[0] = self.terrain_manager.wall_surface_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
+                                                               self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
 
-            p0_adj = self.p0.copy()
-            #adjust X coordinate to terrain shape for both liftoff and landing points
-            p0_adj[0] = self.terrain_manager.wall_surface_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x, self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-            pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-
-            jump_log_points.append(p0_adj)
-            #compute normal at liftoff
-            liftoff_normal = self.terrain_manager.wall_normal_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x,self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+            # compute normal at liftoff
+            liftoff_normal = self.terrain_manager.wall_normal_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
+                                                                   self.terrain_manager.mesh_y,
+                                                                   self.terrain_manager.mesh_z)
 
             # ora il punto assoluto è in pf_adj
             inner_opt_params['mesh_x'] = self.terrain_manager.mesh_x
@@ -159,69 +161,149 @@ class BiLevelOptmizer:
             inner_opt_params['mesh_z'] = self.terrain_manager.mesh_z
             inner_opt_params['contact_normal'] = matlab.double(liftoff_normal)
 
+            res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu,
+                                       inner_opt_params)
 
-            res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, inner_opt_params)
-            fitness += self.calc_fitness(res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
             jump_log_traj.append(mat_matrix2python(res['p']))
-            self.p0 = pf_adj.copy()
+            fitness += self.calc_fitness(res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
+            print(f"Intermediate jump {i}: p0_adj = {p0_adj}, pf_adj = {pf_adj} ; fitness = {fitness}")
 
-        #print("final jump")
-        #last jump is to pf
+            # Add landing point AFTER the trajectory
+            jump_log_points.append(pf_adj.copy())
+
+            p0_adj = pf_adj.copy()
+
+        # print("final jump")
+        # last jump is to pf
         #  absolute coordinates of FINAL landing location
         pf_adj = self.pf.copy()
-        p0_adj = self.p0.copy()
         # adjust X coordinate to terrain shape for both liftoff and landing points
-        pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x, self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-        p0_adj[0] = self.terrain_manager.wall_surface_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x, self.terrain_manager.mesh_y,   self.terrain_manager.mesh_z)
+        pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,
+                                                           self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+        p0_adj[0] = self.terrain_manager.wall_surface_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
+                                                           self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+
         # compute normal at liftoff
-        liftoff_normal = self.terrain_manager.wall_normal_eval(self.p0[2], self.p0[1], self.terrain_manager.mesh_x, self.terrain_manager.mesh_y,   self.terrain_manager.mesh_z)
+        liftoff_normal = self.terrain_manager.wall_normal_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
+                                                               self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
         # ora il punto assoluto è in pf_adj
         inner_opt_params['mesh_x'] = self.terrain_manager.mesh_x
         inner_opt_params['mesh_y'] = self.terrain_manager.mesh_y
         inner_opt_params['mesh_z'] = self.terrain_manager.mesh_z
         inner_opt_params['contact_normal'] = matlab.double(liftoff_normal)
 
-        res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, inner_opt_params)
+        res = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu,
+                                   inner_opt_params)
         fitness += self.calc_fitness(res)
         ref_com = mat_matrix2python(res['p'])
         jump_log_traj.append(ref_com)
-        jump_log_points.append(pf_adj)
+        jump_log_points.append(pf_adj.copy())
+        print(f"Final jump: p0_adj = {p0_adj}, pf_adj = {pf_adj} ; fitness = {fitness}")
 
-        #plot traj
-        # plot starting final points
-        #ax = plt.gca()
-        #for point in jump_log:
-        #    ax.scatter(point[0], point[1], point[2], color='red', s=500)
+        # Plot trajectories if requested
+        
+        self.plot_point_traj(jump_log_points, jump_log_traj)
 
-        #self.point_clouds.plot_map_with_target(jump_log_points)
-        self.point_clouds.animate_plot_map_with_target_and_trajectory(jump_log_points,jump_log_traj)
-        return fitness
+        return fitness, jump_log_points, jump_log_traj
 
     def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
         fit_average_cost_patch = 0.
         fit_landing_cost = 0.
-        # filter apply
-        # fare un nuovo pc filter e poi aggiungere i punti presi sopra
+        
+
         if (patch_id is not None and  contact_abs_pos_yz is not None):
             #compute cost for landing candidate
             fit_landing_cost = -self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
             #compute average cost on patch to see how bad /good is terrain there
             fit_average_cost_patch = -self.patches.get_patch_cost(patch_id)
             #if fit_landing_costmap is None:
-            #    breakpoint()
 
         fit_consumed_energy = -res['consumed_energy']
         if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
-            fit_problem_converged = 100
-        else: #problem did not converge
             fit_problem_converged = 0
+        else: #problem did not converge
+            fit_problem_converged = -100
         # print("jump duration", res['Tf'])
         print(f"convergence: {fitness_weights[0]*fit_problem_converged}, energy: {fitness_weights[1]*fit_consumed_energy}, avg_cost: {fitness_weights[2]*fit_average_cost_patch}, land_cost: {fitness_weights[3]*fit_landing_cost}")
-        fitness =  fitness_weights[0]*fit_problem_converged + fitness_weights[1]*fit_consumed_energy +fitness_weights[2]*fit_average_cost_patch + fitness_weights[3]*fit_landing_cost
-
+        
+        fitness = ( fitness_weights[0] * fit_problem_converged + 
+                    fitness_weights[1] * fit_consumed_energy +
+                    fitness_weights[2] * fit_average_cost_patch + 
+                    fitness_weights[3] * fit_landing_cost)
+        
         return fitness
+    
+    def plot_point_traj(self, jump_log_points, jump_log_traj):
+        x_points = np.array([point['position'][0] for point in self.point_clouds.points_t])
+        y_points = np.array([point['position'][1] for point in self.point_clouds.points_t])
+        z_points = np.array([point['position'][2] for point in self.point_clouds.points_t])
+        color = np.array([point['color'] for point in self.point_clouds.points_t])
+        size_point = np.array([point['size_point'] for point in self.point_clouds.points_t])
+        
+        fig = plt.figure(figsize=(14, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        ax.scatter(x_points, y_points, z_points, c=color, s=size_point, alpha=0.6, label='Terrain')
+        
+        for i, point in enumerate(jump_log_points):
+            if i == 0:  
+                ax.scatter(point[0], point[1], point[2], 
+                        c='green', s=150, marker='o', 
+                        edgecolors='black', linewidths=2,
+                        label='Start Point', zorder=5)
+            elif i == len(jump_log_points) - 1:  # End point
+                ax.scatter(point[0], point[1], point[2], 
+                        c='red', s=150, marker='o', 
+                        edgecolors='black', linewidths=2,
+                        label='End Point', zorder=5)
+            else:  
+                ax.scatter(point[0], point[1], point[2], 
+                        c='blue', s=120, marker='o', 
+                        edgecolors='black', linewidths=2,
+                        label='Waypoint' if i == 1 else '', zorder=5)
+        
+        # Plot trajectories
+        trajectory_colors = plt.cm.viridis(np.linspace(0, 1, len(jump_log_traj)))
+        
+        for i, traj in enumerate(jump_log_traj):
+            if traj is not None and traj.size > 0:
+                # traj is expected to be shape (3, N) where rows are [x, y, z]
+                if traj.ndim == 2 and traj.shape[0] == 3:
+                    ax.plot(traj[0, :], traj[1, :], traj[2, :], 
+                        color=trajectory_colors[i], linewidth=2.5, 
+                        label=f'Jump {i+1}' if i < 3 else '',
+                        alpha=0.9, zorder=4)
+                else:
+                    print(f"Warning: Trajectory {i} has unexpected shape {traj.shape}")
+        
+        # Set labels and title
+        ax.set_xlabel('X (m) - Height', fontsize=11)
+        ax.set_ylabel('Y (m)', fontsize=11)
+        ax.set_zlabel('Z (m)', fontsize=11)
+        ax.set_title(f'Optimized Jumping Path\nTotal Jumps: {len(jump_log_traj)}', 
+                    fontsize=13, fontweight='bold')
+        
+        # Add legend
+        ax.legend(loc='upper left', fontsize=9)
+        
+        # Set viewing angle for better visualization
+        ax.view_init(elev=20, azim=45)
+        
+        # Add grid
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # Print trajectory statistics
+        print("\n=== Trajectory Statistics ===")
+        for i, traj in enumerate(jump_log_traj):
+            if traj is not None and traj.size > 0:
+                traj_length = np.sum(np.sqrt(np.sum(np.diff(traj, axis=1)**2, axis=0)))
+                print(f"Jump {i+1}: {traj.shape[1]} points, Length: {traj_length:.2f}m")
+                
 
-
+n_threads = 5
 
 def main():
     algo = CrossEntropyMethodMixed(cem_params) # <-- da implementare dentro la classe appena il tutto funziona
@@ -231,6 +313,9 @@ def main():
     optimizer = BiLevelOptmizer(terrain_manager, P0_INIT,PF_INIT)
 
     cost_hist = np.zeros(cem_params.cem_iters)
+    best_jump_log_points = None
+    best_jump_log_traj = None
+    best_fitness = -np.inf
 
     start = time.time()
     for k in range(cem_params.cem_iters):
@@ -241,17 +326,21 @@ def main():
         xd = algo.population_discrete  # shape: dim_discrete x pop_size
         xc = algo.population_continuous  # shape: dim_continuous x pop_size
 
-        # Organise inputs into a 2D matrix where hwe have as columns
+        # Organise inputs into a 2D matrix where we have as columns
         inputs = [[xd[:, i].tolist(), xc[:, i].tolist(), cem_params] for i in range(cem_params.pop_size)]
 
-        # Evaluate population in parallel
-        # with ProcessPoolExecutor(max_workers=cem_params.n_threads) as executor:
-        #     fitness = list(executor.map(eval_pop, inputs))
         fitness = []
         for i, population_inputs in enumerate(inputs, start=1):
-            result = optimizer.eval_pop(population_inputs)
+            # Set plot=True to visualize each trajectory
+            result, log_points, log_traj = optimizer.eval_pop(population_inputs) # Changed plot to False to avoid too many plots unless specifically needed
             fitness.append(result)
             print(colored(f"Individual {i}/{len(inputs)} of population {k} finished, fitness = {result}\n", "red"))
+            
+            # Track best solution
+            if result > best_fitness:
+                best_fitness = result
+                best_jump_log_points = log_points
+                best_jump_log_traj = log_traj
 
         # Evaluate population and update distributions
         algo.evaluate_population(fitness)
@@ -294,6 +383,13 @@ def main():
 
     with open(save_path, "w") as f:
         json.dump(report, f, indent=2)
+
+    # Plot best trajectory at the end
+    print(colored(f"\nOptimization Finished! Best Fitness: {best_fitness}", "green", attrs=['bold']))
+    if best_jump_log_points and best_jump_log_traj:
+        optimizer.plot_point_traj(best_jump_log_points, best_jump_log_traj)
+    else:
+        print(colored("Could not plot best trajectory. No solution found or tracking issue.", "yellow"))
 
 if __name__ == "__main__":
     main()
