@@ -139,7 +139,7 @@ robot_params['aliengo'] ={'dt': 0.002,
                           'ki': np.array([0., 0., 0.]*4),
 
                           'kp_nominal': np.array([21.5, 21.5, 21.5]*4),
-                          'kd_nominal': np.array([3., 3., 3.]*4),
+                          'kd_nominal': np.array([3.5, 3.5, 3.5]*4),
                           'ki_nominal': np.array([0., 0., 0.]*4),
                           'kp_backup':  np.array([100., 100., 100.]*4),
                           'kd_backup':  np.array([3., 3., 3.]*4),
