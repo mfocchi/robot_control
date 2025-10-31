@@ -150,6 +150,7 @@ class BiLevelOptimizer:
         self.patches.cost_color()
 
     def eval_pop(self, input_data):
+            # ora apro n_istanze matlab per n_thread
             eng = get_matlab_engine()
             
             # tipo di copia da provare e vedere se funziona!!!!
@@ -389,7 +390,6 @@ def main():
             completed = 0
             
             for future in as_completed(futures):
-                idx = futures[future]
                 
                 result, log_points, log_traj, success = future.result()
                 fitness.append(result)
@@ -452,7 +452,7 @@ def main():
         optimizer.plot_point_traj(best_jump_log_points, best_jump_log_traj)
     else:
         print(colored("Could not plot best trajectory. No solution found or tracking issue.", "yellow"))
-points
+
 if __name__ == "__main__":
     try:
         main()
