@@ -21,7 +21,7 @@ class PointCloudFilter:
         self.color = np.full((N, 3), [0,0,0])
         self.size_point = np.ones(N) *4
         
-        self.cost = np.ones(N) * 0.5  # Valore iniziale costo --> cosi evito falsi positivi
+        self.cost = np.ones(N) * 0.0  # Valore iniziale costo --> cosi evito falsi positivi
         
         self.light = np.ones(N) * 0.8 
         
@@ -585,24 +585,26 @@ class PointCloudFilter:
         plt.show()
         # delay tra ogni punto
         time.sleep(3)
+        
     def plot_color_cost_given_cost(self, source_points=None):
         if source_points is None:
             source_points = self.points_t
         
         cost_values = np.array([point['cost'] for point in source_points])
         cost_min, cost_max = np.min(cost_values), np.max(cost_values)
-        
-        if cost_max > cost_min:
-            normalized_costs = (cost_values - cost_min) / (cost_max - cost_min)
-        else:
-            normalized_costs = np.full_like(cost_values, 0.5)
+        if cost_max == cost_min:
+            for point in source_points:
+                point['color'] = (0.0, 0.0, 1.0)  # blu
+            return
+
+        normalized_costs = (cost_values - cost_min) / (cost_max - cost_min)
 
         cmap = LinearSegmentedColormap.from_list("green_yellow_red", ["green", "yellow", "red"])
         gradient_colors = cmap(normalized_costs)
-        
+
         for i, point in enumerate(source_points):
-            point['color'] = gradient_colors[i][:3] 
-        
+            point['color'] = gradient_colors[i][:3]
+            
         # print(f"Colored {len(source_points)} points based on cost values")
         # print(f"Cost range: {cost_min:.3f} to {cost_max:.3f}")
         
