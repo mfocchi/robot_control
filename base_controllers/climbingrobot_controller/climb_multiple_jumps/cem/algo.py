@@ -39,6 +39,10 @@ class IterationLog:
     best_discrete: Optional[np.ndarray] = None
     best_continuous: Optional[np.ndarray] = None
     best_value: float = -np.inf
+    
+    probs: Optional[np.ndarray] = None
+    mu: Optional[np.ndarray] = None
+    std_devs: Optional[np.ndarray] = None
 
 
 class CrossEntropyMethodMixed:
@@ -55,6 +59,7 @@ class CrossEntropyMethodMixed:
         )
 
         self.rng = np.random.default_rng(params.seed)
+        
 
         assert params.pop_size > 0
         assert params.dim_discrete > 0
@@ -67,7 +72,8 @@ class CrossEntropyMethodMixed:
         self.population_fit = np.full(params.pop_size, -np.inf)
         self.fit_evals = [None] * params.pop_size
         self.fit_best = -np.inf
-
+        self.history = []
+        
     def allocate_data_discrete(self):
         p = self.params
         self.population_discrete = np.zeros((p.dim_discrete, p.pop_size), dtype=int)
@@ -107,6 +113,21 @@ class CrossEntropyMethodMixed:
         self.log.best_discrete = np.copy(self.best_discrete)
         self.log.best_continuous = np.copy(self.best_continuous)
         self.log.best_value = np.copy(self.fit_best)
+        
+        self.log.probs = np.copy(self.probs)
+        self.log.mu = np.copy(self.mu)
+        self.log.std_devs = np.copy(self.std_devs)
+        self.history.append({
+                "iter": self.log.iterations,
+                "func_evals": self.log.func_evals,
+                "best_value": float(self.fit_best),
+                "best_discrete": np.copy(self.best_discrete),
+                "best_continuous": np.copy(self.best_continuous),
+                "probs": [np.array(p, copy=True) for p in self.probs],
+                "mu": np.copy(self.mu),
+                "std_devs": np.copy(self.std_devs),
+            })
+        
 
     def generate_population_discrete(self) -> None:
         # Generate random gaussian values from pure Normal distribution (mean=0, std=1)

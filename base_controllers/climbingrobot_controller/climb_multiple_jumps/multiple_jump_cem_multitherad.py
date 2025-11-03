@@ -9,31 +9,22 @@ from base_controllers.components.patch_surface import PatchSurface
 import numpy as np
 from termcolor import colored
 import matplotlib.pyplot as plt
-
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from multiprocessing import Manager, Lock
 import threading
-
-# Import CEM algorithm
 from cem.algo import CemParams, CrossEntropyMethodMixed
 from base_controllers.utils.matlab_conversions import mat_matrix2python, mat_vector2python
-
 import matlab.engine
 
 thread_local = threading.local()
 
-# Constants
-P0_INIT = np.array([0.0, 2.5, -5])
-PF_INIT = np.array([0.0, 2.5, -15])
-
-# Inner optimization parameters
 Fleg_max = 300.
 Fr_max = 90.
 Fr_min = 0.
 mu = 0.8
 mass = 5.
-anchor_distance = 5.
 
+anchor_distance = 5.
 inner_opt_params = {}
 inner_opt_params['m'] = mass
 inner_opt_params['num_params'] = 4.
@@ -65,14 +56,12 @@ cem_params.pop_size = 100
 cem_params.n_elites = int(cem_params.pop_size * 0.8)
 cem_params.decrease_pop_factor = 1.0
 cem_params.fraction_elites_reused = 0.0
-
 # Discrete
 cem_params.dim_discrete = 5
 number_of_patches = 20
 cem_params.n_values = [3] + [(number_of_patches-1) for _ in range(4)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
 cem_params.min_prob = 0.05
-
 # Continuous
 MAX_N_PATCHES = 5
 cem_params.dim_continuous = 2 * MAX_N_PATCHES
@@ -81,10 +70,6 @@ cem_params.min_value_continuous = np.full(cem_params.dim_continuous, 0.0)
 cem_params.init_mu_continuous = np.full(cem_params.dim_continuous, 0.5)
 cem_params.init_std_continuous = np.full(cem_params.dim_continuous, 1.0)
 cem_params.min_std_continuous = np.full(cem_params.dim_continuous, 1e-3)
-
-# Fitness weights
-fitness_weights = np.array([1., 0.1, 10., 1.])
-
 
 def get_matlab_engine():
     if not hasattr(thread_local, 'engine'):
@@ -124,30 +109,38 @@ def create_inner_opt_params_copy():
 
 
 class BiLevelOptimizer:
-    def __init__(self, terrain_manager, p0, pf):
+    def __init__(self, terrain_manager, p0, pf, fitness_weights, filter_weights, flag_print_plot=False):
         self.terrain_manager = terrain_manager
         self.p0 = p0
         self.pf = pf
-        
+        self.fitness_weights = fitness_weights
+        self.filter_weights = filter_weights
+        self.flag_print_plot = flag_print_plot
         # Point cloud initialization
         self.in_point_clouds = self.terrain_manager.point_cloud
         self.point_clouds = PointCloudFilter(self.in_point_clouds)
         
-        self.filter_weights = np.array([1., 1., 1., 1.])
+        
         anchor_location = np.array(inner_opt_params['p_a1'])
+        
         self.point_clouds.filter_height_profile(profile="logln", x0=anchor_location[0], 
                                                weight=self.filter_weights[3], side_application="depth")
         
         # Apply filters
-        self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel], 
-                                               weight=self.filter_weights[0], plot=False)
+        # self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel], 
+        #                                        weight=self.filter_weights[0], plot=False)
         kernel = [self.point_clouds.sobel_y, self.point_clouds.sobel_z]
         self.point_clouds.filter_process_points(kernel, weight=self.filter_weights[1], plot=False)
         
         # Patches initialization
         pc_t = self.point_clouds.points_t
         self.patches = PatchSurface(pc_t)
-        self.patches.cost_color()
+        # self.patches.cost_color()
+        # print cost map statistics
+        # self.patches.plot_patches()
+        # print(self.point_clouds.points_t)
+        # self.point_clouds.print_map_pc()
+
 
     def eval_pop(self, input_data):
             # ora apro n_istanze matlab per n_thread
@@ -248,8 +241,9 @@ class BiLevelOptimizer:
             ref_com = mat_matrix2python(res['p'])
             jump_log_traj.append(ref_com)
             jump_log_points.append(pf_adj.copy())
-            # print(f"Final jump: p0_adj = {p0_adj}, pf_adj = {pf_adj} ; fitness = {fitness}")
-            #self.plot_point_traj(jump_log_points, jump_log_traj)
+            if (self.flag_print_plot == True):
+                print(f"Final jump: p0_adj = {p0_adj}, pf_adj = {pf_adj} ; fitness = {fitness}")
+                # self.plot_point_traj(jump_log_points, jump_log_traj)
             return fitness, jump_log_points, jump_log_traj, True
             
     def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
@@ -270,13 +264,14 @@ class BiLevelOptimizer:
             fit_problem_converged = 100
         else: #problem did not converge
             fit_problem_converged = 0
-        # print("jump duration", res['Tf'])
-        # print(f"convergence: {fitness_weights[0]*fit_problem_converged}, energy: {fitness_weights[1]*fit_consumed_energy}, avg_cost: {fitness_weights[2]*fit_average_cost_patch}, land_cost: {fitness_weights[3]*fit_landing_cost}")
+        fitness = ( self.fitness_weights[0] * fit_problem_converged + 
+                    self.fitness_weights[1] * fit_consumed_energy +
+                    self.fitness_weights[2] * fit_average_cost_patch + 
+                    self.fitness_weights[3] * fit_landing_cost)
         
-        fitness = ( fitness_weights[0] * fit_problem_converged + 
-                    fitness_weights[1] * fit_consumed_energy +
-                    fitness_weights[2] * fit_average_cost_patch + 
-                    fitness_weights[3] * fit_landing_cost)
+        if (self.flag_print_plot == True):
+            print("jump duration", res['Tf'])
+            print(f"total fitness of the single jump: {fitness} , convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
         
         return fitness
     
@@ -340,34 +335,33 @@ class BiLevelOptimizer:
             if traj is not None and traj.size > 0:
                 traj_length = np.sum(np.sqrt(np.sum(np.diff(traj, axis=1)**2, axis=0)))
                 print(f"Jump {i+1}: Length: {traj_length:.2f}m")
-                
 
 
 def main():
-
-    print("Multi-threaded CEM Optimizer")
-
+    # INPUTS DATA:
+    P0_INIT = np.array([0.0, 2.5, -5])
+    PF_INIT = np.array([0.0, 2.5, -15])
+    fitness_weights = np.array([1., 0.1, 10., 1.])
+    filter_weights = np.array([1., 1., 1., 1.])
+    flag_thread = True
+    # ===================================================
     algo = CrossEntropyMethodMixed(cem_params)
     terrain_manager = TerrainManager()
-    
-    optimizer = BiLevelOptimizer(terrain_manager, P0_INIT, PF_INIT)
-    
+    optimizer = BiLevelOptimizer(terrain_manager, P0_INIT, PF_INIT, fitness_weights=fitness_weights, filter_weights=filter_weights)
     cost_hist = np.zeros(cem_params.cem_iters)
     best_jump_log_points = None
     best_jump_log_traj = None
     best_fitness = -np.inf
     
-    # Use ThreadPoolExecutor for parallelization
-    n_workers = cem_params.n_threads
-    print(f"\nUsing {n_workers} worker threads")
     
     start = time.time()
     
     for k in range(cem_params.cem_iters):
         iter_start = time.time()
-        print(f"\n{'='*60}")
-        print(f"  Starting Cross Entropy Iteration {k+1}/{cem_params.cem_iters}")
-        print(f"{'='*60}")
+        
+        # Use ThreadPoolExecutor for parallelization
+        n_workers = cem_params.n_threads
+        print(f"\nUsing {n_workers} worker threads")        
         
         # Generate population
         algo.generate_population_discrete()
@@ -383,30 +377,53 @@ def main():
         temp_log_traj = []
         
         # Parallel evaluation with ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=n_workers) as executor:
-            futures = {executor.submit(optimizer.eval_pop, inp): i 
-                      for i, inp in enumerate(inputs)}
-            
-            completed = 0
-            
-            for future in as_completed(futures):
+        if (flag_thread == True):
+            print("Multi-threaded CEM Optimizer")
+            print(f"\n{'='*60}")
+            print(f"  Starting Cross Entropy Iteration {k+1}/{cem_params.cem_iters}")
+            print(f"{'='*60}")
+            print("Using ThreadPoolExecutor for parallel evaluation")
+            with ThreadPoolExecutor(max_workers=n_workers) as executor:
+                futures = {executor.submit(optimizer.eval_pop, population_inputs): i 
+                        for i, population_inputs in enumerate(inputs)}
                 
-                result, log_points, log_traj, success = future.result()
+                completed = 0
+                
+                for future in as_completed(futures):
+                    
+                    result, log_points, log_traj, success = future.result()
+                    fitness.append(result)
+                    temp_log_points.append(log_points)
+                    temp_log_traj.append(log_traj)
+                    
+                    completed += 1
+                    if completed % 10 == 0 or completed == len(inputs):
+                        print(f"Progress: {completed}/{len(inputs)} individuals evaluated")
+                    
+                    # Track best solution
+                    if result > best_fitness:
+                        best_fitness = result
+                        best_jump_log_points = log_points
+                        best_jump_log_traj = log_traj
+                        print(f"New best fitness: {best_fitness:.2f}")
+        else:
+            print(f"\n{'='*60}")
+            print("Using sequential evaluation")
+            print(f"{'='*60}")
+            for i, population_inputs in enumerate(inputs, start=1):
+                
+                optimizer.flag_print_plot = True
+                # Set plot=True to visualize each trajectory
+                result, log_points, log_traj, success = optimizer.eval_pop(population_inputs) # Changed plot to False to avoid too many plots unless specifically needed
                 fitness.append(result)
-                temp_log_points.append(log_points)
-                temp_log_traj.append(log_traj)
-                
-                completed += 1
-                if completed % 10 == 0 or completed == len(inputs):
-                    print(f"Progress: {completed}/{len(inputs)} individuals evaluated")
-                
+                print(colored(f"Individual {i}/{len(inputs)} of population {k} finished, fitness = {result}\n", "red"))
+                    
                 # Track best solution
                 if result > best_fitness:
                     best_fitness = result
                     best_jump_log_points = log_points
                     best_jump_log_traj = log_traj
-                    print(f"New best fitness: {best_fitness:.2f}")
-                       
+            
         # Update distributions
         algo.evaluate_population(fitness)
         algo.update_distributions()
