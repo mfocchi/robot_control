@@ -86,7 +86,7 @@ class QuadrupedController(BaseController):
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,   callback=self._receive_pose_real, queue_size=1, tcp_nodelay=True)
             elif self.state_estimation=='imu':#use angular velocity and quaternion coming from IMU (robot_name/imu topic) and write BasePose BaseTwist variables
                 self.sub_imu = ros.Subscriber("/" + self.robot_name + "/imu", Imu,  callback=self._receive_imu, queue_size=1, tcp_nodelay=True)
-            if self.state_estimation=='ground_truth':
+            elif self.state_estimation=='ground_truth':
                 print(f"state_estimation ground truth  not possible on real robot!")
             else:
                 print(f"state_estimation type not known {self.state_estimation}")
@@ -1002,6 +1002,10 @@ class QuadrupedController(BaseController):
         elif self.go0_conf == 'standDown':
             #deprecated
             #self._startup_from_stand_down()
+            # this is needed to avoid initial instability in the real robot
+            for i in range(10):
+                self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+                ros.sleep(0.01)
             self.homing_sm = StateMachine(verbose=0)
             # IMU BIAS ESTIMATION
             if self.real_robot and (self.robot_name == 'go1' or self.robot_name == 'go2' or self.robot_name == 'aliengo'):
@@ -1641,19 +1645,20 @@ if __name__ == '__main__':
             p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12,0))
 
         p.counter = 0
+        p.startTime = p.time
         while not ros.is_shutdown():
             p.updateKinematics()
             
-            if rl_control != 'none':
+            if rl_control != 'none' and (p.time > (p.startTime + 4.)):
                 if use_joy:
                     axes, buttons = joy.get_commands()
                     #use a scaling to make the joy input less reactive
-                    lx = 0.5*axes[0]
-                    ly = 0.5*axes[1]
-                    ry = 0.5*axes[3]
+                    lx = 0.2*axes[0]
+                    ly = 0.2*axes[1]
+                    ry = 0.2*axes[3]
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.1, 0.0, 0.1])
+                    rl_controller.velocity_cmd = np.array([0.1, 0.0, 0.0])
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
