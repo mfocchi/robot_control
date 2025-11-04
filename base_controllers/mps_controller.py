@@ -66,6 +66,8 @@ class MpsSimulator(QuadrupedController):
     def initVars(self):
         super().initVars()
         ## add your variables to initialize here
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
 
         # jessica stuff
@@ -112,7 +114,7 @@ class MpsSimulator(QuadrupedController):
 
 
 def talker(p):
-    p.use_gui = True
+    p.use_gui = False
     additional_args = ['gui:=' + str(p.use_gui), 'go0_conf:=standDown' ]
     #p.startController(additional_args=additional_args)
     world_name = 'fast.world'
