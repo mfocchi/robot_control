@@ -50,7 +50,7 @@ robotName = "ur5"
 from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics
 from base_controllers.utils.math_tools import Math
 from gazebo_msgs.srv import ApplyBodyWrench
-from base_controllers.utils.common_functions import plotJoint
+from base_controllers.utils.common_functions import plotJoint, checkRosControllerRunning
 
 class BaseControllerFixed(threading.Thread):
     """
@@ -140,7 +140,7 @@ class BaseControllerFixed(threading.Thread):
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
-        cli_args.append('use_torque_control:=' + str(use_torque_control))
+        cli_args.append('use_torque_control:=' + str(self.use_torque_control).lower())
         if additional_args is not None:
             cli_args.extend(additional_args)
         if world_name is not None:
@@ -211,7 +211,7 @@ class BaseControllerFixed(threading.Thread):
 
     def startupProcedure(self):
         if (self.use_torque_control):
-            if  ("/" + self.robot_name + "/ros_impedance_controller" not in rosnode.get_node_names()):
+            if not checkRosControllerRunning("ros_impedance_controller", self.robot_name):
                 print(colored('Error: you need to launch the ros impedance controller in torque mode!', 'red'))
                 sys.exit()
             self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))

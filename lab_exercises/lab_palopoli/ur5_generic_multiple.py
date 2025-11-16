@@ -241,7 +241,7 @@ def talker(p):
         launch_file = rospkg.RosPack().get_path(
             'ros_impedance_controller') + '/launch/ros_impedance_controller_ur5_multiple.launch'
 
-        p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control, additional_args =additional_args, launch_file=launch_file)
+        p.startSimulator(world_name=p.world_name, additional_args =additional_args, launch_file=launch_file)
 
 
 

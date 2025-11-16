@@ -153,6 +153,13 @@ def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spa
     launch.start()
     process = launch.launch(node)
 
+def checkRosControllerRunning(controller = '', robot_name=''):
+    cmd = ["rosservice", "call", f"/{robot_name}/controller_manager/list_controllers"]
+    result = subprocess.check_output(cmd).decode()
+    if controller not in result or "state: \"running\"" not in result:
+        return False
+    else:
+        return True
 
 def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
     try:

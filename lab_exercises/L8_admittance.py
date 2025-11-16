@@ -151,8 +151,7 @@ def talker(p):
             additional_args.append('soft_gripper:=true')
         elif str(conf.robot_params[p.robot_name]['gripper_type']) == 'robotiq_2':
             additional_args.append('robotiq_gripper:=true')
-        p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control,
-                         additional_args=additional_args)
+        p.startSimulator(world_name=p.world_name, additional_args=additional_args)
 
     # specify xacro location
     xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'
