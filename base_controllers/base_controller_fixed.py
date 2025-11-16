@@ -113,15 +113,7 @@ class BaseControllerFixed(threading.Thread):
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None, use_torque_control = True,  additional_args = None, launch_file = None):
-        # needed to be able to load a custom world file
-        print(colored('Adding gazebo model path!', 'blue'))
-        custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
-        if os.getenv("GAZEBO_MODEL_PATH") is not None:
-            os.environ["GAZEBO_MODEL_PATH"] +=":"+custom_models_path
-        else:
-            os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
-
+    def startSimulator(self, world_name = None,  additional_args = None, launch_file = None):
         if launch_file=='standard':
             launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/start_framework.launch'
 
