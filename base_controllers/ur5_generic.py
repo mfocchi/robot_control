@@ -255,6 +255,8 @@ def talker(p):
     # sleep to avoid that the real robot crashes on the table
     if p.real_robot:
         time.sleep(3.)
+    else:
+        p.reset_joints(conf.robot_params[p.robot_name]['q_0'])
 
     # loop frequency
     rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
