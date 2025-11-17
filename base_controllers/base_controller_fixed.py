@@ -114,6 +114,10 @@ class BaseControllerFixed(threading.Thread):
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
     def startSimulator(self, world_name = None,  additional_args = None, launch_file = None):
+        os.system("pkill rosmaster")
+        os.system("pkill gzserver")
+        os.system("pkill gzclient")
+        os.system("pkill rviz")
         if launch_file=='standard':
             launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/start_framework.launch'
 
