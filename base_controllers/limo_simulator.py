@@ -513,32 +513,6 @@ class GenericSimulator(BaseController):
         omega_vec.append(0.0)
         return v_vec, omega_vec
 
-    def generateSpiralTraj(self, R_initial= 2, R_final=0.05, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
-        # only around 0.3
-        change_interval = 2.
-        increment = increment
-        turning_radius_vec = np.arange(R_final, R_initial, -increment)
-        if direction=='left':
-            ang_w = np.round(long_v / turning_radius_vec, 3)  # [rad/s]
-        else:
-            ang_w = -np.round(long_v / turning_radius_vec, 3)  # [rad/s]
-        omega_vec = []
-        v_vec = []
-        time = 0
-        i = 0
-        while True:
-            time = np.round(time + dt, 3)
-            omega_vec.append(ang_w[i])
-            v_vec.append(long_v)
-            # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
-            if time > ((1 + i) * change_interval):
-                i += 1
-            if i == len(turning_radius_vec):
-                break
-        v_vec.append(0.0)
-        omega_vec.append(0.0)
-        return v_vec, omega_vec
-
     def estimateSlippages(self,W_baseTwist, theta, qd):
         wheel_L = qd[0]
         wheel_R = qd[1]
@@ -696,14 +670,11 @@ def main_loop(p):
         counter = 0
         if p.IDENT_TYPE=='NONE':
             # generic open loop test for comparison with matlab
-            #vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
-            #v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth() #velocity_straight
             v_ol = np.linspace(0.5, 0.5, np.int32(10./conf.robot_params[p.robot_name]['dt']))
             omega_ol = np.linspace(0., 0., np.int32(10./conf.robot_params[p.robot_name]['dt']))
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'V_OMEGA':
             v_ol, omega_ol = p.generateOmegaTraj(omega_initial=0, omega_final=2., increment=0.3, dt=conf.robot_params[p.robot_name]['dt'],  long_v=p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
-            #v_ol, omega_ol = p.generateSpiralTraj(R_initial= 0.51, R_final=0.21, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
             traj_length = len(v_ol)
 
         if p.IDENT_TYPE == 'WHEELS':
@@ -761,7 +732,7 @@ def main_loop(p):
         p.des_x = p.p0[0]
         p.des_y = p.p0[1]
         p.des_theta = p.p0[2]
-        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.5, omega_max_=0.7)
+        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_chicane(v_max_=0.5, omega_max_=0.7)
         p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                             v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
 
