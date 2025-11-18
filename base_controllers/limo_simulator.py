@@ -46,14 +46,14 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized limo controller---------------------------------------------------------------")
 
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
+        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.LONG_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
-        self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
+        self.SLIPPAGE_INFERENCE_TYPE = 'none'  # 'decision_trees','interpolator' , 'NN', 'none'
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
-        self.ODOMETRY = 'false' #'true',  'false' (optitrack node)
-        self.SENSORS = 'false' #'true',  'false'
+        self.ODOMETRY = 'true' #'true',  'false' (optitrack node)
+        self.SENSORS = 'true' #'true',  'false'
         # Parameters for open loop identification
         self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
         self.IDENT_LONG_SPEED = 0.6  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
@@ -217,11 +217,12 @@ class GenericSimulator(BaseController):
                 self.radius_log[self.log_counter] = self.radius
             super().logData()
 
+
     def startFramework(self):
         self.decimate_publish = 1
         world_name = None #'ramps.world'
         additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]),'sensors:='+self.SENSORS, 'odometry:='+self.ODOMETRY]
-        launch_file = rospkg.RosPack().get_path('limo_description') + '/launch/start_locosim.launch'
+        launch_file = rospkg.RosPack().get_path('limo_description') + '/launch/start_robot.launch'
         super().startSimulator(world_name=world_name, launch_file=launch_file, additional_args=additional_args)
 
     def loadModelAndPublishers(self):
@@ -792,8 +793,8 @@ def main_loop(p):
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
-                _,_, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, p.qd, robot_constants)
-                p.alpha_control = p.model_alpha.predict(p.qd)
+                #_,_, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, p.qd, robot_constants)
+                #p.alpha_control = p.model_alpha.predict(p.qd)
 
             #compute qd_des after control computation
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)
