@@ -6,11 +6,6 @@ Created on 3 May  2022
 @author: mfocchi
 """
 
-from __future__ import print_function
-
-import copy
-import os
-import rospy as ros
 import threading
 from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import JointState
@@ -18,8 +13,6 @@ from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 from std_srvs.srv import Empty
-from base_controllers.utils.math_tools import unwrap_vector
-from termcolor import colored
 
 #gazebo messages
 from gazebo_msgs.srv import SetModelState
@@ -31,8 +24,6 @@ from gazebo_msgs.srv import SetPhysicsProperties
 from gazebo_msgs.srv import SetPhysicsPropertiesRequest
 
 # ros utils
-import roslaunch
-import rospkg
 from gazebo_msgs.srv import ApplyBodyWrench
 
 #other utils
@@ -47,8 +38,6 @@ from ros_impedance_controller.msg import EffortPid
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import  base_controllers.params as conf
 robotName = "solo"
-
-
 
 class BaseController(threading.Thread):
     """

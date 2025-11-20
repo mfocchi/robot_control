@@ -141,7 +141,7 @@ def startNode(package, executable, args='', name=None):
     nodes = rosnode.get_node_names()
     #kill previous instances
     if package in nodes:
-        print(colored("Re Starting ref generator","red"))
+        print(colored(f"Killing previous {executable} node","red"))
         os.system("rosnode kill /"+package)
     package = package
     executable = executable

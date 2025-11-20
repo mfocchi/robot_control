@@ -25,7 +25,7 @@ from base_controllers.utils.math_tools import *
 import pinocchio as pin
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 from termcolor import colored
-from base_controllers.utils.common_functions import plotJoint, plotEndeff
+from base_controllers.utils.common_functions import plotJoint, plotEndeff, startNode
 import  base_controllers.params as conf
 robotName = "ur5"
 
@@ -70,7 +70,7 @@ class Ur5Generic(BaseControllerFixed):
 
         self.world_name = None # only the workbench
         #self.world_name = 'empty.world'
-        #self.world_name = 'palopoli.world' # class example
+        #self.world_name = 'fdr.world' # class example
         #self.world_name = 'tavolo_obstacles.world'
 
         print("Initialized ur5 generic  controller---------------------------------------------------------------")
@@ -78,7 +78,7 @@ class Ur5Generic(BaseControllerFixed):
     def startRealRobot(self):
         os.system("killall rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
-
+        #automatically start ur_driver for real robot
         # uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         # roslaunch.configure_logging(uuid)
         # launch_file = rospkg.RosPack().get_path('ur_robot_driver') + '/launch/ur5e_bringup.launch'
@@ -97,15 +97,8 @@ class Ur5Generic(BaseControllerFixed):
             sys.exit()
             #print(colored('Launching the ur driver!', 'blue'))
             #parent.start()
-
         # run rviz
-        package = 'rviz'
-        executable = 'rviz'
-        args = '-d ' + rospkg.RosPack().get_path('ur_description') + '/rviz/single_robot.rviz'
-        node = roslaunch.core.Node(package, executable, args=args)
-        launch = roslaunch.scriptapi.ROSLaunch()
-        launch.start()
-        process = launch.launch(node)
+        startNode(package='rviz', executable='rviz', args='-d ' + rospkg.RosPack().get_path('ur_description') + '/rviz/single_robot.rviz')
 
     def loadModelAndPublishers(self, xacro_path):
         super().loadModelAndPublishers(xacro_path)
@@ -193,6 +186,7 @@ class Ur5Generic(BaseControllerFixed):
         if not self.real_robot:
             os.system(" rosnode kill /"+self.robot_name+"/ros_impedance_controller")
             os.system(" rosnode kill gazebo")
+            os.system("pkill rosmaster")
 
     def plotStuff(self):
         plotJoint('position',time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log)
@@ -204,7 +198,6 @@ class Ur5Generic(BaseControllerFixed):
         print(colored("STARTING HOMING PROCEDURE", 'red'))
         self.q_des = np.copy(self.q)
         print("Initial joint error = ", np.linalg.norm(self.q_des - q_home))
-        print("q = ", self.q.T)
         print("Homing v des", v_des)
         while True:
             e = q_home - self.q_des
@@ -212,15 +205,16 @@ class Ur5Generic(BaseControllerFixed):
             if (e_norm != 0.0):
                 v_ref += 0.005 * (v_des - v_ref)
                 self.q_des += dt * v_ref * e / e_norm
-                self.controller_manager.sendReference(self.q_des)
+                self.updateKinematicsDynamics()
+                self.controller_manager.sendReference(self.q_des, tau_ffwd=self.g)
                 #self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
-            rate.sleep()
             if (e_norm < 0.001):
                 self.homing_flag = False
-                print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red'))
+                print(colored("HOMING PROCEDURE ACCOMPLISHED", 'red')) #will not happen that q=qdes exactly
                 if self.gripper:
                     self.controller_manager.gm.move_gripper(80)
                 break
+            rate.sleep()
 
     def receive_pointcloud(self, msg):
         points_list = []
@@ -256,8 +250,6 @@ def talker(p):
     # sleep to avoid that the real robot crashes on the table
     if p.real_robot:
         time.sleep(3.)
-    else:
-        p.reset_joints(conf.robot_params[p.robot_name]['q_0'])
 
     # loop frequency
     rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
@@ -281,13 +273,19 @@ def talker(p):
 
     # launch vision node (visual pipelines to detect object, made with service call)
 
+    #reduce sim speed, real time factor
+    #p.setSimSpeed(dt_sim=0.001, max_update_rate=300)
+
+    #change run-time PID joints
+    #p.pid.setPDjoint(0, 10, 0, 0)
+
     #control loop (runs every dt seconds)
     while not ros.is_shutdown():
         p.updateKinematicsDynamics()
 
         ## set joints here
-        #p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
-        #p.qd_des = 0.1 * 2 * np.pi * 0.5* np.cos(2 * np.pi * 0.5 * p.time)*np.ones(p.robot.na)
+        # p.q_des = p.q_des_q0  + 0.1 * np.sin(2*np.pi*0.5*p.time)
+        # p.qd_des = 0.1 * 2 * np.pi * 0.5* np.cos(2 * np.pi * 0.5 * p.time)*np.ones(p.robot.na)
 
         ##test gripper
         # in Simulation remember to set gripper_sim : True in params.yaml!
@@ -299,7 +297,7 @@ def talker(p):
         #     print("gripper 80")
         #     p.controller_manager.gm.move_gripper(80)
         #     gripper_on = 2
-        # ##need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
+        # ##you need to uncomment this to be able to send joints references (leave it commented if you have an external node setting them)
         #p.controller_manager.sendReference(p.q_des, p.qd_des, p.g) #np.zeros(len(p.joint_names))
 
         if p.real_robot:
@@ -327,9 +325,6 @@ if __name__ == '__main__':
         ros.logerr(f"Exception: {e}")
         ros.signal_shutdown("killed")
         p.deregister_node()
-        if   conf.plotting:
-            p.plotStuff()
-    finally:
         if   conf.plotting:
             p.plotStuff()
 
