@@ -66,7 +66,12 @@ def talker(p):
     q0 = np.copy(p.q)
     p.initFilter(q0)
 
+    # check if gripper is actuated
     p.gripper_sim = ros.get_param("/gripper_sim")
+
+    amp = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])  # amplitude
+    freq = np.array([0.2, 0.0, 0.0, 0.0, 0., 0.0]) # frequency
+
 
     while not ros.is_shutdown():
         # 3- generate filtered step reference
