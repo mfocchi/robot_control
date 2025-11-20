@@ -10,25 +10,20 @@ class JointStatePublisher():
         self.q_des =np.zeros(6)
         self.qd_des = np.zeros(6)
         self.tau_ffwd = np.zeros(6)
+
+        #filter variables
         self.filter_1 = np.zeros(6)
         self.filter_2 = np.zeros(6)
 
         self.q =np.zeros(6)
         self.joint_names =  ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
+    # subscriber callback
     def receive_jstate(self, msg):
         for msg_idx in range(len(msg.name)):
             for joint_idx in range(len(self.joint_names)):
                 if self.joint_names[joint_idx] == msg.name[msg_idx]:
                     self.q[joint_idx] = msg.position[msg_idx]
-
-    def send_des_jstate(self):
-        msg = Float64MultiArray()
-        if (self.gripper_sim):
-            msg.data = np.append(self.q_des, np.array([0.0, 0.0 ,0.0]))
-        else:
-            msg.data = self.q_des
-        self.pub_des_jstate.publish(msg)
 
     def initFilter(self, q):
         self.filter_1 = np.copy(q)
@@ -40,6 +35,15 @@ class JointStatePublisher():
         self.filter_1 = (1 - gain) * self.filter_1 + gain * input
         self.filter_2 = (1 - gain) * self.filter_2 + gain * self.filter_1
         return self.filter_2
+
+    def send_des_jstate(self):
+        msg = Float64MultiArray()
+        # check if gripper is actuated if it is just append zeros
+        if (self.gripper_sim):
+            msg.data = np.append(self.q_des, np.array([0.0, 0.0 ,0.0]))
+        else:
+            msg.data = self.q_des
+        self.pub_des_jstate.publish(msg)
 
 def talker(p):
     ros.init_node('custom_joint_pub_node', anonymous=True)
@@ -57,27 +61,24 @@ def talker(p):
     # init variables
     time = 0.
     print("init q: ",p.q)
+
+    #initialize filter with actual values
     q0 = np.copy(p.q)
     p.initFilter(q0)
 
-    # check if gripper is actuated
     p.gripper_sim = ros.get_param("/gripper_sim")
 
-    amp = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])  # amplitude
-    freq = np.array([0.2, 0.0, 0.0, 0.0, 0., 0.0]) # frequency
-
-
     while not ros.is_shutdown():
-        # 2 - generate step reference
-        # if time < 4.:
-        #     p.q_des = q0
-        # else:
-            #p.q_des = q0 + np.array([0., 0.4, 0., 0., 0., 0])
-            # 3- generate filtered step reference
-            #p.q_des = p.secondOrderFilter(q0 + np.array([0., -0.4, 0., 0., 0., 0]), loop_frequency, 5.)
+        # 3- generate filtered step reference
+        if time < 4.:
+            p.q_des = q0
+        else:
+            p.q_des = p.secondOrderFilter(q0 + np.array([0., -0.4, 0., 0., 0., 0]), loop_frequency, 5.)
 
-        # 1 - generate sine reference
-        p.q_des = q0 + np.multiply(amp, np.sin(2 * np.pi * freq * time))
+        # 4 - generate sine reference
+        # amp = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])  # amplitude
+        # freq = np.array([0.2, 0.0, 0.0, 0.0, 0., 0.0])  # frequency
+        # p.q_des = q0 + np.multiply(amp, np.sin(2 * np.pi * freq * time))
 
         p.qd_des = np.zeros(6)
         p.tau_ffwd = np.zeros(6)
