@@ -185,6 +185,7 @@ class Ur5Generic(BaseControllerFixed):
         if (self.real_robot):
             self.zero_sensor()
         self.u.putIntoGlobalParamServer("real_robot",  self.real_robot)
+        self.u.putIntoGlobalParamServer("control_type", conf.robot_params[p.robot_name]['control_type'])
         print(colored("finished startup -- starting controller", "red"))
 
     def deregister_node(self):
