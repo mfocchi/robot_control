@@ -987,7 +987,7 @@ class GenericSimulator(BaseController):
             #publish TF for rviz
             self.broadcaster.sendTransform(self.u.linPart(self.basePoseW),
                                            self.quaternion,
-                                           ros.Time.now(), '/base_link', '/world')
+                                           ros.Time.from_sec(self.time), '/base_link', '/world')
             if self.IDENT_TYPE!='NONE':
                 if np.mod(self.pub_counter, self.decimate_publish) == 0:
                     self.pub_odom_msg(self.groundtruth_pub) #this is to publish on the topic groundtruth if somebody needs it
