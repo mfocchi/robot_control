@@ -46,14 +46,14 @@ class GenericSimulator(BaseController):
         self.torque_control = False
         print("Initialized limo controller---------------------------------------------------------------")
 
-        self.ControlType = 'CLOSED_LOOP_SLIP_0' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
-        self.SIDE_SLIP_COMPENSATION = 'MACHINE_LEARNING' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
+        self.ControlType = 'CLOSED_LOOP_UNICYCLE' #'OPEN_LOOP' 'CLOSED_LOOP_UNICYCLE' 'CLOSED_LOOP_SLIP_0' 'CLOSED_LOOP_SLIP'
+        self.SIDE_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
         self.LONG_SLIP_COMPENSATION = 'NONE' # 'MACHINE_LEARNING', 'NONE', 'EXP(not used)'
-        self.SLIPPAGE_INFERENCE_TYPE = 'decision_trees'  # 'decision_trees','interpolator' , 'NN'
+        self.SLIPPAGE_INFERENCE_TYPE = 'none'  # 'decision_trees','interpolator' , 'NN', 'none'
         self.ESTIMATE_ALPHA_WITH_ACTUAL_VALUES = True # makes difference for v >= 0.4
 
-        self.ODOMETRY = 'false' #'true',  'false' (optitrack node)
-        self.SENSORS = 'false' #'true',  'false'
+        self.ODOMETRY = 'true' #'true',  'false' (optitrack node)
+        self.SENSORS = 'true' #'true',  'false'
         # Parameters for open loop identification
         self.IDENT_TYPE = 'V_OMEGA' # 'V_OMEGA(deprecated)', 'WHEELS', 'NONE'
         self.IDENT_LONG_SPEED = 0.6  #used only when IDENT_TYPE = 'V_OMEGA' (deprecated)
@@ -217,11 +217,12 @@ class GenericSimulator(BaseController):
                 self.radius_log[self.log_counter] = self.radius
             super().logData()
 
+
     def startFramework(self):
         self.decimate_publish = 1
         world_name = None #'ramps.world'
         additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]),'sensors:='+self.SENSORS, 'odometry:='+self.ODOMETRY]
-        launch_file = rospkg.RosPack().get_path('limo_description') + '/launch/start_locosim.launch'
+        launch_file = rospkg.RosPack().get_path('limo_description') + '/launch/start_robot.launch'
         super().startSimulator(world_name=world_name, launch_file=launch_file, additional_args=additional_args)
 
     def loadModelAndPublishers(self):
@@ -512,32 +513,6 @@ class GenericSimulator(BaseController):
         omega_vec.append(0.0)
         return v_vec, omega_vec
 
-    def generateSpiralTraj(self, R_initial= 2, R_final=0.05, increment=0.025, dt = 0.005, long_v = 0.1, direction="left"):
-        # only around 0.3
-        change_interval = 2.
-        increment = increment
-        turning_radius_vec = np.arange(R_final, R_initial, -increment)
-        if direction=='left':
-            ang_w = np.round(long_v / turning_radius_vec, 3)  # [rad/s]
-        else:
-            ang_w = -np.round(long_v / turning_radius_vec, 3)  # [rad/s]
-        omega_vec = []
-        v_vec = []
-        time = 0
-        i = 0
-        while True:
-            time = np.round(time + dt, 3)
-            omega_vec.append(ang_w[i])
-            v_vec.append(long_v)
-            # detect_switch = not(round(math.fmod(time,change_interval),3) >0)
-            if time > ((1 + i) * change_interval):
-                i += 1
-            if i == len(turning_radius_vec):
-                break
-        v_vec.append(0.0)
-        omega_vec.append(0.0)
-        return v_vec, omega_vec
-
     def estimateSlippages(self,W_baseTwist, theta, qd):
         wheel_L = qd[0]
         wheel_R = qd[1]
@@ -695,14 +670,11 @@ def main_loop(p):
         counter = 0
         if p.IDENT_TYPE=='NONE':
             # generic open loop test for comparison with matlab
-            #vel_gen = VelocityGenerator(simulation_time=100., DT=conf.robot_params[p.robot_name]['dt'])
-            #v_ol, omega_ol, _,_,_ = vel_gen.velocity_mir_smooth() #velocity_straight
             v_ol = np.linspace(0.5, 0.5, np.int32(10./conf.robot_params[p.robot_name]['dt']))
             omega_ol = np.linspace(0., 0., np.int32(10./conf.robot_params[p.robot_name]['dt']))
             traj_length = len(v_ol)
         if p.IDENT_TYPE == 'V_OMEGA':
             v_ol, omega_ol = p.generateOmegaTraj(omega_initial=0, omega_final=2., increment=0.3, dt=conf.robot_params[p.robot_name]['dt'],  long_v=p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
-            #v_ol, omega_ol = p.generateSpiralTraj(R_initial= 0.51, R_final=0.21, increment=0.05, dt = conf.robot_params[p.robot_name]['dt'], long_v = p.IDENT_LONG_SPEED, direction=p.IDENT_DIRECTION)
             traj_length = len(v_ol)
 
         if p.IDENT_TYPE == 'WHEELS':
@@ -760,7 +732,7 @@ def main_loop(p):
         p.des_x = p.p0[0]
         p.des_y = p.p0[1]
         p.des_theta = p.p0[2]
-        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_mir_smooth(v_max_=0.5, omega_max_=0.7)
+        v_ol, omega_ol, v_dot_ol, omega_dot_ol, _ = vel_gen.velocity_chicane(v_max_=0.5, omega_max_=0.7)
         p.traj = Trajectory(ModelsList.UNICYCLE, start_x=p.des_x, start_y=p.des_y, start_theta=p.des_theta, DT=conf.robot_params[p.robot_name]['dt'],
                             v=v_ol, omega=omega_ol, v_dot=v_dot_ol, omega_dot=omega_dot_ol)
 
@@ -792,8 +764,8 @@ def main_loop(p):
 
             if p.ControlType=='CLOSED_LOOP_UNICYCLE':
                 p.ctrl_v, p.ctrl_omega, p.V, p.V_dot = p.controller.control_unicycle(robot_state, p.time, p.des_x, p.des_y, p.des_theta, p.v_d, p.omega_d, traj_finished)
-                _,_, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, p.qd, robot_constants)
-                p.alpha_control = p.model_alpha.predict(p.qd)
+                #_,_, p.beta_l_control, p.beta_r_control = p.computeLongSlipCompensationMachineLearning(p.qd_des, p.qd, robot_constants)
+                #p.alpha_control = p.model_alpha.predict(p.qd)
 
             #compute qd_des after control computation
             p.qd_des = p.mapToWheels(p.ctrl_v, p.ctrl_omega)

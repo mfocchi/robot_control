@@ -185,6 +185,7 @@ class Ur5Generic(BaseControllerFixed):
         if (self.real_robot):
             self.zero_sensor()
         self.u.putIntoGlobalParamServer("real_robot",  self.real_robot)
+        self.u.putIntoGlobalParamServer("control_type", conf.robot_params[p.robot_name]['control_type'])
         print(colored("finished startup -- starting controller", "red"))
 
     def deregister_node(self):
@@ -244,7 +245,7 @@ def talker(p):
             additional_args.append('soft_gripper:=true')
         elif str(conf.robot_params[p.robot_name]['gripper_type']) == 'robotiq_2':
             additional_args.append('robotiq_gripper:=true')
-        p.startSimulator(world_name=p.world_name, use_torque_control=p.use_torque_control, additional_args =additional_args)
+        p.startSimulator(world_name=p.world_name, additional_args =additional_args)
 
     # specify xacro location
     xacro_path = rospkg.RosPack().get_path('ur_description') + '/urdf/' + p.robot_name + '.urdf.xacro'
@@ -255,6 +256,8 @@ def talker(p):
     # sleep to avoid that the real robot crashes on the table
     if p.real_robot:
         time.sleep(3.)
+    else:
+        p.reset_joints(conf.robot_params[p.robot_name]['q_0'])
 
     # loop frequency
     rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
@@ -319,11 +322,17 @@ if __name__ == '__main__':
 
     try:
         talker(p)
-    except (ros.ROSInterruptException, ros.service.ServiceException):
+
+    except Exception as e:
+        ros.logerr(f"Exception: {e}")
         ros.signal_shutdown("killed")
         p.deregister_node()
         if   conf.plotting:
             p.plotStuff()
+    finally:
+        if   conf.plotting:
+            p.plotStuff()
+
 
     
         

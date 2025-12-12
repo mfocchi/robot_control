@@ -40,7 +40,7 @@ from sensor_msgs.msg import Imu
 from ros_impedance_controller.msg import EffortPid
 
 from base_controllers.components.imu_utils import IMU_utils
-#from base_controllers.components.quadruped_tasks import QuadrupedTasks
+from base_controllers.components.quadruped_tasks import QuadrupedTasks
 from base_controllers.components.state_machine import StateMachine
 
 import datetime
@@ -62,7 +62,7 @@ class QuadrupedController(BaseController):
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
 
-        self.state_estimation = 'imu' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+        self.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
 
     #####################
     # OVERRIDEN METHODS #
@@ -377,7 +377,6 @@ class QuadrupedController(BaseController):
                                 np.array([-half_lenght, -half_width, half_height])]  # rf_top
 
         self.kfe_idx = [self.robot.model.getFrameId(leg + '_kfe_joint') for leg in ['lf', 'lh', 'rf', 'rh']]
-        #self.ref_gen = QuadrupedTasks(task='pushup', robot_conf = conf, gui = True)
 
     def logData(self):
         # full with new values
@@ -496,8 +495,15 @@ class QuadrupedController(BaseController):
         self.rate = ros.Rate(1 / self.dt)
         print(colored("Started QuadrupedController", "blue"))
 
-
-
+    def resetRobot(self, basePoseDes=np.array([0, 0, 0.3, 0., 0., 0.])):
+        # this sets the position of the joints
+        gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
+        self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
+        # this sets the position of the base
+        if self.DEBUG == 'none' or self.DEBUG == 'pushup':
+            self.freezeBase(False, basePoseW=basePoseDes)
+        else:
+            self.freezeBase(True, basePoseW=basePoseDes)
 
     def reset(self, basePoseW=None, baseTwistW=None, resetPid=False):
         self.q_des = conf.robot_params[self.robot_name]['q_0'].copy()
@@ -1621,8 +1627,9 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    rl_control = 'sensor_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
+    rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = False
+    generate_reference = False
 
     if rl_control == 'state_est_based':
         if p.real_robot and p.state_estimation != 'pronto':
@@ -1646,9 +1653,15 @@ if __name__ == '__main__':
 
         p.counter = 0
         p.startTime = p.time
+
+        if generate_reference:
+            p.ref_gen = QuadrupedTasks(task='pushup', robot_conf=conf.robot_params[p.robot_name], gui=True, quadruped=p)
+            p.ref_gen.startUp(p.time)
+
         while not ros.is_shutdown():
             p.updateKinematics()
-            
+
+
             if rl_control != 'none' and (p.time > (p.startTime + 4.)):
                 if use_joy:
                     axes, buttons = joy.get_commands()
@@ -1682,23 +1695,21 @@ if __name__ == '__main__':
                 p.tau_ffwd = np.zeros(12)
                 p.send_command(p.rl_q_des, np.zeros(12), np.zeros(12), log_data_in_send_command=True)
             else:
-                p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
-                                                                            p.wJ,
-                                                                            p.h_joints,
-                                                                            p.comPoseW)
+                if generate_reference:
+                    p.q_des, p.qd_des, p.tau_ffwd, p.basePoseW_des, p.baseTwistW_des = p.ref_gen.generateReference(p.time)
+                else:
+                    p.tau_ffwd, p.grForcesW_des = p.wbc.gravityCompensationBase(p.B_contacts,
+                                                                                p.wJ,
+                                                                                p.h_joints,
+                                                                                p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.tau_ffwd, log_data_in_send_command=True)
 
             p.visualizeContacts()
         
-
-
-
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
         
-
-
     if conf.plotting:
         plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
                   start=0, end=-1)

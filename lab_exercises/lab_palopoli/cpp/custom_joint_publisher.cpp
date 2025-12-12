@@ -4,25 +4,25 @@
 void send_des_jstate(const JointStateVector & joint_pos)
 {
     std::cout << "q_des " << joint_pos.transpose() << std::endl;
-    if (real_robot)
+    if (control_type=="position")
     {
         for (int i = 0; i < joint_pos.size(); i++)
         {
-          jointState_msg_robot.data[i] = joint_pos[i];
+          jointState_msg_position.data[i] = joint_pos[i];
         }
 
-        pub_des_jstate.publish(jointState_msg_robot);
+        pub_des_jstate.publish(jointState_msg_position);
 
 
     } else {
         for (int i = 0; i < joint_pos.size(); i++)
         {
-          jointState_msg_sim.position[i] = joint_pos[i];
-          jointState_msg_sim.velocity[i] = 0.0;
-          jointState_msg_sim.effort[i] = 0.0;
+          jointState_msg_torque.position[i] = joint_pos[i];
+          jointState_msg_torque.velocity[i] = 0.0;
+          jointState_msg_torque.effort[i] = 0.0;
         }
 
-        pub_des_jstate.publish(jointState_msg_sim);
+        pub_des_jstate.publish(jointState_msg_torque);
     }
 
 /*   if (pub_des_jstate_sim_rt->trylock())
@@ -55,10 +55,11 @@ int main(int argc, char **argv)
   ros::NodeHandle node;
 
   //pub_des_jstate_sim_rt.reset(new realtime_tools::RealtimePublisher<sensor_msgs::JointState>(node, "/command", 1));
+  node.getParam("/control_type", control_type);
 
-  node.getParam("/real_robot", real_robot);
 
-  if (real_robot)
+
+  if (control_type=="position")
   {
       pub_des_jstate = node.advertise<std_msgs::Float64MultiArray>("/ur5/joint_group_pos_controller/command", 1);
 
@@ -68,10 +69,10 @@ int main(int argc, char **argv)
 
   ros::Rate loop_rate(loop_frequency);
 
-  jointState_msg_sim.position.resize(6);
-  jointState_msg_sim.velocity.resize(6);
-  jointState_msg_sim.effort.resize(6);
-  jointState_msg_robot.data.resize(6);
+  jointState_msg_torque.position.resize(6);
+  jointState_msg_torque.velocity.resize(6);
+  jointState_msg_torque.effort.resize(6);
+  jointState_msg_position.data.resize(6);
 
   q_des0 << -0.3223527113543909, -0.7805794638446351, -2.5675506591796875, -1.6347843609251917, -1.5715253988849085, -1.0017417112933558;
   initFilter(q_des0);
@@ -84,24 +85,12 @@ int main(int argc, char **argv)
   while (ros::ok())
   {
 
-    //1- step reference
-    if (loop_time < 5.)
-    {
-      q_des = q_des0;
-    } else {
-      JointStateVector delta_q;
-      delta_q << 0., 0.4, 0., 0., 0., 0.;
-      //q_des = q_des0 + delta_q;
-      q_des = secondOrderFilter(q_des0 + delta_q, loop_frequency, 5.);
-    }
-
-    //2- sine reference
-//    q_des = q_des0.array() + amp.array()*(2*M_PI*freq*loop_time).array().sin();
+    //sine reference
+    q_des = q_des0.array() + amp.array()*(2*M_PI*freq*loop_time).array().sin();
 
     loop_time += (double)1/loop_frequency;
     //send_des_jstate_sim(q_des);
     send_des_jstate(q_des);
-    ros::spinOnce();
     loop_rate.sleep();
   }
 

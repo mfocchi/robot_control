@@ -43,9 +43,8 @@ class QuadrupedJumpController(QuadrupedController):
         super(QuadrupedJumpController, self).__init__(robot_name, launch_file)
         self.use_gui = False
         self.STATISTICAL_ANALYSIS = False
-        self.DEBUG = 'none' # 'none', 'pushup','swim','step'
         self.FLIGHT_DETECTION='heuristic'#, 'haptic', 'heuristic'
-        self.debug_gui = True
+
         self.jumpAgent = JumpAgent(self.robot_name, 'omnidirectional') # 'omnidirectional', 'forward'
         self.go0_conf = 'standDown'
         # self.q_0_td = conf.robot_params[self.robot_name]['q_0_td']
@@ -57,8 +56,11 @@ class QuadrupedJumpController(QuadrupedController):
             self.FLIGHT_DETECTION = 'haptic'  #in sim use haptic!
 
         if self.real_robot:
+            self.state_estimation = 'odometry'
             print(colored(
                 "Real robot TRUE: you should launch your lab alias with xhost +; lab -u root"))
+        else:
+            self.state_estimation = 'ground_truth'
 
         user = os.popen('whoami').read()
 
@@ -86,9 +88,6 @@ class QuadrupedJumpController(QuadrupedController):
         self.landing_error = 0.
         self.orient_error = 0.
         self.touchdown_detected = False
-        # for debug
-        self.switch_on = False
-        self.t0 = None
         self.new_mass = 0
         self.new_damping = 0
 
@@ -99,14 +98,6 @@ class QuadrupedJumpController(QuadrupedController):
             self.publish_contact_gt_in_wf = True
             spawnModel('go1_description', 'jump_platform')
 
-        # instance of pid gui for tuning
-        self.pid_tuning_gui = PIDTuningGui(self, mode=self.DEBUG, init_freq=0.5, real_robot_=self.real_robot)
-
-        if self.debug_gui and self.DEBUG != 'none':
-            self.stop_thread = False
-            self.thread_pid = threading.Thread(target=self.pid_tuning_gui.init_pid_tuning_ui)
-            self.thread_pid.daemon = True
-            self.thread_pid.start()
 
     def detectApex(self, threshold=-3):
         # foot tradius is 0.015
@@ -195,11 +186,7 @@ class QuadrupedJumpController(QuadrupedController):
         gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
         self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
         # this sets the position of the base
-        if self.DEBUG == 'none' or self.DEBUG == 'pushup':
-            self.freezeBase(False,  basePoseW=basePoseDes)
-        else:
-            self.freezeBase(True,  basePoseW=basePoseDes)
-
+        self.freezeBase(False,  basePoseW=basePoseDes)
 
     def bernstein_pol(self, k, n, x):
         v = (np.math.factorial(n)/(np.math.factorial(k) *(np.math.factorial(n-k))))*np.power(x, k)*np.power(1-x, n-k)
@@ -309,19 +296,7 @@ class QuadrupedJumpController(QuadrupedController):
         euld = np.array(self.Bezier2(self.bezier_weights_ang, t_, T_th_total))
         euldd = np.array(self.Bezier1(self.bezier_weights_ang, t_, T_th_total))
 
-        if self.DEBUG=='pushup' or self.DEBUG=='swim':
-            # generate a sin trajectory
-            freq = self.pid_tuning_gui.debug_freq
-            amp_lin = np.array([0., 0., 0.05])
-            amp_ang = np.array([0., 0.1, 0])
 
-            com = self.initial_com + np.multiply(amp_lin, np.sin(2*np.pi*freq * t_))
-            comd = np.multiply(2*np.pi*freq*amp_lin,  np.cos(2*np.pi*freq * t_))
-            comdd = np.multiply(np.power(2*np.pi*freq*amp_lin, 2), -np.sin(2*np.pi*freq * t_))
-
-            eul = np.array([0., 0.0, 0]) + np.multiply(amp_ang, np.sin(2 * np.pi * freq * t_))
-            euld = np.multiply(2 * np.pi * freq * amp_ang, np.cos(2 * np.pi * freq * t_))
-            euldd = np.multiply(np.power(2 * np.pi * freq * amp_ang, 2), -np.sin(2 * np.pi * freq * t_))
 
         Jb = p.computeJcb(self.W_contacts_sampled, com, self.stance_legs)
 
@@ -354,70 +329,43 @@ class QuadrupedJumpController(QuadrupedController):
         # integrate relative Velocity
 
         for leg in range(self.robot.nee):
-            if self.DEBUG != 'step':
-                # with this you do not have proper tracking of com and trunk orientation, I think there is a bug in the ik
-                # self.W_feetRelPosDes[leg] += W_feetRelVelDes[3 * leg:3 * (leg+1)]*self.dt
-                # this has better tracking
-                # should use desired values to generate traj otherwise if it is unstable it detroys the ref signal
-                self.W_feetRelPosDes[leg] = self.W_contacts_sampled[leg] - com
 
-                q_des[3 * leg:3 * (leg+1)], isFeasible = self.IK.ik_leg(w_R_b_des.T.dot(self.W_feetRelPosDes[leg]),
-                                                                        self.leg_names[leg],
-                                                                        self.legConfig[self.leg_names[leg]][0],
-                                                                        self.legConfig[self.leg_names[leg]][1])
-                # for joint velocity we need to recompute the Jacobian (in the world frame) for the computed joint position q_des
-                # you need to fill in also the floating base part
-                quat_des = pin.Quaternion(w_R_b_des)
-                fbjoints[:3] = com
-                fbjoints[3:7] = np.array([quat_des.x, quat_des.y, quat_des.z, quat_des.w])
-                fbjoints[7:] = q_des
+            # with this you do not have proper tracking of com and trunk orientation, I think there is a bug in the ik
+            # self.W_feetRelPosDes[leg] += W_feetRelVelDes[3 * leg:3 * (leg+1)]*self.dt
+            # this has better tracking
+            # should use desired values to generate traj otherwise if it is unstable it detroys the ref signal
+            self.W_feetRelPosDes[leg] = self.W_contacts_sampled[leg] - com
 
-                pin.forwardKinematics(self.des_robot.model, self.des_robot.data, fbjoints, np.zeros(
-                    self.des_robot.model.nv),   np.zeros(self.des_robot.model.nv))
-                pin.computeJointJacobians(
-                    self.des_robot.model, self.des_robot.data)
-                pin.computeFrameJacobian(self.des_robot.model, self.des_robot.data,
-                                        fbjoints, p.des_robot.model.getFrameId(self.ee_frames[leg]))
-                w_J[leg] = pin.getFrameJacobian(self.des_robot.model, self.des_robot.data,
-                                                p.des_robot.model.getFrameId(
-                                                    self.ee_frames[leg]),
-                                                pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 6 + leg * 3:6 + leg * 3 + 3]
-                # compute joint variables
-                qd_des[3 * leg:3 * (leg+1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
-                
-            if self.DEBUG!='swim' and self.DEBUG!='step':
-                tau_ffwd, self.grForcesW_des = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
-                                                            W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
-                                                            comControlled=False, type='projection', stance_legs=self.stance_legs)
-            # OLD
-            # tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts, self.wJ, self.h_joints,  self.basePoseW)
-            
-            else:
-                tau_ffwd = np.zeros(12)
-            
-            if self.DEBUG=='step':
-                #p.qj_switch  = p.q_0_lo
-                p.qj_switch  = p.q_retraction
-                switching_signal =  0.5*(1. + np.sin(2*np.pi*self.pid_tuning_gui.debug_freq * t_) )   
-                if (switching_signal  > 0.75) and not p.switch_on:
-                    print(colored("SWITCH ON","red"))
-                    p.q_1 = p.q_des.copy()
-                    p.q_2 = p.qj_switch.copy()            
-                    p.switch_on = True
-                    p.t0 = t_
-                if  (switching_signal < 0.25)  and p.switch_on:
-                    print(colored("SWITCH OFF","red"))
-                    p.q_1 = p.qj_switch.copy()
-                    p.q_2 = p.qj_0.copy()
-                    p.switch_on = False
-                    p.t0 = t_
-                if p.t0 is not None:
-                    elapsed_time = t_-p.t0
-                    elapsed_ratio = np.clip(elapsed_time / p.lerp_time, 0, 1)
-                    q_des = p.cerp(p.q_1, p.q_2,  elapsed_ratio).copy()
-                    qd_des = np.zeros(12) #p.lerp(p.q_t_th, np.zeros_like(p.q_t_th), elapsed_ratio).copy()
-                    #tau_ffwd = p.h_joints #rovina il tracking del KFE
-        
+            q_des[3 * leg:3 * (leg+1)], isFeasible = self.IK.ik_leg(w_R_b_des.T.dot(self.W_feetRelPosDes[leg]),
+                                                                    self.leg_names[leg],
+                                                                    self.legConfig[self.leg_names[leg]][0],
+                                                                    self.legConfig[self.leg_names[leg]][1])
+            # for joint velocity we need to recompute the Jacobian (in the world frame) for the computed joint position q_des
+            # you need to fill in also the floating base part
+            quat_des = pin.Quaternion(w_R_b_des)
+            fbjoints[:3] = com
+            fbjoints[3:7] = np.array([quat_des.x, quat_des.y, quat_des.z, quat_des.w])
+            fbjoints[7:] = q_des
+
+            pin.forwardKinematics(self.des_robot.model, self.des_robot.data, fbjoints, np.zeros(
+                self.des_robot.model.nv),   np.zeros(self.des_robot.model.nv))
+            pin.computeJointJacobians(
+                self.des_robot.model, self.des_robot.data)
+            pin.computeFrameJacobian(self.des_robot.model, self.des_robot.data,
+                                    fbjoints, p.des_robot.model.getFrameId(self.ee_frames[leg]))
+            w_J[leg] = pin.getFrameJacobian(self.des_robot.model, self.des_robot.data,
+                                            p.des_robot.model.getFrameId(
+                                                self.ee_frames[leg]),
+                                            pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[:3, 6 + leg * 3:6 + leg * 3 + 3]
+            # compute joint variables
+            qd_des[3 * leg:3 * (leg+1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 * (leg+1)])
+
+
+            tau_ffwd, self.grForcesW_des = self.wbc.computeWBC(self.W_contacts, self.wJ, self.h_joints,  self.basePoseW, self.comPoseW, self.baseTwistW, self.comTwistW,
+                                                        W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.centroidalInertiaB,
+                                                        comControlled=False, type='projection', stance_legs=self.stance_legs)
+
+
         return q_des, qd_des, tau_ffwd, W_des_basePose, W_des_baseTwist
 
     def computeIdealLanding(self, com_lo, comd_lo, target_position):
@@ -473,9 +421,7 @@ class QuadrupedJumpController(QuadrupedController):
         p.resetRobot(basePoseDes=np.array([0, 0, conf.robot_params[self.robot_name]['spawn_z'],  0., 0., 0.]))
         while self.time <= self.startTrust:
             self.updateKinematics()
-            if p.DEBUG!='swim' and p.DEBUG!='step' :
-                self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,
-                                                                        self.basePoseW, self.comPoseW)
+            self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,   self.basePoseW, self.comPoseW)
             self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
     def lerp(self, start, end, weight):
@@ -544,30 +490,12 @@ class QuadrupedJumpController(QuadrupedController):
 
         p.lerp_time = p.jumpAgent.lerp_time
 
-        if p.DEBUG != 'none':
-            p.initial_com = np.copy(com_0)
-            print(f"Initial Com Position is {p.initial_com}")
-            print(f"Initial Joint Position is {p.q}")
-            print(f"Initial Joint torques {p.tau_ffwd}")
-            print(colored(f"IMPORTANT: you cannot control both pitch and Z and expect 0 error on comX, only on base, because it is an impossible task!", "red"))
-            p.T_th = np.inf
-            p.T_th_total = np.inf
-
-        if p.DEBUG=='step' or p.DEBUG=='swim':
-            print(colored('!!!!!!!!!!!!!! PULL UP THE ROBOT !!!!!!!!!!!!!!','red'))
-            ros.sleep(5.) #wait for user tu pull up the robot
-            print(colored(f'STARTING {p.DEBUG} MODE','red'))
-            p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_real_swing'],
-                                          conf.robot_params[p.robot_name]['kd_real_swing'], 
-                                          conf.robot_params[p.robot_name]['ki_real_swing'] )
-        
         p.computeHeuristicSolutionBezierLinear(com_0, p.com_lo_b, p.comd_lo_b, p.T_th_b)
         # we have the explosive part only for the lineat part
         p.computeHeuristicSolutionBezierAngular(eul_0, p.eul_lo, p.euld_lo, p.T_th_total)
 
         # this is for visualization
-        if not p.DEBUG:
-            p.computeTrajectoryBezier(p.T_th_b, p.com_lo_e)
+        p.computeTrajectoryBezier(p.T_th_b, p.com_lo_e)
         p.stance_legs = [True, True, True, True]
 
         # reset integration of feet
@@ -622,11 +550,6 @@ class QuadrupedJumpController(QuadrupedController):
                                         conf.robot_params[p.robot_name][f'kd{real_str}_swing'],
                                         conf.robot_params[p.robot_name][f'ki{real_str}_swing'])
                     print(colored(f"pdi: {p.pid.joint_pid}"))
-
-                    if p.DEBUG != 'none':
-                        print('time is over: ', p.time, 'tot_time:',
-                              p.startTrust + p.T_th_total)
-                        break
             else:
                 p.detectApex()
                 if (p.detectedApexFlag):
@@ -712,9 +635,8 @@ class QuadrupedJumpController(QuadrupedController):
                     #                     elapsed_ratio).copy()
 
             if not p.real_robot:
-                if p.DEBUG == 'none':
-                    p.plotTrajectoryBezier()
-                    p.plotTrajectoryFlight()
+                p.plotTrajectoryBezier()
+                p.plotTrajectoryFlight()
                 # plot target
                 p.ros_pub.add_marker(
                     p.target_position, color="blue", radius=0.1)
@@ -746,7 +668,6 @@ if __name__ == '__main__':
     try:
         # p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
-                          use_ground_truth_pose=True,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(p.use_gui),
                                            'go0_conf:='+p.go0_conf,

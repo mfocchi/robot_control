@@ -50,7 +50,7 @@ robotName = "ur5"
 from base_controllers.components.inverse_kinematics.inv_kinematics_pinocchio import robotKinematics
 from base_controllers.utils.math_tools import Math
 from gazebo_msgs.srv import ApplyBodyWrench
-from base_controllers.utils.common_functions import plotJoint
+from base_controllers.utils.common_functions import plotJoint, checkRosControllerRunning
 
 class BaseControllerFixed(threading.Thread):
     """
@@ -113,15 +113,11 @@ class BaseControllerFixed(threading.Thread):
 
         print("Initialized fixed basecontroller---------------------------------------------------------------")
 
-    def startSimulator(self, world_name = None, use_torque_control = True,  additional_args = None, launch_file = None):
-        # needed to be able to load a custom world file
-        print(colored('Adding gazebo model path!', 'blue'))
-        custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
-        if os.getenv("GAZEBO_MODEL_PATH") is not None:
-            os.environ["GAZEBO_MODEL_PATH"] +=":"+custom_models_path
-        else:
-            os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
-
+    def startSimulator(self, world_name = None,  additional_args = None, launch_file = None):
+        os.system("pkill rosmaster")
+        os.system("pkill gzserver")
+        os.system("pkill gzclient")
+        os.system("pkill rviz")
         if launch_file=='standard':
             launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/start_framework.launch'
 
@@ -140,7 +136,7 @@ class BaseControllerFixed(threading.Thread):
                     'spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x']),
                     'spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y']),
                     'spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])]
-        cli_args.append('use_torque_control:=' + str(use_torque_control))
+        cli_args.append('use_torque_control:=' + str(self.use_torque_control).lower())
         if additional_args is not None:
             cli_args.extend(additional_args)
         if world_name is not None:
@@ -211,7 +207,7 @@ class BaseControllerFixed(threading.Thread):
 
     def startupProcedure(self):
         if (self.use_torque_control):
-            if  ("/" + self.robot_name + "/ros_impedance_controller" not in rosnode.get_node_names()):
+            if not checkRosControllerRunning("ros_impedance_controller", self.robot_name):
                 print(colored('Error: you need to launch the ros impedance controller in torque mode!', 'red'))
                 sys.exit()
             self.pid.setPDjoints( conf.robot_params[self.robot_name]['kp'], conf.robot_params[self.robot_name]['kd'], np.zeros(self.robot.na))

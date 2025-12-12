@@ -252,7 +252,7 @@ class TrackedVehicleSimulator3D:
             else:
                 self.w_Fg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
                 self.w_Mg_patch_l[patch_counter, :] = np.array([0.0, 0.0, 0.0])
-            if self.DEBUG:
+            if self.enable_visuals:
                 self.ros_pub.add_arrow(patch_pos, self.w_Fg_patch_l[patch_counter, :] / 50.,
                                        color=np.array([1.-self.patch_stiffness_l[patch_counter]/self.max_patch_stiffness_l, 0., self.patch_stiffness_l[patch_counter]/self.max_patch_stiffness_l])) #low stiffness is red
             patch_counter += 1
@@ -285,7 +285,7 @@ class TrackedVehicleSimulator3D:
 
 
 
-            if self.DEBUG:
+            if self.enable_visuals:
                 self.ros_pub.add_arrow(patch_pos, self.w_Fg_patch_r[patch_counter, :] / 50.,
                                        color=np.array([1.-self.patch_stiffness_r[patch_counter]/self.max_patch_stiffness_r, 0., self.patch_stiffness_r[patch_counter]/self.max_patch_stiffness_r])) #low stiffness is red
             patch_counter += 1

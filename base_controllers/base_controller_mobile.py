@@ -307,7 +307,7 @@ def talker(p):
     initial_des_y = 0.1
     initial_des_theta = 0.3
     p.traj = Trajectory(ModelsList.UNICYCLE, initial_des_x, initial_des_y, initial_des_theta,
-                        vel_gen.velocity_mir_smooth, conf.robot_params[p.robot_name]['dt'])
+                        vel_gen.velocity_chicane, conf.robot_params[p.robot_name]['dt'])
 
     # Lyapunov controller parameters
     K_P = 5.0

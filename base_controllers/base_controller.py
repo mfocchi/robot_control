@@ -126,14 +126,6 @@ class BaseController(threading.Thread):
         print("Initialized basecontroller---------------------------------------------------------------")
 
     def startSimulator(self, world_name = None, launch_file = None, additional_args = None):
-        # needed to be able to load a custom world file
-        print(colored('Adding gazebo model path!', 'blue'))
-        custom_models_path = rospkg.RosPack().get_path('ros_impedance_controller')+"/worlds/models/"
-        if os.getenv("GAZEBO_MODEL_PATH") is not None:
-            os.environ["GAZEBO_MODEL_PATH"] +=":"+custom_models_path
-        else:
-            os.environ["GAZEBO_MODEL_PATH"] = custom_models_path
-
         # clean up previous process
         os.system("killall rosmaster rviz gzserver gzclient")
 
