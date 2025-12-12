@@ -13,7 +13,7 @@ from gazebo_ros import gazebo_interface
 class QuadrupedTasks:
     def __init__(self, task='pushup', robot_conf = None, gui = True, quadruped = None):
         """Simple timer utility similar to force_timer_ in your C++ code."""
-        self.DEBUG = task  # 'none', 'pushup','swim','step'
+        self.task = task  # 'none', 'pushup','swim','step'
         self.debug_gui = gui
         self.quadruped = quadruped
         self.robot_conf = robot_conf
@@ -24,11 +24,11 @@ class QuadrupedTasks:
         self.q_final = robot_conf['q_final']
         self.transition_time = 0.1
 
-        self.pid_tuning_gui = PIDTuningGui(self.quadruped, mode=self.DEBUG, tuning_type='PID', init_freq=0.5)
+        self.pid_tuning_gui = PIDTuningGui(self.quadruped, mode=self.task, tuning_type='PID', init_freq=0.5)
 
 
 
-        if self.debug_gui and self.DEBUG != 'none':
+        if self.debug_gui and self.task != 'none':
             self.quadruped.stop_thread = False
             self.thread_pid = threading.Thread(target=self.pid_tuning_gui.init_pid_tuning_ui)
             self.thread_pid.daemon = True
@@ -97,17 +97,15 @@ class QuadrupedTasks:
         self.W_contacts_sampled = np.copy(self.quadruped.W_contacts)
         self.des_robot = RobotWrapper.BuildFromURDF(os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + self.quadruped.robot_name + ".urdf",
                                                     root_joint=pin.JointModelFreeFlyer())
-
-
-        if self.DEBUG == 'step' or self.DEBUG == 'swim':
+        if self.task == 'step' or self.task == 'swim':
             if self.quadruped.real_robot:
                 print(colored('!!!!!!!!!!!!!! PULL UP THE ROBOT !!!!!!!!!!!!!!', 'red'))
                 ros.sleep(1.)  # wait for user tu pull up the robot
-            print(colored(f'STARTING {self.DEBUG} MODE', 'red'))
+            print(colored(f'STARTING {self.task} MODE', 'red'))
             self.quadruped.pid.setPDjoints(self.robot_conf['kp_real_swing'],
                                  self.robot_conf['kd_real_swing'],
                                  self.robot_conf['ki_real_swing'])
-        if self.DEBUG == 'step' or self.DEBUG == 'swim':
+        if self.task == 'step' or self.task == 'swim':
             self.resetRobot(basePoseDes=np.array([0, 0, self.robot_conf['spawn_z'], 0., 0., 0.]))
 
         # DEFINE A ros SHUTDOWN HOOK
@@ -165,7 +163,7 @@ class QuadrupedTasks:
 
         # integrate relative Velocity
         for leg in range(self.quadruped.robot.nee):
-            if self.DEBUG != 'step':
+            if self.task != 'step':
                 # with this you do not have proper tracking of com and trunk orientation, I think there is a bug in the ik
                 # self.W_feetRelPosDes[leg] += W_feetRelVelDes[3 * leg:3 * (leg+1)]*self.dt
                 # this has better tracking
@@ -196,14 +194,14 @@ class QuadrupedTasks:
                 # compute joint variables
                 qd_des[3 * leg:3 * (leg + 1)] = np.linalg.pinv(w_J[leg]).dot(W_feetRelVelDes[3 * leg:3 * (leg + 1)])
 
-            if self.DEBUG != 'swim' and self.DEBUG != 'step':
+            if self.task != 'swim' and self.task != 'step':
                 tau_ffwd, self.grForcesW_des = self.quadruped.wbc.computeWBC(self.quadruped.W_contacts, self.quadruped.wJ, self.quadruped.h_joints, self.quadruped.basePoseW, self.quadruped.comPoseW, self.quadruped.baseTwistW, self.quadruped.comTwistW,
                                                                    W_des_basePose, W_des_baseTwist, W_des_baseAcc, self.quadruped.centroidalInertiaB,
                                                                    comControlled=False, type='projection', stance_legs=self.quadruped.stance_legs)
             else:
                 tau_ffwd = np.zeros(12)
 
-            if self.DEBUG == 'step':
+            if self.task == 'step':
                 # self.qj_switch  = self.q_0_lo
                 self.qj_switch = self.q_retraction
                 switching_signal = 0.5 * (1. + np.sin(2*np.pi*self.pid_tuning_gui.debug_freq * t_))
