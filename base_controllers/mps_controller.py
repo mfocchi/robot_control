@@ -85,7 +85,7 @@ class MpsSimulator(QuadrupedController):
         self.device = config['networks']['device']
 
         backup_trot_policy = config['settings']['tests']['backup_policy']
-        self.backup_trot = TrotPolicy(config, backup_trot_policy)
+        self.backup_trot = TrotPolicy(config, backup_trot_policy,100)
         self.running_mean = copy.copy(self.backup_trot.actor_network.running_mean_std.running_mean)
         self.running_var = copy.copy(self.backup_trot.actor_network.running_mean_std.running_var)
         self.count = copy.copy(self.backup_trot.actor_network.running_mean_std.count)
