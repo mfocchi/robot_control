@@ -57,8 +57,11 @@ class QuadrupedJumpController(QuadrupedController):
             self.FLIGHT_DETECTION = 'haptic'  #in sim use haptic!
 
         if self.real_robot:
+            self.state_estimation = 'odometry'
             print(colored(
                 "Real robot TRUE: you should launch your lab alias with xhost +; lab -u root"))
+        else:
+            self.state_estimation = 'ground_truth'
 
         user = os.popen('whoami').read()
 
@@ -746,7 +749,6 @@ if __name__ == '__main__':
     try:
         # p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
-                          use_ground_truth_pose=True,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(p.use_gui),
                                            'go0_conf:='+p.go0_conf,
