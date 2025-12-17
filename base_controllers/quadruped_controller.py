@@ -947,7 +947,7 @@ class QuadrupedController(BaseController):
                                                                              self.wJ,
                                                                              self.h_joints,
                                                                              self.basePoseW)
-        self.visualizeContacts()
+        #self.visualizeContacts()
         self.tau_ffwd *= alpha
         self.qd_des[:] = 0
         self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
@@ -983,7 +983,7 @@ class QuadrupedController(BaseController):
             if isFeasible:
                 self.u.setLegJointState(leg, q_des_leg, self.q_des)
         self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensationBase(self.B_contacts,  self.wJ, self.h_joints,  self.basePoseW)
-        self.visualizeContacts()
+        #self.visualizeContacts()
         self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd)
         #termination
         if sm.timer.is_elapsed(time):
@@ -1410,7 +1410,7 @@ class QuadrupedController(BaseController):
                                                                                              self.h_joints,
                                                                                              self.basePoseW)
 
-                        self.visualizeContacts()
+                        #self.visualizeContacts()
 
                         self.tau_ffwd *= alpha
                     else:
@@ -1440,7 +1440,7 @@ class QuadrupedController(BaseController):
                                                                                              self.h_joints,
                                                                                              self.basePoseW)
 
-                        self.visualizeContacts()
+                        #self.visualizeContacts()
 
                     else:
                         print(
@@ -1465,7 +1465,7 @@ class QuadrupedController(BaseController):
                                                                                              self.h_joints,
                                                                                              self.basePoseW)
 
-                        self.visualizeContacts()
+                        #self.visualizeContacts()
 
                 self.send_command(self.q_des, self.qd_des, self.tau_ffwd)
 
@@ -1627,7 +1627,7 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
+    rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = False
     generate_reference = False
 
@@ -1657,12 +1657,12 @@ if __name__ == '__main__':
         if generate_reference:
             p.ref_gen = QuadrupedTasks(task='pushup', robot_conf=conf.robot_params[p.robot_name], gui=True, quadruped=p)
             p.ref_gen.startUp(p.time)
-
+        counter = 0
         while not ros.is_shutdown():
             p.updateKinematics()
 
 
-            if rl_control != 'none' and (p.time > (p.startTime + 4.)):
+            if rl_control != 'none' and (p.time > (p.startTime + 1.)):
                 if use_joy:
                     axes, buttons = joy.get_commands()
                     #use a scaling to make the joy input less reactive
@@ -1671,7 +1671,7 @@ if __name__ == '__main__':
                     ry = 0.2*axes[3]
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.1, 0.0, 0.0])
+                    rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
@@ -1679,7 +1679,20 @@ if __name__ == '__main__':
                     lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                     ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
                     proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
-                    p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
+                    # if p.time % 2. == 0:
+                    #     p.applyForce(0, 50*counter, 0, 0, 0, 0, 0.25)
+                    #     print(50*counter)
+                    #     counter+=1
+                    # rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
+                    # p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+
+                    if  p.time > (p.startTime + 3.):
+                        rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
+                        p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="safe")
+                    else:
+                        p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+
+
                 if rl_control == 'sensor_based':
                     h_R_b = p.math_utils.eul2Rot(np.array([p.euler[0],p.euler[1],0.]))
                     p.rl_q_des =  rl_controller.compute_control(h_R_b=h_R_b,
@@ -1704,7 +1717,7 @@ if __name__ == '__main__':
                                                                                 p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.tau_ffwd, log_data_in_send_command=True)
 
-            p.visualizeContacts()
+            #p.visualizeContacts()
         
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
