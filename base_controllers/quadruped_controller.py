@@ -1,17 +1,4 @@
-from __future__ import print_function
-
-import copy
-import os
-
-import rospy as ros
-import sys
-import threading
-
-import numpy as np
 import pinocchio as pin
-# utility functions
-###W
-from  scipy.linalg import block_diag
 from base_controllers.utils.pidManager import PidManager
 from base_controllers.base_controller import BaseController
 from base_controllers.utils.math_tools import *
@@ -24,26 +11,20 @@ from base_controllers.components.leg_odometry.leg_odometry import LegOdometry
 from base_controllers.components.rl_velocity_controller.rl_controller import RlVelocityController
 from base_controllers.components.rl_velocity_controller.LocomotionPolicyWrapper import LocomotionPolicyWrapper
 from termcolor import colored
-from std_msgs.msg import Float64MultiArray
 import base_controllers.params as conf
-
 from scipy.io import savemat
-
 #gazebo messages
 from gazebo_ros import gazebo_interface
-
 from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Vector3
 from sensor_msgs.msg import Imu
 from ros_impedance_controller.msg import EffortPid
-
 from base_controllers.components.imu_utils import IMU_utils
 from base_controllers.components.quadruped_tasks import QuadrupedTasks
 from base_controllers.components.state_machine import StateMachine
 
-import datetime
 
 class QuadrupedController(BaseController):
     def __init__(self, robot_name="hyq", launch_file=None):
