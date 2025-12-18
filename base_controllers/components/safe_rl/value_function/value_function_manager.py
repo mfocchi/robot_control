@@ -50,8 +50,8 @@ def critic_inference(critic_model, params, obs):
 class ValueFunctionManager:
     def __init__(self):
         model_path = "components/safe_rl/value_function/models/VF_backup_policy.pkl"
-        self.load_value(model_path)
-        self.setup_value_function()
+        self.model = self.load_value(model_path)
+        self.setup_value_function(self.model)
         print("Loaded model parameters.")
 
     # Function to load value function
@@ -59,11 +59,10 @@ class ValueFunctionManager:
         with open(file_path, 'rb') as f:
             return pickle.load(f)
 
-    def setup_value_function(self):
+    def setup_value_function(self, model):
         # Setup value function network
         self.critic_model = CriticNetwork()
-        self.params, self.mean, self.std = self.data_value['model_params'], self.data_value['mean'], self.data_value['std']
-
+        self.params, self.mean, self.std = model['model_params'], model['mean'], model['std']
         # Create object to evaluate the value function
         self.critic_network = CriticEvaluator(self.critic_model, self.params)
 
@@ -86,7 +85,7 @@ class ValueFunctionManager:
 
         if V_safe > threshold:
             #  print(f"\033[92mV_safe: {V_safe:.4f}\033[0m")
-            return True
+            return True, V_safe
         else:
             #  print(f"\033[91mV_safe: {V_safe:.4f}\033[0m")
-            return False
+            return False, V_safe

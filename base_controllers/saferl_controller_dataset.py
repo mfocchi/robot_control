@@ -10,15 +10,13 @@ import rospy as ros
 from base_controllers.utils.math_tools import *
 np.set_printoptions(threshold=np.inf, precision=5, linewidth=1000, suppress=True)
 from base_controllers.quadruped_controller import QuadrupedController
-from base_controllers.utils.common_functions import plotFrame, plotJoint
 from base_controllers.components.rl_velocity_controller.rl_controller import RlVelocityController
-from base_controllers.components.rl_velocity_controller.dataset_manager import DatasetManager
+from base_controllers.components.safe_rl.dataset_manager import DatasetManager
 from gazebo_ros import gazebo_interface
 from base_controllers.utils.pidManager import PidManager
 from gazebo_msgs.srv import GetModelState
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.msg import ModelState
-import params as conf
 import numpy as np
 robotName = "aliengo"  # needs to inherit BaseController
 
@@ -67,7 +65,7 @@ if __name__ == '__main__':
 
         p.pid = PidManager(p.joint_names)
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
-        p.dm.run_batch_simulations(rl_controller, n_episodes=100, save_path="components/rl_velocity_controller/value_function/observation_datasets", noise_std=10.0, seed = 0)
+        p.dm.run_batch_simulations(rl_controller, n_episodes=100, save_path="components/safe_rl/value_function/observation_datasets", noise_std=10.0, seed = 0)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
