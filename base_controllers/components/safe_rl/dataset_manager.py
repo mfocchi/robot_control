@@ -53,13 +53,15 @@ class DatasetManager():
 
         self.quadruped.ros_pub.add_marker(np.append(base_pos_xy, 0.), radius=0.1, color="blue")
         self.quadruped.ros_pub.add_marker(np.append(cp, 0.), radius=0.1, color="red")
+        return self.capture_flag or self.fallen_flag
 
+    def store_observations(self):
         # -------------------------------
         # Save Observation Transition for VF Learning
         # -------------------------------
         body_ang_vel = self.quadruped.b_R_w @ self.quadruped.baseTwistW[3:]
         proj_gravity = self.quadruped.b_R_w.dot(np.array([0, 0, -1]))
-        #dimension of observation vector = 3+3+12+12=30
+        # dimension of observation vector = 3+3+12+12=30
         self.obs_tp1_ = np.concatenate((
             proj_gravity.astype(np.float32),
             body_ang_vel.astype(np.float32),
@@ -68,14 +70,13 @@ class DatasetManager():
         ))
         # dimension of full_obs vector = 30+30+1+1=62
         full_obs = np.concatenate([self.obs_t_, self.obs_tp1_, [float(self.fallen_flag), float(self.capture_flag)]])
-        #collect data only for backup policy which is active after warmup
-        if self.step % self.decimation == 0:
+        # collect data only for backup policy which is active after warmup (the = ensures at least one sample is collected before break)
+        if self.step % self.decimation == 0 and self.quadruped.time>=self.warmup_time:
             self.observations.append(full_obs)
 
-        #store last observation
+        # store last observation
         self.obs_t_ = self.obs_tp1_
 
-        return self.capture_flag or self.fallen_flag
 
     # -------------------------------
     # Main Function: Single Simulation Episode
@@ -106,14 +107,12 @@ class DatasetManager():
         push_instant = round(low + np.random.randint(0, n_steps + 1) * self.quadruped.dt,3)
         for self.step in range(max_steps):
             self.quadruped.updateKinematics()
-            if not self.first_time and self.quadruped.time > warmup_time:
+            self.store_observations()
+            if self.quadruped.time > warmup_time:
                 # Stop if CP was reached successfully
                 if self.check_termination():
                     print(f"Termination at {self.quadruped.time}")
                     break
-            else:
-                self.first_time = False
-
             # -------------------------------
             # Observation and Action Computation
             # -------------------------------
@@ -156,7 +155,7 @@ class DatasetManager():
 
             # Add noise to simulate real-world actuation
             self.quadruped.tau_ffwd = np.zeros(12)
-            #TODO
+
             if self.quadruped.time >= self.warmup_time:
                 noise = np.random.normal(0, noise_std, size=self.quadruped.tau_ffwd.shape)
                 self.quadruped.tau_ffwd += noise
@@ -198,7 +197,9 @@ class DatasetManager():
             obs, fallen, captured = self.run_single_simulation(actor_network=actor_network, noise_std=noise_std)
             print(colored(f"Fallen {fallen}, Captured {captured}", "green"))
             all_obs.append(obs)
-            
+
+            #debug
+            #print(obs.shape)
             stats.append((fallen, captured, len(obs)))
             max_len = max(max_len, len(obs))
 
