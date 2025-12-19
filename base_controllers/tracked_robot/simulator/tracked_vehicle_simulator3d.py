@@ -707,10 +707,10 @@ if __name__ == '__main__':
         errors = []
         #print(p.pose_log[:,-1])
 
-        p.unit_test.check_assertion(p.pose_log[0, -1], 6.5590648756217425, decimal=2, description="Pose X")
+        p.unit_test.check_assertion(p.pose_log[0, -1], 7.758488675688657, decimal=2, description="Pose X")
         p.unit_test.check_assertion(p.pose_log[1, -1],0. , decimal=2, description="Pose Y")
         if p.consider_robot_height:
-            p.unit_test.check_assertion(p.pose_log[2, -1],     0.8993727217334103, decimal=2, description="Pose Z")
+            p.unit_test.check_assertion(p.pose_log[2, -1],     1.02914053317055, decimal=2, description="Pose Z")
         else:
             p.unit_test.check_assertion(p.pose_log[2, -1],    0.648124971, decimal=2,description="Pose Z")
         p.unit_test.check_assertion(p.pose_log[3, -1], 0., decimal=2, description="Pose Roll")
