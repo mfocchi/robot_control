@@ -49,6 +49,9 @@ def talker(p):
     p.q_des = np.copy(p.q_des_q0)
 
     while not ros.is_shutdown():
+        p.broadcaster.sendTransform(p.u.linPart(p.basePoseW),
+                                       p.quaternion,
+                                       ros.Time.now(), '/base_link', '/world')
         p.tau_ffwd = np.zeros(p.robot.na)
         #p.q_des = p.q_des_q0  + 0.3 * np.sin(2*np.pi*0.5*p.time)
         p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
