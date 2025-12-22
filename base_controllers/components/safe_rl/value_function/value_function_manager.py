@@ -49,10 +49,13 @@ def critic_inference(critic_model, params, obs):
 
 class ValueFunctionManager:
     def __init__(self):
-        model_path = "components/safe_rl/value_function/models/VF_backup_policy.pkl"
+        model_path = "components/safe_rl/value_function/models/VF_backup_policy12.pkl"
         self.model = self.load_value(model_path)
         self.setup_value_function(self.model)
         print("Loaded model parameters.")
+        self.count = 0
+        self.min_switch = 1
+        self.VF = True
 
     # Function to load value function
     def load_value(self, file_path):
@@ -83,9 +86,15 @@ class ValueFunctionManager:
 
         V_safe = critic_inference(self.critic_model, self.critic_network.params, obs_flax)
 
-        if V_safe > threshold:
+        if V_safe > threshold and self.VF:
             #  print(f"\033[92mV_safe: {V_safe:.4f}\033[0m")
-            return True, V_safe
+            self.count = 0
+            self.VF = True
         else:
-            #  print(f"\033[91mV_safe: {V_safe:.4f}\033[0m")
-            return False, V_safe
+            self.count += 1
+            print(f"\033[91mV_safe: {V_safe:.4f}\033[0m", self.count)
+            if self.count >= self.min_switch:
+                self.VF = False
+            else:
+                self.VF = True
+        return self.VF, V_safe

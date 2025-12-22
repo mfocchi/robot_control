@@ -14,6 +14,8 @@ from base_controllers.base_controller import BaseController
 from base_controllers.quadruped_controller import QuadrupedController
 from base_controllers.utils.common_functions import plotFrame, plotJoint
 from base_controllers.components.rl_velocity_controller.rl_controller import RlVelocityController
+from base_controllers.components.rl_velocity_controller.LocomotionPolicyWrapper import LocomotionPolicyWrapper
+
 import params as conf
 
 robotName = "aliengo"  # needs to inherit BaseController
@@ -75,11 +77,16 @@ class MpsSimulator(QuadrupedController):
         # Nominal policy
         config_path = os.environ["LOCOSIM_DIR"] + '/robot_control/AlienGo_SDK/example_py/MPS_robot_sensors/config.yaml'
         config = load_config(config_path)
-        self.dt_mps = 0.01
-        self.nominal_policy = RlVelocityController(self.robot_name, self.dt_mps)#, 100)#NominalPolicy(config)
+        self.dt_mps = config['simulation']['timestep_mps']
+        self.rl_control = 'state_est_based'#'sensor_based' (Giulio), 'state_est_based' (Riccardo)
+        if self.rl_control == 'state_est_based':
+            self.nominal_policy = RlVelocityController(self.robot_name, self.dt_mps)#, 100)#NominalPolicy(config)
+        elif self.rl_control == 'sensor_based':
+            self.nominal_policy = LocomotionPolicyWrapper(use_state_est=True, dt=self.dt_mps)
         self.nominal_policy.velocity_cmd = np.array([0.1, 0.0, 0.0])
         self.state_estimation = 'ground_truth'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
         self.prev_actions = np.zeros(12)  # Store the previous actions
+
 
         # Backup policy
         self.device = config['networks']['device']
@@ -144,12 +151,11 @@ def talker(p):
     p.dt = p.dt_mps
     p.rate = ros.Rate(1 / p.dt)
     is_rec = True
-    p.pid.setPDjoints(conf.robot_params[p.robot_name]['kp_nominal'], conf.robot_params[p.robot_name]['kd_nominal'],
-                      np.zeros(p.robot.na))
-
+    p.pid.setPDjoints(p.nominal_policy.kp, p.nominal_policy.kd, np.full(12, 0))
     '''p.pid.setPDjoints(p.kp_backup,
                       p.kd_backup,
                       np.zeros(p.robot.na))'''
+
     start_time = p.time
     first_switch = True
     while not ros.is_shutdown():
@@ -163,12 +169,12 @@ def talker(p):
         p.updateKinematics()
 
         #fill in data struct
-        p.data.imu_acc = p.baseLinAccB
+        '''p.data.imu_acc = p.baseLinAccB
         p.data.imu_quat = p.quaternion
         p.data.imu_gyro = p.b_R_w @ p.baseTwistW[3:]
         p.data.joint_pos = p.q
         p.data.joint_vel = p.qd
-        p.data.euler = p.euler
+        p.data.euler = p.euler'''
 
         lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
         ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
@@ -206,18 +212,37 @@ def talker(p):
             #lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
             #ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
             #proj_gravity = p.b_R_w.dot(np.array([0, 0, -1]))
-            p.q_des = p.nominal_policy.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
+            if p.rl_control == 'state_est_based':
+                p.q_des = p.nominal_policy.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd)
+            elif p.rl_control == 'sensor_based':
+                p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(p.nominal_policy.velocity_cmd[:2], 0.0)
+                p.baseTwistW_des[5] = p.nominal_policy.velocity_cmd[2]
+                h_R_b = p.math_utils.eul2Rot(np.array([p.euler[0], p.euler[1], 0.]))
+                p.q_des = p.nominal_policy.compute_control(h_R_b=h_R_b,
+                                                           joints_pos=p.q,
+                                                           joints_vel=p.qd,
+                                                           ref_base_lin_vel=np.array([p.nominal_policy.velocity_cmd[0],
+                                                                                      p.nominal_policy.velocity_cmd[1], 0.]),
+                                                           ref_base_ang_vel=np.array(
+                                                               [0., 0., p.nominal_policy.velocity_cmd[2]]),
+                                                           imu_linear_acceleration=p.baseLinAccB,
+                                                           imu_angular_velocity=p.b_R_w @ p.baseTwistW[3:],
+                                                           imu_orientation=np.array(
+                                                               [p.quaternion[3], p.quaternion[0], p.quaternion[1],
+                                                                p.quaternion[2]]))
         else:
             p.q_des = p.backup_trot.compute_actions(p.quaternion, ang_vel_b, p.q, p.qd)
-            p.pid.setPDjoints(p.kp_backup,
-                              p.kd_backup,
-                              np.zeros(p.robot.na))
+            if first_switch:
+                first_switch = False
+                p.pid.setPDjoints(p.kp_backup,
+                                  p.kd_backup,
+                                  np.zeros(p.robot.na))
             for i in range(4):
                 p.q_des[i * 3] = np.clip(p.q_des[i * 3], -1.22, 1.22)  # Hip joint
                 p.q_des[i * 3 + 1] = np.clip(p.q_des[i * 3 + 1], 0.0, 1.8)  # Thigh joint
                 p.q_des[i * 3 + 2] = np.clip(p.q_des[i * 3 + 2], -2.78, -0.65)  # Calf joint
         # publishes /command
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd, clip_commands=True)
         # log variables
         p.logData()
         # wait for synchronization of the control loop
@@ -232,7 +257,7 @@ if __name__ == '__main__':
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
         p.deregister_node()
-        #plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
+        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, joint_names=p.joint_names)
         plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
         plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,

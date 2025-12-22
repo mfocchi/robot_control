@@ -39,9 +39,14 @@ class SafeRLController(QuadrupedController):
 if __name__ == '__main__':
     p = SafeRLController('aliengo')
     world_name = 'fast.world'
-    use_gui=True
+    use_gui=False#True
     p.state_estimation = 'ground_truth'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
     rl_controller = RlVelocityController(p.robot_name, p.dt)
+
+    vf_frequency = 100  # Hz
+    decimation = (1 / p.dt) * (1 / vf_frequency)
+    step = 0
+    isrec = True
 
     #load value function NN
     vf = ValueFunctionManager()
@@ -69,11 +74,21 @@ if __name__ == '__main__':
                 p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
                 print(50*p.counter)
                 p.counter+=1
-            #nominal policy
-            p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+
+            if isrec:
+                # nominal policy
+                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+            else:
+                # backup policy
+                rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
+                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="safe")
             #check this
-            isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity, joint_pos=p.q, joint_vel=p.qd, threshold=0.3)
-            print(V_safe)
+            #print('ang_vel_b A',ang_vel_b)
+            #print('proj_gravity A',proj_gravity)
+            if step % decimation == 0:
+                isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity, joint_pos=p.q, joint_vel=p.qd, threshold=0.8)
+                #print(V_safe)
+            step += 1
 
             # time based switch
             # if p.time > (p.startTime + 3.): #backup policy

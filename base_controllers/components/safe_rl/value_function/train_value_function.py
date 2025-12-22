@@ -27,7 +27,7 @@ os.environ["XLA_FLAGS"] = os.environ.get("XLA_FLAGS", "") + " --xla_gpu_triton_g
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "True"
 
-model_path = 'models/VF_backup_policy.pkl'
+model_path = 'models/VF_backup_policy12.pkl'
 load_parameters = False
 
 # ====================================
@@ -166,7 +166,7 @@ def normalize_states(states):
 # ====================================
 #            Load Dataset
 # ====================================
-data_path = 'observation_datasets/observations_dataset.npy'
+data_path = 'observation_datasets/observations_dataset12.npy'
 data = np.load(data_path)
 print("Dataset loaded:", data.shape)
 input_dim = 30 # obst, obs_t+1, fallen, captured
@@ -227,12 +227,12 @@ optimizer = optax.adam(learning_rate)
 class TrainState(train_state.TrainState):
     pass
 
-train_state = TrainState.create(apply_fn=model.apply, params=params, tx=optimizer)
+state = TrainState.create(apply_fn=model.apply, params=params, tx=optimizer)
 
 # ====================================
 #           Training Loop
 # ====================================
-epochs = 5000
+epochs = 1000
 batch_size = 512
 rng = jax.random.PRNGKey(int(time.time()))
 losses, min_losses, max_losses = [], [], []
@@ -259,9 +259,9 @@ with tqdm(range(epochs), desc="Epoch") as pbar:
         for batch_states, batch_next_states, batch_fallen, batch_cp in zip(*batches):
             #produces one batch at a time: batch_states: shape (batch_size, dim)...
             # Perform one gradient update
-            state, loss = train_step(train_state, batch_states, batch_next_states, batch_fallen, batch_cp, target_params)
+            state, loss = train_step(state, batch_states, batch_next_states, batch_fallen, batch_cp, target_params)
             #Update target network, target_params = tau * new_params + (1 - tau) * old_target_params, This is Polyak averaging (soft target update), which stabilizes TD learning.
-            target_params = update_target_params(target_params, train_state.params, tau)
+            target_params = update_target_params(target_params, state.params, tau)
             #Accumulate total epoch loss
             epoch_loss += loss
             batch_losses.append(loss)

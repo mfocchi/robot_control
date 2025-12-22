@@ -59,23 +59,25 @@ class DatasetManager():
         # -------------------------------
         # Save Observation Transition for VF Learning
         # -------------------------------
-        body_ang_vel = self.quadruped.b_R_w @ self.quadruped.baseTwistW[3:]
-        proj_gravity = self.quadruped.b_R_w.dot(np.array([0, 0, -1]))
-        # dimension of observation vector = 3+3+12+12=30
-        self.obs_tp1_ = np.concatenate((
-            proj_gravity.astype(np.float32),
-            body_ang_vel.astype(np.float32),
-            self.quadruped.q.astype(np.float32),
-            self.quadruped.qd.astype(np.float32)
-        ))
-        # dimension of full_obs vector = 30+30+1+1=62
-        full_obs = np.concatenate([self.obs_t_, self.obs_tp1_, [float(self.fallen_flag), float(self.capture_flag)]])
-        # collect data only for backup policy which is active after warmup (the = ensures at least one sample is collected before break)
-        if self.step % self.decimation == 0 and self.quadruped.time>=self.warmup_time:
-            self.observations.append(full_obs)
+        if self.step % self.decimation == 0 :
+            body_ang_vel = self.quadruped.b_R_w @ self.quadruped.baseTwistW[3:]
+            proj_gravity = self.quadruped.b_R_w.dot(np.array([0, 0, -1]))
+            # dimension of observation vector = 3+3+12+12=30
+            self.obs_tp1_ = np.concatenate((
+                proj_gravity.astype(np.float32),
+                body_ang_vel.astype(np.float32),
+                self.quadruped.q.astype(np.float32),
+                self.quadruped.qd.astype(np.float32)
+            ))
+            # dimension of full_obs vector = 30+30+1+1=62
+            full_obs = np.concatenate([self.obs_t_, self.obs_tp1_, [float(self.fallen_flag), float(self.capture_flag)]])
+            #print('store',self.capture_flag)
+            # collect data only for backup policy which is active after warmup (the = ensures at least one sample is collected before break)
+            if self.quadruped.time>=self.warmup_time:
+                self.observations.append(full_obs)
 
         # store last observation
-        self.obs_t_ = self.obs_tp1_
+            self.obs_t_ = self.obs_tp1_
 
 
     # -------------------------------
@@ -107,10 +109,12 @@ class DatasetManager():
         push_instant = round(low + np.random.randint(0, n_steps + 1) * self.quadruped.dt,3)
         for self.step in range(max_steps):
             self.quadruped.updateKinematics()
+            terminate = self.check_termination()
             self.store_observations()
             if self.quadruped.time > warmup_time:
                 # Stop if CP was reached successfully
-                if self.check_termination():
+                if terminate and self.step % self.decimation == 0:
+                    #print('terminate', self.capture_flag)
                     print(f"Termination at {self.quadruped.time}")
                     break
             # -------------------------------
@@ -135,8 +139,8 @@ class DatasetManager():
                     # self.quadruped.applyForce(Fx,0,0,0,0,0,self.quadruped.dt)  # push in x
                     # self.quadruped.applyForce(0, Fy, 0, 0, 0, 0, self.quadruped.dt)  # push in y
                     #apply as a twisch change
-                    vx= np.random.uniform(-2.0, 3.0)
-                    vy = np.random.uniform(-1.5, 1.5)
+                    vx = np.random.uniform(-2.0, 3.0) #+ self.quadruped.baseTwistW[0]
+                    vy = np.random.uniform(-1.5, 1.5) #+ self.quadruped.baseTwistW[1]
                     #debug makes it fall
                     # vx = -1.645
                     # vy = -1.239
@@ -194,8 +198,15 @@ class DatasetManager():
             self.quadruped.q_des = self.quadruped.qj_0.copy()
             self.quadruped.resetRobot(basePoseDes=np.array([0, 0, 0.36, 0., 0., 0.]))
 
+            actor_network.prev_action = np.zeros(12)
+            actor_network.decimation_counter = 0
+            #print('actor_network.prev_action',actor_network.prev_action)
+            #print('actor_network.decimation_counter',actor_network.decimation_counter)
+            #print('self.quadruped.time',self.quadruped.time)
+
             obs, fallen, captured = self.run_single_simulation(actor_network=actor_network, noise_std=noise_std)
             print(colored(f"Fallen {fallen}, Captured {captured}", "green"))
+            #print('obs', obs)
             all_obs.append(obs)
 
             #debug
@@ -212,13 +223,9 @@ class DatasetManager():
 
         stats = np.array(stats, dtype=int)
 
-        np.save(os.path.join(save_path, "observations_dataset.npy"), padded_obs)
+        np.save(os.path.join(save_path, "observations_dataset12.npy"), padded_obs)
 
         print(f"Episodi completati: {n_episodes}")
         print(f"Caduti: {np.sum(stats[:, 0])}, CP raggiunto: {np.sum(stats[:, 1])}")
         print(f"Dati salvati in: {save_path}")
         print(f"Shape of observations: {padded_obs.shape}")
-
-
-
-
