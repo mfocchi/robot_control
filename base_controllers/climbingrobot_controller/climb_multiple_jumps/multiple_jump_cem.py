@@ -100,9 +100,9 @@ class BiLevelOptmizer:
         self.filter_weights = np.array([1., 1., 1., 1.])
         anchor_location = np.array(inner_opt_params['p_a1'])
         self.point_clouds.filter_height_profile(profile="logln", x0 = anchor_location[0], weight=self.filter_weights[3], side_application="depth")
-        self.point_clouds.filter_process_points([self.point_clouds.smoothing_kernel],weight=self.filter_weights[0], plot=False)
+        self.point_clouds.filter_process_points_pipeline([self.point_clouds.smoothing_kernel],weight=self.filter_weights[0], plot=False)
         kernel = [self.point_clouds.sobel_y, self.point_clouds.sobel_z]
-        self.point_clouds.filter_process_points(kernel, weight=self.filter_weights[1], plot=False)
+        self.point_clouds.filter_process_points_pipeline(kernel, weight=self.filter_weights[1], plot=False)
 
         #self.point_clouds.visualize_cost_map()
 
