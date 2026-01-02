@@ -38,7 +38,7 @@ class IterationLog:
     func_evals: int = 0
     best_discrete: Optional[np.ndarray] = None
     best_continuous: Optional[np.ndarray] = None
-    best_value: float = 0.0
+    best_value: float = -np.inf
     
     probs: Optional[np.ndarray] = None
     mu: Optional[np.ndarray] = None
@@ -71,7 +71,7 @@ class CrossEntropyMethodMixed:
 
         self.population_fit = np.full(params.pop_size, -np.inf)
         self.fit_evals = [None] * params.pop_size
-        self.fit_best = np.inf
+        self.fit_best = -np.inf
         self.history = []
         
     def allocate_data_discrete(self):
