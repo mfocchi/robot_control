@@ -27,13 +27,14 @@ from base_controllers.utils.matlab_conversions import (
 P0_INIT = np.array([0.0, 2.5, -5])
 #PF_INIT = np.array([0.0, 4, -3])
 PF_INIT = np.array([0.0, 2.5, -15])
-
+MAX_JUMP = 4
 # inner_opt_params for optimizer:
 Fleg_max = 300.
 Fr_max = 90.
 Fr_min = 0.
 mu = 0.8
-
+number_of_patches_width = 10
+number_of_patches_height = 10
 mass = 5.
 anchor_distance = 5.
 
@@ -67,17 +68,18 @@ inner_opt_params['contact_normal'] = None
 # Set up parameters OUTER LOOP
 cem_params = CemParams()
 cem_params.seed = int(time.time())
-cem_params.n_threads = 5
+cem_params.n_threads = 15
 # General CEM-MD Parameters
 cem_params.cem_iters = 15
-cem_params.pop_size = 100
-cem_params.n_elites = int(cem_params.pop_size * 0.8)
+cem_params.pop_size = 10
+cem_params.n_elites = int(cem_params.pop_size * 0.1)
 cem_params.decrease_pop_factor = 1.0
 cem_params.fraction_elites_reused = 0.0
 # Discrete
 cem_params.dim_discrete = 5
-number_of_patches = 20
-cem_params.n_values = [3] + [(number_of_patches-1) for _ in range(4)]
+number_of_patches = number_of_patches_width * number_of_patches_height
+# cem_params.n_values = [3] + [(number_of_patches-1) for _ in range(4)]
+cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(4)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
 cem_params.min_prob = 0.05
 # Continuous
@@ -164,7 +166,7 @@ def initialize_terrain_data(terrain_manager, filter_weights):
 
     # === 2 PATCHES INITIALIZATION ===
     pc_t = point_clouds.points_t
-    patches = PatchSurface(pc_t)
+    patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_width)
     cost_grid = patches.get_cost_meshgrid()
     
     # Update inner_opt_params with terrain data
@@ -192,7 +194,91 @@ class BiLevelOptmizer:
         self.point_clouds = point_clouds
         self.patches = patches
         self.cost_grid = cost_grid
+        
+        # Create result directory
+        self.result_dir = os.path.join(os.path.abspath(os.getcwd()), "result")
+        os.makedirs(self.result_dir, exist_ok=True)
+        
+        # Save terrain data to JSON
+        self.save_terrain_data()
     
+    def save_terrain_data(self):
+        """Save point cloud and patches information to JSON file"""
+        
+        # Extract point cloud data
+        point_cloud_data = []
+        for point in self.point_clouds.points_t:
+            point_data = {
+                'position': point['position'].tolist() if isinstance(point['position'], np.ndarray) else point['position'],
+                'color': point['color'].tolist() if isinstance(point['color'], np.ndarray) else point['color'],
+                'size_point': float(point['size_point']) if hasattr(point['size_point'], 'item') else point['size_point']
+            }
+            point_cloud_data.append(point_data)
+        
+        # Extract patches data
+        patches_data = []
+        for i in range(len(self.patches.patches)):
+            patch = self.patches.patches[i]
+            
+            # Handle different possible patch structures
+            patch_info = {
+                'id': i,
+                'cost': float(self.patches.get_patch_cost(i))
+            }
+            
+            # Add available patch data
+            if isinstance(patch, dict):
+                if 'center' in patch:
+                    patch_info['center'] = patch['center'].tolist() if isinstance(patch['center'], np.ndarray) else patch['center']
+                if 'vertices' in patch:
+                    patch_info['vertices'] = patch['vertices'].tolist() if isinstance(patch['vertices'], np.ndarray) else patch['vertices']
+                if 'bounds' in patch:
+                    patch_info['bounds'] = patch['bounds'].tolist() if isinstance(patch['bounds'], np.ndarray) else patch['bounds']
+            
+            # If patch doesn't have standard keys, try to get basic info
+            if 'center' not in patch_info and hasattr(self.patches, 'get_patch_center'):
+                try:
+                    center = self.patches.get_patch_center(i)
+                    patch_info['center'] = center.tolist() if isinstance(center, np.ndarray) else center
+                except:
+                    pass
+            
+            patches_data.append(patch_info)
+        
+        # Create terrain data structure
+        terrain_data = {
+            'metadata': {
+                'timestamp': datetime.now().isoformat(),
+                'num_points': len(point_cloud_data),
+                'num_patches': len(patches_data),
+                'patch_width': float(self.patches.patch_width),
+                'patch_height': float(self.patches.patch_height)
+            },
+            'point_cloud': point_cloud_data,
+            'patches': patches_data,
+            'mesh_bounds': {
+                'x_min': float(np.min(self.terrain_manager.mesh_x)),
+                'x_max': float(np.max(self.terrain_manager.mesh_x)),
+                'y_min': float(np.min(self.terrain_manager.mesh_y)),
+                'y_max': float(np.max(self.terrain_manager.mesh_y)),
+                'z_min': float(np.min(self.terrain_manager.mesh_z)),
+                'z_max': float(np.max(self.terrain_manager.mesh_z))
+            },
+            'start_position': self.p0.tolist(),
+            'goal_position': self.pf.tolist()
+        }
+        
+        # Save to file
+        filename = "actual_terrain.json"
+        save_path = os.path.join(self.result_dir, filename)
+        
+        with open(save_path, "w") as f:
+            json.dump(terrain_data, f, indent=2)
+        
+        print(colored(f"[SAVE] Terrain data saved to: {save_path}", "cyan"))
+        print(colored(f"       - Point cloud points: {len(point_cloud_data)}", "cyan"))
+        print(colored(f"       - Patches: {len(patches_data)}", "cyan"))
+
     def eval_pop(self, input_data):
         # n_iteration matlab for n_thread
         eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager)
@@ -205,8 +291,11 @@ class BiLevelOptmizer:
         xc = input_data[1]
         # first discrete variable is number of jumps, the next ones are the of the patches
         n_jumps = xd[0]
+        
         ids = []
         fitness = 0.0
+        total_consumed_energy = 0.0
+        total_landing_cost = 0.0
         
         # Print total number of jumps for this individual
         print(colored(f"[EVAL] Evaluating individual with {n_jumps + 1} total jumps ({n_jumps} intermediate + 1 final)", "blue"))
@@ -253,6 +342,12 @@ class BiLevelOptmizer:
                 Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
             
             jump_log_traj.append(mat_matrix2python(res['p']))
+            
+            # Track energy and landing cost
+            total_consumed_energy += res['consumed_energy']
+            landing_cost = self.patches.get_cost_in_point(patch_id, pf_adj[1:])
+            total_landing_cost += landing_cost
+            
             fitness += self.calc_fitness(res, patch_id=patch_id, 
                                         contact_abs_pos_yz=pf_adj[1:])
             
@@ -282,8 +377,12 @@ class BiLevelOptmizer:
             matlab.double(p0_adj), matlab.double(pf_adj), 
             Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
         
-        fitness += self.calc_fitness(res)
+        # Track energy for final jump
+        total_consumed_energy += res['consumed_energy']
         
+        fitness += self.calc_fitness(res)
+        if (n_jumps+1) < 3:
+            fitness -= 500.0  # Valore molto basso per "spaventare" l'algoritmo
         ref_com = mat_matrix2python(res['p'])
         jump_log_traj.append(ref_com)
         jump_log_points.append(pf_adj.copy())
@@ -292,12 +391,20 @@ class BiLevelOptmizer:
         # Plot trajectories if requested
         #self.plot_point_traj(jump_log_points, jump_log_traj)
         
-        return fitness, jump_log_points, jump_log_traj, n_jumps
+        log_result = {
+            'fitness': fitness,
+            'points': jump_log_points,
+            'traj': jump_log_traj,
+            'n_jumps': n_jumps + 1,
+            'consumed_energy': total_consumed_energy,
+            'landing_cost': total_landing_cost
+        }
+        
+        return fitness, jump_log_points, jump_log_traj, n_jumps, log_result
         
     def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
         fit_average_cost_patch = 0.
         fit_landing_cost = 0.
-        
 
         if (patch_id is not None and  contact_abs_pos_yz is not None):
             #compute cost for landing candidate
@@ -318,7 +425,6 @@ class BiLevelOptmizer:
                     fitness_weights[1] * fit_consumed_energy +
                     fitness_weights[2] * fit_average_cost_patch + 
                     fitness_weights[3] * fit_landing_cost)
-        
         return fitness
      
     def plot_point_traj(self, jump_log_points, jump_log_traj):
@@ -400,6 +506,15 @@ def main():
     fitness_weights = np.array([1., 0.1, 10., 1.])
     filter_weights = np.array([1., 1., 1., 1.])
     flag_thread = True
+    
+    # OUTPUT TOP DATA:
+    MAX_TOP_SOLUTIONS = 100
+    top_solutions = []  
+    
+    # Create result directory at the start of main
+    result_dir = os.path.join(os.path.abspath(os.getcwd()), "result")
+    os.makedirs(result_dir, exist_ok=True)
+    
     # ===================================================
 
 
@@ -464,21 +579,33 @@ def main():
                 
                 for future in as_completed(future_to_index):
                     idx = future_to_index[future]
-                    fit_val, log_points, log_traj, n_jumps = future.result()
+                    fit_val, log_points, log_traj, n_jumps, log_result = future.result()
                     fitness[idx] = fit_val
-                    all_log_points[idx] = log_points
-                    all_log_traj[idx] = log_traj
                     
+                    if (n_jumps + 1) >= 3:
+                        current_sol = {
+                            'fitness': log_result['fitness'],
+                            'points': [p.tolist() for p in log_result['points']],
+                            'traj': [t.tolist() if t is not None else None for t in log_result['traj']],
+                            'n_jumps': log_result['n_jumps'],
+                            'consumed_energy': log_result['consumed_energy'],
+                            'landing_cost': log_result['landing_cost'],
+                            'iteration': k + 1
+                        }
+                        top_solutions.append(current_sol)
+                        top_solutions.sort(key=lambda x: x['fitness'], reverse=True)
+                        
+                        if len(top_solutions) > MAX_TOP_SOLUTIONS:
+                            top_solutions = top_solutions[:MAX_TOP_SOLUTIONS]
+                    # ----------------------------
+
                     completed += 1
-                    # Track best solution only if at least 3 total jumps
+                    # Aggiornamento del best assoluto (opzionale, per mantenere le stampe a video)
                     if fit_val > best_fitness and (n_jumps + 1) >= 3:
                             best_fitness = fit_val
                             best_jump_log_points = log_points
                             best_jump_log_traj = log_traj
-                            print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
-                            
-                    if completed % 10 == 0 or completed == len(inputs):
-                        print(colored(f"[PROGRESS] {completed}/{len(inputs)} individuals evaluated", "blue"))
+                            print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f} (Posizione 1 nella Top 100)", "green"))
                     
         else:
             print(colored(f"\n{'='*60}", "yellow"))
@@ -513,6 +640,23 @@ def main():
         print(colored(f"  Iteration {k+1} completed in {iter_time:.2f}s", "cyan", attrs=['bold']))
         print(colored(f"  Best value this iteration: {algo.log.best_value:.4f}", "cyan", attrs=['bold']))
         print(colored(f"{'='*60}\n", "cyan", attrs=['bold']))
+        
+        temp_report = {
+            "iteration": k + 1,
+            "best_fitness_ever": best_fitness,
+            "top_100_solutions": top_solutions,
+            "top_100_summary": {
+                "count": len(top_solutions),
+                "best_fitness": top_solutions[0]['fitness'] if top_solutions else None,
+                "worst_fitness": top_solutions[-1]['fitness'] if top_solutions else None,
+                "avg_n_jumps": sum(s['n_jumps'] for s in top_solutions) / len(top_solutions) if top_solutions else 0,
+                "avg_consumed_energy": sum(s['consumed_energy'] for s in top_solutions) / len(top_solutions) if top_solutions else 0,
+                "avg_landing_cost": sum(s['landing_cost'] for s in top_solutions) / len(top_solutions) if top_solutions else 0
+            }
+        }
+        with open(os.path.join(result_dir, "top_100_progress.json"), "w") as f:
+            json.dump(temp_report, f, indent=2)
+        
     n_workers = cem_params.n_threads
     
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -530,20 +674,35 @@ def main():
             "timestamp": datetime.now().isoformat(),
             "iterations": k + 1,
         },
-        "solution": {
+        "solution_algo": {
             "elite_cost_history": cost_hist.tolist(),
             "best_discrete": xd.tolist(),
             "best_continuous": xc.tolist(),
             "wall_time_sec": wall_time,
         },
+        "top_solutions": top_solutions[:10] if len(top_solutions) >= 10 else top_solutions,
+        "statistics": {
+            "total_solutions_found": len(top_solutions),
+            "best_fitness": best_fitness,
+            "avg_n_jumps": sum(s['n_jumps'] for s in top_solutions) / len(top_solutions) if top_solutions else 0,
+            "avg_consumed_energy": sum(s['consumed_energy'] for s in top_solutions) / len(top_solutions) if top_solutions else 0,
+            "avg_landing_cost": sum(s['landing_cost'] for s in top_solutions) / len(top_solutions) if top_solutions else 0
+        }
     }
 
     # Save to file
-    # filename = f"cem_solution.json"
-    # save_path = os.path.join(os.path.abspath(os.getcwd()), filename)
-    # with open(save_path, "w") as f:
-    #     json.dump(report, f, indent=2)
-    # print(colored(f"[SAVE] Report saved to: {save_path}", "blue"))
+    filename = f"cem_solution_final.json"
+    save_path = os.path.join(result_dir, filename)
+    with open(save_path, "w") as f:
+        json.dump(report, f, indent=2)
+    print(colored(f"[SAVE] Final report saved to: {save_path}", "blue"))
+    
+    # Also save complete top 100 solutions
+    top_100_filename = "top_100_solutions_final.json"
+    top_100_save_path = os.path.join(result_dir, top_100_filename)
+    with open(top_100_save_path, "w") as f:
+        json.dump({"top_solutions": top_solutions}, f, indent=2)
+    print(colored(f"[SAVE] Top 100 solutions saved to: {top_100_save_path}", "blue"))
 
     # Plot best trajectory at the end
     print(colored(f"\n{'='*70}", "green", attrs=['bold']))
