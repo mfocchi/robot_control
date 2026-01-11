@@ -182,8 +182,7 @@ class PatchSurface:
             return True
         else:
             return False
-    
-             
+                 
     def cost_patch(self, some_points): 
         '''
         compute the mean cost of the patch
@@ -286,6 +285,73 @@ class PatchSurface:
             plt.tight_layout()
             plt.show()
         return normal_unit
+    
+    def gaussian_cost_all_patch(self, sigma=0.3, weight_gauss_cost=1.0):
+        '''
+        apply the gaussian function to the cost of each point in each patch
+        '''
+        sigma_y = sigma *0.1
+        sigma_z = sigma
+        for patch in self.patches:
+            centroid = patch['centroid']
+            points_in_patch = patch['points_in_patch']
+            
+            for point in points_in_patch:
+                pos = point['position']
+                
+                # Calcolo separato per i due assi
+                diff_y_sq = (pos[1] - centroid[1])**2
+                diff_z_sq = (pos[2] - centroid[2])**2
+                
+                # Formula della Gaussiana 2D
+                exponent = - ( (diff_y_sq / (2 * sigma_y**2)) + (diff_z_sq / (2 * sigma_z**2)) )
+                gauss_val = weight_gauss_cost * np.exp(exponent)
+                
+                point['cost'] += gauss_val
+                
+            costs = [p['cost'] for p in points_in_patch]
+            patch['cost_patch'] = float(np.mean(costs))
+        self.cost_color()
+        
+        # Update individual point colors based on their costs
+        self.update_point_colors()
+        
+    
+        
+    def update_point_colors(self):
+        '''
+        Update the color of each point based on its cost value
+        '''
+        # Collect all costs from all points
+        all_costs = []
+        for patch in self.patches:
+            for point in patch['points_in_patch']:
+                all_costs.append(point['cost'])
+        
+        if not all_costs:
+            return
+        
+        all_costs = np.array(all_costs)
+        min_c, max_c = np.min(all_costs), np.max(all_costs)
+        
+        # Normalize costs
+        if max_c - min_c > 0:
+            norm_costs = (all_costs - min_c) / (max_c - min_c)
+        else:
+            norm_costs = np.zeros_like(all_costs)
+        
+        # Apply colormap (red-yellow-green reversed: high cost = red, low cost = green)
+        cmap = cm.get_cmap('RdYlGn_r')
+        
+        # Update each point's color
+        idx = 0
+        for patch in self.patches:
+            for point in patch['points_in_patch']:
+                point['color'] = cmap(norm_costs[idx])[:3]
+                idx += 1
+        
+        print(f"[patch_surface] Updated colors for {len(all_costs)} points based on costs")
+        print(f"[patch_surface] Cost range: [{min_c:.3f}, {max_c:.3f}]")             
             
     #  ==== GET METHODS ====
     def get_patches(self):
@@ -899,6 +965,53 @@ class PatchSurface:
         plt.tight_layout()
         plt.show()
     
+    def visualize_full_cost_map(self):
+        # 1. Raccolta di tutti i punti da tutte le patch
+        all_points_list = []
+        for patch in self.patches:
+            all_points_list.extend(patch.get('points_in_patch', []))
+
+        if not all_points_list:
+            print("[patch_surface] Nessun punto trovato nelle patch per la visualizzazione.")
+            return
+
+        # 2. Estrazione dati per il plotting
+        x_coords = np.array([p['position'][0] for p in all_points_list])
+        y_coords = np.array([p['position'][1] for p in all_points_list])
+        z_coords = np.array([p['position'][2] for p in all_points_list])
+        colors = np.array([p['color'] for p in all_points_list])
+        costs = np.array([p['cost'] for p in all_points_list])
+        sizes = np.array([p['size_point'] for p in all_points_list])
+
+        # 3. Creazione del grafico (replica subplot di PointCloudFilter)
+        fig = plt.figure(figsize=(16, 8))
+        
+        # Subplot 1: Point cloud 3D colorata per costo
+        ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+        ax1.scatter(x_coords, y_coords, z_coords, c=colors, s=sizes, alpha=0.8)
+        ax1.set_xlabel('X (m) - Altezza')
+        ax1.set_ylabel('Y (m)')
+        ax1.set_zlabel('Z (m)')
+        ax1.set_title('Mappa 3D - Colore basato sul Costo\n(Verde=Basso, Rosso=Alto)')
+        
+        # Subplot 2: Vista 2D dall'alto (Piano YZ)
+        ax2 = fig.add_subplot(1, 2, 2)
+        scatter2 = ax2.scatter(y_coords, z_coords, c=colors, s=sizes*2, alpha=0.8)
+        ax2.set_xlabel('Y (m)')
+        ax2.set_ylabel('Z (m)')
+        ax2.set_title('Vista 2D Mappa dei Costi\n(Proiezione YZ)')
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # 4. Statistiche dei costi (replica logica PointCloudFilter)
+        print(f"\n[patch_surface] Statistiche Costi Globali (su {len(all_points_list)} punti):")
+        print(f"  - Costo Minimo: {np.min(costs):.3f}")
+        print(f"  - Costo Massimo: {np.max(costs):.3f}")
+        print(f"  - Costo Medio: {np.mean(costs):.3f}")
+        print(f"  - Deviazione Standard: {np.std(costs):.3f}")
+    
 def main():
     print("[TEST] STARTING PATCH SURFACE TEST SUITE")
     
@@ -908,11 +1021,11 @@ def main():
     pcs = PointCloudFilter(pc, h_min=1.0, h_max=4.0)    
     pcs.print_map_pc()
     # filter
-    print("\n[TEST] Applying Exponential Height Cost Filter...")
-    pcs.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
-    print("\n[TEST] Applying Smoothing Filter...")
-    kernel = [pcs.smoothing_kernel] 
-    pcs.filter_process_points_pipeline(kernel, weight=0.5, plot=False)
+    # print("\n[TEST] Applying Exponential Height Cost Filter...")
+    # pcs.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
+    # print("\n[TEST] Applying Smoothing Filter...")
+    # kernel = [pcs.smoothing_kernel] 
+    # pcs.filter_process_points_pipeline(kernel, weight=0.5, plot=False)
     print("\n[TEST] Filtered Map Statistics:")
     pcs.print_map_pc()
 
@@ -1015,6 +1128,12 @@ def main():
     print(f"[TEST] Selected {len(target_patches)} random target patches: {[p['id'] for p in target_patches]}")
     patch_surface.color_targhet_patches(target_patches)
     
+    
+    # TEST 11: add gaussian cost to a patch
+    print("\n[TEST] === TEST 10b: Adding Gaussian Cost to a Patch ===")
+    patch_surface.gaussian_cost_all_patch()
+    patch_surface.visualize_full_cost_map()
+    breakpoint()
     # TEST 11: Visualize results
     print("\n[TEST] === TEST 11: Visualization ===")
     print("[TEST] Plotting all patches with cost coloring...")
