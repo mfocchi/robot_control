@@ -136,9 +136,9 @@ class LinearMultiJumpParams:
             'average_fitness': total_fitness / len(self.trajectories),
             'jump_details': self.jump_results
         }
-    
+        
     def plot_multi_jump_trajectory(self, show_plot=True):
-        """Plot complete multi-jump trajectory with terrain."""
+        """Plot complete multi-jump trajectory with terrain and correct scaling."""
         x_pts = np.array([p['position'][0] for p in self.point_clouds.points_t])
         y_pts = np.array([p['position'][1] for p in self.point_clouds.points_t])
         z_pts = np.array([p['position'][2] for p in self.point_clouds.points_t])
@@ -148,10 +148,10 @@ class LinearMultiJumpParams:
         fig = plt.figure(figsize=(16, 12))
         ax = fig.add_subplot(111, projection='3d')
         
-        # Terrain
+        # 1. Terrain (Point Cloud)
         ax.scatter(x_pts, y_pts, z_pts, c=colors, s=sizes, alpha=0.1, label='Terrain', zorder=1)
         
-        # Waypoints
+        # 2. Waypoints
         for i, point in enumerate(self.waypoints):
             if i == 0:
                 ax.scatter(point[0], point[1], point[2], c='lime', s=200, marker='o', 
@@ -166,12 +166,12 @@ class LinearMultiJumpParams:
                 ax.text(point[0], point[1], point[2], f'  W{i}', 
                        fontsize=9, color='black', weight='bold')
         
-        # Planned path line
+        # 3. Planned path line (Dashed)
         wps = np.array(self.waypoints)
         ax.plot(wps[:, 0], wps[:, 1], wps[:, 2], 'k--', linewidth=1.5, 
                alpha=1.0, label='Planned Path', zorder=3)
         
-        # Trajectories
+        # 4. Trajectories (Jump segments)
         traj_colors = plt.cm.plasma(np.linspace(0, 1, len(self.trajectories)))
         
         for i, traj in enumerate(self.trajectories):
@@ -186,17 +186,48 @@ class LinearMultiJumpParams:
                     d = traj[:, mid+1] - traj[:, mid]
                     ax.quiver(traj[0, mid], traj[1, mid], traj[2, mid],
                              d[0], d[1], d[2], color=traj_colors[i], 
+                             length=0.1, normalize=True, # Fixed arrow params
                              arrow_length_ratio=0.3, linewidth=2, zorder=6)
-        
+
+        # --- LOGICA DI SCALATURA (Equal Aspect Ratio) ---
+        # Raccogliamo tutti i dati esistenti per calcolare il bounding box globale
+        all_x = [x_pts, wps[:, 0]]
+        all_y = [y_pts, wps[:, 1]]
+        all_z = [z_pts, wps[:, 2]]
+
+        for t in self.trajectories:
+            if t is not None:
+                all_x.append(t[0, :])
+                all_y.append(t[1, :])
+                all_z.append(t[2, :])
+
+        flat_x = np.concatenate(all_x)
+        flat_y = np.concatenate(all_y)
+        flat_z = np.concatenate(all_z)
+
+        max_range = np.array([
+            flat_x.max() - flat_x.min(), 
+            flat_y.max() - flat_y.min(), 
+            flat_z.max() - flat_z.min()
+        ]).max() / 2.0
+
+        mid_x = (flat_x.max() + flat_x.min()) * 0.5
+        mid_y = (flat_y.max() + flat_y.min()) * 0.5
+        mid_z = (flat_z.max() + flat_z.min()) * 0.5
+
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+        # ------------------------------------------------
+
         # Styling
         ax.set_xlabel('X (m) - Height', fontsize=12, fontweight='bold')
         ax.set_ylabel('Y (m)', fontsize=12, fontweight='bold')
         ax.set_zlabel('Z (m) - Depth', fontsize=12, fontweight='bold')
         
-        title = (f'Linear Multi-Jump Trajectory\n'
+        title = (f'Linear Multi-Jump Trajectory (Scaled)\n'
                 f'Jumps: {len(self.trajectories)} | '
-                f'Total Fitness: {sum(self.fitness_values):.2f} | '
-                f'Avg: {np.mean(self.fitness_values):.2f}')
+                f'Total Fitness: {sum(self.fitness_values):.2f}')
         ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
         
         handles, labels = ax.get_legend_handles_labels()
@@ -209,20 +240,7 @@ class LinearMultiJumpParams:
         
         if show_plot:
             plt.show()
-        
-        # Statistics
-        print(colored("\n=== Trajectory Statistics ===", "cyan"))
-        total_len = 0.0
-        for i, traj in enumerate(self.trajectories):
-            if traj is not None and traj.size > 0:
-                length = np.sum(np.sqrt(np.sum(np.diff(traj, axis=1)**2, axis=0)))
-                total_len += length
-                print(f"Jump {i+1}: {traj.shape[1]} pts, {length:.2f}m, fitness {self.fitness_values[i]:.2f}")
-        
-        straight = np.linalg.norm(self.pf - self.p0)
-        print(f"\nTotal length: {total_len:.2f}m | Straight: {straight:.2f}m | "
-              f"Efficiency: {straight/total_len*100:.1f}%\n")
-
+    
     def plot_multi_jump_mesh(self, show_plot=True):
         """Plot complete multi-jump trajectory with a solid brown terrain mesh."""
         import matplotlib.patches as mpatches
@@ -302,9 +320,8 @@ def main():
     # Initialize terrain
     print(colored("[1/3] Initializing Terrain...", "yellow"))
     terrain_manager = TerrainManager()
-    point_clouds, patches, cost_grid = initialize_terrain_data(
-        terrain_manager, filter_weights, inner_opt_params
-    )
+    point_clouds, patches, cost_grid = initialize_terrain_data (terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
+        
     print(colored("✓ Terrain ready\n", "green"))
     
     # Configure multi-jump

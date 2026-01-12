@@ -106,10 +106,7 @@ class BilevelOpt:
         for i in range(n_jumps):
             
             patch_id = int(xd[1 + i])
-            
-            # === MODIFICA: Uso il centro della patch (0.5, 0.5) ===
-            # Poiché non abbiamo più variabili continue ottimizzate dal CEM
-            contact_relative_to_patch_yz = [0.5, 0.5] 
+            contact_relative_to_patch_yz = [0.5, 0.5]  # center of the patch
 
             # computes 0, Y, Z  absolute coordinates of candidate landing location
             landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(
@@ -188,7 +185,7 @@ class BilevelOpt:
         
         # Penalty for too few jumps (optional logic)
         if (n_jumps + 1) < 2:
-            fitness -= 500.0 
+            fitness -= -100.0 
             
         ref_com = mat_matrix2python(res['p'])
         jump_log_traj.append(ref_com)
@@ -223,14 +220,15 @@ class BilevelOpt:
         if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
             fit_problem_converged = 0
         else: #problem did not converge
-            fit_problem_converged = -100
+            fit_problem_converged = -5000
         # print("jump duration", res['Tf'])
-        print(f"convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
+        # print(f"convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
         
         fitness = ( self.fitness_weights[0] * fit_problem_converged + 
                     self.fitness_weights[1] * fit_consumed_energy +
                     self.fitness_weights[2] * fit_average_cost_patch + 
                     self.fitness_weights[3] * fit_landing_cost)
+        print(f"fitness: {fitness}, convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
         return fitness
     
     def plot_point_traj(self, jump_log_points, jump_log_traj):
@@ -340,7 +338,7 @@ class BilevelOpt:
                 traj_length = np.sum(np.sqrt(np.sum(np.diff(traj, axis=1)**2, axis=0)))
                 print(f"Jump {i+1}: {traj.shape[1]} points, Length: {traj_length:.2f}m")
 
-    def plot_mesh_traj(self, jump_log_points, jump_log_traj):
+    def plot_mesh_traj(self, jump_log_points, jump_log_traj, best_fitness):
         
         X = self.terrain_manager.mesh_x
         Y = self.terrain_manager.mesh_y
@@ -379,7 +377,7 @@ class BilevelOpt:
         handles.insert(0, terrain_proxy)
         ax.legend(handles=handles, loc='upper left')
 
-        ax.set_title('Trajectory on Terrain Mesh')
+        ax.set_title(f'Trajectory on Terrain Mesh (Best fitness: {best_fitness:.4f})')
         ax.set_xlabel('X (Depth/Height)')
         ax.set_ylabel('Y (Horizontal)')
         ax.set_zlabel('Z (Vertical)')

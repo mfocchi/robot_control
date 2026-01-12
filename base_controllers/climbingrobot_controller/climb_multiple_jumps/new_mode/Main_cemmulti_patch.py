@@ -27,7 +27,16 @@ def main():
         best_lock = threading.Lock()
         
         algo = CrossEntropyMethodMixed(cem_params)
-        terrain_manager = TerrainManager()
+        
+        # Terrain configuration values for rock terrain, otherwise stay in default
+        # wall_depth = 1            
+        # grid_size = 100
+        # max_ridge_depth = 0.5     
+        # seed = 30                 
+        # Lz = -50                  
+        # Ly = 10          
+        # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
+        terrain_manager  = TerrainManager()
         point_clouds, patches, cost_grid = initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
         save_terrain_data(terrain_manager,point_clouds, patches)
 
@@ -59,19 +68,19 @@ def main():
             # xc = algo.population_continuous # shape: dim_continuous x pop_size
             # Organise inputs into a 2D matrix where we have as columns
             inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
-            fitness = []
-            
+        
+            fitness = [0.0] * cem_params.pop_size
+            all_log_points = [None] * cem_params.pop_size
+            all_log_traj = [None] * cem_params.pop_size
+            all_consumed_energy = [0.0] * cem_params.pop_size
+            all_landing_cost = [0.0] * cem_params.pop_size
+            all_n_jumps = [0] * cem_params.pop_size
+            n_workers = cem_params.n_threads
+        
             # ============================
             # flag_thread == TRUE: multi-threaded evaluation
             # ============================
             if (flag_thread == True):
-                fitness = [0.0] * cem_params.pop_size
-                all_log_points = [None] * cem_params.pop_size
-                all_log_traj = [None] * cem_params.pop_size
-                all_consumed_energy = [0.0] * cem_params.pop_size
-                all_landing_cost = [0.0] * cem_params.pop_size
-                all_n_jumps = [0] * cem_params.pop_size
-                n_workers = cem_params.n_threads
                 
                 print(colored(f"\n{'='*60}", "yellow"))
                 print(colored(f"{n_workers} Thread evaluation with ThreadPoolExecutor, Iteration {k+1}/{cem_params.cem_iters}", "yellow", attrs=['bold']))
@@ -118,16 +127,25 @@ def main():
                     
                     fitness.append(log_result['fitness']) #log_result['fitness']
                     print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "red", attrs=['bold']))
-
+                    
+                    log_result = future.result()
+                    
+                    fitness[i] = log_result['fitness']
+                    all_log_points[i] = log_result['points']
+                    all_log_traj[i] = log_result['traj']
+                    all_consumed_energy[i] = log_result['consumed_energy']
+                    all_landing_cost[i] = log_result['landing_cost']
+                    all_n_jumps[i] = log_result['n_jumps']
+                        
                     if log_result['fitness'] > best_fitness:
                         best_fitness = log_result['fitness']
                         best_consumed_energy = log_result['consumed_energy']
                         best_landing_cost = log_result['landing_cost']
                         best_jump_log_points = log_result['points']
-                        best_jump = log_result['n_jumps']
                         best_trajectory = log_result['traj']
+                        best_jump = log_result['n_jumps']
                         
-                        print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f} with {n_jumps + 1} jumps", "green", attrs=['bold']))
+                        print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f}","green", attrs=['bold']))
         
             # Update distributions
             algo.evaluate_population(fitness)
@@ -139,7 +157,7 @@ def main():
             
             if flag_thread == False:
                 optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
-                optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory)
+                optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
                 
             print(colored(f"\n{'='*60}", "cyan", attrs=['bold']))
             print(colored(f"  Iteration {k+1} completed in {iter_time:.2f}s", "cyan", attrs=['bold']))
@@ -253,30 +271,24 @@ def main():
         
         if best_jump_log_points and best_trajectory:
             optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
-            optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory)
+            optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
         else:
             print(colored("[ERROR] Could not plot best trajectory. No solution found or tracking issue.", "red", attrs=['bold']))
 
     if setting["PLOT_MODE"]:
         
-        plot_result_cem_mjumps = PlotResultCemMjumps(
-            FILE_TERRAIN_POINTS, 
-            FILE_TERRAIN_PATCHES, 
-            FILE_PROGRESS, 
-            ITERATIONS_FOLDER,
-            FILE_BEST_LOG
-        )
-        print("ok all is ready")
+        plot_result_cem_mjumps = PlotResultCemMjumps()
+        
         plot_result_cem_mjumps.plot_terrain_patches()
         plot_result_cem_mjumps.plot_actual_terrain()
         plot_result_cem_mjumps.plot_all_in_one()
-        plot_result_cem_mjumps.plot_density_map()
+        # plot_result_cem_mjumps.plot_density_map()
         plot_result_cem_mjumps.plot_3d_scenario_iterations(animated=True)
         plot_result_cem_mjumps.plot_2d_iterations_layout(animated=True)
-        plot_result_cem_mjumps.plot_evolution_fitness()
-        # plot_result_cem_mjumps.plot_evolution_std_dev_cem() 
+        # plot_result_cem_mjumps.plot_evolution_fitness()
+        # plot_result_cem_mjumps.plot_evolution_std_dev_cem()
         plot_result_cem_mjumps.plot_mesh_traj()
-
+        
 if __name__ == "__main__":
     try:
         main()

@@ -8,7 +8,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import matplotlib.pyplot as plt
-from cem.algo import CrossEntropyMethodMixed
+from algo import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
 
 from BilevelOpt import BilevelOpt, close_matlab_engines
@@ -128,7 +128,7 @@ def main():
                         best_jump = log_result['n_jumps']
                         best_trajectory = log_result['traj']
                         
-                        print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f} with {n_jumps + 1} jumps", "green", attrs=['bold']))
+                        print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f}", "green", attrs=['bold']))
         
             # Update distributions
             algo.evaluate_population(fitness)
@@ -264,22 +264,17 @@ def main():
 
     if setting["PLOT_MODE"]:
         
-        plot_result_cem_mjumps = PlotResultCemMjumps(
-            FILE_TERRAIN_POINTS, 
-            FILE_TERRAIN_PATCHES, 
-            FILE_PROGRESS, 
-            ITERATIONS_FOLDER,
-            FILE_BEST_LOG
-        )
+        plot_result_cem_mjumps = PlotResultCemMjumps()
         print("ok all is ready")
         plot_result_cem_mjumps.plot_terrain_patches()
         plot_result_cem_mjumps.plot_actual_terrain()
         plot_result_cem_mjumps.plot_all_in_one()
-        plot_result_cem_mjumps.plot_density_map()
+        # plot_result_cem_mjumps.plot_density_map()
         plot_result_cem_mjumps.plot_3d_scenario_iterations(animated=True)
         plot_result_cem_mjumps.plot_2d_iterations_layout(animated=True)
-        plot_result_cem_mjumps.plot_evolution_fitness()
-        plot_result_cem_mjumps.plot_evolution_std_dev_cem() 
+        # plot_result_cem_mjumps.plot_evolution_fitness()
+        # plot_result_cem_mjumps.plot_evolution_std_dev_cem()
+        plot_result_cem_mjumps.plot_mesh_traj()
 
 if __name__ == "__main__":
     try:

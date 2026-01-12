@@ -34,9 +34,9 @@ class LinearOpti:
         
         jump_log_points = []
         jump_log_traj = []
-        xd = input_data[0]  # xd is the discrete variables and contains the patches
-        xc = input_data[1]  # xc is the continuous variables and contains the jump coordinates
-        n_jumps = xd[0]     # first discrete variable is number of jumps, the next ones are the of the patches
+        
+        xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
+        n_jumps = int(xd[0])     
         ids = []
         fitness = 0.0
         total_consumed_energy = 0.0
@@ -54,16 +54,14 @@ class LinearOpti:
         
         for i in range(n_jumps):
             
-            patch_id = xd[1 + i] 
-            # the continue variables contain the X and Y normalized coordinate of the candidate contact landing points inside the candidate patches
-            contact_relative_to_patch_yz = xc[i * 2:i * 2 + 2]  # tra 0 - 1  upper left corner patch
-
-            # computes 0, Y, Z  absolute coordinates of candidate landing location
-            landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(patch_id, contact_relative_to_patch_yz[0],
-                                                                             contact_relative_to_patch_yz[1], scale=1.0)
+            patch_id = int(xd[1 + i])
+            
+            contact_relative_to_patch_yz = [0.5, 0.5] # center of the patch (poi è il codice di focchi a trovare il centro grazie al mio costo)
+            landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(
+                patch_id, contact_relative_to_patch_yz[0],
+                contact_relative_to_patch_yz[1], scale=1.0)
             pf_adj = landing_abs_pos.copy()
             
-            # adjust X coordinate to terrain shape for both liftoff and landing points
             pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,
                                                                self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
             p0_adj[0] = self.terrain_manager.wall_surface_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
@@ -71,8 +69,7 @@ class LinearOpti:
             
             # compute normal at liftoff
             liftoff_normal = self.terrain_manager.wall_normal_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-                                                                   self.terrain_manager.mesh_y,
-                                                                   self.terrain_manager.mesh_z)
+                                                                   self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
 
             
             
@@ -138,25 +135,14 @@ class LinearOpti:
         return log_result
     
     def linear_computation(self, p0, pf):
-        """
-        Calcola i parametri per una traiettoria lineare tra due punti.
-        """
-        # 1. Calcolo della distanza (Euclidean distance) come misura di energia consumata
         distance = np.linalg.norm(pf - p0)
         
-        # 2. Verifica se il problema è risolto (se i punti sono validi e la distanza è calcolabile)
-        # Assumiamo che se la distanza è definita (anche 0), il problema è risolto.
         problem_solved = 1 if distance is not None else 0
-        
-        # 3. Generazione della traiettoria lineare
-        # Creiamo N punti tra p0 e pf. Il formato richiesto dai plot è (3, N)
         num_points = 50 
         t = np.linspace(0, 1, num_points)
-        
-        # Interpolazione lineare: P(t) = P0 + t * (Pf - P0)
-        # Usiamo np.outer o broadcasting per ottenere la matrice 3x50
+        # interpolation
         trajectory = np.zeros((3, num_points))
-        for i in range(3): # Per X, Y, Z
+        for i in range(3): 
             trajectory[i, :] = p0[i] + t * (pf[i] - p0[i])
             
         res = {
@@ -182,7 +168,7 @@ class LinearOpti:
         if (res['problem_solved']) == 1 :
             fit_problem_converged = 0
         else: #problem did not converge
-            fit_problem_converged = -100
+            fit_problem_converged = -5000
         # print("jump duration", res['Tf'])
         print(f"convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
         
@@ -240,42 +226,68 @@ class LinearOpti:
         ax.legend(loc='upper right')
         plt.show()
         
-    def plot_mesh_traj(self, jump_log_points, jump_log_traj):
-        X, Y, Z = self.terrain_manager.mesh_x, self.terrain_manager.mesh_y, self.terrain_manager.mesh_z
+    def plot_mesh_traj(self, jump_log_points, jump_log_traj, best_fitness):
+        
+        X = self.terrain_manager.mesh_x
+        Y = self.terrain_manager.mesh_y
+        Z = self.terrain_manager.mesh_z
 
         fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(111, projection='3d')
 
-        # Superficie del terreno
-        surf = ax.plot_surface(X, Y, Z, color='gray', edgecolor='none', alpha=0.3, antialiased=True)
+        surf = ax.plot_surface(X, Y, Z,color='sienna', 
+                               edgecolor='none', alpha=0.4, 
+                               linewidth=0, antialiased=False)
 
         pts = np.array(jump_log_points)
-        # Waypoints
-        ax.scatter(pts[0, 0], pts[0, 1], pts[0, 2], c='lime', s=120, marker='o', edgecolors='k', label='Start', zorder=20)
-        ax.scatter(pts[-1, 0], pts[-1, 1], pts[-1, 2], c='darkred', s=150, marker='*', edgecolors='k', label='Goal', zorder=20)
-        
+        # Start Point
+        ax.scatter(pts[0, 0], pts[0, 1], pts[0, 2], 
+                   c='lime', s=100, marker='o', edgecolors='k', label='Start', zorder=10)
+        # Goal Point
+        ax.scatter(pts[-1, 0], pts[-1, 1], pts[-1, 2], 
+                   c='darkred', s=100, marker='*', edgecolors='k', label='Goal', zorder=10)
+        # Punti intermedi
         if len(pts) > 2:
-            ax.scatter(pts[1:-1, 0], pts[1:-1, 1], pts[1:-1, 2], c='blue', s=80, marker='o', label='Contacts', zorder=20)
+            ax.scatter(pts[1:-1, 0], pts[1:-1, 1], pts[1:-1, 2], 
+                       c='blue', s=60, marker='o', edgecolors='k', label='Contacts', zorder=10)
         
-        # Traiettorie
+        trajectory_colors = plt.cm.jet(np.linspace(0, 1, len(jump_log_traj)))
+        
         for i, traj in enumerate(jump_log_traj):
-            if traj is not None:
-                ax.plot(traj[0, :], traj[1, :], traj[2, :], color='blue', linewidth=2.5, zorder=25)
+            if traj is not None and traj.size > 0:
+                ax.plot(traj[0, :], traj[1, :], traj[2, :], 
+                        color='blue', linewidth=2, 
+                        label=f'Jump {i+1}', zorder=20)
 
-        # Labels e legende
-        ax.set_title('Linear Trajectory on Terrain Mesh')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
         
-        # Impostazione limiti assi proporzionali
-        all_coords = np.concatenate([pts] + [t.T for t in jump_log_traj if t is not None])
-        mid = (all_coords.max(axis=0) + all_coords.min(axis=0)) / 2
-        span = (all_coords.max(axis=0) - all_coords.min(axis=0)).max() / 2
-        ax.set_xlim(mid[0] - span, mid[0] + span)
-        ax.set_ylim(mid[1] - span, mid[1] + span)
-        ax.set_zlim(mid[2] - span, mid[2] + span)
+        terrain_proxy = mpatches.Patch(color='grey', alpha=0.4, label='Terrain Surface')
+        handles, labels = ax.get_legend_handles_labels()
+        handles.insert(0, terrain_proxy)
+        ax.legend(handles=handles, loc='upper left')
 
-        ax.view_init(elev=35, azim=-60)
+        ax.set_title(f'Trajectory on Terrain Mesh (Best fitness: {best_fitness:.4f})')
+        ax.set_xlabel('X (Depth/Height)')
+        ax.set_ylabel('Y (Horizontal)')
+        ax.set_zlabel('Z (Vertical)')
+
+        all_x = np.concatenate([X.flatten()] + [t[0,:] for t in jump_log_traj if t is not None])
+        all_y = np.concatenate([Y.flatten()] + [t[1,:] for t in jump_log_traj if t is not None])
+        all_z = np.concatenate([Z.flatten()] + [t[2,:] for t in jump_log_traj if t is not None])
+
+        max_range = np.array([
+            all_x.max() - all_x.min(), 
+            all_y.max() - all_y.min(), 
+            all_z.max() - all_z.min()
+        ]).max() / 2.0
+
+        mid_x = (all_x.max() + all_x.min()) * 0.5
+        mid_y = (all_y.max() + all_y.min()) * 0.5
+        mid_z = (all_z.max() + all_z.min()) * 0.5
+
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        ax.view_init(elev=30, azim=-45)
         plt.tight_layout()
         plt.show()
