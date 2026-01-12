@@ -15,12 +15,12 @@ from base_controllers.components.patch_surface import PatchSurface
 # ================================================
 # start and goal point
 P0_INIT = np.array([0.0, 2.5, -5])
-PF_INIT = np.array([0.0, 2.5, -20])
-PF_PATCH_INIT = np.array([0.0, 2.5, -10])
+PF_PATCH_INIT = np.array([0.0, 4.5, -7])
+PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 4
-THREADS = 100
+THREADS = 5
 flag_thread = True
-
+MAIN_DIRECTORY = "result_patch_9"
 
 Fleg_max = 300.
 Fr_max = 90.
@@ -30,8 +30,9 @@ number_of_patches_height = number_of_patches_width
 mass = 5.
 anchor_distance = 5.
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap ]
-fitness_weights = np.array([1., 0.1, 10., 10.])
-filter_weights = np.array([1., 1., 1., 1.])
+fitness_weights = np.array([1., 1.0,10., 10.])
+# weights for point cloud filtering
+filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
 
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
@@ -75,8 +76,8 @@ cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 10
 cem_params.pop_size = 100
-cem_params.n_elites = int(cem_params.pop_size * 0.4)
-cem_params.decrease_pop_factor = 1.0 # a ogni iterazione la popolazione decresce
+cem_params.n_elites = int(cem_params.pop_size * 0.3)
+cem_params.decrease_pop_factor = 0.0 # a ogni iterazione la popolazione decresce di ...
 cem_params.fraction_elites_reused = 0.1
 # Discrete
 cem_params.dim_discrete = MAX_N_PATCHES
@@ -96,7 +97,7 @@ cem_params.min_std_continuous = np.full(cem_params.dim_continuous, 0.05)
 # ================================================
 # PLOTTING PARAMETERS
 # ================================================
-MAIN_DIRECTORY = "result_patch"
+
 FILE_TERRAIN_POINTS = f"{MAIN_DIRECTORY}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{MAIN_DIRECTORY}/actual_patch_terrain.json"
 FILE_PROGRESS = f"{MAIN_DIRECTORY}/cem_iteration_history.json"
@@ -114,10 +115,23 @@ def initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_w
     in_point_clouds = terrain_manager.point_cloud
     point_clouds = PointCloudFilter(in_point_clouds)
     anchor_location = np.array(inner_opt_params['p_a1'])
-    # point_clouds.filter_height_profile(profile="logln", x0=anchor_location[0], weight=filter_weights[3], side_application="depth")
-    # # point_clouds.filter_process_points_pipeline([point_clouds.smoothing_kernel], weight=filter_weights[0], plot=False)
+    
+    
+    # filtro con cambio di costo e colore in base all'altezza
+    point_clouds.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
+    point_clouds.visualize_cost_map()
+    # print("\n[INIT] === Smoothing Filter ===")
+    # kernel = [point_clouds.smoothing_kernel] 
+    # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[0], plot=False)
+    
+    print("\n[INIT] === First Derivative (Gradient) ===")
     kernel = [point_clouds.sobel_y, point_clouds.sobel_z] 
     point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[1], plot=False)
+    
+    # print("\n[INIT] === Second Derivative (Laplacian) ===")
+    # kernel = [point_clouds.laplacian_kernel] 
+    # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[2], plot=False)
+    
     point_clouds.visualize_cost_map()
 
     # === 2 PATCHES INITIALIZATION ===
@@ -133,8 +147,8 @@ def initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_w
     inner_opt_params['cost_y'] = terrain_manager.mesh_y
     inner_opt_params['cost_z'] = terrain_manager.mesh_z
     inner_opt_params['patch_side'] = 1.0 * patches.patch_width
-    # patches.gaussian_cost_all_patch()
-    # patches.visualize_full_cost_map()
+    patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
+    patches.visualize_full_cost_map()
     
     terrain_params.append({
         'anchor_location': point_clouds,
@@ -186,7 +200,7 @@ def save_terrain_data(terrain_manager,point_clouds, patches):
             'z_max': float(np.max(terrain_manager.mesh_z))
         },
         'start_position': P0_INIT.tolist(),
-        'goal_position': PF_INIT.tolist(),
+        'goal_position': PF_PATCH_INIT.tolist(),
         'points': point_cloud_data
     }
     
