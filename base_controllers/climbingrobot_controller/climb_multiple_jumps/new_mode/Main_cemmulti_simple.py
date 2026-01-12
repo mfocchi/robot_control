@@ -8,7 +8,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import matplotlib.pyplot as plt
-from algo import CrossEntropyMethodMixed, CemParams
+from algo_patch import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
 
 # from BilevelOpt import BilevelOpt, close_matlab_engines
@@ -21,7 +21,7 @@ def main():
     
     setting = {
         "COMPUTATION_MODE": True, 
-        "PLOT_MODE": False
+        "PLOT_MODE": True
     }
     
     if setting["COMPUTATION_MODE"]:
@@ -34,7 +34,7 @@ def main():
 
         # Pass pre-computed data to the optimizer
         optimizer = LinearOpti(
-            terrain_manager, P0_INIT, PF_INIT, 
+            terrain_manager, P0_INIT, PF_PATCH_INIT, 
             fitness_weights=fitness_weights,
             point_clouds=point_clouds,
             patches=patches,
@@ -56,11 +56,10 @@ def main():
             
             # Generate population
             algo.generate_population_discrete()
-            algo.generate_population_continuous()
             xd = algo.population_discrete   # shape: dim_discrete x pop_size
-            xc = algo.population_continuous # shape: dim_continuous x pop_size
+            
             # Organise inputs into a 2D matrix where we have as columns
-            inputs = [[xd[:, i].tolist(), xc[:, i].tolist()] for i in range(cem_params.pop_size)]
+            inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
             fitness = []
             
             # ============================
@@ -83,7 +82,7 @@ def main():
                     # map futures to their input indices
                     future_to_index = {executor.submit(optimizer.eval_pop, inputs[i]): i 
                                     for i in range(cem_params.pop_size)}
-                
+                    
                     for future in as_completed(future_to_index):
                         idx = future_to_index[future]
                         log_result = future.result()
@@ -104,6 +103,7 @@ def main():
                                 best_jump = log_result['n_jumps']
                                 print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
                         print(colored(f"complete individual {idx}, Iteration {k+1}", "yellow")) #scrvi in arancione
+                    
                 print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
             
 
@@ -141,7 +141,7 @@ def main():
             
             if flag_thread == False:
                 optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
-                optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory)
+                optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
                 
             print(colored(f"\n{'='*60}", "cyan", attrs=['bold']))
             print(colored(f"  Iteration {k+1} completed in {iter_time:.2f}s", "cyan", attrs=['bold']))
@@ -169,7 +169,6 @@ def main():
                     'traj': [t.tolist() if t is not None else None for t in all_log_traj[idx]],
                     'iteration': k + 1,
                     'patch_ids': xd[1:, idx].tolist(),        # Gli ID delle patch scelti (saltando il primo che è N_jump)
-                    'continuous_coords': xc[:, idx].tolist(), # Coordinate Y,Z relative                    
                 }
                 current_iteration_elites.append(elite_sol)
             
@@ -203,13 +202,11 @@ def main():
         wall_time = end - start
 
         xd = algo.best_discrete
-        xc = algo.best_continuous        
         
         # =======================
         # FINAL SAVE
         # =======================
         print(f"Best discrete solution: {xd}")
-        print(f"Best continuous solution: {xc}")
         # Generate and save report json
         
         iteration_history = []
@@ -219,10 +216,7 @@ def main():
                 "func_evals": h["func_evals"],
                 "best_value": h["best_value"],
                 "best_discrete": h["best_discrete"].tolist(),
-                "best_continuous": h["best_continuous"].tolist(),
                 "probs": [p.tolist() for p in h["probs"]],
-                "mu": h["mu"].tolist(),
-                "std_devs": h["std_devs"].tolist()
             }
             iteration_history.append(iter_data)
             
@@ -238,6 +232,17 @@ def main():
             }, f, indent=2)
         print(colored(f"[SAVE] Iteration history saved to: {history_save_path}", "blue"))
         
+        #save best log_points and trajectory
+        best_log_data={
+            "best_jump_log_points": [p.tolist() for p in best_jump_log_points] if best_jump_log_points is not None else None,
+            "best_trajectory": [t.tolist() if t is not None else None for t in best_trajectory] if best_trajectory is not None else None
+        }
+        best_log_filename = "best_trajectory_log.json"
+        best_log_save_path = os.path.join(result_dir, best_log_filename)
+        with open(best_log_save_path, "w") as f:
+            json.dump(best_log_data, f, indent=2)
+        print(colored(f"[SAVE] Best trajectory log saved to: {best_log_save_path}", "blue"))
+        
         # Plot best trajectory at the end
         print(colored(f"\n{'='*70}", "green", attrs=['bold']))
         print(colored(f"  OPTIMIZATION FINISHED!", "green", attrs=['bold']))
@@ -247,28 +252,22 @@ def main():
         
         if best_jump_log_points and best_trajectory:
             optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
-            optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory)
+            optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
         else:
             print(colored("[ERROR] Could not plot best trajectory. No solution found or tracking issue.", "red", attrs=['bold']))
 
     if setting["PLOT_MODE"]:
         
-        plot_result_cem_mjumps = PlotResultCemMjumps(
-            FILE_TERRAIN_POINTS, 
-            FILE_TERRAIN_PATCHES, 
-            FILE_PROGRESS, 
-            ITERATIONS_FOLDER,
-            FILE_BEST_LOG
-        )
-        print("ok all is ready")
+        plot_result_cem_mjumps = PlotResultCemMjumps()
         plot_result_cem_mjumps.plot_terrain_patches()
         plot_result_cem_mjumps.plot_actual_terrain()
         plot_result_cem_mjumps.plot_all_in_one()
-        plot_result_cem_mjumps.plot_density_map()
+        # plot_result_cem_mjumps.plot_density_map()
         plot_result_cem_mjumps.plot_3d_scenario_iterations(animated=True)
         plot_result_cem_mjumps.plot_2d_iterations_layout(animated=True)
-        plot_result_cem_mjumps.plot_evolution_fitness()
-        plot_result_cem_mjumps.plot_evolution_std_dev_cem() 
+        # plot_result_cem_mjumps.plot_evolution_fitness()
+        # plot_result_cem_mjumps.plot_evolution_std_dev_cem()
+        plot_result_cem_mjumps.plot_mesh_traj()
 
 if __name__ == "__main__":
     # try:

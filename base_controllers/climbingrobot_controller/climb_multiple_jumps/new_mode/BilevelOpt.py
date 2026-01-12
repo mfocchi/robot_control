@@ -17,7 +17,7 @@ thread_local = threading.local()
 def get_matlab_engine(point_clouds=None, cost_grid=None, terrain_manager=None):
     if not hasattr(thread_local, 'engine'):
         eng = matlab.engine.start_matlab()
-        eng.addpath('../codegen_mesh_landing', nargout=0)
+        eng.addpath('../../codegen_mesh_landing', nargout=0)
         
         thread_local.engine = eng
         print(f"Created Engine and uploaded Mesh for thread {threading.current_thread().name}")
@@ -171,8 +171,8 @@ class BilevelOpt:
         total_consumed_energy += res['consumed_energy']
         
         fitness += self.calc_fitness(res)
-        if (n_jumps+1) < 2:
-            fitness -= 500.0  # Valore molto basso per "spaventare" l'algoritmo
+        # if (n_jumps+1) < 2:
+        #     fitness -= 500.0  # Valore molto basso per "spaventare" l'algoritmo
         ref_com = mat_matrix2python(res['p'])
         jump_log_traj.append(ref_com)
         jump_log_points.append(pf_adj.copy())
@@ -207,7 +207,7 @@ class BilevelOpt:
         if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
             fit_problem_converged = 0
         else: #problem did not converge
-            fit_problem_converged = -100
+            fit_problem_converged = -1000
         # print("jump duration", res['Tf'])
         print(f"convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
         

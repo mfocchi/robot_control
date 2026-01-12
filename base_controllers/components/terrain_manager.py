@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='hemisphere'):
+    def __init__(self, grid_size=100,wall_depth =0.1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='gaussian_bumps'):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
@@ -40,11 +40,30 @@ class TerrainManager:
             if terrain_type=='hemisphere':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size)
 
+            if terrain_type == 'gaussian_bumps':
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
+                    self.Lz, self.Ly, self.grid_size, self.wall_depth,
+                    standard_deviation=1.0, n_gaussian=5, seed=self.seed, casual=True, x_offset=1
+                )
+                
+            if terrain_type == 'mini_tower_each_patch':
+                
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_patched_towers(
+                    n_patches_w=int(self.number_of_patches_width),
+                    n_patches_h=int(self.number_of_patches_height),
+                    h_tower=self.wall_depth,
+                    sigma=0.5, # radius tower
+                    p_exp=10,  # plane of the top
+                    x_offset=0.2 # Move everything forward to avoid singularity issues
+                )
+            
+                
             self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
 
             # Convert to point cloud format and store
             self.point_cloud = self.convert_meshgrid_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
 
+    
     def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, x_offset = 0):
         """
         Generate a 3D rock wall height map with fractal noise, ridges, and pillars.
@@ -157,7 +176,6 @@ class TerrainManager:
     def generate_hemisferic_map(self, Lz, Ly, cz = -10, cy = 2.5, radius = 3, grid_size=100, x_offset = 0.1):
         X = np.zeros((grid_size, grid_size))
         # Add hemispherical bulge
-        # Create physical grid in meters
         z = np.linspace(Lz, 0, grid_size)
         y = np.linspace(0, Ly, grid_size)
 
@@ -173,6 +191,114 @@ class TerrainManager:
 
         return X, Y, Z
 
+    def generate_patched_towers(self, n_patches_w=10, n_patches_h=10, h_tower=1.0, sigma=0.5, p_exp=10, x_offset=1.0):
+        self.number_of_patches_width = n_patches_w
+        self.number_of_patches_height = n_patches_h
+        self.number_of_patches = n_patches_w * n_patches_h
+        self.patch_origins = [np.zeros((2))] * self.number_of_patches
+
+        X = np.zeros((self.grid_size, self.grid_size))
+        z_vec = np.linspace(self.Lz, 0, self.grid_size)
+        y_vec = np.linspace(0, self.Ly, self.grid_size)
+        Z, Y = np.meshgrid(z_vec, y_vec)
+        
+        self.patch_width = self.Ly / n_patches_w
+        self.patch_height = abs(self.Lz) / n_patches_h
+        
+        patch_id = 0
+        for i in range(n_patches_w):
+            for j in range(n_patches_h):
+                center_y = (i + 0.5) * self.patch_width
+                center_z = self.Lz + (j + 0.5) * self.patch_height
+                self.patch_origins[patch_id] = np.array([i * self.patch_width, j * self.patch_height])
+                
+                # exp( - (dist^2 / 2*sigma^2)^p_exp )
+                dist_sq = ((Z - center_z)**2 + (Y - center_y)**2)
+                tower = h_tower * np.exp(- (dist_sq / (2 * sigma**2))**p_exp)
+                
+                X += tower
+                patch_id += 1
+        
+        X = X + x_offset
+        self.mesh_x, self.mesh_y, self.mesh_z = X, Y, Z
+        self.point_cloud = self.convert_meshgrid_to_pc(X, Y, Z)
+        return X, Y, Z
+
+    def generate_gaussian_bumps_map(self, Lz, Ly, grid_size=100, wall_depth=2, standard_deviation=0.8, n_gaussian=None, seed=None, casual=False, x_offset=1):
+        
+        if seed == "default" or seed is None:
+            np.random.seed(47)
+        else:
+            np.random.seed(int(seed))
+        
+        X = np.zeros((grid_size, grid_size))
+        
+        z = np.linspace(Lz, 0, grid_size)
+        y = np.linspace(0, Ly, grid_size)
+        Z, Y = np.meshgrid(z, y)
+        
+        if n_gaussian is None:
+            wall_area = abs(Lz) * Ly
+            n_gaussian = int(wall_area / 10)
+        
+        if casual:
+            for _ in range(n_gaussian):
+                cz = np.random.uniform(Lz, 0)
+                cy = np.random.uniform(0, Ly)
+                amplitude = np.random.uniform(0.3, 0.5) * wall_depth
+                
+                sigma_z = standard_deviation * abs(Lz) / 10
+                sigma_y = standard_deviation * Ly / 10
+                
+                gaussian = amplitude * np.exp(-((Z - cz)**10 / (2 * sigma_z**10) + 
+                                                (Y - cy)**10 / (2 * sigma_y**10)))
+                gaussian = np.minimum(gaussian, amplitude) 
+                X += gaussian
+        else:
+            # Create a grid with 2*n_gaussian total cells, then fill half with gaussians
+            total_cells = 2 * n_gaussian
+            
+            # Calculate grid dimensions based on aspect ratio
+            aspect_ratio = abs(Lz) / Ly
+            n_cols = int(np.round(np.sqrt(total_cells / aspect_ratio)))
+            n_cols = max(1, n_cols)
+            n_rows = int(np.ceil(total_cells / n_cols))
+            n_rows = max(1, n_rows)
+            
+            # Generate grid positions (cell centers)
+            cell_height = abs(Lz) / n_rows
+            cell_width = Ly / n_cols
+            
+            z_positions = np.linspace(Lz + cell_height/2, -cell_height/2, n_rows)
+            y_positions = np.linspace(cell_width/2, Ly - cell_width/2, n_cols)
+            
+            amplitude = wall_depth
+            sigma_z = standard_deviation * abs(Lz) / 10
+            sigma_y = standard_deviation * Ly / 10
+            
+            # Place gaussians in alternating pattern (checkerboard)
+            count = 0
+            for i, cz in enumerate(z_positions):
+                for j, cy in enumerate(y_positions):
+                    # Alternating pattern: place gaussian only when (i + j) is even
+                    if (i + j) % 2 == 0 and count < n_gaussian:
+                        gaussian = amplitude * np.exp(-((Z - cz)**2 / (2 * sigma_z**2) + 
+                                                        (Y - cy)**2 / (2 * sigma_y**2)))
+                        X += gaussian
+                        count += 1
+        
+        X = X + x_offset
+        
+        self.patch_width = Ly / self.number_of_patches_width
+        self.patch_height = abs(Lz) / self.number_of_patches_height
+        patch_id = 0
+        for i in range(self.number_of_patches_width):
+            for j in range(self.number_of_patches_height):
+                self.patch_origins[patch_id] = np.array([self.patch_width*i, self.patch_height*j])
+                patch_id += 1
+        
+        return X, Y, Z
+          
     def convert_meshgrid_to_pc(self, X, Y, Z):
         x_position = X.flatten()
         y_position = Y.flatten()
@@ -214,7 +340,7 @@ class TerrainManager:
 
         # Extract coordinate arrays from meshgrids
         z_coords = mesh_z[0, :]  # Z coordinates (1D array)
-        y_coords = mesh_y[:, 0]  # Y coordinates (1D array)
+        y_coords = mesh_y[:, 0]  # Y Coordinates (1D array)
 
         # Create interpolation function using RegularGridInterpolator
         # Note: RegularGridInterpolator expects (y, z) order for 2D data
@@ -308,7 +434,7 @@ class TerrainManager:
         # Create interpolation functions for gradients
         # Using RegularGridInterpolator for better performance and consistency
         z_coords = mesh_z[0, :]  # Z coordinates (1D)
-        y_coords = mesh_y[:, 0]  # Y coordinates (1D)
+        y_coords = mesh_y[:, 0]  # Y Coordinates (1D)
 
         # Note: RegularGridInterpolator expects (y, z) order for 2D data
         Fz_interp = RegularGridInterpolator((y_coords, z_coords), dx_dz,
@@ -631,7 +757,7 @@ if __name__ == '__main__':
     print(normal)
     
     terrainManager.plot_debug(debug=True)
-    
-    
-    
+
+
+
 

@@ -15,8 +15,8 @@ from base_controllers.utils.matlab_conversions import mat_matrix2python, mat_vec
 
 # Initialize MATLAB engine globally
 eng = matlab.engine.start_matlab()
-eng.addpath('../codegen_mesh_landing', nargout=0)
-sys.path.insert(0, '../codegen_mesh_landing')
+eng.addpath('../../codegen_mesh_landing', nargout=0)
+sys.path.insert(0, '../../codegen_mesh_landing')
 
 
 from params import *
