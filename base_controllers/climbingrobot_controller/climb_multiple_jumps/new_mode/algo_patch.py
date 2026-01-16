@@ -109,17 +109,23 @@ class CrossEntropyMethodMixed:
             })
         
 
-    def generate_population_discrete(self) -> None:
-        # Generate random gaussian values from pure Normal distribution (mean=0, std=1)
+    def generate_population_discrete(self,first_iteration=False) -> None:
         for i in range(self.params.pop_size):
             for j in range(self.params.dim_discrete):
-                p = self.rng.random()
-                s = 0.0
-                for k in range(self.params.n_values[j]):
-                    s += self.probs[j][k]
-                    if p < s:
-                        break
-                self.population_discrete[j, i] = k
+                if j == 0 and i == 0 and first_iteration == True:
+                    self.population_discrete[j, i] = 0
+                else:
+                    p = self.rng.random()
+                    s = 0.0
+                    chosen_k = self.params.n_values[j] - 1
+                    for k in range(1, self.params.n_values[j]):
+                        
+                        n_prob = self.probs[j][k] / (1.0 - self.probs[j][0])
+                        s += n_prob
+                        if p < s:
+                            chosen_k = k
+                            break
+                    self.population_discrete[j, i] = chosen_k
 
     
     def update_distribution_discrete(self):

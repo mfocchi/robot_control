@@ -25,20 +25,9 @@ def main():
     
     if setting["COMPUTATION_MODE"]:
         best_lock = threading.Lock()
-        
         algo = CrossEntropyMethodMixed(cem_params)
         
-        # Terrain configuration values for rock terrain, otherwise stay in default
-        # wall_depth = 1            
-        # grid_size = 100
-        # max_ridge_depth = 0.5     
-        # seed = 30                 
-        # Lz = -50                  
-        # Ly = 10          
-        # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
-        terrain_manager  = TerrainManager()
         point_clouds, patches, cost_grid = initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
-        save_terrain_data(terrain_manager,point_clouds, patches)
 
         # Pass pre-computed data to the optimizer
         optimizer = BilevelOpt(
@@ -50,6 +39,7 @@ def main():
         )
         
         cost_hist = np.zeros(cem_params.cem_iters)
+        
         best_jump_log_points = None
         best_jump = None
         best_trajectory = None
@@ -61,12 +51,12 @@ def main():
         
         for k in range(cem_params.cem_iters):
             iter_start = time.time()
-            
             # Generate population
-            algo.generate_population_discrete()
+            first_iteration = (k == 0)
+            algo.generate_population_discrete(first_iteration)
             xd = algo.population_discrete   # shape: dim_discrete x pop_size
             # xc = algo.population_continuous # shape: dim_continuous x pop_size
-            # Organise inputs into a 2D matrix where we have as columns
+            print (xd)
             inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
         
             fitness = [0.0] * cem_params.pop_size
@@ -76,7 +66,11 @@ def main():
             all_landing_cost = [0.0] * cem_params.pop_size
             all_n_jumps = [0] * cem_params.pop_size
             n_workers = cem_params.n_threads
-        
+            
+            # patch_ids_esplorati = xd[1:, :].flatten().astype(int)
+            # unique_patch_ids = np.unique(patch_ids_esplorati).tolist()
+            # patches.plot_patches_by_id(unique_patch_ids)
+            
             # ============================
             # flag_thread == TRUE: multi-threaded evaluation
             # ============================
@@ -112,8 +106,6 @@ def main():
                                 print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
                         print(colored(f"complete individual {idx}, Iteration {k+1}", "yellow")) #scrvi in arancione
                 print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
-            
-
             # ============================
             # flag_thread == FALSE: sequential evaluation
             # ============================
@@ -122,13 +114,13 @@ def main():
                 print(colored("Sequential evaluation", "yellow", attrs=['bold']))
                 print(colored(f"{'='*60}\n", "yellow"))
                 
-                for i, population_inputs in enumerate(inputs, start=1):
+                for i, population_inputs in enumerate(inputs):
                     log_result = optimizer.eval_pop(population_inputs)
+                    if k == 0 and i == 0:
+                        print(colored(f"\n[PLOT] Visualizzazione primo individuo dell'iterazione 1...", "magenta", attrs=['bold']))
+                        optimizer.plot_mesh_traj(log_result['points'], log_result['traj'], log_result['fitness'])
                     
-                    fitness.append(log_result['fitness']) #log_result['fitness']
-                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "red", attrs=['bold']))
-                    
-                    log_result = future.result()
+                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "cyan", attrs=['bold']))
                     
                     fitness[i] = log_result['fitness']
                     all_log_points[i] = log_result['points']
@@ -150,6 +142,7 @@ def main():
             # Update distributions
             algo.evaluate_population(fitness)
             algo.update_distributions()
+            
             cost_hist[k] = algo.log.best_value 
                    
             print ("finish iteration ", k+1)
@@ -166,14 +159,16 @@ def main():
             
             
             # =======================
-            # SAVE PARTS
+            # SAVE PARTS INSIDE THE ITERATION LOOP
             # =======================
             
             # 1. Save elites of current iteration
             num_elites = cem_params.n_elites
             sorted_indices = np.argsort(fitness)[::-1]
             elite_indices = sorted_indices[:num_elites]
-            
+            xd_elites = xd[1:, elite_indices]
+            elite_patch_ids = np.unique(xd_elites).astype(int).tolist()
+            # patches.plot_patches_by_id(elite_patch_ids)
             current_iteration_elites = []
             for idx in elite_indices:
                 elite_sol = {
@@ -222,7 +217,7 @@ def main():
         # xc = algo.best_continuous        
         
         # =======================
-        # FINAL SAVE
+        # FINAL SAVE 
         # =======================
         print(f"Best discrete solution: {xd}")
         # print(f"Best continuous solution: {xc}")

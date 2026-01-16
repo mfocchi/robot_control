@@ -32,107 +32,87 @@ class LinearOpti:
     
     def eval_pop(self, input_data):
         
+        # Extract discrete parameters (first array is the possible jumps) and the rest are the patch IDs
+        xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
+        n_jumps = int(xd[0])
+        
+        # State tracking
         jump_log_points = []
         jump_log_traj = []
-        
-        xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
-        n_jumps = int(xd[0])     
-        ids = []
         fitness = 0.0
         total_consumed_energy = 0.0
         total_landing_cost = 0.0
+        all_converged = True  # Flag to monitor overall convergence
         
         print(colored(f"[EVAL] Evaluating individual with {n_jumps + 1} total jumps ({n_jumps} intermediate + 1 final)", "blue"))
         
         p0_adj = self.p0.copy()
-        
         p0_adj[0] = self.terrain_manager.wall_surface_eval(
             p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
             self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
         
         jump_log_points.append(p0_adj.copy())
         
-        for i in range(n_jumps):
+        total_jump = n_jumps + 1  # Including final jump
+        for i in range(total_jump):
+            if i < n_jumps:
+                patch_id = int(xd[1 + i])
+                contact_relative_to_patch_yz = [0.5, 0.5] # center of the patch
+                pf_adj = self.patches.getAbsolutePoseOfPointInsidePatch(
+                    patch_id, contact_relative_to_patch_yz[0],
+                    contact_relative_to_patch_yz[1], scale=1.0).copy()
+            else: 
+                pf_adj = self.pf.copy()
+                patch_id = None
             
-            patch_id = int(xd[1 + i])
+            # Projection on the surface the points considered for optimization
+            for pt in [p0_adj, pf_adj]:
+                pt[0] = self.terrain_manager.wall_surface_eval(
+                    pt[2], pt[1], self.terrain_manager.mesh_x,
+                    self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
             
-            contact_relative_to_patch_yz = [0.5, 0.5] # center of the patch (poi è il codice di focchi a trovare il centro grazie al mio costo)
-            landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(
-                patch_id, contact_relative_to_patch_yz[0],
-                contact_relative_to_patch_yz[1], scale=1.0)
-            pf_adj = landing_abs_pos.copy()
+            # Compute normal at liftoff
+            liftoff_normal = self.terrain_manager.wall_normal_eval(
+                p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
+                self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
             
-            pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,
-                                                               self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-            p0_adj[0] = self.terrain_manager.wall_surface_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-                                                               self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-            
-            # compute normal at liftoff
-            liftoff_normal = self.terrain_manager.wall_normal_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-                                                                   self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-
-            
-            
-            #tun optimization
+            # Run optimization
             res = self.linear_computation(p0_adj, pf_adj)
             
+            # Convergence Check
+            if int(res['problem_solved']) != 1:
+                all_converged = False
+            
+            # Update logs and metrics
             jump_log_traj.append(res['linear_trajectory'])
-            
-            # Track energy and landing cost
-            total_consumed_energy += res['consumed_energy']
-            landing_cost = self.patches.get_cost_in_point(patch_id, pf_adj[1:])
-            total_landing_cost += landing_cost
-            
-            fitness += self.calc_linear_fitness(res, patch_id=patch_id, 
-                                        contact_abs_pos_yz=pf_adj[1:])
-            
-            # Add landing point AFTER the trajectory
             jump_log_points.append(pf_adj.copy())
-            p0_adj = pf_adj.copy()
+            total_consumed_energy += res['consumed_energy']
             
-        # print("final jump")
-        # last jump is to pf
-        # absolute coordinates of FINAL landing location
-        pf_adj = self.pf.copy()
-        
-        # adjust X coordinate to terrain shape for both liftoff and landing points
-        pf_adj[0] = self.terrain_manager.wall_surface_eval(pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,
-                                                           self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-        p0_adj[0] = self.terrain_manager.wall_surface_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-                                                           self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+            jump_fitness, jump_landing_cost = self.calc_linear_fitness(
+                res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
+            fitness += jump_fitness
+            total_landing_cost += jump_landing_cost
+            
+            # The landing point becomes the new starting point
+            p0_adj = pf_adj.copy()
 
-        # compute normal at liftoff
-        liftoff_normal = self.terrain_manager.wall_normal_eval(p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-                                                               self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-        
-        
-        res = self.linear_computation(p0_adj, pf_adj)
-        
-        # Track energy for final jump
-        total_consumed_energy += res['consumed_energy']
-        
-        fitness += self.calc_linear_fitness(res)
-        
-        if (n_jumps+1) < 2:
-            fitness -= 500.0  # Valore molto basso per "spaventare" l'algoritmo
-        
-        jump_log_traj.append(res['linear_trajectory'])
-        jump_log_points.append(pf_adj.copy())
-        print(f"Final jump: p0_adj = {p0_adj}, pf_adj = {pf_adj} ; fitness = {fitness}")
+        status_msg = "CONVERGED" if all_converged else "FAILED (One or more jumps did not converge)"
+        print(f"--- Evaluation Results ---")
+        print(f"Total Jumps: {n_jumps + 1}, Total Fitness: {fitness:.4f}, Energy Consumed: {total_consumed_energy:.2f}, Global Convergence: {status_msg}")
+        print(f"--------------------------")
 
         # Plot trajectories if requested
         #self.plot_point_traj(jump_log_points, jump_log_traj)
         
-        log_result = {
+        return {
             'fitness': fitness,
             'points': jump_log_points,
             'traj': jump_log_traj,
             'n_jumps': n_jumps + 1,
             'consumed_energy': total_consumed_energy,
-            'landing_cost': total_landing_cost
+            'landing_cost': total_landing_cost,
+            'all_converged': all_converged
         }
-        
-        return log_result
     
     def linear_computation(self, p0, pf):
         distance = np.linalg.norm(pf - p0)
@@ -153,30 +133,31 @@ class LinearOpti:
         
         return res
            
-    def calc_linear_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
+    def calc_linear_fitness(self, res, patch_id=None, contact_abs_pos_yz=None):
         fit_average_cost_patch = 0.
         fit_landing_cost = 0.
 
-        if (patch_id is not None and  contact_abs_pos_yz is not None):
+        if (patch_id is not None and contact_abs_pos_yz is not None):
             #compute cost for landing candidate
             fit_landing_cost = -self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
             #compute average cost on patch to see how bad /good is terrain there
             fit_average_cost_patch = -self.patches.get_patch_cost(patch_id)
-            #if fit_landing_costmap is None:
 
         fit_consumed_energy = -res['consumed_energy']
-        if (res['problem_solved']) == 1 :
+        if (res['problem_solved']) == 1:
             fit_problem_converged = 0
         else: #problem did not converge
             fit_problem_converged = -5000
-        # print("jump duration", res['Tf'])
-        print(f"convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
         
-        fitness = ( self.fitness_weights[0] * fit_problem_converged + 
-                    self.fitness_weights[1] * fit_consumed_energy +
-                    self.fitness_weights[2] * fit_average_cost_patch + 
-                    self.fitness_weights[3] * fit_landing_cost)
-        return fitness
+        # print(f"convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
+        
+        fitness = (self.fitness_weights[0] * fit_problem_converged + 
+                   self.fitness_weights[1] * fit_consumed_energy +
+                   self.fitness_weights[2] * fit_average_cost_patch + 
+                   self.fitness_weights[3] * fit_landing_cost)
+        
+        return fitness, fit_landing_cost
+    
     def plot_point_traj(self, jump_log_points, jump_log_traj):
         # Conversione sicura dei punti della nuvola
         x_points = np.array([point['position'][0] for point in self.point_clouds.points_t])

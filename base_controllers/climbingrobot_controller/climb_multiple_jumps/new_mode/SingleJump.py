@@ -22,53 +22,6 @@ sys.path.insert(0, '../../codegen_mesh_landing')
 from params import *
 
 
-def initialize_terrain_data(terrain_manager, filter_weights, inner_opt_params):
-    # === 1 POINT CLOUD INITIALIZATION ===
-    in_point_clouds = terrain_manager.point_cloud
-    point_clouds = PointCloudFilter(in_point_clouds)
-    
-    # Apply height profile filter
-    anchor_location = np.array(inner_opt_params['p_a1'])
-    point_clouds.filter_height_profile(
-        profile="logln", 
-        x0=anchor_location[0], 
-        weight=filter_weights[3], 
-        side_application="depth"
-    )
-    
-    # Apply gradient filters
-    kernel = [point_clouds.sobel_y, point_clouds.sobel_z] 
-    point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[1], plot=False)
-    
-    # Optionally visualize cost map
-    # point_clouds.visualize_cost_map()
-
-    # === 2 PATCHES INITIALIZATION ===
-    pc_t = point_clouds.points_t
-    patches = PatchSurface(
-        pc_t,
-        number_of_patches_width=number_of_patches_width, 
-        number_of_patches_height=number_of_patches_height
-    )
-    cost_grid = patches.get_cost_meshgrid()
-    
-    # Update inner_opt_params with terrain data
-    inner_opt_params['mesh_x'] = terrain_manager.mesh_x
-    inner_opt_params['mesh_y'] = terrain_manager.mesh_y
-    inner_opt_params['mesh_z'] = terrain_manager.mesh_z
-    inner_opt_params['cost_x'] = cost_grid
-    inner_opt_params['cost_y'] = terrain_manager.mesh_y
-    inner_opt_params['cost_z'] = terrain_manager.mesh_z
-    inner_opt_params['patch_side'] = 1.0 * patches.patch_width
-    
-    # Apply cost-based coloring to patches
-    patches.cost_color()
-    # Optionally plot patches
-    # patches.plot_patches()
-    
-    return point_clouds, patches, cost_grid
-
-
 class SingleJump:
     """
     Class to handle single jump optimization between two points on a terrain.
@@ -154,7 +107,7 @@ class SingleJump:
         if res['problem_solved'] == 1 or res['problem_solved'] == 2:
             fit_problem_converged = 0.0
         else:
-            fit_problem_converged = -100.0
+            fit_problem_converged = -1000.0
         
         # Print individual fitness components
         print(f"  convergence: {fitness_weights[0]*fit_problem_converged:.2f}, "
@@ -340,11 +293,7 @@ def main():
     # Initialize terrain
     print(colored("\n1. Initializing Terrain...", "yellow"))
     terrain_manager = TerrainManager()
-    point_clouds, patches, cost_grid = initialize_terrain_data(
-        terrain_manager, 
-        filter_weights, 
-        inner_opt_params
-    )
+    point_clouds, patches, cost_grid = initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
     print(colored("   Terrain initialized successfully!", "green"))
     
     print(colored("\n2. Creating Jump Optimizer...", "yellow"))
@@ -374,7 +323,7 @@ def main():
     
     # Plot trajectory
     print(colored("\n5. Plotting Trajectory...", "yellow"))
-    jump_optimizer.plot_trajectory([p0_adj, pf_adj], [trajectory], show_plot=True)
+    jump_optimizer.plot_trajectory([p0_adj, pf_adj], [trajectory], show_plot=False)
     jump_optimizer.plot_mesh_traj([p0_adj, pf_adj], [trajectory])
     print(colored("\n=== Single Jump Optimization Complete! ===", "cyan", attrs=['bold']))
 

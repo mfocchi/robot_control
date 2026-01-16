@@ -60,19 +60,19 @@ def main():
             xc = algo.population_continuous # shape: dim_continuous x pop_size
             # Organise inputs into a 2D matrix where we have as columns
             inputs = [[xd[:, i].tolist(), xc[:, i].tolist()] for i in range(cem_params.pop_size)]
-            fitness = []
+            
+            fitness = [0.0] * cem_params.pop_size
+            all_log_points = [None] * cem_params.pop_size
+            all_log_traj = [None] * cem_params.pop_size
+            all_consumed_energy = [0.0] * cem_params.pop_size
+            all_landing_cost = [0.0] * cem_params.pop_size
+            all_n_jumps = [0] * cem_params.pop_size
+            n_workers = cem_params.n_threads
             
             # ============================
             # flag_thread == TRUE: multi-threaded evaluation
             # ============================
             if (flag_thread == True):
-                fitness = [0.0] * cem_params.pop_size
-                all_log_points = [None] * cem_params.pop_size
-                all_log_traj = [None] * cem_params.pop_size
-                all_consumed_energy = [0.0] * cem_params.pop_size
-                all_landing_cost = [0.0] * cem_params.pop_size
-                all_n_jumps = [0] * cem_params.pop_size
-                n_workers = cem_params.n_threads
                 
                 print(colored(f"\n{'='*60}", "yellow"))
                 print(colored(f"{n_workers} Thread evaluation with ThreadPoolExecutor, Iteration {k+1}/{cem_params.cem_iters}", "yellow", attrs=['bold']))
@@ -118,8 +118,15 @@ def main():
                     log_result = optimizer.eval_pop(population_inputs)
                     
                     fitness.append(log_result['fitness']) #log_result['fitness']
-                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "red", attrs=['bold']))
+                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "cyan", attrs=['bold']))
 
+                    fitness[i] = log_result['fitness']
+                    all_log_points[i] = log_result['points']
+                    all_log_traj[i] = log_result['traj']
+                    all_consumed_energy[i] = log_result['consumed_energy']
+                    all_landing_cost[i] = log_result['landing_cost']
+                    all_n_jumps[i] = log_result['n_jumps']
+                    
                     if log_result['fitness'] > best_fitness:
                         best_fitness = log_result['fitness']
                         best_consumed_energy = log_result['consumed_energy']

@@ -2,8 +2,6 @@ import os
 import sys
 import numpy as np
 from termcolor import colored
-import threading
-import matlab.engine
 from params import *
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches 
@@ -12,54 +10,6 @@ from base_controllers.utils.matlab_conversions import (
     mat_vector2python,
 )
 
-thread_local = threading.local()
-
-def get_matlab_engine(point_clouds=None, cost_grid=None, terrain_manager=None):
-    if not hasattr(thread_local, 'engine'):
-        eng = matlab.engine.start_matlab()
-        eng.addpath('../../codegen_mesh_landing', nargout=0)
-        
-        thread_local.engine = eng
-        print(f"Created Engine and uploaded Mesh for thread {threading.current_thread().name}")
-    return thread_local.engine
-
-def close_matlab_engines():
-    if hasattr(thread_local, 'engine'):
-        thread_local.engine.quit()
-        del thread_local.engine
-        print("MATLAB engine closed")
-        
-def shutdown_engine():
-    close_matlab_engines()
-
-def create_inner_opt_params_copy():
-    return {
-        'm': inner_opt_params['m'],
-        'num_params': inner_opt_params['num_params'],
-        'int_method': inner_opt_params['int_method'],
-        'N_dyn': inner_opt_params['N_dyn'],
-        'FRICTION_CONE': inner_opt_params['FRICTION_CONE'],
-        'int_steps': inner_opt_params['int_steps'],
-        'b': inner_opt_params['b'],
-        'p_a1': matlab.double([0., 0., 0.]).reshape(3, 1),
-        'p_a2': matlab.double([0., inner_opt_params['b'], 0.]).reshape(3, 1),
-        'g': inner_opt_params['g'],
-        'w1': inner_opt_params['w1'],
-        'w2': inner_opt_params['w2'],
-        'w3': inner_opt_params['w3'],
-        'T_th': inner_opt_params['T_th'],
-        'obstacle_avoidance': inner_opt_params['obstacle_avoidance'],
-        'jump_clearance': inner_opt_params['jump_clearance'],
-        'mesh_x': inner_opt_params['mesh_x'],
-        'mesh_y': inner_opt_params['mesh_y'],
-        'mesh_z': inner_opt_params['mesh_z'],
-        'cost_x': inner_opt_params['cost_x'],
-        'cost_y': inner_opt_params['cost_y'],
-        'cost_z': inner_opt_params['cost_z'],
-        'patch_side': inner_opt_params['patch_side'],
-        'contact_normal': None,
-    }
-    
 class BilevelOpt:
     
     def __init__(self, terrain_manager, p0, pf_patch, fitness_weights, point_clouds, patches, cost_grid):
@@ -68,142 +18,95 @@ class BilevelOpt:
         self.p0 = p0
         self.pf_patch = pf_patch
         self.fitness_weights = fitness_weights
-        
         # terrain creation done outside to avoid recomputation at each thread
         self.point_clouds = point_clouds
         self.patches = patches
         self.cost_grid = cost_grid
     
     def eval_pop(self, input_data):
-        # n_iteration matlab for n_thread
+        # Initialization parameters for matlab engine
         eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager)
-        
         local_inner_opt_params = create_inner_opt_params_copy()
         
-        jump_log_points = []
-        jump_log_traj = []
-        
-        # === MODIFICA: Input è ora solo la lista discreta ===
-        # Extract the actual list from the wrapper
+        # Extract discrete parameters (first array is the possible jumps) and the rest are the patch IDs
         xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
         n_jumps = int(xd[0])
         
+        # State tracking
+        jump_log_points = []
+        jump_log_traj = []
         fitness = 0.0
         total_consumed_energy = 0.0
         total_landing_cost = 0.0
+        all_converged = True  # Flag to monitor overall convergence
         
-        # print(colored(f"[EVAL] Evaluating individual with {n_jumps + 1} total jumps", "blue"))
-        
-        # 1. Start Point Correction (Wall Surface Eval fatta QUI)
         p0_adj = self.p0.copy()
         p0_adj[0] = self.terrain_manager.wall_surface_eval(
             p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
             self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
         
         jump_log_points.append(p0_adj.copy())
-        
-        # Loop per i salti intermedi
-        for i in range(n_jumps):
-            
-            patch_id = int(xd[1 + i])
-            contact_relative_to_patch_yz = [0.5, 0.5]  # center of the patch
 
-            # computes 0, Y, Z  absolute coordinates of candidate landing location
-            landing_abs_pos = self.patches.getAbsolutePoseOfPointInsidePatch(
-                patch_id, contact_relative_to_patch_yz[0],
-                contact_relative_to_patch_yz[1], scale=1.0)
+        total_jump = n_jumps + 1  # Including final jump
+        for i in range(total_jump):
+            if i < n_jumps:
+                patch_id = int(xd[1 + i])
+                center_relative_patch_yz = [.5, .5]
+                pf_adj = self.patches.getAbsolutePoseOfPointInsidePatch(
+                    patch_id, center_relative_patch_yz[0], 
+                    center_relative_patch_yz[1], scale=1.0).copy()
+            else: 
+                pf_adj = self.pf_patch.copy()
+                patch_id = self.patches.get_patch_id_from_point_2D(pf_adj[1], pf_adj[2]) 
             
-            pf_adj = landing_abs_pos.copy()
-            
-            # Intermediate Landing Correction (Wall Surface Eval)
-            pf_adj[0] = self.terrain_manager.wall_surface_eval(
-                pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,
-                self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-            
-            # Recalculate p0 projection (liftoff point) just to be safe/consistent
-            p0_adj[0] = self.terrain_manager.wall_surface_eval(
-                p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-                self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-            
-            # compute normal at liftoff
+            # Projection on the surface the points considered for optimization
+            for pt in [p0_adj, pf_adj]:   
+                pt[0] = self.terrain_manager.wall_surface_eval(
+                    pt[2], pt[1], self.terrain_manager.mesh_x,
+                    self.terrain_manager.mesh_y, self.terrain_manager.mesh_z) 
+
+            # Calculate liftoff normal
             liftoff_normal = self.terrain_manager.wall_normal_eval(
-                p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-                self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-
-            # Update only contact_normal for this jump
+                p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x
+                , self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+            
             local_inner_opt_params['contact_normal'] = matlab.double(liftoff_normal)
             
-            # Run optimization (inner loop)
             res = eng.optimize_cpp_mex(
                 matlab.double(p0_adj), matlab.double(pf_adj), 
                 Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
             
+            # Convergence Check (1=Converged, 2=Semidefinite)
+            if int(res['problem_solved']) not in [1, 2]:
+                all_converged = False
+            
+            
+            # Update logs and metrics
             jump_log_traj.append(mat_matrix2python(res['p']))
-            
-            # Track energy and landing cost
-            total_consumed_energy += res['consumed_energy']
-            landing_cost = self.patches.get_cost_in_point(patch_id, pf_adj[1:])
-            total_landing_cost += landing_cost
-            
-            fitness += self.calc_fitness(res, patch_id=patch_id, 
-                                        contact_abs_pos_yz=pf_adj[1:])
-            
-            # Add landing point AFTER the trajectory
             jump_log_points.append(pf_adj.copy())
+            total_consumed_energy += res['consumed_energy']
+        
+            jump_fitness,jump_landing_cost = self.calc_fitness(res, contact_abs_pos_yz=pf_adj[1:])
+            fitness += jump_fitness
+            total_landing_cost += jump_landing_cost
+            
+            # The landing point becomes the new starting point
             p0_adj = pf_adj.copy()
-            
-        # === FINAL JUMP ===
-        # Use the global target self.pf 
-        pf_adj = self.pf_patch.copy()
-        
-        # 3. Final Target Correction (Wall Surface Eval fatta QUI)
-        pf_adj[0] = self.terrain_manager.wall_surface_eval(
-            pf_adj[2], pf_adj[1], self.terrain_manager.mesh_x,
-            self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-        
-        # Re-project liftoff point
-        p0_adj[0] = self.terrain_manager.wall_surface_eval(
-            p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-            self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
 
-        # compute normal at liftoff
-        liftoff_normal = self.terrain_manager.wall_normal_eval(
-            p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
-            self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-        
-        # Update only contact_normal for final jump
-        local_inner_opt_params['contact_normal'] = matlab.double(liftoff_normal)
-        
-        res = eng.optimize_cpp_mex(
-            matlab.double(p0_adj), matlab.double(pf_adj), 
-            Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
-        
-        # Track energy for final jump
-        total_consumed_energy += res['consumed_energy']
-        
-        fitness += self.calc_fitness(res)
-        
-        # Penalty for too few jumps (optional logic)
-        if (n_jumps + 1) < 2:
-            fitness -= -100.0 
-            
-        ref_com = mat_matrix2python(res['p'])
-        jump_log_traj.append(ref_com)
-        jump_log_points.append(pf_adj.copy())
-        
-        # Debug print opzionale
-        # print(f"Final jump: p0_adj = {p0_adj}, pf_adj = {pf_adj} ; fitness = {fitness}")
+        status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
+        print(f"--- Evaluation Results ---")
+        print(f"Total Jumps: {n_jumps + 1}, Total Fitness: {fitness:.4f}, Energy Consumed: {total_consumed_energy:.2f}, Global Convergence: {status_msg}")
+        print(f"--------------------------")
 
-        log_result = {
+        return {
             'fitness': fitness,
             'points': jump_log_points,
             'traj': jump_log_traj,
             'n_jumps': n_jumps + 1,
             'consumed_energy': total_consumed_energy,
-            'landing_cost': total_landing_cost
+            'landing_cost': total_landing_cost,
+            'all_converged': all_converged
         }
-        
-        return log_result
                
     def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
         fit_average_cost_patch = 0.
@@ -228,8 +131,8 @@ class BilevelOpt:
                     self.fitness_weights[1] * fit_consumed_energy +
                     self.fitness_weights[2] * fit_average_cost_patch + 
                     self.fitness_weights[3] * fit_landing_cost)
-        print(f"fitness: {fitness}, convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
-        return fitness
+        #print(f"fitness: {fitness}, convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
+        return fitness,fit_landing_cost
     
     def plot_point_traj(self, jump_log_points, jump_log_traj):
         
