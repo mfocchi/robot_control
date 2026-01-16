@@ -17,15 +17,19 @@ from base_controllers.components.terrain_manager import TerrainManager
 # BASE DATA FOR MULTIPLE JUMPS CLIMBING CONTROLLER
 # ================================================
 # start and goal point
-P0_INIT = np.array([0.0, 1.5, -6.4])
-PF_PATCH_INIT = np.array([0.0, 3.25, -6.4])
+# P0_INIT = np.array([0.0, 1.46, -2.53])
+# PF_PATCH_INIT = np.array([0.0, 1.46, -5.55])
+
+P0_INIT = np.array([0.0, 2.43, -5.5]) 
+PF_PATCH_INIT=  np.array([0.0, 2.43,-8.5])
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 4
 THREADS = 5
-flag_thread = False
-MAIN_DIRECTORY = "result_patch_11"
+flag_thread = True
 
-Fleg_max = 600.
+MAIN_DIRECTORY = "result/result_test"
+
+Fleg_max = 300.
 Fr_max = 90.
 Fr_min = 10.
 number_of_patches_width = 10
@@ -77,7 +81,7 @@ cem_params = CemParams()
 cem_params.seed = int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 1
+cem_params.cem_iters = 10
 cem_params.pop_size =10
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # NON RIDURRE LA POPOLAZIONE

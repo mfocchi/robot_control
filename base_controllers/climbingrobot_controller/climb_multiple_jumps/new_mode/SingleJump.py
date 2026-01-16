@@ -136,7 +136,7 @@ class SingleJump:
 
         # Plot terrain
         ax.scatter(x_points, y_points, z_points,
-                c=color, s=size_point, alpha=0.2, label='Terrain')
+                c=color, s=size_point, alpha=0.5, label='Terrain')
 
         # Plot jump points
         for i, p in enumerate(jump_points):
