@@ -71,6 +71,9 @@ def main():
             all_n_jumps = [0] * cem_params.pop_size
             n_workers = cem_params.n_threads
             
+            # patch_ids_esplorati = xd[1:, :].flatten().astype(int)
+            # unique_patch_ids = np.unique(patch_ids_esplorati).tolist()
+            # patches.plot_patches_by_id(unique_patch_ids)
             # ============================
             # flag_thread == TRUE: multi-threaded evaluation
             # ============================
