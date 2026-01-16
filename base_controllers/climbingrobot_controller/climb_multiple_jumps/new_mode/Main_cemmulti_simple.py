@@ -30,8 +30,7 @@ def main():
         algo = CrossEntropyMethodMixed(cem_params)
         terrain_manager = TerrainManager()
         point_clouds, patches, cost_grid = initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
-        save_terrain_data(terrain_manager,point_clouds, patches)
-
+        
         # Pass pre-computed data to the optimizer
         optimizer = LinearOpti(
             terrain_manager, P0_INIT, PF_PATCH_INIT, 
@@ -54,25 +53,28 @@ def main():
         for k in range(cem_params.cem_iters):
             iter_start = time.time()
             
+            first_iteration = (k == 0)
             # Generate population
-            algo.generate_population_discrete()
+            algo.generate_population_discrete(first_iteration)
             xd = algo.population_discrete   # shape: dim_discrete x pop_size
+            print(xd)
             
             # Organise inputs into a 2D matrix where we have as columns
             inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
-            fitness = []
+            
+            
+            fitness = [0.0] * cem_params.pop_size
+            all_log_points = [None] * cem_params.pop_size
+            all_log_traj = [None] * cem_params.pop_size
+            all_consumed_energy = [0.0] * cem_params.pop_size
+            all_landing_cost = [0.0] * cem_params.pop_size
+            all_n_jumps = [0] * cem_params.pop_size
+            n_workers = cem_params.n_threads
             
             # ============================
             # flag_thread == TRUE: multi-threaded evaluation
             # ============================
             if (flag_thread == True):
-                fitness = [0.0] * cem_params.pop_size
-                all_log_points = [None] * cem_params.pop_size
-                all_log_traj = [None] * cem_params.pop_size
-                all_consumed_energy = [0.0] * cem_params.pop_size
-                all_landing_cost = [0.0] * cem_params.pop_size
-                all_n_jumps = [0] * cem_params.pop_size
-                n_workers = cem_params.n_threads
                 
                 print(colored(f"\n{'='*60}", "yellow"))
                 print(colored(f"{n_workers} Thread evaluation with ThreadPoolExecutor, Iteration {k+1}/{cem_params.cem_iters}", "yellow", attrs=['bold']))
@@ -94,6 +96,7 @@ def main():
                         all_n_jumps[idx] = log_result['n_jumps']
                         
                         with best_lock:
+                            
                             if log_result['fitness'] > best_fitness: #and (n_jumps + 1) >= 3:
                                 best_fitness = log_result['fitness']
                                 best_consumed_energy = log_result['consumed_energy']
@@ -103,7 +106,8 @@ def main():
                                 best_jump = log_result['n_jumps']
                                 print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
                         print(colored(f"complete individual {idx}, Iteration {k+1}", "yellow")) #scrvi in arancione
-                    
+                
+                print() 
                 print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
             
 
@@ -115,12 +119,19 @@ def main():
                 print(colored("Sequential evaluation", "yellow", attrs=['bold']))
                 print(colored(f"{'='*60}\n", "yellow"))
                 
-                for i, population_inputs in enumerate(inputs, start=1):
+                for i, population_inputs in enumerate(inputs):
                     log_result = optimizer.eval_pop(population_inputs)
                     
-                    fitness.append(log_result['fitness']) #log_result['fitness']
-                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "red", attrs=['bold']))
+                    
+                    print(colored(f"\n[COMPLETE] Individual {i+1}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "red", attrs=['bold']))
 
+                    fitness[i] = log_result['fitness']
+                    all_log_points[i] = log_result['points']
+                    all_log_traj[i] = log_result['traj']
+                    all_consumed_energy[i] = log_result['consumed_energy']
+                    all_landing_cost[i] = log_result['landing_cost']
+                    all_n_jumps[i] = log_result['n_jumps']
+                    
                     if log_result['fitness'] > best_fitness:
                         best_fitness = log_result['fitness']
                         best_consumed_energy = log_result['consumed_energy']
