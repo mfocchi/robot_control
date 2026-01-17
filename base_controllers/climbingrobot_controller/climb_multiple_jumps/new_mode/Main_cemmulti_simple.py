@@ -251,11 +251,11 @@ def main():
             "best_jump_log_points": [p.tolist() for p in best_jump_log_points] if best_jump_log_points is not None else None,
             "best_trajectory": [t.tolist() if t is not None else None for t in best_trajectory] if best_trajectory is not None else None
         }
-        best_log_filename = "best_trajectory_log.json"
-        best_log_save_path = os.path.join(result_dir, best_log_filename)
-        with open(best_log_save_path, "w") as f:
-            json.dump(best_log_data, f, indent=2)
-        print(colored(f"[SAVE] Best trajectory log saved to: {best_log_save_path}", "blue"))
+        # best_log_filename = "best_trajectory_log.json"
+        # best_log_save_path = os.path.join(result_dir, best_log_filename)
+        # with open(best_log_save_path, "w") as f:
+        #     json.dump(best_log_data, f, indent=2)
+        # print(colored(f"[SAVE] Best trajectory log saved to: {best_log_save_path}", "blue"))
         
         # Plot best trajectory at the end
         print(colored(f"\n{'='*70}", "green", attrs=['bold']))
@@ -272,17 +272,7 @@ def main():
 
     if setting["PLOT_MODE"]:
         
-        plot_result_cem_mjumps = PlotResultCemMjumps()
-        plot_result_cem_mjumps.plot_terrain_patches()
-        plot_result_cem_mjumps.plot_actual_terrain()
-        plot_result_cem_mjumps.plot_all_in_one()
-        # plot_result_cem_mjumps.plot_density_map()
-        plot_result_cem_mjumps.plot_3d_scenario_iterations(animated=True)
-        plot_result_cem_mjumps.plot_2d_iterations_layout(animated=True)
-        # plot_result_cem_mjumps.plot_evolution_fitness()
-        # plot_result_cem_mjumps.plot_evolution_std_dev_cem()
-        plot_result_cem_mjumps.plot_mesh_traj()
-
+        print("plot da stampare")
 if __name__ == "__main__":
     # try:
         main()

@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =0.1,max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='gaussian_bumps'):
+    def __init__(self, grid_size=100,wall_depth =0.1,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='hemisphere'):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
@@ -38,7 +38,7 @@ class TerrainManager:
                     self.max_ridge_depth, self.seed
                 )
             if terrain_type=='hemisphere':
-                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size)
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 0.7, grid_size=self.grid_size)
 
             if terrain_type == 'gaussian_bumps':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
@@ -58,7 +58,7 @@ class TerrainManager:
                 )
             
                 
-            self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
+            # self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
 
             # Convert to point cloud format and store
             self.point_cloud = self.convert_meshgrid_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)

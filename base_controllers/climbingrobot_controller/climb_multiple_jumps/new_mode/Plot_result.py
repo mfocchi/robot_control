@@ -1,7 +1,10 @@
 import json
+from typing import Any, List
+from attr import dataclass
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib import colors
+from matplotlib.colors import Normalize, LinearSegmentedColormap
 import numpy as np
 import os
 from scipy.interpolate import griddata
@@ -10,335 +13,394 @@ from params import *
 import matplotlib
 matplotlib.use('Qt5Agg')
 
+FILE_TERRAIN_POINTS = f"{MAIN_DIRECTORY}/actual_point_terrain.json"
+FILE_TERRAIN_PATCHES = f"{MAIN_DIRECTORY}/actual_patch_terrain.json"
+ITERATIONS_FOLDER = f"{MAIN_DIRECTORY}/iteration_reports"
+FILE_SAVE_PARAMS = f"{MAIN_DIRECTORY}/simulation_params.json"
+
+@dataclass
+class InnerParams:
+    Fleg_max: float
+    Fr_max: float
+    Fr_min: float
+    mass: float
+    anchor_distance: float
+    fitness_weights: List[float]
+    filter_weights: List[float]
+    inner_opt_params: Any
+
+@dataclass
+class CemParams:
+    seed: int
+    n_threads: int
+    cem_iters: int
+    pop_size: int
+    n_elites: int
+    decrease_pop_factor: float
+    fraction_elites_reused: float
+    dim_discrete: int
+    n_values: int
+    init_probs: List[float]
+    min_prob: float
+    dim_continuous: int
+    max_value_continuous: List[float]
+    min_value_continuous: List[float]
+    init_mu_continuous: List[float]
+    init_std_continuous: List[float]
+    min_std_continuous: List[float]
+
+@dataclass
+class eliteData:
+    fitness: float
+    n_jumps: int
+    consumed_energy: float
+    landing_cost: float
+    points: List[List[float]]  
+    traj: List[List[List[float]]]
+    patch_ids: List[int]
+    
+
 
 class PlotResultCemMjumps:
     
     def __init__(self):
-        self.iterations_folder = ITERATIONS_FOLDER
         
-        # Load all JSON files
-        self.data_terrain_points = self._load_json(FILE_TERRAIN_POINTS)
-        self.data_terrain_patches = self._load_json(FILE_TERRAIN_PATCHES)
-        self.data_progress = self._load_json(FILE_PROGRESS)
-        self.data_best_log = self._load_json(FILE_BEST_LOG)
+        # LOAD PARAMS
+        self.data_params = self.load_simulation_params()
         
-        # Initialize data containers
-        self.px = self.py = self.pz = None
-        self.points_np = self.colors_np = None
-        self.points_t = []
-        self.patches_list = []
-        self.edge_patches = []
+        self.p0 = self.data_params['START']
+        self.pf = self.data_params['GOAL']
+        self.n_jumps = self.data_params['MAX_JUMP']
+        self.n_threads = self.data_params['THREADS']
+        self.inner_params = InnerParams(**self.data_params['inner_opt_params_order'])
+        self.cem_params = CemParams(**self.data_params['cem_params'])
         
-        # Solution data
-        self.iterations = self.fitnesses = self.n_jumps = []
-        self.energies = self.landing_costs = []
-        self.all_points = []
+        # LOAD POINTS
+        self.data_terrain_points = self.load_terrain_points()
+        self.num_points = self.data_terrain_points['metadata']['num_points']
+        self.mesh_bounds = self.data_terrain_points['mesh_bounds'] # [xmin, xmax, ymin, ymax, zmin, zmax]
+        self.points_t_data = self.data_terrain_points['points'] 
+                                                # list of dicts:
+                                                # - position: [x, y, z]
+                                                # - color: [r, g, b]
+                                                # - light: float
+                                                # - size_point: float
+                                                # - cost: float
+        self.pc_plotter = PointCloudFilter(pc=[p['position'] for p in self.points_t_data])
         
-        # Trajectory data
-        self.best_points_np = None
-        self.best_traj_segments = []
-        self.starts_np = self.ends_np = self.intermediates_np = None
+        # LOAD PATCHES
+        self.data_terrain_patches = self.load_terrain_patches()
+        self.num_patches = self.data_terrain_patches['metadata']['num_patches']
+        self.patch_width = self.data_terrain_patches['metadata']['patch_width']
+        self.patch_height = self.data_terrain_patches['metadata']['patch_height']
+        self.patches = self.data_terrain_patches['patches'] 
+        self.patch_plotter = PatchSurface(points_t=self.points_t_data,
+                                          number_of_patches_height=int(self.patch_width),
+                                          number_of_patches_width=int(self.patch_height),)
         
-        # Extract all data
-        self._extract_terrain_data()
-        self._extract_solution_data()
-        self._extract_best_trajectory_data()
-        self._extract_trajectory_points()
+        
+        # self.data_terrain_patches = self.load_terrain_patches(FILE_TERRAIN_PATCHES)
+        # self.data_iteration_history = self.load_iteration_history(ITERATIONS_FOLDER)
     
-    def _load_json(self, filename):
-        """Load JSON file with error handling."""
-        if not os.path.exists(filename):
-            print(f"ERROR: File '{filename}' not found.")
-            return None
-        with open(filename, 'r') as f:
-            return json.load(f)
-    
-    def _extract_terrain_data(self):
-        """Extract terrain points and patches."""
-        # Extract points
-        if self.data_terrain_points and 'points' in self.data_terrain_points:
-            point_list = self.data_terrain_points['points']
-            positions, colors = [], []
-            
-            for p in point_list:
-                p_dict = {
-                    'position': p.get('position'),
-                    'color': p.get('color'),
-                    'light': p.get('light', 1.0),
-                    'size_point': p.get('size_point', 1.0),
-                    'cost': p.get('cost', 0.0)
-                }
-                self.points_t.append(p_dict)
-                positions.append(p_dict['position'])
-                colors.append(p_dict['color'])
-            
-            self.points_np = np.array(positions)
-            self.colors_np = np.array(colors)
-            if self.points_np.size > 0:
-                self.px, self.py, self.pz = self.points_np[:, 0], self.points_np[:, 1], self.points_np[:, 2]
-            
-            self.start_pos_terrain = self.data_terrain_points.get('start_position')
-            self.goal_pos_terrain = self.data_terrain_points.get('goal_position')
+        # LOAD ITERATION HISTORY
         
-        # Extract patches
-        if self.data_terrain_patches and 'patches' in self.data_terrain_patches:
-            meta = self.data_terrain_patches.get('metadata', {})
-            self.patch_width = meta.get('patch_width')
-            self.patch_height = meta.get('patch_height')
-            self.num_patches = meta.get('num_patches')
-            
-            for patch in self.data_terrain_patches.get('patches', []):
-                points_in_patch = patch.get('points_in_patch', [])
-                mean_cost = np.mean([pt.get('cost', 0.0) for pt in points_in_patch]) if points_in_patch else 0.0
+        self.best_fit_ever = []         # take from last iteration
+        self.best_energy_ever = []      # take from last iteration
+        self.best_land_cost_ever = []   # take from last iteration
+        self.best_traj_ever = []        # take from last iteration
+        self.best_fit_each_iter = []
+        self.all_elites = []
+        self.iteration_files = sorted([f for f in os.listdir(ITERATIONS_FOLDER) if f.startswith('iteration_') and f.endswith('.json')],
+                                      key=lambda x: int(x.split('_')[1].split('.')[0]))
+        
+        self.load_iteration_history()
+        
+    def load_iteration_history(self):
+        
+        for file_name in self.iteration_files:
+            with open(os.path.join(ITERATIONS_FOLDER, file_name), 'r') as file:
+                iteration_data = json.load(file)
                 
-                self.patches_list.append({
-                    'id': patch.get('id'),
-                    'centroid': patch.get('centroid'),
-                    'points_in_patch': points_in_patch,
-                    'cost_patch': mean_cost
-                })
-
-    def _extract_solution_data(self):
-        """Extract solution data from iteration files."""
-        if not os.path.exists(self.iterations_folder):
-            print(f"WARNING: Iterations folder '{self.iterations_folder}' not found.")
-            return
+                self.best_fit_each_iter.append(iteration_data['best_fitness_this_iter'])
+                
+                iteration_elites = []
+                for e  in iteration_data['elites']:
+                    elite_instance = eliteData(
+                        fitness=e['fitness'],
+                        n_jumps=e['n_jumps'],
+                        consumed_energy=e['consumed_energy'],
+                        landing_cost=e['landing_cost'],
+                        points=e['points'],
+                        traj=e['traj'],
+                        patch_ids=e['patch_ids']
+                    )
+                    iteration_elites.append(elite_instance)
+                    
+                self.all_elites.append(iteration_elites)
+                
+                self.best_fit_ever = iteration_data['best_fitness_ever']
+                self.best_energy_ever = iteration_data['best_consumed_energy_ever']
+                self.best_land_cost_ever = iteration_data['best_landing_cost_ever']
+                self.best_traj_ever = iteration_data['best_trajectory_ever']
+          
+    def load_simulation_params(self):
         
-        iter_files = sorted([f for f in os.listdir(self.iterations_folder) if f.endswith('.json')])
-        
-        data_lists = {'iterations': [], 'fitnesses': [], 'n_jumps': [], 
-                      'energies': [], 'landing_costs': [], 'all_points': []}
-        
-        for filename in iter_files:
-            data = self._load_json(os.path.join(self.iterations_folder, filename))
-            if data is None:
-                continue
-            
-            iteration_num = data.get('iteration', 0)
-            for elite in data.get('elites', []):
-                data_lists['iterations'].append(iteration_num)
-                data_lists['fitnesses'].append(elite.get('fitness', 0.0))
-                data_lists['n_jumps'].append(elite.get('n_jumps', 0))
-                data_lists['energies'].append(elite.get('consumed_energy', 0.0))
-                data_lists['landing_costs'].append(elite.get('landing_cost', 0.0))
-                data_lists['all_points'].append(elite.get('points', []))
-        
-        # Convert to numpy arrays
-        for key in ['iterations', 'fitnesses', 'n_jumps', 'energies', 'landing_costs']:
-            setattr(self, key, np.array(data_lists[key]) if data_lists[key] else np.array([]))
-        self.all_points = data_lists['all_points']
-        
-        print(f"[INFO] Extracted {len(self.fitnesses)} solutions from {len(iter_files)} files.")
-        
-    def _extract_trajectory_points(self):
-        """Extract start, end, and intermediate points from solutions."""
-        starts, ends, intermediates = [], [], []
-        
-        for pts in self.all_points:
-            if not pts:
-                continue
-            pts_np = [np.array(p) if not isinstance(p, np.ndarray) else p for p in pts]
-            
-            if len(pts_np) > 0:
-                starts.append(pts_np[0])
-            if len(pts_np) > 1:
-                ends.append(pts_np[-1])
-            if len(pts_np) > 2:
-                intermediates.extend(pts_np[1:-1])
-        
-        self.starts_np = np.array(starts) if starts else np.array([]).reshape(0, 3)
-        self.ends_np = np.array(ends) if ends else np.array([]).reshape(0, 3)
-        self.intermediates_np = np.array(intermediates) if intermediates else np.array([]).reshape(0, 3)
-        
-    def _extract_best_trajectory_data(self):
-        """Extract best trajectory data."""
-        if self.data_best_log:
-            pts = self.data_best_log.get('best_jump_log_points', [])
-            if pts:
-                self.best_points_np = np.array(pts)
-            
-            traj = self.data_best_log.get('best_trajectory', [])
-            self.best_traj_segments = [np.array(t) for t in traj if t is not None]
-            print(f"[INFO] Extracted best trajectory with {len(self.best_traj_segments)} segments.")
+        with open(FILE_SAVE_PARAMS, 'r') as file:
+            data_params = json.load(file)
+        return data_params
     
-    def _setup_axis(self, ax=None, projection=None):
-        """Helper to create or use existing axis."""
-        created_fig = False
-        if ax is None:
-            fig = plt.figure(figsize=(12, 10))
-            ax = fig.add_subplot(111, projection=projection)
-            created_fig = True
-        else:
-            fig = ax.figure
-        return fig, ax, created_fig
-
-    def plot_actual_terrain(self, ax=None):
-        """Plot terrain point cloud."""
-        if self.points_np is None:
-            print("ERROR: No terrain data available.")
-            return
-        
-        fig, ax, created = self._setup_axis(ax, '3d')
-        ax.scatter(self.px, self.py, self.pz, c=self.colors_np, s=10)
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-        
-        if created:
-            plt.show()
-            
-    def plot_terrain_patches(self, ax=None):
-        """Visualize terrain patches with centroids."""
-        if not self.patches_list:
-            print("WARNING: No patch data available.")
-            return
-
-        fig, ax, created = self._setup_axis(ax, '3d')
-        cmap = plt.get_cmap('tab20')
-        
-        for i, patch in enumerate(self.patches_list):
-            centroid = patch.get('centroid')
-            if centroid is None:
-                continue
-            
-            centroid_np = np.array(centroid)
-            color = cmap(i % 20)
-            
-            ax.scatter(centroid_np[0], centroid_np[1], centroid_np[2],
-                      c=[color], s=50, alpha=0.9, edgecolors='black',
-                      linewidths=0.5, marker='s')
-            ax.text(centroid_np[0], centroid_np[1], centroid_np[2], 
-                   f"{patch.get('id', i)}", fontsize=6, ha='center')
-
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-        ax.set_title(f"Terrain Patches ({len(self.patches_list)} patches)")
-
-        if created:
-            plt.savefig(f'{MAIN_DIRECTORY}/plot_terrain_patches.png', dpi=150)
-            plt.show()
+    def load_terrain_points(self):    
+        with open(FILE_TERRAIN_POINTS, 'r') as file:
+            data_terrain_points = json.load(file)
+        return data_terrain_points
     
-    def plot_fitness_by_iteration(self, ax=None):
-        """Plot fitness distribution across iterations."""
-        if len(self.fitnesses) == 0:
-            print("WARNING: No fitness data available.")
-            return None
-            
-        fig, ax, created = self._setup_axis(ax)
-        
-        scatter = ax.scatter(self.iterations, self.fitnesses, c=self.fitnesses, 
-                           cmap='viridis', alpha=0.8, edgecolors='k', s=60)
-        fig.colorbar(scatter, ax=ax, label='Fitness Value')
-        
-        # Highlight best solution
-        if len(self.fitnesses) > 0:
-            best_idx = np.argmax(self.fitnesses)
-            ax.annotate(f'Best: {self.fitnesses[best_idx]:.2f}', 
-                       xy=(self.iterations[best_idx], self.fitnesses[best_idx]), 
-                       xytext=(self.iterations[best_idx], self.fitnesses[best_idx] + 
-                              (max(self.fitnesses)-min(self.fitnesses))*0.05),
-                       arrowprops=dict(facecolor='red', shrink=0.05))
-        
-        ax.set_title('Fitness Distribution vs Iteration', fontsize=14)
-        ax.set_xlabel('Iteration', fontsize=12)
-        ax.set_ylabel('Fitness', fontsize=12)
-        ax.grid(True, linestyle='--', alpha=0.5)
-        fig.tight_layout()
-        
-        if created:
-            fig.savefig(f'{MAIN_DIRECTORY}/plot_fitness_iteration.png')
-            plt.show()
-        
-        return scatter
-        
-    def plot_jumps_histogram(self, ax=None):
+    def load_terrain_patches(self):
+        with open(FILE_TERRAIN_PATCHES, 'r') as file:
+            data_terrain_patches = json.load(file)
+        return data_terrain_patches
+    
+    # ================= 
+    # Plot methods
+    # =================
+    
+    def base_plot(self):
+        # plot point cloud with cost
+        self.pc_plotter.visualize_cost_map(self.points_t_data)
+        # plot patches with different colors
+        # self.patch_plotter.random_color()
+        # self.patch_plotter.cost_color()
+        # self.patch_plotter.plot_patches()
+        # TODO da capire come mai non va
+    
+    
+    def count_jump_histogram(self, ax=None, use_last_iter_only=False):
         """Plot histogram of jump counts."""
-        if len(self.n_jumps) == 0:
-            print("WARNING: No jump data available.")
+        if use_last_iter_only:
+            jump_data = [e.n_jumps for e in self.all_elites[-1]]
+            title_suffix = "(Last Iteration)"
+        else:
+            jump_data = [e.n_jumps for iter_list in self.all_elites for e in iter_list]
+            title_suffix = "(All Iterations)"
+
+        if not jump_data:
+            print("WARNING: Jump data list is empty.")
             return
-            
-        fig, ax, created = self._setup_axis(ax)
-        bins = np.arange(min(self.n_jumps) - 0.5, max(self.n_jumps) + 1.5, 1)
+
+        created = False
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            created = True
+        else:
+            fig = ax.get_figure()
+
+        # 3. Plotting
+        min_j, max_j = min(jump_data), max(jump_data)
+        bins = np.arange(min_j - 0.5, max_j + 1.5, 1)
         
-        ax.hist(self.n_jumps, bins=bins, color='skyblue', edgecolor='black', 
-               alpha=0.7, rwidth=0.8)
-        ax.set_title('Jump Count Distribution', fontsize=14)
+        ax.hist(jump_data, bins=bins, color='skyblue', edgecolor='black', 
+                alpha=0.7, rwidth=0.8)
+        
+        # 4. Formattazione
+        ax.set_title(f'Jump Count Distribution {title_suffix}', fontsize=14)
         ax.set_xlabel('Number of Jumps', fontsize=12)
-        ax.set_ylabel('Solution Count', fontsize=12)
-        ax.set_xticks(range(min(self.n_jumps), max(self.n_jumps) + 1))
+        ax.set_ylabel('Frequency (Elites)', fontsize=12)
+        ax.set_xticks(range(int(min_j), int(max_j) + 1))
         ax.grid(axis='y', linestyle='--', alpha=0.5)
+        
         fig.tight_layout()
         
         if created:
-            fig.savefig(f'{MAIN_DIRECTORY}/plot_jumps_histogram.png')
+            save_path = f'{MAIN_DIRECTORY}/plot_jumps_histogram.png'
+            fig.savefig(save_path)
+            print(f"Histogram saved to: {save_path}")
             plt.show()
-        
-    def plot_energy_vs_cost(self, ax=None):
-        """Plot energy vs landing cost trade-off."""
-        if len(self.energies) == 0 or len(self.landing_costs) == 0:
-            print("WARNING: No energy/cost data available.")
+   
+    def plot_fitness_by_iteration(self, ax=None):
+        if not self.all_elites:
+            print("WARNING: No data available for plotting fitness.")
             return
-            
-        fig, ax, created = self._setup_axis(ax)
+
+        # 1. Preparazione dell'asse
+        created = False
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(12, 7))
+            created = True
+        else:
+            fig = ax.get_figure()
+
+        # 2. Separazione dei dati in due gruppi: "Normali" e "Best Ever"
+        x_normal, y_normal = [], []
+        x_best, y_best = [], []
         
-        scatter = ax.scatter(self.energies, self.landing_costs, c=self.fitnesses, 
-                           cmap='plasma', s=50, alpha=0.8, edgecolors='gray')
-        cbar = fig.colorbar(scatter, ax=ax)
-        cbar.set_label('Total Fitness')
+        # Tolleranza per il confronto di numeri float
+        tolerance = 1e-9 
+
+        all_fitness_values_for_norm = [] # Serve per calcolare min/max globali
+
+        for i, iteration_list in enumerate(self.all_elites):
+            current_iter = i + 1
+            for elite in iteration_list:
+                all_fitness_values_for_norm.append(elite.fitness)
+                
+                # Se la fitness è "uguale" alla migliore di sempre
+                if np.isclose(elite.fitness, self.best_fit_ever, atol=tolerance):
+                    x_best.append(current_iter)
+                    y_best.append(elite.fitness)
+                else:
+                    x_normal.append(current_iter)
+                    y_normal.append(elite.fitness)
+
+        if not all_fitness_values_for_norm:
+             print("WARNING: No fitness values found.")
+             return
+
+        # 3. Configurazione della Colormap (solo per i punti "normali")
+        # Usiamo min/max totali per avere una scala coerente
+        vmin = min(all_fitness_values_for_norm)
+        vmax = max(all_fitness_values_for_norm)
+        norm = Normalize(vmin=vmin, vmax=vmax)
+        colors_cmap = ['green', 'orange'] 
+        cmap_name = 'green_to_orange_gradient'
+        custom_cmap = LinearSegmentedColormap.from_list(cmap_name, colors_cmap, N=256)
+        sc = ax.scatter(x_normal, y_normal, c=y_normal, cmap=custom_cmap, norm=norm,
+                        s=35, edgecolors='black', linewidths=0.3, alpha=0.8, zorder=3,
+                        label='Elite Solutions (Gradient)')
+        if x_best:
+            ax.scatter(x_best, y_best, c='red',
+                       s=50, edgecolors='black', linewidths=0.5, alpha=1.0, zorder=4,
+                       label='Best Ever Reached')
+        ax.set_title('Elite Fitness Distribution', fontsize=14)
+        ax.set_xlabel('Iteration', fontsize=12)
+        ax.set_ylabel('Fitness Value', fontsize=12)
+        ax.axhline(y=self.best_fit_ever, color='red', linestyle='--', linewidth=1, alpha=0.5, zorder=2)
         
-        ax.set_title('Energy vs Landing Cost Trade-off', fontsize=14)
-        ax.set_xlabel('Consumed Energy [J]', fontsize=12)
-        ax.set_ylabel('Landing Cost', fontsize=12)
-        ax.grid(True, linestyle='--', alpha=0.5)
+        ax.grid(True, linestyle=':', alpha=0.5, zorder=0)
+        
+        ax.legend(loc='upper right', frameon=True, fancybox=True, framealpha=0.9)
+        max_iter = len(self.all_elites)
+        if max_iter <= 25:
+             ax.set_xticks(range(1, max_iter + 1))
+        else:
+            ax.xaxis.get_major_locator().set_params(integer=True)
+
         fig.tight_layout()
-        
+
         if created:
-            fig.savefig(f'{MAIN_DIRECTORY}/plot_energy_vs_cost.png')
+            save_path = f'{MAIN_DIRECTORY}/plot_fitness_colormap_redbest.png'
+            fig.savefig(save_path)
+            print(f"Fitness plot saved to: {save_path}")
             plt.show()
     
-    def plot_3d_scenario(self, ax=None):
-        """Complete 3D visualization with terrain and jump points."""
-        if self.px is None or len(self.px) == 0:
-            print("WARNING: No terrain data available.")
+    def plot_mesh_pc_traj(self, ax=None, show_cost=True):
+        """
+        Visualizza la migliore traiettoria assoluta (best_ever) sul terreno 3D.
+        Flag show_cost: se True, colora i punti del terreno in base al loro costo.
+        """
+        
+        # 1. Controllo disponibilità dati
+        if not self.best_traj_ever:
+            print("WARNING: Nessuna traiettoria 'best_ever' trovata.")
             return
+
+        # Setup dell'asse 3D
+        if ax is None:
+            fig = plt.figure(figsize=(14, 9)) # Leggermente più grande per far spazio alla colorbar
+            ax = fig.add_subplot(111, projection='3d')
+            created = True
+        else:
+            fig = ax.get_figure()
+            created = False
+
+        # 2. Render del Terreno
+        px = np.array([p['position'][0] for p in self.points_t_data])
+        py = np.array([p['position'][1] for p in self.points_t_data])
+        pz = np.array([p['position'][2] for p in self.points_t_data])
+        
+        if show_cost:
+            # Estraiamo i costi per ogni punto
+            costs = np.array([p['cost'] for p in self.points_t_data])
+            # Creiamo lo scatter con colormap
+            sc_terrain = ax.scatter(px, py, pz, c=costs,cmap='RdYlGn_r', s=1, alpha=1, 
+                                   label='Terrain', zorder=1)
+            # Aggiungiamo una colorbar dedicata al costo del terreno
+            cbar = fig.colorbar(sc_terrain, ax=ax, pad=0.1, shrink=0.6)
+            cbar.set_label('Terrain Point Cost', rotation=270, labelpad=15)
+        else:
+            # Grigio uniforme come prima
+            ax.scatter(px, py, pz, c='gray', s=1, alpha=0.3, label='Terrain', zorder=1)
+
+        # 3. Disegno dei Segmenti della Traiettoria
+        all_x, all_y, all_z = [px], [py], [pz] 
+        landing_points = []
+        blue_label_added = False
+        yellow_label_added = False
+
+        for i, segment in enumerate(self.best_traj_ever):
+            segment_np = np.array(segment)
+            if segment_np.shape[0] == 3 and segment_np.shape[1] != 3:
+                x_s, y_s, z_s = segment_np[0, :], segment_np[1, :], segment_np[2, :]
+            else:
+                x_s, y_s, z_s = segment_np[:, 0], segment_np[:, 1], segment_np[:, 2]
             
-        fig, ax, created = self._setup_axis(ax, '3d')
-        
-        # Terrain
-        ax.scatter(self.px, self.py, self.pz, c='gray', s=2, alpha=0.20, label='Terrain')
-        
-        # Start and goal
-        if self.starts_np.size > 0 and len(self.starts_np.shape) > 1:
-            ax.scatter(self.starts_np[0,0], self.starts_np[0,1], self.starts_np[0,2], 
-                      c='lime', s=100, marker='^', label='Start', depthshade=False)
-        
-        if self.ends_np.size > 0 and len(self.ends_np.shape) > 1:
-            ax.scatter(self.ends_np[0,0], self.ends_np[0,1], self.ends_np[0,2], 
-                      c='red', s=100, marker='X', label='Goal', depthshade=False)
-        
-        # Jump points
-        if self.intermediates_np.size > 0 and len(self.intermediates_np.shape) > 1:
-            ax.scatter(self.intermediates_np[:,0], self.intermediates_np[:,1], 
-                      self.intermediates_np[:,2], c='blue', s=20, marker='o', 
-                      alpha=0.6, label='Jump Points')
-        
-        ax.set_title("Jump Visualization on Terrain", fontsize=14)
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.legend()
-        ax.view_init(elev=25, azim=-45)
-        
+            displacement = np.sqrt((x_s[0]-x_s[-1])**2 + (y_s[0]-y_s[-1])**2 + (z_s[0]-z_s[-1])**2)
+            
+            if displacement < 1e-3:
+                jump_color = 'yellow'
+                label = "Stationary Jump" if not yellow_label_added else ""
+                yellow_label_added = True
+            else:
+                jump_color = 'blue'
+                label = "Active Trajectory" if not blue_label_added else ""
+                blue_label_added = True
+            
+            ax.plot(x_s, y_s, z_s, color=jump_color, linewidth=2.5, zorder=10, label=label)
+            
+            all_x.append(x_s)
+            all_y.append(y_s)
+            all_z.append(z_s)
+            landing_points.append([x_s[0], y_s[0], z_s[0]])
+            if i == len(self.best_traj_ever) - 1:
+                landing_points.append([x_s[-1], y_s[-1], z_s[-1]])
+
+        lp = np.array(landing_points)
+
+        # 4. Landing Points, Start (p0) e Goal (pf)
+        ax.scatter(lp[:, 0], lp[:, 1], lp[:, 2], c='black', s=25, zorder=11, label='Contact Points')
+        ax.scatter(self.p0[0], self.p0[1], self.p0[2], c='lime', s=200, marker='^', 
+                   edgecolors='black', linewidths=1.5, zorder=15, label='Start (p0)')
+        ax.scatter(self.pf[0], self.pf[1], self.pf[2], c='red', s=200, marker='X', 
+                   edgecolors='black', linewidths=1.5, zorder=15, label='Goal (pf)')
+
+        # 5. Scaling 1:1:1
+        flat_x, flat_y, flat_z = np.concatenate(all_x), np.concatenate(all_y), np.concatenate(all_z)
+        max_range = np.array([flat_x.max()-flat_x.min(), flat_y.max()-flat_y.min(), flat_z.max()-flat_z.min()]).max() / 2.0
+        mid_x, mid_y, mid_z = (flat_x.max()+flat_x.min())*0.5, (flat_y.max()+flat_y.min())*0.5, (flat_z.max()+flat_z.min())*0.5
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        # 6. Titolo e Legenda
+        cost_status = "with Cost Map" if show_cost else ""
+        ax.set_title(f"Best Trajectory {cost_status}\n(Fitness: {self.best_fit_ever:.4f})", 
+                    fontsize=13, fontweight='bold')
+        ax.set_xlabel("X (m)")
+        ax.set_ylabel("Y (m)")
+        ax.set_zlabel("Z (m)")
+        ax.legend(loc='upper left', fontsize='small')
+        ax.view_init(elev=30, azim=-60)
+
         if created:
-            plt.savefig(f'{MAIN_DIRECTORY}/plot_3d_scenario.png', dpi=150)
+            plt.tight_layout()
             plt.show()
+   
+    def plot_terrain_traj(self, ax=None, show_cost=True):
+        pass
     
     def compute_edge_patches(self):
-        """Compute patch contours using ConvexHull."""
+        """Compute patch contours using ConvexHull for 3D visualization."""
         self.edge_patches = []
         
-        for patch in self.patches_list:
+        for patch in self.patches:
             points_data = patch.get('points_in_patch', [])
             if len(points_data) < 3:
                 continue
@@ -346,443 +408,398 @@ class PlotResultCemMjumps:
             coords = np.array([p['position'] for p in points_data])
             
             try:
+                # Project onto YZ plane for hull computation
                 points_2d = coords[:, [1, 2]]
                 hull = ConvexHull(points_2d)
                 sorted_pts = coords[hull.vertices]
+                # Close the polygon
                 sorted_pts = np.vstack([sorted_pts, sorted_pts[0]])
                 
                 self.edge_patches.append({
-                    'position': sorted_pts.tolist(),
-                    'color': [0, 0, 0]
+                    'position': sorted_pts,
+                    'patch_id': patch.get('id', -1),
+                    'cost': patch.get('cost_patch', 0.0)
                 })
-            except:
+            except Exception:
                 continue
     
-    def plot_density_map(self, ax=None):
-        """Plot 3D density heatmap of jump points on YZ plane."""
-        fig, ax, created = self._setup_axis(ax, '3d')
+    def plot_2d_iterations_layout(self, ax=None, animated=False):
+        """2D YZ plane visualization of contact points with patch contours and equal aspect ratio."""
         
-        # Terrain background
-        ax.scatter(self.px, self.py, self.pz, c=self.colors_np, s=2, alpha=0.3, label='Terrain')
-        
-        # Extract jump points
-        jump_y, jump_z, jump_x = [], [], []
-        for pts in self.all_points:
-            if len(pts) > 2:
-                for p in pts[1:-1]:
-                    jump_x.append(p[0])
-                    jump_y.append(p[1])
-                    jump_z.append(p[2])
-        
-        if not jump_y:
-            print("Warning: No jump points for heatmap.")
-            return
-        
-        # Create density grid
-        y_min, y_max = min(self.py), max(self.py)
-        z_min, z_max = min(self.pz), max(self.pz)
-        
-        H, yedges, zedges = np.histogram2d(jump_y, jump_z, bins=50,
-                                          range=[[y_min, y_max], [z_min, z_max]])
-        
-        ycenters = (yedges[:-1] + yedges[1:]) / 2
-        zcenters = (zedges[:-1] + zedges[1:]) / 2
-        Yc, Zc = np.meshgrid(ycenters, zcenters)
-        
-        # Interpolate density
-        yi = np.linspace(y_min, y_max, 100)
-        zi = np.linspace(z_min, z_max, 100)
-        Yi, Zi = np.meshgrid(yi, zi)
-        density = griddata((Yc.flatten(), Zc.flatten()), H.T.flatten(), 
-                          (Yi, Zi), method='cubic', fill_value=0)
-        
-        x_base = min(self.px) - (max(self.px) - min(self.px)) * 0.05
-        Xi = np.full_like(Yi, x_base)
-        
-        # Plot surface and points
-        ax.plot_surface(Xi, Yi, Zi, facecolors=plt.cm.inferno(density / density.max()),
-                       alpha=0.6, shade=False, rstride=5, cstride=5)
-        ax.scatter(jump_x, jump_y, jump_z, c='gold', s=20, marker='o', 
-                  alpha=1.0, label='Jump Points', edgecolors='white', linewidths=0.5)
-        
-        # Colorbar
-        m = plt.cm.ScalarMappable(cmap='inferno')
-        m.set_array(density)
-        cbar = plt.colorbar(m, ax=ax, pad=0.1, shrink=0.7)
-        cbar.set_label('Jump Density', fontsize=10)
-        
-        ax.set_title("Jump Density Map (YZ Plane)", fontsize=14)
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.view_init(elev=20, azim=10)
-        
-        if created:
-            plt.savefig(f'{MAIN_DIRECTORY}/plot_density_map.png', dpi=150)
-            plt.show()
-        
-    def plot_evolution_fitness(self):
-        """Plot fitness convergence over iterations."""
-        if not os.path.exists(self.iterations_folder):
-            print("[WARNING] Iterations folder not found")
-            return
-        
-        iter_files = sorted([f for f in os.listdir(self.iterations_folder) if f.endswith('.json')])
-        if not iter_files:
-            return
-        
-        iterations, best_values, best_ever = [], [], []
-        current_best = float('-inf')
-        
-        for filename in iter_files:
-            data = self._load_json(os.path.join(self.iterations_folder, filename))
-            if data:
-                iter_num = data.get('iteration', 0)
-                best_fitness = data.get('best_fitness_this_iter', 0.0)
-                current_best = max(current_best, best_fitness)
-                
-                iterations.append(iter_num)
-                best_values.append(best_fitness)
-                best_ever.append(current_best)
-        
-        if not iterations:
-            return
-        
-        plt.figure(figsize=(12, 7))
-        plt.plot(iterations, best_values, linewidth=2, marker='o', markersize=4, 
-                color='#2E86AB', alpha=0.6, label='Best Fitness (Iter)')
-        plt.plot(iterations, best_ever, linewidth=3, color='#27AE60', 
-                label='Best Ever', zorder=5)
-        
-        plt.xlabel('Iteration', fontsize=12, fontweight='bold')
-        plt.ylabel('Fitness', fontsize=12, fontweight='bold')
-        plt.title('CEM Fitness Convergence', fontsize=14, fontweight='bold')
-        plt.grid(True, alpha=0.3, linestyle='--')
-        plt.legend(fontsize=10)
-        plt.tight_layout()
-        
-        plt.savefig(f'{MAIN_DIRECTORY}/plot_evolution_fitness.png', dpi=150)
-        plt.show()
-
-    def plot_evolution_std_dev_cem(self):
-        """Plot standard deviation convergence for CEM variables."""
-        history_file = f"{MAIN_DIRECTORY}/cem_iteration_history.json"
-        
-        if not os.path.exists(history_file):
-            print("[WARNING] CEM history file not found")
-            return
-        
-        with open(history_file, 'r') as f:
-            history_data = json.load(f)
-        
-        iteration_history = history_data.get('iteration_history', [])
-        if not iteration_history:
-            return
-        
-        iterations = [h['iteration'] for h in iteration_history]
-        std_history = np.array([h['std_devs'] for h in iteration_history])
-        
-        plt.figure(figsize=(12, 6))
-        colors = plt.cm.tab20(np.linspace(0, 1, std_history.shape[1]))
-        
-        for i in range(std_history.shape[1]):
-            patch_num = i // 2 + 1
-            coord = 'Y' if i % 2 == 0 else 'Z'
-            plt.plot(iterations, std_history[:, i], 
-                    label=f'Patch {patch_num}-{coord}', linewidth=2, 
-                    color=colors[i], marker='.')
-        
-        plt.xlabel('Iteration', fontsize=12, fontweight='bold')
-        plt.ylabel('Standard Deviation', fontsize=12, fontweight='bold')
-        plt.title('CEM Standard Deviation Convergence', fontsize=14, fontweight='bold')
-        plt.grid(True, alpha=0.3, linestyle='--')
-        plt.legend(fontsize=9, ncol=2)
-        plt.tight_layout()
-        
-        plt.savefig(f'{MAIN_DIRECTORY}/plot_evolution_std_dev.png', dpi=150)
-        plt.show()
-
-    def plot_3d_scenario_iterations(self, animated=False, save_animation=False):
-        """3D visualization of iteration evolution with correct 1:1:1 scaling."""
-        plt.close('all')
-        fig = plt.figure(figsize=(12, 10))
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # --- RACCOLTA DATI PER SCALATURA ---
-        all_x, all_y, all_z = [], [], []
-        if self.px is not None:
-            all_x.extend(self.px.flatten()); all_y.extend(self.py.flatten()); all_z.extend(self.pz.flatten())
-        
-        # Terrain background
-        if self.px is not None:
-            ax.scatter(self.px, self.py, self.pz, c='gray', s=1, alpha=0.15, label='Terrain', zorder=1)
-        
-        self.compute_edge_patches()
-        for i, edge in enumerate(self.edge_patches):
-            pts = np.array(edge['position'])
-            lbl = 'Patch Contour' if i == 0 else ""
-            ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], c='black', 
-                   linewidth=1.0, alpha=0.5, zorder=2, label=lbl)
-        
-        # Start and goal markers
-        if self.start_pos_terrain:
-            sp = np.array(self.start_pos_terrain)
-            ax.scatter(sp[0], sp[1], sp[2], c='lime', s=150, marker='^', 
-                      label='Start', zorder=15, edgecolors='darkgreen', linewidths=2)
-        if self.goal_pos_terrain:
-            gp = np.array(self.goal_pos_terrain)
-            ax.scatter(gp[0], gp[1], gp[2], c='red', s=150, marker='X', 
-                      label='Goal', zorder=15, edgecolors='darkred', linewidths=2)
-        
-        # Load iteration data
-        if not os.path.exists(self.iterations_folder): return
-        iter_files = sorted([f for f in os.listdir(self.iterations_folder) if f.endswith('.json')])
-        cmap = plt.cm.get_cmap('rainbow', len(iter_files))
-        
-        iteration_data = []
-        for idx, filename in enumerate(iter_files):
-            data = self._load_json(os.path.join(self.iterations_folder, filename))
-            if not data: continue
-            
-            all_pts = []
-            for elite in data.get('elites', []):
-                pts = elite.get('points', [])
-                if pts: all_pts.extend(pts)
-            
-            if all_pts:
-                pts_np = np.array(all_pts)
-                iteration_data.append({'points': pts_np, 'color': cmap(idx), 'num': data.get('iteration', idx)})
-                all_x.extend(pts_np[:, 0]); all_y.extend(pts_np[:, 1]); all_z.extend(pts_np[:, 2])
-
-        # --- APPLICAZIONE SCALATURA ---
-        if all_x:
-            all_x, all_y, all_z = np.array(all_x), np.array(all_y), np.array(all_z)
-            max_range = np.array([all_x.max()-all_x.min(), all_y.max()-all_y.min(), all_z.max()-all_z.min()]).max() / 2.0
-            mid_x, mid_y, mid_z = (all_x.max()+all_x.min())*0.5, (all_y.max()+all_y.min())*0.5, (all_z.max()+all_z.min())*0.5
-            ax.set_xlim(mid_x - max_range, mid_x + max_range)
-            ax.set_ylim(mid_y - max_range, mid_y + max_range)
-            ax.set_zlim(mid_z - max_range, mid_z + max_range)
-
-        if not animated:
-            for idx, d in enumerate(iteration_data):
-                lbl = f"Iter {d['num']}" if idx in [0, len(iteration_data)-1] else ""
-                ax.scatter(d['points'][:, 0], d['points'][:, 1], d['points'][:, 2], 
-                          c=[d['color']], s=80, alpha=0.8, label=lbl, zorder=4, edgecolors='white', linewidths=0.5)
-            ax.set_title("Evolution of Jumps (Static Scaled)", fontsize=14, weight='bold')
+        # 1. Setup
+        created = False
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(14, 10))
+            created = True
         else:
-            scatter_objects = []
-            title_text = ax.text2D(0.5, 0.95, '', transform=ax.transAxes, ha='center', fontsize=12, weight='bold', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-
-            def update(frame):
-                for s in scatter_objects: s.remove()
-                scatter_objects.clear()
-                if frame < len(iteration_data):
-                    curr = iteration_data[frame]
-                    scat = ax.scatter(curr['points'][:, 0], curr['points'][:, 1], curr['points'][:, 2], 
-                                     c=[curr['color']], s=80, edgecolors='white', linewidths=0.7, zorder=4, alpha=0.95)
-                    scatter_objects.append(scat)
-                    title_text.set_text(f"Iteration: {curr['num']}")
-                return scatter_objects + [title_text]
-
-            anim = FuncAnimation(fig, update, frames=len(iteration_data), interval=300, blit=False)
-            self._anim_3d = anim
-            if save_animation: anim.save(f'{MAIN_DIRECTORY}/animation_3d_iterations.gif', writer='pillow', fps=3)
+            fig = ax.get_figure()
         
-        ax.set_xlabel('X (Depth)'); ax.set_ylabel('Y (Width)'); ax.set_zlabel('Z (Height)')
-        ax.view_init(elev=25, azim=-45)
-        plt.tight_layout()
-        plt.show()
-
-    def plot_2d_iterations_layout(self, animated=False, save_animation=False):
-        """2D YZ plane visualization with equal aspect ratio (real proportions)."""
-        plt.close('all')
-        if not self.patches_list: return
-
-        fig, ax = plt.subplots(figsize=(12, 10))
-        
-        # --- FORZA ASPETTO EQUALE ---
+        # Force equal aspect ratio for real proportions
         ax.set_aspect('equal', adjustable='box')
-
-        # Draw patches
-        costs = [p.get('cost_patch', 0) for p in self.patches_list]
-        norm_cost = colors.Normalize(vmin=min(costs), vmax=max(costs))
-        cmap_terrain = plt.get_cmap('Greys')
-
-        for patch in self.patches_list:
-            pts_in = patch.get('points_in_patch', [])
-            if len(pts_in) >= 3:
-                coords_2d = np.array([[p['position'][1], p['position'][2]] for p in pts_in])
-                try:
-                    hull = ConvexHull(coords_2d)
-                    poly = plt.Polygon(coords_2d[hull.vertices], color=cmap_terrain(norm_cost(patch.get('cost_patch', 0))), 
-                                     alpha=0.3, ec='black', lw=0.5)
-                    ax.add_patch(poly)
-                except: pass
-
-        # Start/Goal
-        if self.start_pos_terrain:
-            ax.scatter(self.start_pos_terrain[1], self.start_pos_terrain[2], c='lime', s=150, marker='^', zorder=15, label='Start', edgecolors='black')
-        if self.goal_pos_terrain:
-            ax.scatter(self.goal_pos_terrain[1], self.goal_pos_terrain[2], c='red', s=150, marker='X', zorder=15, label='Goal', edgecolors='black')
-
-        # Load iterations
-        if not os.path.exists(self.iterations_folder): return
-        iter_files = sorted([f for f in os.listdir(self.iterations_folder) if f.endswith('.json')])
-        cmap_iters = plt.get_cmap('jet', len(iter_files))
-
-        iteration_data = []
-        for idx, filename in enumerate(iter_files):
-            data = self._load_json(os.path.join(self.iterations_folder, filename))
-            if not data: continue
-            pts_2d = []
-            for elite in data.get('elites', []):
-                p_list = elite.get('points', [])
-                if p_list: pts_2d.extend([[p[1], p[2]] for p in p_list])
-            if pts_2d:
-                iteration_data.append({'points': np.array(pts_2d), 'color': cmap_iters(idx), 'num': data.get('iteration', idx)})
-
-        if not animated:
-            for i, d in enumerate(iteration_data):
-                lbl = f"Iter {d['num']}" if i % max(1, len(iteration_data)//5) == 0 else ""
-                ax.scatter(d['points'][:, 0], d['points'][:, 1], color=[d['color']], s=30, alpha=0.6, label=lbl, edgecolors='white', lw=0.3)
-            ax.set_title("2D Evolution (YZ Plane - Scaled)")
+        
+        # 2. Draw patches with cost-based coloring and contours (STATIC - only once)
+        costs = [p.get('cost_patch', 0.0) for p in self.patches]
+        if costs:
+            norm_cost = Normalize(vmin=min(costs), vmax=max(costs))
         else:
-            scatter_objs = []
-            title_text = ax.text(0.5, 1.05, '', transform=ax.transAxes, ha='center', fontweight='bold')
-
-            def update(frame):
-                for s in scatter_objs: s.remove()
-                scatter_objs.clear()
-                # Mostra le ultime 2 iterazioni per dare senso di movimento (ghosting)
-                for i in range(max(0, frame-1), frame + 1):
-                    d = iteration_data[i]
-                    alpha = 1.0 if i == frame else 0.3
-                    s = ax.scatter(d['points'][:, 0], d['points'][:, 1], color=[d['color']], s=50, alpha=alpha, edgecolors='black', lw=0.5)
-                    scatter_objs.append(s)
-                title_text.set_text(f"Iteration: {iteration_data[frame]['num']}")
-                return scatter_objs + [title_text]
-
-            anim = FuncAnimation(fig, update, frames=len(iteration_data), interval=200, blit=False)
-            self._anim_2d = anim
-            if save_animation: anim.save(f'{MAIN_DIRECTORY}/animation_2d_iterations.gif', writer='pillow', fps=5)
-
-        ax.set_xlabel("Y (Width)"); ax.set_ylabel("Z (Height)")
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
-        plt.tight_layout()
-        plt.show()
-    
-    def plot_mesh_traj(self, ax=None):
-        """Visualize best trajectory with parabolic segments and correct scaling."""
-        if self.best_points_np is None or not self.best_traj_segments:
-            print("WARNING: No best trajectory data found.")
-            return
-
-        fig, ax, created = self._setup_axis(ax, '3d')
-
-        # 1. Terrain background
-        if self.px is not None:
-            ax.scatter(self.px, self.py, self.pz, c='gray', s=1, alpha=0.80, label='Terrain', zorder=1)
-
-        # 2. Trajectory segments - FIXED: Using row indexing for (3, N) data
-        for i, segment in enumerate(self.best_traj_segments):
-            # Verifichiamo la forma: BilevelOpt produce (3, N)
-            if segment.shape[0] == 3:
-                x_vals, y_vals, z_vals = segment[0, :], segment[1, :], segment[2, :]
-            else:
-                x_vals, y_vals, z_vals = segment[:, 0], segment[:, 1], segment[:, 2]
+            norm_cost = Normalize(vmin=0, vmax=1)
+        
+        cmap_terrain = plt.get_cmap('RdYlGn_r')
+        
+        for patch in self.patches:
+            pts_in = patch.get('points_in_patch', [])
+            if len(pts_in) < 3:
+                continue
+            
+            coords_2d = np.array([[p['position'][1], p['position'][2]] for p in pts_in])
+            
+            try:
+                hull = ConvexHull(coords_2d)
+                hull_vertices = coords_2d[hull.vertices]
                 
-            label = "Best Trajectory" if i == 0 else ""
-            ax.plot(x_vals, y_vals, z_vals, color='blue', linewidth=2.5, zorder=10, label=label)
-
-        # 3. Landing points - self.best_points_np è (M, 3)
-        ax.scatter(self.best_points_np[:, 0], self.best_points_np[:, 1], self.best_points_np[:, 2], 
-                  c='yellow', s=60, edgecolors='black', marker='o', zorder=11, label='Landing Points')
-
-        # 4. Start and goal
-        ax.scatter(self.best_points_np[0, 0], self.best_points_np[0, 1], self.best_points_np[0, 2], 
-                  c='lime', s=150, marker='^', edgecolors='black', zorder=12, label='Start')
-        ax.scatter(self.best_points_np[-1, 0], self.best_points_np[-1, 1], self.best_points_np[-1, 2], 
-                  c='red', s=150, marker='X', edgecolors='black', zorder=12, label='Goal')
-
-        # --- LOGICA DI SCALATURA CORRETTA (Sincronizzata con lo script funzionante) ---
-        # Estraiamo correttamente le coordinate da tutti i segmenti per i limiti
-        all_traj_x = [s[0, :] if s.shape[0] == 3 else s[:, 0] for s in self.best_traj_segments]
-        all_traj_y = [s[1, :] if s.shape[0] == 3 else s[:, 1] for s in self.best_traj_segments]
-        all_traj_z = [s[2, :] if s.shape[0] == 3 else s[:, 2] for s in self.best_traj_segments]
-
-        # Uniamo con i punti del terreno per decidere il bound globale
-        total_x = np.concatenate(all_traj_x + ([self.px] if self.px is not None else []))
-        total_y = np.concatenate(all_traj_y + ([self.py] if self.py is not None else []))
-        total_z = np.concatenate(all_traj_z + ([self.pz] if self.pz is not None else []))
-
+                poly = plt.Polygon(hull_vertices, 
+                                   color=cmap_terrain(norm_cost(patch.get('cost_patch', 0.0))),
+                                   alpha=0.4, ec='black', lw=1.0, zorder=1)
+                ax.add_patch(poly)
+            except Exception:
+                continue
+        
+        # 3. Start and Goal markers (STATIC)
+        ax.scatter(self.p0[1], self.p0[2], c='lime', s=200, marker='^',
+                   edgecolors='black', linewidths=2, zorder=15, label='Start (p0)')
+        ax.scatter(self.pf[1], self.pf[2], c='red', s=200, marker='X',
+                   edgecolors='black', linewidths=2, zorder=15, label='Goal (pf)')
+        
+        # 4. Prepare iteration data
+        iteration_data = []
+        num_iters = len(self.all_elites)
+        cmap_iters = plt.get_cmap('viridis', num_iters)
+        
+        for iter_idx, iteration_list in enumerate(self.all_elites):
+            iter_points_y, iter_points_z = [], []
+            for elite in iteration_list:
+                for pt in elite.points:
+                    iter_points_y.append(pt[1])
+                    iter_points_z.append(pt[2])
+            
+            if iter_points_y:
+                iteration_data.append({
+                    'y': np.array(iter_points_y),
+                    'z': np.array(iter_points_z),
+                    'color': cmap_iters(iter_idx),
+                    'iter_num': iter_idx
+                })
+        
+        if not iteration_data:
+            print("WARNING: No iteration data to plot")
+            return
+        
+        # 5. Best trajectory (STATIC)
+        if self.best_traj_ever:
+            best_y, best_z = [], []
+            for segment in self.best_traj_ever:
+                segment_np = np.array(segment)
+                if segment_np.shape[0] == 3:
+                    best_y.append(segment_np[1, 0])
+                    best_z.append(segment_np[2, 0])
+                else:
+                    best_y.append(segment_np[0, 1])
+                    best_z.append(segment_np[0, 2])
+            
+            if self.best_traj_ever:
+                last_seg = np.array(self.best_traj_ever[-1])
+                if last_seg.shape[0] == 3:
+                    best_y.append(last_seg[1, -1])
+                    best_z.append(last_seg[2, -1])
+                else:
+                    best_y.append(last_seg[-1, 1])
+                    best_z.append(last_seg[-1, 2])
+            
+            ax.plot(best_y, best_z, 'gold', linestyle='--', linewidth=2.5, 
+                    alpha=0.8, zorder=13, label='Best Trajectory Path')
+            ax.scatter(best_y, best_z, c='gold', s=100, marker='*',
+                       edgecolors='black', linewidths=1, zorder=14, 
+                       label='Best Contact Points')
+        
+        # 6. Formatting
+        ax.set_xlabel('Y (Width)', fontsize=12)
+        ax.set_ylabel('Z (Height)', fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.4)
+        
+        if not animated:
+            # Static plot: show all iterations
+            for data in iteration_data:
+                ax.scatter(data['y'], data['z'], c=[data['color']], s=40, 
+                          alpha=0.6, edgecolors='white', linewidths=0.5, zorder=5)
+            
+            ax.set_title('2D Contact Points Layout - All Iterations', 
+                        fontsize=14, fontweight='bold')
+            ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
+            
+            if created:
+                fig.tight_layout()
+                save_path = f'{MAIN_DIRECTORY}/plot_2d_iterations_static.png'
+                fig.savefig(save_path, dpi=150, bbox_inches='tight')
+                print(f"2D static layout saved to: {save_path}")
+                plt.show()
+        else:
+            # Animated plot
+            scatter_objects = []
+            title_text = ax.text(0.5, 1.05, '', transform=ax.transAxes, 
+                               ha='center', fontsize=12, fontweight='bold',
+                               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+            
+            def init():
+                """Initialize animation."""
+                title_text.set_text('Iteration: 0')
+                return [title_text]
+            
+            def update(frame):
+                """Update function for each frame."""
+                # Remove previous scatter objects
+                for scat in scatter_objects:
+                    scat.remove()
+                scatter_objects.clear()
+                
+                # Show current iteration with ghosting effect
+                for i in range(max(0, frame - 2), frame + 1):
+                    if i < len(iteration_data):
+                        data = iteration_data[i]
+                        alpha_val = 1.0 if i == frame else 0.3
+                        size_val = 50 if i == frame else 30
+                        
+                        scat = ax.scatter(data['y'], data['z'], 
+                                        c=[data['color']], s=size_val,
+                                        alpha=alpha_val, edgecolors='white', 
+                                        linewidths=0.5, zorder=5)
+                        scatter_objects.append(scat)
+                
+                title_text.set_text(f'Iteration: {iteration_data[frame]["iter_num"]}')
+                return scatter_objects + [title_text]
+            
+            ax.set_title('2D Contact Points Evolution (Animated)', 
+                        fontsize=14, fontweight='bold')
+            ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
+            
+            anim = FuncAnimation(fig, update, init_func=init,
+                               frames=len(iteration_data), 
+                               interval=400, blit=True, repeat=True)
+            
+            self._anim_2d = anim  # Store reference to prevent garbage collection
+            
+            if created:
+                fig.tight_layout()
+                plt.show()
+    
+    def plot_3d_iterations_layout(self, ax=None, animated=False):
+        """3D visualization of contact points with terrain, patch contours, and optional animation."""
+        
+        # 1. Setup 3D axis
+        created = False
+        if ax is None:
+            fig = plt.figure(figsize=(14, 10))
+            ax = fig.add_subplot(111, projection='3d')
+            created = True
+        else:
+            fig = ax.get_figure()
+        
+        # 2. Data collection for scaling
+        all_x, all_y, all_z = [], [], []
+        
+        # 3. Plot terrain point cloud (STATIC)
+        px = np.array([p['position'][0] for p in self.points_t_data])
+        py = np.array([p['position'][1] for p in self.points_t_data])
+        pz = np.array([p['position'][2] for p in self.points_t_data])
+        costs = np.array([p['cost'] for p in self.points_t_data])
+        
+        all_x.extend(px)
+        all_y.extend(py)
+        all_z.extend(pz)
+        
+        ax.scatter(px, py, pz, c=costs, cmap='RdYlGn_r', s=2, alpha=0.5, 
+                   zorder=1, label='Terrain')
+        
+        # 4. Compute and draw patch contours (STATIC)
+        self.compute_edge_patches()
+        
+        for i, edge in enumerate(self.edge_patches):
+            pts = edge['position']
+            label = 'Patch Contours' if i == 0 else ""
+            ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], 
+                    c='black', linewidth=1.2, alpha=0.7, zorder=3, label=label)
+        
+        # 5. Start and Goal markers (STATIC)
+        ax.scatter(self.p0[0], self.p0[1], self.p0[2], c='lime', s=250, marker='^',
+                   edgecolors='black', linewidths=2, zorder=15, label='Start (p0)')
+        ax.scatter(self.pf[0], self.pf[1], self.pf[2], c='red', s=250, marker='X',
+                   edgecolors='black', linewidths=2, zorder=15, label='Goal (pf)')
+        
+        all_x.extend([self.p0[0], self.pf[0]])
+        all_y.extend([self.p0[1], self.pf[1]])
+        all_z.extend([self.p0[2], self.pf[2]])
+        
+        # 6. Prepare iteration data
+        iteration_data = []
+        num_iters = len(self.all_elites)
+        cmap_iters = plt.get_cmap('plasma', num_iters)
+        
+        for iter_idx, iteration_list in enumerate(self.all_elites):
+            iter_x, iter_y, iter_z = [], [], []
+            for elite in iteration_list:
+                for pt in elite.points:
+                    iter_x.append(pt[0])
+                    iter_y.append(pt[1])
+                    iter_z.append(pt[2])
+            
+            if iter_x:
+                all_x.extend(iter_x)
+                all_y.extend(iter_y)
+                all_z.extend(iter_z)
+                
+                iteration_data.append({
+                    'x': np.array(iter_x),
+                    'y': np.array(iter_y),
+                    'z': np.array(iter_z),
+                    'color': cmap_iters(iter_idx),
+                    'iter_num': iter_idx
+                })
+        
+        if not iteration_data:
+            print("WARNING: No iteration data to plot")
+            return
+        
+        # 7. Best trajectory (STATIC)
+        if self.best_traj_ever:
+            best_pts = []
+            for segment in self.best_traj_ever:
+                segment_np = np.array(segment)
+                if segment_np.shape[0] == 3:
+                    best_pts.append([segment_np[0, 0], segment_np[1, 0], segment_np[2, 0]])
+                else:
+                    best_pts.append([segment_np[0, 0], segment_np[0, 1], segment_np[0, 2]])
+            
+            if self.best_traj_ever:
+                last_seg = np.array(self.best_traj_ever[-1])
+                if last_seg.shape[0] == 3:
+                    best_pts.append([last_seg[0, -1], last_seg[1, -1], last_seg[2, -1]])
+                else:
+                    best_pts.append([last_seg[-1, 0], last_seg[-1, 1], last_seg[-1, 2]])
+            
+            best_pts_np = np.array(best_pts)
+            ax.plot(best_pts_np[:, 0], best_pts_np[:, 1], best_pts_np[:, 2],
+                    'b-', linewidth=3, alpha=0.8, zorder=11, label='Best Trajectory Path')
+            ax.scatter(best_pts_np[:, 0], best_pts_np[:, 1], best_pts_np[:, 2],
+                       c='gold', s=120, marker='*', edgecolors='black', linewidths=1,
+                       zorder=12, label='Best Contact Points')
+        
+        # 8. Apply 1:1:1 scaling
+        all_x, all_y, all_z = np.array(all_x), np.array(all_y), np.array(all_z)
         max_range = np.array([
-            total_x.max() - total_x.min(), 
-            total_y.max() - total_y.min(), 
-            total_z.max() - total_z.min()
+            all_x.max() - all_x.min(),
+            all_y.max() - all_y.min(),
+            all_z.max() - all_z.min()
         ]).max() / 2.0
-
-        mid_x = (total_x.max() + total_x.min()) * 0.5
-        mid_y = (total_y.max() + total_y.min()) * 0.5
-        mid_z = (total_z.max() + total_z.min()) * 0.5
-
+        
+        mid_x = (all_x.max() + all_x.min()) * 0.5
+        mid_y = (all_y.max() + all_y.min()) * 0.5
+        mid_z = (all_z.max() + all_z.min()) * 0.5
+        
         ax.set_xlim(mid_x - max_range, mid_x + max_range)
         ax.set_ylim(mid_y - max_range, mid_y + max_range)
         ax.set_zlim(mid_z - max_range, mid_z + max_range)
-        # ------------------------------------------------------------------------------
-
-        ax.set_title("Best Trajectory Visualization", fontsize=14, fontweight='bold')
-        ax.set_xlabel("X (Depth/Height)")
-        ax.set_ylabel("Y (Horizontal)")
-        ax.set_zlabel("Z (Vertical)")
-        ax.legend()
-        ax.view_init(elev=30, azim=-60)
-
-        if created:
-            plt.tight_layout()
-            # plt.savefig(f'{MAIN_DIRECTORY}/best_trajectory_plot.png', dpi=150)
-            plt.show()
-    
-    def plot_all_in_one(self):
-        """Combined plot with multiple subplots."""
-        fig = plt.figure(figsize=(16, 12))
         
-        ax1 = fig.add_subplot(221)
-        ax2 = fig.add_subplot(222)
-        ax3 = fig.add_subplot(223)
-        ax4 = fig.add_subplot(224, projection='3d')
+        # 9. Labels
+        ax.set_xlabel('X (m)', fontsize=11)
+        ax.set_ylabel('Y (m)', fontsize=11)
+        ax.set_zlabel('Z (m)', fontsize=11)
+        ax.view_init(elev=25, azim=-50)
         
-        sc1 = self.plot_fitness_by_iteration(ax1)
-        self.plot_jumps_histogram(ax2)
-        self.plot_energy_vs_cost(ax3)
-        self.plot_3d_scenario(ax4)
-        
-        if sc1:
-            fig.colorbar(sc1, ax=ax2, label='Fitness Value')
-        
-        plt.tight_layout()
-        plt.savefig(f'{MAIN_DIRECTORY}/plot_all_in_one.png', dpi=150)
-        plt.show()
-
+        if not animated:
+            # Static plot: show all iterations
+            for data in iteration_data:
+                ax.scatter(data['x'], data['y'], data['z'],
+                          c=[data['color']], s=50, alpha=0.7,
+                          edgecolors='white', linewidths=0.5, zorder=5)
+            
+            ax.set_title('3D Contact Points Layout - All Iterations', 
+                        fontsize=14, fontweight='bold')
+            ax.legend(loc='upper left', fontsize=9)
+            
+            if created:
+                plt.tight_layout()
+                save_path = f'{MAIN_DIRECTORY}/plot_3d_iterations_static.png'
+                fig.savefig(save_path, dpi=150)
+                print(f"3D static layout saved to: {save_path}")
+                plt.show()
+        else:
+            # Animated plot
+            scatter_objects = []
+            title_text = ax.text2D(0.5, 0.95, '', transform=ax.transAxes,
+                                  ha='center', fontsize=12, fontweight='bold',
+                                  bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+            
+            def init():
+                """Initialize animation."""
+                title_text.set_text('Iteration: 0')
+                return [title_text]
+            
+            def update(frame):
+                """Update function for each frame."""
+                # Remove previous scatter objects
+                for scat in scatter_objects:
+                    scat.remove()
+                scatter_objects.clear()
+                
+                # Show current and previous iterations with fading effect
+                for i in range(max(0, frame - 2), frame + 1):
+                    if i < len(iteration_data):
+                        data = iteration_data[i]
+                        alpha_val = 1.0 if i == frame else 0.3
+                        size_val = 80 if i == frame else 40
+                        
+                        scat = ax.scatter(data['x'], data['y'], data['z'],
+                                        c=[data['color']], s=size_val,
+                                        alpha=alpha_val, edgecolors='white',
+                                        linewidths=0.7, zorder=5)
+                        scatter_objects.append(scat)
+                
+                title_text.set_text(f'Iteration: {iteration_data[frame]["iter_num"]}')
+                
+                # Slowly rotate view
+                azim = -50 + (frame * 2) % 360
+                ax.view_init(elev=25, azim=azim)
+                
+                return scatter_objects + [title_text]
+            
+            ax.set_title('3D Contact Points Evolution (Animated)', 
+                        fontsize=14, fontweight='bold')
+            ax.legend(loc='upper left', fontsize=9)
+            
+            anim = FuncAnimation(fig, update, init_func=init,
+                               frames=len(iteration_data),
+                               interval=400, blit=False, repeat=True)
+            
+            self._anim_3d = anim  # Store reference to prevent garbage collection
+            
+            
+            if created:
+                plt.tight_layout()
+                plt.show()
 
 def main():
     """Main execution function."""
     plotter = PlotResultCemMjumps()
     print("[INFO] Plotter initialized successfully")
     
-    # Generate all plots
-    plotter.plot_terrain_patches()
-    plotter.plot_actual_terrain()
-    plotter.plot_all_in_one()
-    # plotter.plot_density_map()
-    plotter.plot_3d_scenario_iterations(animated=True)
+    # Static plots
+    plotter.base_plot()
+    plotter.count_jump_histogram(use_last_iter_only=False)
+    plotter.plot_fitness_by_iteration()
+    plotter.plot_mesh_pc_traj()
     plotter.plot_2d_iterations_layout(animated=True)
-    # plotter.plot_evolution_fitness()
-    # plotter.plot_evolution_std_dev_cem()
-    plotter.plot_mesh_traj()
+    plotter.plot_3d_iterations_layout(animated=True )
     
-    print("[INFO] All plots generated successfully")
-
+    print("[INFO] All plots completed!")
 
 if __name__ == "__main__":
     main()
