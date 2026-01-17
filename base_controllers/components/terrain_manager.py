@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =0.1,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='hemisphere'):
+    def __init__(self, grid_size=100,wall_depth =30,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='single_central_tower'):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
@@ -43,7 +43,7 @@ class TerrainManager:
             if terrain_type == 'gaussian_bumps':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
-                    standard_deviation=1.0, n_gaussian=5, seed=self.seed, casual=True, x_offset=1
+                    standard_deviation=0.5, n_gaussian=5, seed=self.seed, casual=False, x_offset=1
                 )
                 
             if terrain_type == 'mini_tower_each_patch':
@@ -55,6 +55,14 @@ class TerrainManager:
                     sigma=0.5, # radius tower
                     p_exp=10,  # plane of the top
                     x_offset=0.2 # Move everything forward to avoid singularity issues
+                )
+            
+            if terrain_type == 'single_central_tower':
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_single_central_tower(
+                    h_tower=2.0,   # Più alta
+                    sigma=1.5,     # Più larga
+                    p_exp=10,       # Più simile a una collina (morbida)
+                    x_offset=1.0
                 )
             
                 
@@ -294,11 +302,60 @@ class TerrainManager:
         patch_id = 0
         for i in range(self.number_of_patches_width):
             for j in range(self.number_of_patches_height):
-                self.patch_origins[patch_id] = np.array([self.patch_width*i, self.patch_height*j])
+                self.patch_origins[patch_id] = np.array([
+                    self.patch_width * i, 
+                    Lz + (self.patch_height * j)  # Aggiunto Lz +
+                ])
                 patch_id += 1
         
         return X, Y, Z
-          
+        
+    
+    def generate_single_central_tower(self, h_tower=1.0, sigma=0.5, p_exp=10, x_offset=1.0):
+        """
+        Genera una singola torre al centro della mappa, indipendente dalla griglia delle patch.
+        """
+        # Inizializza la matrice delle altezze
+        X = np.zeros((self.grid_size, self.grid_size))
+        
+        # Crea la meshgrid (stessa logica del resto della classe)
+        z_vec = np.linspace(self.Lz, 0, self.grid_size)
+        y_vec = np.linspace(0, self.Ly, self.grid_size)
+        Z, Y = np.meshgrid(z_vec, y_vec)
+        
+        # Calcola il centro geometrico
+        # Se Lz = -10 e Ly = 10, il centro sarà a Z = -5 e Y = 5
+        center_y = self.Ly / 2.0
+        center_z = self.Lz / 2.0
+        
+        # Calcola la torre usando la formula Super-Gaussiana
+        # Formula: X = h * exp( - (dist^2 / (2*sigma^2))^p_exp )
+        dist_sq = ((Z - center_z)**2 + (Y - center_y)**2)
+        tower = h_tower * np.exp(- (dist_sq / (2 * sigma**2))**p_exp)
+        
+        X += tower
+        X = X + x_offset
+        
+        # Aggiorna gli attributi della classe per la compatibilità con i plot
+        self.mesh_x, self.mesh_y, self.mesh_z = X, Y, Z
+        self.point_cloud = self.convert_meshgrid_to_pc(X, Y, Z)
+        
+        # Calcolo forzato delle patch (necessario per non rompere i metodi di plotting)
+        self.patch_width = self.Ly / self.number_of_patches_width
+        self.patch_height = abs(self.Lz) / self.number_of_patches_height
+        
+        patch_id = 0
+        for i in range(self.number_of_patches_width):
+            for j in range(self.number_of_patches_height):
+                # Importante: sommiamo self.Lz per centrare le patch nel range negativo
+                self.patch_origins[patch_id] = np.array([
+                    i * self.patch_width, 
+                    self.Lz + (j * self.patch_height)
+                ])
+                patch_id += 1
+                
+        return X, Y, Z    
+    
     def convert_meshgrid_to_pc(self, X, Y, Z):
         x_position = X.flatten()
         y_position = Y.flatten()
@@ -306,10 +363,14 @@ class TerrainManager:
         points = np.vstack((x_position, y_position, z_position)).T
         return points
             
-    def getAbsolutePositionOfPointInsidePatch(self, patch_id,  normalized_y, normalized_z):
-        pos_yz = self.patch_origins[patch_id] + np.array([normalized_y * self.patch_width, normalized_z* self.patch_height])
-        pos = np.concatenate(([0.], pos_yz))
-        return pos
+    def getAbsolutePositionOfPointInsidePatch(self, patch_id, normalized_y, normalized_z):
+        # Assicurati che l'origine della patch sia sommata correttamente ai valori normalizzati
+        origin = self.patch_origins[patch_id]
+        absolute_y = origin[0] + (normalized_y * self.patch_width)
+        absolute_z = origin[1] + (normalized_z * self.patch_height)
+        
+        # Ritorna [X, Y, Z]. X inizialmente è 0 perché verrà valutato con wall_surface_eval
+        return np.array([0.0, absolute_y, absolute_z])
 
     def retrievePatches(self, patch_id): #points are columns
         y_vec = np.linspace(0, self.patch_width, self.patch_discretization_width)
@@ -612,7 +673,7 @@ class TerrainManager:
         
         for patch_id in range(self.number_of_patches):
             # Get the position inside the patch
-            position = self.getPositionInsidePatch(patch_id, normalized_y, normalized_z)
+            position = self.getAbsolutePositionOfPointInsidePatch(patch_id, normalized_y, normalized_z)
             pos_x, pos_y, pos_z = position[0], position[1], position[2]
             
             # Get the actual surface height at this position
@@ -640,6 +701,20 @@ class TerrainManager:
         ax.set_xlabel('X (m)')
         ax.set_ylabel('Y (m)')
         ax.set_zlabel('Z (m)')
+        
+        # Set axis limits for proper scaling
+        x_range = np.max(X) - np.min(X)
+        y_range = self.Ly
+        z_range = abs(self.Lz)
+        max_range = max(x_range, y_range, z_range)
+        
+        ax.set_xlim([np.min(X) - 0.1*max_range, np.max(X) + 0.1*max_range])
+        ax.set_ylim([0 - 0.1*max_range, self.Ly + 0.1*max_range])
+        ax.set_zlim([self.Lz - 0.1*max_range, 0 + 0.1*max_range])
+        
+        # Set aspect ratio to be equal
+        ax.set_box_aspect([x_range, y_range, z_range])
+        
         ax.legend()
         ax.view_init(elev=20, azim=9)
         
@@ -678,7 +753,7 @@ class TerrainManager:
         if plot_patches or plot_patch_boundaries:
             for patch_id in range(self.number_of_patches):
                 # Get patch center position
-                position = self.getPositionInsidePatch(patch_id, 0.5, 0.5)
+                position = self.getAbsolutePositionOfPointInsidePatch(patch_id, 0.5, 0.5)
                 pos_y, pos_z = position[1], position[2]
                 
                 # Get surface height at center
@@ -717,6 +792,19 @@ class TerrainManager:
         ax.set_zlabel('Z (m)')
         ax.set_title(title)
         
+        # Set axis limits for proper scaling
+        x_range = np.max(x_points) - np.min(x_points)
+        y_range = self.Ly
+        z_range = abs(self.Lz)
+        max_range = max(x_range, y_range, z_range)
+        
+        ax.set_xlim([np.min(x_points) - 0.1*max_range, np.max(x_points) + 0.1*max_range])
+        ax.set_ylim([0 - 0.1*max_range, self.Ly + 0.1*max_range])
+        ax.set_zlim([self.Lz - 0.1*max_range, 0 + 0.1*max_range])
+        
+        # Set aspect ratio to be equal
+        ax.set_box_aspect([x_range, y_range, z_range])
+        
         # Set view angle
         ax.view_init(elev=20, azim=45)
         
@@ -741,11 +829,11 @@ class TerrainManager:
             
 if __name__ == '__main__':
     
-    wall_depth = 1  # how
-    grid_size = 50
+    wall_depth = 5  # how
+    grid_size = 100
     max_ridge_depth = 0.5
     seed = 47
-    Lz = -60  # Height of wall in meters
+    Lz = -10  # Height of wall in meters
     Ly = 10  # Width (horizontal extent) of wall in meters
   
     terrainManager = TerrainManager(grid_size, wall_depth=wall_depth, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
