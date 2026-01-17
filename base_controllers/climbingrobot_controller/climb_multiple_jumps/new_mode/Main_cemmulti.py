@@ -271,18 +271,7 @@ def main():
 
     if setting["PLOT_MODE"]:
         
-        plot_result_cem_mjumps = PlotResultCemMjumps()
-        print("ok all is ready")
-        plot_result_cem_mjumps.plot_terrain_patches()
-        plot_result_cem_mjumps.plot_actual_terrain()
-        plot_result_cem_mjumps.plot_all_in_one()
-        # plot_result_cem_mjumps.plot_density_map()
-        plot_result_cem_mjumps.plot_3d_scenario_iterations(animated=True)
-        plot_result_cem_mjumps.plot_2d_iterations_layout(animated=True)
-        # plot_result_cem_mjumps.plot_evolution_fitness()
-        # plot_result_cem_mjumps.plot_evolution_std_dev_cem()
-        plot_result_cem_mjumps.plot_mesh_traj()
-
+        print("plot da stampare")
 if __name__ == "__main__":
     try:
         main()

@@ -20,16 +20,16 @@ from base_controllers.components.terrain_manager import TerrainManager
 # P0_INIT = np.array([0.0, 1.46, -2.53])
 # PF_PATCH_INIT = np.array([0.0, 1.46, -5.55])
 
-P0_INIT = np.array([0.0, 2.43, -5.5]) 
-PF_PATCH_INIT=  np.array([0.0, 2.43,-8.5])
+P0_INIT = np.array([0.0, 1.53, -5.51]) 
+PF_PATCH_INIT=  np.array([0.0, 1.53,-1.55])
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 4
 THREADS = 5
 flag_thread = True
 
-MAIN_DIRECTORY = "result/result_test"
+MAIN_DIRECTORY = "result/result_1_hemisphere"
 
-Fleg_max = 300.
+Fleg_max = 600.
 Fr_max = 90.
 Fr_min = 10.
 number_of_patches_width = 10
@@ -40,7 +40,7 @@ anchor_distance = 10.
 fitness_weights = np.array([1., 1.0,10., 10.])
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([100., 10., 0,100.0])
+filter_weights = np.array([100., 10., 0,10.0])
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
@@ -81,11 +81,11 @@ cem_params = CemParams()
 cem_params.seed = int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 10
+cem_params.cem_iters = 15
 cem_params.pop_size =10
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # NON RIDURRE LA POPOLAZIONE
-cem_params.fraction_elites_reused = 0.1 
+cem_params.fraction_elites_reused = 0.3 
 # Discrete
 cem_params.dim_discrete = MAX_N_PATCHES
 number_of_patches = number_of_patches_width * number_of_patches_height
@@ -104,13 +104,13 @@ cem_params.min_std_continuous = np.full(cem_params.dim_continuous, 0.05)
 # ================================================
 # PLOTTING PARAMETERS
 # ================================================
-
 FILE_TERRAIN_POINTS = f"{MAIN_DIRECTORY}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{MAIN_DIRECTORY}/actual_patch_terrain.json"
-FILE_PROGRESS = f"{MAIN_DIRECTORY}/cem_iteration_history.json"
 ITERATIONS_FOLDER = f"{MAIN_DIRECTORY}/iteration_reports"
-FILE_BEST_LOG = f"{MAIN_DIRECTORY}/best_trajectory_log.json"
 FILE_SAVE_PARAMS = f"{MAIN_DIRECTORY}/simulation_params.json"
+
+FILE_BEST_LOG = f"{MAIN_DIRECTORY}/best_trajectory_log.json"
+FILE_PROGRESS = f"{MAIN_DIRECTORY}/cem_iteration_history.json"
 # ================================================
 # COMMON FUNCTIONS
 # ================================================
@@ -167,7 +167,7 @@ def initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_w
     inner_opt_params['cost_z'] = terrain_manager.mesh_z
     inner_opt_params['patch_side'] = 1.0 * patches.patch_width
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
-    patches.visualize_full_cost_map()
+    # patches.visualize_full_cost_map()
     
     terrain_params.append({
         'anchor_location': point_clouds,
@@ -288,9 +288,9 @@ def save_params():
     params = {
         'START': P0_INIT.tolist(),
         'GOAL': PF_PATCH_INIT.tolist(),        
+        'MAX_JUMP': MAX_JUMP,
+        'THREADS': THREADS,
         'inner_opt_params_order':{
-            'MAX_JUMP': MAX_JUMP,
-            'THREADS': THREADS,
             'Fleg_max': Fleg_max,
             'Fr_max': Fr_max,
             'Fr_min': Fr_min,

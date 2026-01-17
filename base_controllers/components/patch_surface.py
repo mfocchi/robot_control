@@ -96,7 +96,7 @@ class PatchSurface:
                 })
                 
                 patch_id += 1
-    
+        
     # === CHECKER METHODS ===
     def is_point_in_patch(self, patch_id, point): 
         '''
@@ -290,8 +290,9 @@ class PatchSurface:
         '''
         apply the gaussian function to the cost of each point in each patch
         '''
-        sigma_y = sigma *0.1
+        sigma_y = sigma
         sigma_z = sigma
+        all_final_costs = []
         for patch in self.patches:
             centroid = patch['centroid']
             points_in_patch = patch['points_in_patch']
@@ -299,24 +300,31 @@ class PatchSurface:
             for point in points_in_patch:
                 pos = point['position']
                 
-                # Calcolo separato per i due assi
+                
                 diff_y_sq = (pos[1] - centroid[1])**2
                 diff_z_sq = (pos[2] - centroid[2])**2
                 
-                # Formula della Gaussiana 2D
+                
                 exponent = - ( (diff_y_sq / (2 * sigma_y**2)) + (diff_z_sq / (2 * sigma_z**2)) )
-                gauss_val = weight_gauss_cost * np.exp(exponent)
+                gauss_val = weight_gauss_cost * (np.exp(exponent)) #OCCHIO valore basso al centro!!!!
                 
                 point['cost'] += gauss_val
+                all_final_costs.append(point['cost'])
                 
             costs = [p['cost'] for p in points_in_patch]
             patch['cost_patch'] = float(np.mean(costs))
+        if all_final_costs:
+            print("\n" + "="*40)
+            print(f" Static Gaussian Cost Applied to All Points in Patches:")
+            print(f" Total Points:    {len(all_final_costs)}")
+            print(f" Minimum Cost:    {min(all_final_costs):.4f}")
+            print(f" Maximum Cost:    {max(all_final_costs):.4f}")
+            print(f" Average Cost:    {np.mean(all_final_costs):.4f}")
+            print("="*40 + "\n")
         self.cost_color()
         
         # Update individual point colors based on their costs
         self.update_point_colors()
-        
-    
         
     def update_point_colors(self):
         '''
@@ -857,7 +865,54 @@ class PatchSurface:
         plt.tight_layout()
         plt.show()
         return fig, ax
+    
+    def plot_patches_by_id(self, target_ids):
+        if isinstance(target_ids, int):
+            target_ids = [target_ids]
+            
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.set_title(f'Contesto Mappa - Patch Evidenziate: {target_ids}')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
 
+        # Colori
+        colore_evidenziato = 'purple'
+        colore_sfondo = 'lightgrey' # Grigio chiaro per il resto della mappa
+
+        for patch in self.patches:
+            pts = patch.get('points_in_patch', [])
+            if not pts:
+                continue
+
+            # Estrazione coordinate
+            P = np.vstack([p['position'] for p in pts])
+            s = np.array([p['size_point'] for p in pts]) if (len(pts) > 0 and 'size_point' in pts[0]) else 10
+            
+            # Decidiamo colore e trasparenza in base all'ID
+            if patch['id'] in target_ids:
+                # Patch selezionata: VIOLA e OPACA
+                current_color = colore_evidenziato
+                current_alpha = 0.8
+                zorder = 5 # Porta in primo piano
+                
+                # Aggiungiamo centroide e testo solo per queste
+                centroid = patch.get('centroid')
+            else:
+                # Resto della mappa: GRIGIO e SEMI-TRASPARENTE
+                current_color = colore_sfondo
+                current_alpha = 0.3 # Molto leggero per non disturbare la vista
+                zorder = 1
+
+            # Disegno della patch
+            ax.scatter(P[:, 0], P[:, 1], P[:, 2], s=s, alpha=current_alpha, color=current_color, zorder=zorder)
+
+        # Ottimizzazione visualizzazione
+        plt.tight_layout()
+        plt.show()
+        return fig, ax
+    
     def plot_patches_points_target(self):
         
         alpha = 0.5
@@ -946,7 +1001,7 @@ class PatchSurface:
         
         P = np.vstack([p['position'] for p in points_in_patch])  
         s = np.array([p['size_point'] for p in points_in_patch])
-        color = patch.get('color_patch', [0.5, 0.5, 0.5])
+        color = patch.get('color_patch')
         
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -1033,6 +1088,8 @@ def main():
     print("\n[TEST] === Creating Patch Surface ===")
     patch_surface = PatchSurface(pcs.points_t, number_of_patches_width=10, number_of_patches_height=10)
     
+    patch_surface.random_color()
+    patch_surface.plot_patches()
     # Apply cost-based coloring
     patch_surface.cost_color()
     
@@ -1133,7 +1190,7 @@ def main():
     print("\n[TEST] === TEST 10b: Adding Gaussian Cost to a Patch ===")
     patch_surface.gaussian_cost_all_patch()
     patch_surface.visualize_full_cost_map()
-    breakpoint()
+    
     # TEST 11: Visualize results
     print("\n[TEST] === TEST 11: Visualization ===")
     print("[TEST] Plotting all patches with cost coloring...")
@@ -1177,11 +1234,13 @@ def main():
         if pf_on_surface:
             print(f"[patch_su   rface] PF projected on surface: {pf_on_surface['position']}")
     
-    # TEST 13: Generate cost mesh grid
-    print("\n[TEST] === TEST 13: Generating Cost Mesh Grid ===")
-    cost_grid = patch_surface.get_cost_meshgrid(grid_size_y=100, grid_size_z=100, plot_mesh=False)
+    # # TEST 13: Generate cost mesh grid
+    # print("\n[TEST] === TEST 13: Generating Cost Mesh Grid ===")
+    # cost_grid = patch_surface.get_cost_meshgrid(grid_size_y=100, grid_size_z=100, plot_mesh=False)
     
-    # TEST
-    
+    # TEST 14: print list of patches
+    print("\n[TEST] === TEST 14: Plotting Specific Patches by ID ===")
+    patches_list = [1 , 10 , 50 , 60 , 4 , 8 , 28]
+    patch_surface.plot_patches_by_id(patches_list)    
 if __name__ == "__main__":
     main()
