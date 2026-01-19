@@ -45,7 +45,6 @@ class LinearMultiJumpParams:
             self.terrain_manager.mesh_z
         )
         
-        
     def linear_discretization(self):
         """Generate waypoints with linear interpolation, projected onto terrain surface."""
         print(colored(f"Generating {self.num_jumps + 1} waypoints...", "cyan"))
@@ -312,6 +311,7 @@ class LinearMultiJumpParams:
 
         if show_plot:
             plt.show()
+
 def main():
     print(colored("="*60, "cyan"))
     print(colored("  LINEAR MULTI-JUMP TRAJECTORY OPTIMIZER  ", "cyan", attrs=['bold']))

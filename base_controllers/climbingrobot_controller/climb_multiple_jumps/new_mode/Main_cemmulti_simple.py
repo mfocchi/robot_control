@@ -15,7 +15,7 @@ from base_controllers.components.terrain_manager import TerrainManager
 from LinearOpti import LinearOpti
 from params import *
 from base_controllers.climbingrobot_controller.climb_multiple_jumps.new_mode.Plot_result import PlotResultCemMjumps
-
+from collections import Counter
 
 def main():
     
@@ -57,7 +57,13 @@ def main():
             # Generate population
             algo.generate_population_discrete(first_iteration)
             xd = algo.population_discrete   # shape: dim_discrete x pop_size
-            print(xd)
+            # print(xd)
+            counter = Counter(xd[0])
+            total = len(xd[0])
+            for value in sorted(counter.keys()):
+                perc = counter[value] / total * 100
+                # print(f"Jump {value}: {perc:.2f}%")
+            # breakpoint()
             
             # Organise inputs into a 2D matrix where we have as columns
             inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
@@ -144,7 +150,9 @@ def main():
                         best_trajectory = log_result['traj']
                         
                         print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f} with {best_jump} jumps", "green", attrs=['bold']))
-        
+
+                    
+                    
             # Update distributions
             algo.evaluate_population(fitness)
             algo.update_distributions()
@@ -153,9 +161,9 @@ def main():
             print ("finish iteration ", k+1)
             iter_time = time.time() - iter_start
             
-            if flag_thread == False:
-                optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
-                optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
+            # if flag_thread == False:
+            #     optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
+            #     optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
                 
             print(colored(f"\n{'='*60}", "cyan", attrs=['bold']))
             print(colored(f"  Iteration {k+1} completed in {iter_time:.2f}s", "cyan", attrs=['bold']))
@@ -269,7 +277,6 @@ def main():
             optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
         else:
             print(colored("[ERROR] Could not plot best trajectory. No solution found or tracking issue.", "red", attrs=['bold']))
-
     if setting["PLOT_MODE"]:
         
         print("plot da stampare")

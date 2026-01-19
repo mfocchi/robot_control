@@ -113,6 +113,7 @@ class PlotResultCemMjumps:
         self.iteration_files = sorted([f for f in os.listdir(ITERATIONS_FOLDER) if f.startswith('iteration_') and f.endswith('.json')],
                                       key=lambda x: int(x.split('_')[1].split('.')[0]))
         
+        self.correct_start_goal_positions()
         self.load_iteration_history()
         
     def load_iteration_history(self):
@@ -159,6 +160,62 @@ class PlotResultCemMjumps:
             data_terrain_patches = json.load(file)
         return data_terrain_patches
     
+    def project_point_to_surface(self, point):
+        target_y, target_z = point[1], point[2]
+        
+        # Find all terrain points with similar Y and Z (within tolerance)
+        tolerance_y = 0.1  # meters
+        tolerance_z = 0.1  # meters
+        
+        candidates = []
+        for p in self.points_t_data:
+            pos = p['position']
+            if (abs(pos[1] - target_y) < tolerance_y and 
+                abs(pos[2] - target_z) < tolerance_z):
+                candidates.append(pos)
+        
+        if not candidates:
+            # If no close points found, increase tolerance
+            tolerance_y *= 2
+            tolerance_z *= 2
+            for p in self.points_t_data:
+                pos = p['position']
+                if (abs(pos[1] - target_y) < tolerance_y and 
+                    abs(pos[2] - target_z) < tolerance_z):
+                    candidates.append(pos)
+        
+        if not candidates:
+            print(f"[WARNING] No terrain points found near Y={target_y:.3f}, Z={target_z:.3f}")
+            return point
+        
+        # Find the candidate with the closest X to the original point
+        candidates_np = np.array(candidates)
+        distances = np.abs(candidates_np[:, 0] - point[0])
+        closest_idx = np.argmin(distances)
+        
+        projected_point = candidates_np[closest_idx]
+        
+        print(f"[INFO] Projected point from {point} to {projected_point.tolist()}")
+        return projected_point.tolist()
+
+    
+    def correct_start_goal_positions(self):
+        """
+        Correct p0 and pf positions to lie on the terrain surface.
+        Updates self.p0 and self.pf in place.
+        """
+        print("[INFO] Correcting start and goal positions to terrain surface...")
+        
+        original_p0 = self.p0.copy()
+        original_pf = self.pf.copy()
+        
+        self.p0 = self.project_point_to_surface(self.p0)
+        self.pf = self.project_point_to_surface(self.pf)
+        
+        print(f"[INFO] Start p0: {original_p0} -> {self.p0}")
+        print(f"[INFO] Goal pf: {original_pf} -> {self.pf}")
+
+    
     # ================= 
     # Plot methods
     # =================
@@ -171,7 +228,6 @@ class PlotResultCemMjumps:
         # self.patch_plotter.cost_color()
         # self.patch_plotter.plot_patches()
         # TODO da capire come mai non va
-    
     
     def count_jump_histogram(self, ax=None, use_last_iter_only=False):
         """Plot histogram of jump counts."""
@@ -423,7 +479,7 @@ class PlotResultCemMjumps:
             except Exception:
                 continue
     
-    def plot_2d_iterations_layout(self, ax=None, animated=False):
+    def plot_2d_iterations_layout(self, ax=None, animated=False, compare=False):
         """2D YZ plane visualization of contact points with patch contours and equal aspect ratio."""
         
         # 1. Setup
@@ -526,6 +582,73 @@ class PlotResultCemMjumps:
         ax.set_ylabel('Z (Height)', fontsize=12)
         ax.grid(True, linestyle='--', alpha=0.4)
         
+        if compare and not animated:
+            # Compare mode: show first and last iteration in separate windows
+            if len(iteration_data) < 2:
+                print("WARNING: Need at least 2 iterations for comparison")
+                return
+            
+            # Create two separate figures
+            fig1, ax1 = plt.subplots(figsize=(14, 10))
+            fig2, ax2 = plt.subplots(figsize=(14, 10))
+            
+            for current_ax, data_idx, iter_name in [(ax1, 0, 'First'), (ax2, -1, 'Last')]:
+                current_ax.set_aspect('equal', adjustable='box')
+                
+                # Redraw patches
+                for patch in self.patches:
+                    pts_in = patch.get('points_in_patch', [])
+                    if len(pts_in) < 3:
+                        continue
+                    coords_2d = np.array([[p['position'][1], p['position'][2]] for p in pts_in])
+                    try:
+                        hull = ConvexHull(coords_2d)
+                        hull_vertices = coords_2d[hull.vertices]
+                        poly = plt.Polygon(hull_vertices, 
+                                           color=cmap_terrain(norm_cost(patch.get('cost_patch', 0.0))),
+                                           alpha=0.4, ec='black', lw=1.0, zorder=1)
+                        current_ax.add_patch(poly)
+                    except Exception:
+                        continue
+                
+                # Redraw start/goal
+                current_ax.scatter(self.p0[1], self.p0[2], c='lime', s=200, marker='^',
+                           edgecolors='black', linewidths=2, zorder=15, label='Start (p0)')
+                current_ax.scatter(self.pf[1], self.pf[2], c='red', s=200, marker='X',
+                           edgecolors='black', linewidths=2, zorder=15, label='Goal (pf)')
+                
+                # Redraw best trajectory
+                if self.best_traj_ever:
+                    current_ax.plot(best_y, best_z, 'gold', linestyle='--', linewidth=2.5, 
+                            alpha=0.8, zorder=13, label='Best Trajectory Path')
+                    current_ax.scatter(best_y, best_z, c='gold', s=100, marker='*',
+                               edgecolors='black', linewidths=1, zorder=14, 
+                               label='Best Contact Points')
+                
+                # Plot specific iteration
+                data = iteration_data[data_idx]
+                current_ax.scatter(data['y'], data['z'], c=[data['color']], s=60, 
+                          alpha=0.8, edgecolors='white', linewidths=0.5, zorder=5,
+                          label=f'Iteration {data["iter_num"]}')
+                
+                current_ax.set_title(f'2D Contact Points - {iter_name} Iteration ({data["iter_num"]})', 
+                            fontsize=14, fontweight='bold')
+                current_ax.set_xlabel('Y (Width)', fontsize=12)
+                current_ax.set_ylabel('Z (Height)', fontsize=12)
+                current_ax.grid(True, linestyle='--', alpha=0.4)
+                current_ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
+            
+            fig1.tight_layout()
+            fig2.tight_layout()
+            
+            save_path1 = f'{MAIN_DIRECTORY}/plot_2d_compare_first.png'
+            save_path2 = f'{MAIN_DIRECTORY}/plot_2d_compare_last.png'
+            fig1.savefig(save_path1, dpi=150, bbox_inches='tight')
+            fig2.savefig(save_path2, dpi=150, bbox_inches='tight')
+            print(f"2D comparison saved to: {save_path1} and {save_path2}")
+            plt.show()
+            return
+        
         if not animated:
             # Static plot: show all iterations
             for data in iteration_data:
@@ -591,7 +714,7 @@ class PlotResultCemMjumps:
                 fig.tight_layout()
                 plt.show()
     
-    def plot_3d_iterations_layout(self, ax=None, animated=False):
+    def plot_3d_iterations_layout(self, ax=None, animated=False, compare=False):
         """3D visualization of contact points with terrain, patch contours, and optional animation."""
         
         # 1. Setup 3D axis
@@ -714,6 +837,75 @@ class PlotResultCemMjumps:
         ax.set_zlabel('Z (m)', fontsize=11)
         ax.view_init(elev=25, azim=-50)
         
+        if compare and not animated:
+            # Compare mode: show first and last iteration in separate windows
+            if len(iteration_data) < 2:
+                print("WARNING: Need at least 2 iterations for comparison")
+                return
+            
+            # Create two separate figures
+            fig1 = plt.figure(figsize=(14, 10))
+            ax1 = fig1.add_subplot(111, projection='3d')
+            fig2 = plt.figure(figsize=(14, 10))
+            ax2 = fig2.add_subplot(111, projection='3d')
+            
+            for current_ax, data_idx, iter_name in [(ax1, 0, 'First'), (ax2, -1, 'Last')]:
+                # Redraw terrain
+                current_ax.scatter(px, py, pz, c=costs, cmap='RdYlGn_r', s=2, alpha=0.5, 
+                           zorder=1, label='Terrain')
+                
+                # Redraw patch contours
+                for i, edge in enumerate(self.edge_patches):
+                    pts = edge['position']
+                    label = 'Patch Contours' if i == 0 else ""
+                    current_ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], 
+                            c='black', linewidth=1.2, alpha=0.7, zorder=3, label=label)
+                
+                # Redraw start/goal
+                current_ax.scatter(self.p0[0], self.p0[1], self.p0[2], c='lime', s=250, marker='^',
+                           edgecolors='black', linewidths=2, zorder=15, label='Start (p0)')
+                current_ax.scatter(self.pf[0], self.pf[1], self.pf[2], c='red', s=250, marker='X',
+                           edgecolors='black', linewidths=2, zorder=15, label='Goal (pf)')
+                
+                # Redraw best trajectory
+                if self.best_traj_ever:
+                    current_ax.plot(best_pts_np[:, 0], best_pts_np[:, 1], best_pts_np[:, 2],
+                            'b-', linewidth=3, alpha=0.8, zorder=11, label='Best Trajectory Path')
+                    current_ax.scatter(best_pts_np[:, 0], best_pts_np[:, 1], best_pts_np[:, 2],
+                               c='gold', s=120, marker='*', edgecolors='black', linewidths=1,
+                               zorder=12, label='Best Contact Points')
+                
+                # Plot specific iteration
+                data = iteration_data[data_idx]
+                current_ax.scatter(data['x'], data['y'], data['z'],
+                          c=[data['color']], s=80, alpha=0.9,
+                          edgecolors='white', linewidths=0.7, zorder=5,
+                          label=f'Iteration {data["iter_num"]}')
+                
+                # Apply scaling
+                current_ax.set_xlim(mid_x - max_range, mid_x + max_range)
+                current_ax.set_ylim(mid_y - max_range, mid_y + max_range)
+                current_ax.set_zlim(mid_z - max_range, mid_z + max_range)
+                
+                current_ax.set_title(f'3D Contact Points - {iter_name} Iteration ({data["iter_num"]})', 
+                            fontsize=14, fontweight='bold')
+                current_ax.set_xlabel('X (m)', fontsize=11)
+                current_ax.set_ylabel('Y (m)', fontsize=11)
+                current_ax.set_zlabel('Z (m)', fontsize=11)
+                current_ax.view_init(elev=25, azim=-50)
+                current_ax.legend(loc='upper left', fontsize=9)
+            
+            fig1.tight_layout()
+            fig2.tight_layout()
+            
+            save_path1 = f'{MAIN_DIRECTORY}/plot_3d_compare_first.png'
+            save_path2 = f'{MAIN_DIRECTORY}/plot_3d_compare_last.png'
+            fig1.savefig(save_path1, dpi=150)
+            fig2.savefig(save_path2, dpi=150)
+            print(f"3D comparison saved to: {save_path1} and {save_path2}")
+            plt.show()
+            return
+        
         if not animated:
             # Static plot: show all iterations
             for data in iteration_data:
@@ -766,8 +958,8 @@ class PlotResultCemMjumps:
                 title_text.set_text(f'Iteration: {iteration_data[frame]["iter_num"]}')
                 
                 # Slowly rotate view
-                azim = -50 + (frame * 2) % 360
-                ax.view_init(elev=25, azim=azim)
+                # azim = -50 + (frame * 2) % 360
+                # ax.view_init(elev=25, azim=azim)
                 
                 return scatter_objects + [title_text]
             
@@ -796,8 +988,8 @@ def main():
     plotter.count_jump_histogram(use_last_iter_only=False)
     plotter.plot_fitness_by_iteration()
     plotter.plot_mesh_pc_traj()
-    plotter.plot_2d_iterations_layout(animated=True)
-    plotter.plot_3d_iterations_layout(animated=True )
+    plotter.plot_2d_iterations_layout(animated=False, compare=True)
+    plotter.plot_3d_iterations_layout(animated=True, compare=True)
     
     print("[INFO] All plots completed!")
 

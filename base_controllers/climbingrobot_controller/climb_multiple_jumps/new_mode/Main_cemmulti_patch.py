@@ -14,7 +14,7 @@ from base_controllers.components.terrain_manager import TerrainManager
 from BilevelOptPatch import BilevelOpt, close_matlab_engines
 from params import *
 from base_controllers.climbingrobot_controller.climb_multiple_jumps.new_mode.Plot_result import PlotResultCemMjumps
-
+from collections import Counter
 
 def main():
     
@@ -56,7 +56,7 @@ def main():
             algo.generate_population_discrete(first_iteration)
             xd = algo.population_discrete   # shape: dim_discrete x pop_size
             # xc = algo.population_continuous # shape: dim_continuous x pop_size
-            print (xd)
+            
             inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
         
             fitness = [0.0] * cem_params.pop_size
@@ -67,9 +67,15 @@ def main():
             all_n_jumps = [0] * cem_params.pop_size
             n_workers = cem_params.n_threads
             
+            # print (xd)
             # patch_ids_esplorati = xd[1:, :].flatten().astype(int)
             # unique_patch_ids = np.unique(patch_ids_esplorati).tolist()
             # patches.plot_patches_by_id(unique_patch_ids)
+            counter = Counter(xd[0])
+            total = len(xd[0])
+            for value in sorted(counter.keys()):
+                perc = counter[value] / total * 100
+                # print(f"Jump {value}: {perc:.2f}%")
             
             # ============================
             # flag_thread == TRUE: multi-threaded evaluation

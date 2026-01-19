@@ -29,7 +29,6 @@ class LinearOpti:
         self.patches = patches
         self.cost_grid = cost_grid
     
-    
     def eval_pop(self, input_data):
         
         # Extract discrete parameters (first array is the possible jumps) and the rest are the patch IDs
@@ -77,8 +76,8 @@ class LinearOpti:
                 self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
             
             # Run optimization
-            res = self.linear_computation(p0_adj, pf_adj)
-            
+            #res = self.linear_computation(p0_adj, pf_adj)
+            res = self.linear_computation_exponential(p0_adj, pf_adj, a=.50)
             # Convergence Check
             if int(res['problem_solved']) != 1:
                 all_converged = False
@@ -95,12 +94,16 @@ class LinearOpti:
             
             # The landing point becomes the new starting point
             p0_adj = pf_adj.copy()
-
+        
+        print("xd value: " , xd)    
+        print ("fitness: " , fitness)
+        
+        
         status_msg = "CONVERGED" if all_converged else "FAILED (One or more jumps did not converge)"
         print(f"--- Evaluation Results ---")
         print(f"Total Jumps: {n_jumps + 1}, Total Fitness: {fitness:.4f}, Energy Consumed: {total_consumed_energy:.2f}, Global Convergence: {status_msg}")
         print(f"--------------------------")
-
+        # breakpoint()
         # Plot trajectories if requested
         #self.plot_point_traj(jump_log_points, jump_log_traj)
         
@@ -131,6 +134,29 @@ class LinearOpti:
             'linear_trajectory': trajectory
         }
         
+        return res
+    
+    def linear_computation_exponential(self, p0, pf, a=0.2):
+        
+        distance = np.linalg.norm(pf - p0)
+
+        problem_solved = 1 if distance > 0 else 0
+        num_points = 50
+        t = np.linspace(0, 1, num_points)
+
+        trajectory = np.zeros((3, num_points))
+        for i in range(3):
+            trajectory[i, :] = p0[i] + t * (pf[i] - p0[i])
+
+        # E(d) = d * exp(d - a)
+        consumed_energy = distance * np.exp(distance - a)
+
+        res = {
+            'consumed_energy': float(consumed_energy),
+            'problem_solved': problem_solved,
+            'linear_trajectory': trajectory
+        }
+
         return res
            
     def calc_linear_fitness(self, res, patch_id=None, contact_abs_pos_yz=None):

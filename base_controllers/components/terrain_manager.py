@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =30,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='single_central_tower'):
+    def __init__(self, grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='gaussian_bumps'):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
@@ -304,7 +304,7 @@ class TerrainManager:
             for j in range(self.number_of_patches_height):
                 self.patch_origins[patch_id] = np.array([
                     self.patch_width * i, 
-                    Lz + (self.patch_height * j)  # Aggiunto Lz +
+                    Lz + (self.patch_height * j) 
                 ])
                 patch_id += 1
         
@@ -313,41 +313,33 @@ class TerrainManager:
     
     def generate_single_central_tower(self, h_tower=1.0, sigma=0.5, p_exp=10, x_offset=1.0):
         """
-        Genera una singola torre al centro della mappa, indipendente dalla griglia delle patch.
+        Generate a single central tower on the wall surface.
         """
-        # Inizializza la matrice delle altezze
         X = np.zeros((self.grid_size, self.grid_size))
         
-        # Crea la meshgrid (stessa logica del resto della classe)
         z_vec = np.linspace(self.Lz, 0, self.grid_size)
         y_vec = np.linspace(0, self.Ly, self.grid_size)
         Z, Y = np.meshgrid(z_vec, y_vec)
         
-        # Calcola il centro geometrico
-        # Se Lz = -10 e Ly = 10, il centro sarà a Z = -5 e Y = 5
         center_y = self.Ly / 2.0
         center_z = self.Lz / 2.0
         
-        # Calcola la torre usando la formula Super-Gaussiana
-        # Formula: X = h * exp( - (dist^2 / (2*sigma^2))^p_exp )
         dist_sq = ((Z - center_z)**2 + (Y - center_y)**2)
         tower = h_tower * np.exp(- (dist_sq / (2 * sigma**2))**p_exp)
         
         X += tower
         X = X + x_offset
         
-        # Aggiorna gli attributi della classe per la compatibilità con i plot
         self.mesh_x, self.mesh_y, self.mesh_z = X, Y, Z
         self.point_cloud = self.convert_meshgrid_to_pc(X, Y, Z)
         
-        # Calcolo forzato delle patch (necessario per non rompere i metodi di plotting)
         self.patch_width = self.Ly / self.number_of_patches_width
         self.patch_height = abs(self.Lz) / self.number_of_patches_height
         
         patch_id = 0
         for i in range(self.number_of_patches_width):
             for j in range(self.number_of_patches_height):
-                # Importante: sommiamo self.Lz per centrare le patch nel range negativo
+                
                 self.patch_origins[patch_id] = np.array([
                     i * self.patch_width, 
                     self.Lz + (j * self.patch_height)
