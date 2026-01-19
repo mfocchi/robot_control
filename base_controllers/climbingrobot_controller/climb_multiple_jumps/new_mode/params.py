@@ -20,24 +20,24 @@ from base_controllers.components.terrain_manager import TerrainManager
 # P0_INIT = np.array([0.0, 1.46, -2.53])
 # PF_PATCH_INIT = np.array([0.0, 1.46, -5.55])
 
-P0_INIT = np.array([0.0, 1.53, -5.51]) 
-PF_PATCH_INIT=  np.array([0.0, 1.53,-1.55])
+P0_INIT = np.array([0.0, 1.53, -2.53]) 
+PF_PATCH_INIT=  np.array([0.0, 9.53,-9.53])
 PF_INIT = PF_PATCH_INIT
-MAX_JUMP = 4
-THREADS = 5
-flag_thread = True
+MAX_JUMP = 10
+THREADS = 20
+flag_thread = False
 
-MAIN_DIRECTORY = "result/result_1_hemisphere"
+MAIN_DIRECTORY = "result/result_1_gaussian_chess"
 
-Fleg_max = 600.
-Fr_max = 90.
+Fleg_max = 400.
+Fr_max = 50.
 Fr_min = 10.
 number_of_patches_width = 10
 number_of_patches_height = 10
 mass = 10.
 anchor_distance = 10.
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap ]
-fitness_weights = np.array([1., 1.0,10., 10.])
+fitness_weights = np.array([1., 1.,1., 1.])
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
 filter_weights = np.array([100., 10., 0,10.0])
@@ -75,26 +75,28 @@ inner_opt_params['contact_normal'] = None
 # ================================================
 # OUTER LOOP OPTIMIZER PARAMETERS
 # ================================================
-MAX_N_PATCHES = MAX_JUMP + 1
+CEM_DISCRETE_DIM = MAX_JUMP + 1
+
 # Set up parameters OUTER LOOP
 cem_params = CemParams()
 cem_params.seed = int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 15
-cem_params.pop_size =10
+cem_params.pop_size = 150
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # NON RIDURRE LA POPOLAZIONE
-cem_params.fraction_elites_reused = 0.3 
+cem_params.fraction_elites_reused = 0.0 
+cem_params.alpha = 0.5
 # Discrete
-cem_params.dim_discrete = MAX_N_PATCHES
+cem_params.dim_discrete = CEM_DISCRETE_DIM
 number_of_patches = number_of_patches_width * number_of_patches_height
 # cem_params.n_values = [3] + [(number_of_patches-1) for _ in range(4)]
-cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(4)]
+cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(MAX_JUMP)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
 cem_params.min_prob = 0.01
 # Continuous
-cem_params.dim_continuous = 2 * MAX_N_PATCHES # ho posizioni x e y
+cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # ho posizioni x e y
 cem_params.max_value_continuous = np.full(cem_params.dim_continuous, 1.0)
 cem_params.min_value_continuous = np.full(cem_params.dim_continuous, 0.0)
 cem_params.init_mu_continuous = np.full(cem_params.dim_continuous, 0.5)
@@ -167,7 +169,13 @@ def initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_w
     inner_opt_params['cost_z'] = terrain_manager.mesh_z
     inner_opt_params['patch_side'] = 1.0 * patches.patch_width
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
-    # patches.visualize_full_cost_map()
+    patches.visualize_full_cost_map()
+    # patch_id = 25
+    # costo = patches.get_patch_cost(patch_id)
+    # if costo is not None:
+    #     print(f"Il costo della patch {patch_id} è: {costo:.4f}")
+    #     patches.plot_patch(patch_id)
+    # breakpoint()
     
     terrain_params.append({
         'anchor_location': point_clouds,
@@ -302,6 +310,7 @@ def save_params():
         },
         'cem_params': {
             'seed': cem_params.seed,
+            'alpha': cem_params.alpha,
             'n_threads': cem_params.n_threads,
             'cem_iters': cem_params.cem_iters,
             'pop_size': cem_params.pop_size,

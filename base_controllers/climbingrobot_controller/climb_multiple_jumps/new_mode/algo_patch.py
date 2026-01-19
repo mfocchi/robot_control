@@ -16,7 +16,7 @@ class CemParams:
     n_elites: int = None
     decrease_pop_factor: float = None
     fraction_elites_reused: float = None
-
+    alpha: float = 0.5
     # Discrete
     dim_discrete: int = None
     n_values: List[int] = None
@@ -44,7 +44,7 @@ class IterationLog:
 
 class CrossEntropyMethodMixed:
     def __init__(self, params: CemParams):
-        self.alpha  = 0.6
+        
         
         self.params = params
         self.log = IterationLog()
@@ -127,6 +127,26 @@ class CrossEntropyMethodMixed:
                             break
                     self.population_discrete[j, i] = chosen_k
 
+    # def update_distribution_discrete(self):
+    #     p = self.params
+    #     # Sort individuals by their perfomance (best first!)
+    #     idx = np.argsort(self.population_fit)[::-1]
+
+    #     # Add elites to population
+    #     self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
+
+    #     # Update probabilities using the elites
+    #     for j in range(self.params.dim_discrete):
+    #         new_probs_elites = np.zeros(p.n_values[j])
+    #         for i in range(p.n_elites):
+    #             val = self.elites_discrete[j, i]
+    #             new_probs_elites[val] += 1.0
+            
+    #         new_probs_elites = new_probs_elites / p.n_elites
+            
+    #         updated_probs = (new_probs_elites * self.alpha) + (np.array(self.probs[j]) * (1.0 - self.alpha))
+    #         updated_probs += p.min_prob
+    #         self.probs[j] = updated_probs / np.sum(updated_probs)
     
     def update_distribution_discrete(self):
         p = self.params
@@ -146,20 +166,3 @@ class CrossEntropyMethodMixed:
 
             self.probs[j] = self.probs[j] / np.sum(self.probs[j])
     
-    # def update_distribution_discrete(self):
-    #     p = self.params
-    #     # Sort individuals by their perfomance (best first!)
-    #     idx = np.argsort(self.population_fit)[::-1]
-
-    #     # Add elites to population
-    #     self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
-
-    #     # Update probabilities using the elites
-    #     for j in range(self.params.dim_discrete):
-    #         counter = [0.0 for _ in range(p.n_values[j])]
-    #         for i in range(p.n_elites):
-    #             counter[self.elites_discrete[j, i]] += 1
-    #         for k in range(p.n_values[j]):
-    #             self.probs[j][k] = (counter[k] / p.n_elites)*self.alpha + p.min_prob + self.probs[j][k]*(1.0 - self.alpha)
-
-    #         self.probs[j] = self.probs[j] / np.sum(self.probs[j])
