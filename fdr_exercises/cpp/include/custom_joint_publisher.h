@@ -29,9 +29,9 @@ double  loop_frequency = 1000.;
 // Publishers
 //std::shared_ptr<realtime_tools::RealtimePublisher<sensor_msgs::JointState> > pub_des_jstate_sim_rt;
 ros::Publisher pub_des_jstate;
-sensor_msgs::JointState jointState_msg_sim;
-std_msgs::Float64MultiArray jointState_msg_robot;
+sensor_msgs::JointState jointState_msg_torque;
+std_msgs::Float64MultiArray jointState_msg_position;
 
-bool real_robot = false;
+std::string control_type;
 
 #endif

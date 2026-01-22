@@ -10,15 +10,14 @@ class JointStatePublisher():
         self.q_des =np.zeros(6)
         self.qd_des = np.zeros(6)
         self.tau_ffwd = np.zeros(6)
-        self.filter_1 = np.zeros(6)
-        self.filter_2 = np.zeros(6)
 
-    def send_des_jstate(self):
+
+    def send_des_jstate(self, q_des):
         msg = Float64MultiArray()
         if (self.gripper_sim):
-            msg.data = np.append(self.q_des, np.array([0.0, 0.0 ,0.0]))
+            msg.data = np.append(q_des, np.array([0.0, 0.0 ,0.0]))
         else:
-            msg.data = self.q_des
+            msg.data = q_des
         self.pub_des_jstate.publish(msg)
 
 def talker(p):
@@ -45,17 +44,17 @@ def talker(p):
             print("this publisher cannot handle the gripper joints")
             break
         # 2 - generate step reference
-        # if time < 4.:
-        #     p.q_des = q_des0
-        # else:
-            #p.q_des = q_des0 + np.array([0., 0.4, 0., 0., 0., 0])
+        if time < 4.:
+            p.q_des = q_des0
+        else:
+            p.q_des = q_des0 + np.array([0., 0.4, 0., 0., 0., 0])
 
 
         p.qd_des = np.zeros(6)
         p.tau_ffwd = np.zeros(6)
 
-        p.send_des_jstate()
-        print(p.q_des)
+        p.send_des_jstate(p.q_des)
+
         time = np.round(time + np.array([1/loop_frequency]), 3)
         loop_rate.sleep()
 
