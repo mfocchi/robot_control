@@ -25,19 +25,10 @@ import matlab.engine
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 import sys
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
-from base_controllers.utils.common_functions import checkRosMaster
 import  base_controllers.params as conf
 robotName = "climbingrobot2"
 from base_controllers.utils.common_functions import SafeTFBroadcaster
 
-# real robot stuff
-from climbingrobot_description.msg import RopeCommand
-from climbingrobot_description.msg import PropellerCommand
-from climbingrobot_description.msg import RopeTelemetry
-from climbingrobot_description.msg import AlpineBodyTelemetry
-from climbingrobot_description.srv import AlpineBodyCommand
-from climbingrobot_description.srv import RopeControlMode
-import std_msgs, geometry_msgs
 
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
@@ -249,6 +240,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_l = 0
         self.Fr_r = 0
         self.prop_force = 0
+        self.touch_down_detected_prismleg = False
         self.touch_down_detected_l = False
         self.touch_down_detected_r = False
         self.optimal_control_traj_finished = False
@@ -390,19 +382,29 @@ class ClimbingrobotController(BaseControllerFixed):
                 mountain_wire_pitch_l, mountain_wire_roll_l,  wire_base_prismatic_l, 0., wire_base_roll_l, 0.]
 
     def detectTouchDown(self):
-        force_th = 10.
-        if not self.touch_down_detected_l and (self.wall_normal.dot(self.contactForceW_l) > force_th):
-            self.touch_down_detected_l = True
-        if not self.touch_down_detected_r  and (self.wall_normal.dot(self.contactForceW_r) > force_th):
-            self.touch_down_detected_r = True
+        force_th = 15.
+        #old way with two landing legs
+        # if not self.touch_down_detected_l and (self.wall_normal.dot(self.contactForceW_l) > force_th):
+        #     self.touch_down_detected_l = True
+        # if not self.touch_down_detected_r  and (self.wall_normal.dot(self.contactForceW_r) > force_th):
+        #     self.touch_down_detected_r = True
+        # if self.touch_down_detected_l and self.touch_down_detected_r:
+        #     print(colored("TouchDown Detected", "blue"))
+        #     # sample com pos
+        #     self.x_tilde0 =  self.wall_normal.reshape(1, 3) @ (self.com)# - self.x_p)
+        #     return True
+        # else:
+        #     return False
 
-        if self.touch_down_detected_l and self.touch_down_detected_r:
-            print(colored("TouchDown Detected", "blue"))
-            # sample com pos
-            self.x_tilde0 =  self.wall_normal.reshape(1, 3) @ (self.com)# - self.x_p)
+        #new way prismatic leg
+        if not self.touch_down_detected_prismleg and np.linalg.norm(self.contactForceW) > force_th:
+            self.touch_down_detected_prismleg = True
+        if self.touch_down_detected_prismleg:
+            #print(colored("TouchDown Detected", "blue"))
             return True
         else:
             return False
+
 
     def resetRope(self):
         print(colored(f"RESTORING ROPE PD", "red"))
@@ -657,65 +659,24 @@ class ClimbingrobotController(BaseControllerFixed):
             print(colored(message, "red"))
         self.print_counter += 1
 
-def talker(p):
-    p.start()
-    additional_args = ['robot_name:='+p.robot_name,
-                       'spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
-                       'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
-                       'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z']),
-                       'wall_inclination:=' + str(conf.robot_params[p.robot_name]['wall_inclination']),
-                       'double_propeller:=' + str(p.USE_PROPELLERS_FOR_LEG_REORIENT)
-                       ]
-    world_name = "climbingrobot2.world"
-    launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_climbingrobot2.launch'
-    p.startSimulator(world_name=world_name, additional_args=additional_args, launch_file=launch_file)
-
-    p.loadModelAndPublishers()
-
-    # jump params
-    # jump starting position
-    p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
-    # jump landing position
-    p.target = np.array([0.28, 4, -4])
-
-
-
-    p.startupProcedure()
-    p.initVars()
-    p.q_des = np.copy(p.q_des_q0)
-
-    #loop frequency
-    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
-    p.updateKinematicsDynamics()
-
-
-    # spawn mesh in gazebo (needs mat2Gazebo)
-    if p.OBSTACLE_AVOIDANCE=='mesh':
-        spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo)
-
-    p.startJump = 2.5
-    p.orientTime = 1.0
-    p.stateMachine = 'idle'
-    p.jumpNumber  = 0
-    p.numberOfJumps = 1
-    p.start_logging = np.inf
-
-    # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
-    p.q_des[:12] = p.computeJointVariables(p0)
-    p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
-    #  wait for a target
-    while True:
-        if p.targetReceived:
-            print(colored(f"---------------Ideal Target landing: {p.target}", "green"))
-            break
+    def checkCycleTermination(self):
+        p.jumpNumber += 1
+        #continue jumping
+        if (p.jumpNumber < p.numberOfJumps):
+            p.stateMachine = 'idle'
+            # reset for multiple jumps
+            p.startJump = p.time
+            p.touch_down_detected_prismleg = False
+            return False
         else:
-            p.print_message("waiting for target", decimate=1000)
-            rate.sleep()
+            # p.pause_physics_client()
+            if p.SAVE_BAG:
+                p.recorder.stop_recording_srv()
+            return True
 
-    while not ros.is_shutdown():
-        # update the kinematics
-        p.updateKinematicsDynamics()
-        # jump state machine
+    def stateMachineLoop(self):
+
+        terminateFlag = False
         if ( p.stateMachine == 'idle') and (p.time >= p.startJump):
             # first run optim and fill in jump variable
             p.pause_physics_client()
@@ -726,6 +687,7 @@ def talker(p):
             #set the end of orienting
             p.end_orienting = p.startJump + p.orientTime
             p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
+            p.end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
             p.start_logging = p.end_orienting
             p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
             if p.SAVE_BAG:
@@ -785,12 +747,16 @@ def talker(p):
                 p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
                 p.stateMachine = 'flying'
 
-                # retract leg and move langing elements
-                p.q_des[p.leg_index[2]] = 0.25
 
-                # retract leg for landing
                 if  p.landing:
                     p.stateMachine = 'flying_and_wait_for_touchdown'
+                    #put leg straight for landing
+                    p.q_des[p.leg_index] = np.array([-1.57, 0.0, 0.1])
+                else:
+                    # retract leg
+                    p.q_des[p.leg_index[2]] = 0.25
+
+
                 print(colored("Start "+ p.stateMachine, "blue"))
 
         if (p.stateMachine == 'flying'):
@@ -815,25 +781,14 @@ def talker(p):
 
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-            end_flying = p.startJump + p.orientTime +  p.jumps[p.jumpNumber]["Tf"]
 
-            if (p.time >= end_flying):
+
+            if (p.time >= p.end_flying):
                 print(colored("Stop Flying", "blue"))
                 # reset the qdes
                 # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
                 p.resetRope()
-                energy = p.computeJumpEnergyConsumption()
-                p.jumpNumber += 1
-                if (p.jumpNumber < p.numberOfJumps):
-                    p.stateMachine = 'idle'
-                    # reset for multiple jumps
-                    p.startJump = p.time
-                else:
-                    #p.pause_physics_client()
-                    p.printLandingInfo()
-                    if p.SAVE_BAG:
-                        p.recorder.stop_recording_srv()
-                    break
+                terminateFlag = p.checkCycleTermination()
 
         # this is the same as flying but with the lander
         if (p.stateMachine == 'flying_and_wait_for_touchdown'):
@@ -850,40 +805,119 @@ def talker(p):
                 deltaFr_r0 = 0.
 
             if not p.optimal_control_traj_finished:
-                if p.getIndex(delta_t) == -1:
+                if p.getIndex(delta_t) != -1:
+                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] + deltaFr_l0
+                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
+                else:
                     # start again pid gains and reset qdes
                     p.resetRope()
                     p.optimal_control_traj_finished = True
-                else:
-                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] +deltaFr_l0
-                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
-                # check for early td and in case reset rope
-                if p.detectTouchDown():
+                # check for early td and in case reset rope I comment otherwise is triggering to early
+                if (p.time>=0.7*p.end_flying) and p.detectTouchDown():
                     p.resetRope()
-                    print(colored("Early TD detected, Start landing", "blue"))
+                    print(colored("Early TD detected, Starting landing", "blue"))
                     p.stateMachine = 'landing'
                     p.start_landing = p.time
+                    p.landing_error = p.printLandingInfo()
             else: # you are checking for delayed TD you have already reset rope and restored PD
                 if p.detectTouchDown():
-                    print(colored("Start landing", "blue"))
+                    print(colored("Delayed TD detected, Starting landing", "blue"))
                     p.stateMachine = 'landing'
                     p.start_landing = p.time
-
+                    p.landing_error = p.printLandingInfo()
             # plot rope forces
             p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
             p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-            end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
+            p.end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
 
         if (p.stateMachine == 'landing'):
                 print(colored("Start landing", "blue"))
                 p.prop_force = (-25.)  # push against the wall
                 p.apply_propeller_force(p.prop_force)
-                landing_error = p.printLandingInfo()
-                ####TODO
-                pass
+                terminateFlag = p.checkCycleTermination()
 
+        return terminateFlag
+
+    def printLandingInfo(self):
+        print(colored(f"PRINTING LANDING INFO", "red"))
+        landing_location = self.base_pos - self.mat2Gazebo
+        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
+        print(colored(f" while from optim it should be  {self.targetPos}", "blue"))
+
+        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "blue"))
+        # jump_length = np.linalg.norm(p0[:2] - self.targetPos[:2])
+        # MSE = np.square(np.array(p.MPC_tracking_error)).mean()
+        # RMSE = math.sqrt(MSE)
+        # print(colored(
+        #     f" the relative landing error (norm per jump lenghth)  is {100 * np.linalg.norm(landing_location - self.targetPos) / jump_length}%",
+        #     "blue"))
+        print(colored(f" the energy consumption is  {p.computeJumpEnergyConsumption()}", "blue"))
+        print(colored(f" the leg impulse  is  {self.Fleg}", "blue"))
+        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "blue"))
+        self.plotStuff()
+        return self.targetPos - landing_location
+
+def talker(p):
+    p.start()
+    additional_args = ['robot_name:='+p.robot_name,
+                       'spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
+                       'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
+                       'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z']),
+                       'wall_inclination:=' + str(conf.robot_params[p.robot_name]['wall_inclination']),
+                       'double_propeller:=' + str(p.USE_PROPELLERS_FOR_LEG_REORIENT)
+                       ]
+    world_name = "climbingrobot2.world"
+    launch_file = rospkg.RosPack().get_path('ros_impedance_controller') + '/launch/ros_impedance_controller_climbingrobot2.launch'
+    p.startSimulator(world_name=world_name, additional_args=additional_args, launch_file=launch_file)
+
+    p.loadModelAndPublishers()
+
+    # jump params
+    p.numberOfJumps = 1
+    # jump starting position
+    p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
+    # jump landing position
+    p.target = np.array([0.28, 4, -4])
+
+    p.startupProcedure()
+    p.initVars()
+    p.q_des = np.copy(p.q_des_q0)
+
+    #loop frequency
+    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
+    p.updateKinematicsDynamics()
+
+    # spawn mesh in gazebo (needs mat2Gazebo)
+    if p.OBSTACLE_AVOIDANCE=='mesh':
+        spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo)
+
+    p.startJump = 2.5
+    p.orientTime = 1.0
+    p.stateMachine = 'idle'
+    p.jumpNumber  = 0
+
+    p.start_logging = np.inf
+
+    # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
+    p.q_des[:12] = p.computeJointVariables(p0)
+    p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+    #  wait for a target coming from real robot
+    while True:
+        if p.targetReceived:
+            print(colored(f"---------------Ideal Target landing: {p.target}", "green"))
+            break
+        else:
+            p.print_message("waiting for target", decimate=1000)
+            rate.sleep()
+
+    while not ros.is_shutdown():
+        # update the kinematics
+        p.updateKinematicsDynamics()
+        # jump state machine
+        if (p.stateMachineLoop()):
+            break
         # plot ropes as green arrows only when you not save bags because they are ugly
         if not p.SAVE_BAG:
             p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
@@ -910,24 +944,7 @@ def talker(p):
         # wait for synconization of the control loop
         rate.sleep()
 
-    def printLandingInfo(self):
-        landing_location = self.base_pos - self.mat2Gazebo
-        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
-        print(colored(f" while from optim it should be  {self.targetPos}", "blue"))
 
-        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "blue"))
-        jump_length = np.linalg.norm(p0[:2] - self.targetPos[:2])
-        MSE = np.square(np.array(p.MPC_tracking_error)).mean()
-        RMSE = math.sqrt(MSE)
-        print(colored(
-            f" the relative landing error (norm per jump lenghth)  is {100 * np.linalg.norm(landing_location - self.targetPos) / jump_length}%",
-            "blue"))
-        print(colored(f" the energy consumption is  {energy}", "blue"))
-        print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
-        print(colored(f" the leg impulse  is  {self.Fleg}", "blue"))
-        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "blue"))
-        self.plotStuff()
-        return self.targetPos - landing_location
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
     fig = plt.figure()
