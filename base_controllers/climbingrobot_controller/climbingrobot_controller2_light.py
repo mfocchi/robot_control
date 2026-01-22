@@ -28,6 +28,7 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress
 from base_controllers.utils.common_functions import checkRosMaster
 import  base_controllers.params as conf
 robotName = "climbingrobot2"
+from base_controllers.utils.common_functions import SafeTFBroadcaster
 
 # real robot stuff
 from climbingrobot_description.msg import RopeCommand
@@ -122,7 +123,7 @@ class ClimbingrobotController(BaseControllerFixed):
         additional_urdf_args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
         super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args,  markers_time_to_live=conf.robot_params[p.robot_name]['dt'])
 
-        self.broadcaster = tf.TransformBroadcaster()
+        self.broadcaster = SafeTFBroadcaster()
         self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
                                              callback=self._receive_contact, queue_size=1, buff_size=2 ** 24,
                                              tcp_nodelay=True)
