@@ -16,6 +16,7 @@ from base_controllers.components.rl_velocity_controller.rl_controller import RlV
 from base_controllers.components.safe_rl.value_function.value_function_manager import ValueFunctionManager
 import params as conf
 import numpy as np
+from base_controllers.utils.joyManager import JoyManager
 robotName = "aliengo"  # needs to inherit BaseController
 
 class SafeRLController(QuadrupedController):
@@ -44,9 +45,13 @@ if __name__ == '__main__':
     rl_controller = RlVelocityController(p.robot_name, p.dt)
 
     vf_frequency = 100  # Hz
-    decimation = (1 / p.dt) * (1 / vf_frequency)
+    decimation = (1 / p.dt) / (vf_frequency)
     step = 0
     isrec = True
+    use_joy = False
+
+    if use_joy:
+        joy = JoyManager()
 
     #load value function NN
     vf = ValueFunctionManager()
@@ -56,24 +61,34 @@ if __name__ == '__main__':
                           use_ground_truth_contacts=True,
                           additional_args=['gui:=' + str(use_gui),
                                            'go0_conf:=standDown'])
-
+        #p.setSimSpeed(max_update_rate=300)
         p.startupProcedure()
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
         p.counter = 0
         p.startTime = p.time
         while not ros.is_shutdown():
             p.updateKinematics()
-            rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
+            #rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
+            if use_joy:
+                axes, buttons = joy.get_commands()
+                # use a scaling to make the joy input less reactive
+                lx = 0.2 * axes[0]
+                ly = 0.2 * axes[1]
+                ry = 0.2 * axes[3]
+                #print(lx,ly,ry)
+                rl_controller.velocity_cmd = np.array([lx, ly, ry])
+            else:
+                rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
             p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
             p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
             lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
             ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
             proj_gravity = p.b_R_w.dot(np.array([0, 0, -1]))
             # pushes of increasing entity
-            if p.time % 2. == 0:
-                p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
-                print(50*p.counter)
-                p.counter+=1
+            if p.time % 2. == 0 and isrec and not p.real_robot:
+                 p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
+                 print(50*p.counter)
+                 p.counter+=1
 
             if isrec:
                 # nominal policy
@@ -85,9 +100,17 @@ if __name__ == '__main__':
             #check this
             #print('ang_vel_b A',ang_vel_b)
             #print('proj_gravity A',proj_gravity)
-            if step % decimation == 0:
-                isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity, joint_pos=p.q, joint_vel=p.qd, threshold=0.8)
-                #print(V_safe)
+            if step % decimation == 0:# and isrec:
+                 isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity, joint_pos=p.q, joint_vel=p.qd, threshold=0.8, vf_additional_term = 0.064)
+                 #isrec = True
+            #     #print(V_safe)
+            # '''elif step % decimation == 0:
+            #     if np.all(np.abs(lin_vel_b < 10e-2)) and np.all(np.abs(p.qd) < 10e-2):
+            #         #print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+            #         isrec = True
+            #         rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
+            #         vf.count = 0
+            #         vf.VF = True'''
             step += 1
 
             # time based switch
@@ -101,7 +124,7 @@ if __name__ == '__main__':
             p.grForcesW_des = np.zeros((12))
             p.tau_ffwd = np.zeros(12)
             p.send_command(p.rl_q_des, np.zeros(12), np.zeros(12), log_data_in_send_command=True)
-            #p.visualizeContacts()
+            p.visualizeContacts()
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")

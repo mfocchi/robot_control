@@ -56,6 +56,8 @@ class ValueFunctionManager:
         self.count = 0
         self.min_switch = 1
         self.VF = True
+        self.count_back = 0
+        self.min_back = 40
 
     # Function to load value function
     def load_value(self, file_path):
@@ -69,7 +71,7 @@ class ValueFunctionManager:
         # Create object to evaluate the value function
         self.critic_network = CriticEvaluator(self.critic_model, self.params)
 
-    def computeValueFnc(self,proj_gravity, body_ang_vel, joint_pos, joint_vel,   threshold):
+    def computeValueFnc(self,proj_gravity, body_ang_vel, joint_pos, joint_vel,   threshold, vf_additional_term):
 
         # dimension of observation vector = 3+3+12+12=30
         obs_flax_np = np.concatenate((
@@ -86,15 +88,26 @@ class ValueFunctionManager:
 
         V_safe = critic_inference(self.critic_model, self.critic_network.params, obs_flax)
 
-        if V_safe > threshold and self.VF:
+        if V_safe - vf_additional_term > threshold and self.VF:
             #  print(f"\033[92mV_safe: {V_safe:.4f}\033[0m")
             self.count = 0
             self.VF = True
-        else:
+        elif self.VF:
             self.count += 1
             print(f"\033[91mV_safe: {V_safe:.4f}\033[0m", self.count)
             if self.count >= self.min_switch:
                 self.VF = False
             else:
                 self.VF = True
+        elif V_safe - vf_additional_term > threshold and not self.VF:
+            self.count_back += 1
+            #print('self.count_back',self.count_back)
+            if self.count_back >= self.min_back:
+                #print('Back')
+                self.VF =True
+                self.count_back = 0
+                self.count = 0
+        elif not self.VF:
+            self.count_back = 0
+
         return self.VF, V_safe

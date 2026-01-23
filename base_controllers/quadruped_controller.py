@@ -43,7 +43,7 @@ class QuadrupedController(BaseController):
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
 
-        self.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+        self.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
 
     #####################
     # OVERRIDEN METHODS #
@@ -1609,7 +1609,7 @@ if __name__ == '__main__':
     world_name = 'fast.world'
     use_gui = False
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
-    use_joy = False
+    use_joy = True
     generate_reference = False
 
     if rl_control == 'state_est_based':
@@ -1643,7 +1643,7 @@ if __name__ == '__main__':
             p.updateKinematics()
 
 
-            if rl_control != 'none' and (p.time > (p.startTime + 1.)):
+            if rl_control != 'none' and (p.time > (p.startTime + 10.)):
                 if use_joy:
                     axes, buttons = joy.get_commands()
                     #use a scaling to make the joy input less reactive
@@ -1667,11 +1667,8 @@ if __name__ == '__main__':
                     # rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
                     # p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
 
-                    if  p.time > (p.startTime + 3.):
-                        rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                        p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="safe")
-                    else:
-                        p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+
+                    p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
 
 
                 if rl_control == 'sensor_based':
@@ -1698,7 +1695,7 @@ if __name__ == '__main__':
                                                                                 p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.tau_ffwd, log_data_in_send_command=True)
 
-            #p.visualizeContacts()
+            p.visualizeContacts()
         
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")
