@@ -47,6 +47,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
         self.anchor_passive_joints = np.array([0,1, 6,7])
         self.OBSTACLE_AVOIDANCE = 'mesh' #'none', 'mesh'
+        self.use_gui = False
 
         if self.MPC_control:
             sys.path.insert(0, './codegen_mpc')
@@ -132,7 +133,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
-            self.recorder = RosbagControlledRecorder(record_from_startup_=False)
+            self.recorder = RosbagControlledRecorder(bag_name = "climbing_robot_new.bag", record_from_startup_=False)
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -240,11 +241,18 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_l = 0
         self.Fr_r = 0
         self.prop_force = 0
-        self.touch_down_detected_prismleg = False
-        self.touch_down_detected_l = False
-        self.touch_down_detected_r = False
-        self.optimal_control_traj_finished = False
         self.MPC_tracking_error = []
+
+        w_R_wall = self.math_utils.eul2Rot(np.array([0, -conf.robot_params[p.robot_name]['wall_inclination'], 0]))
+        self.wall_normal = w_R_wall[:, 0].copy()  # take X axis, I need to use copy otherwise matlab complains is not contiguous
+
+        self.touch_down_detected_prismleg = False
+        self.touch_down_detected_l = False #no longer used
+        self.touch_down_detected_r = False #no longer used
+        self.optimal_control_traj_finished = False
+        self.mpc_index = 0
+        self.mpc_index_old = 0
+        self.mpc_index_ffwd = 0  # updated only when we stop recomputing mpc
 
         # init new logged vars here
         self.com_log =  np.empty((3, conf.robot_params[self.robot_name]['buffer_size'] ))*nan
@@ -264,14 +272,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
-        w_R_wall = self.math_utils.eul2Rot(np.array([0,-conf.robot_params[p.robot_name]['wall_inclination'],0]))
-        self.wall_normal = w_R_wall[:,0].copy() #take X axis, I need to use copy otherwise matlab complains is not contiguous
 
-        self.mpc_index = 0
-        self.mpc_index_old = 0
-        self.mpc_index_ffwd = 0 # updated only when we stop recomputing mpc
 
-        self.targetReceived = True # in sim just give hardcoded target
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -310,28 +312,30 @@ class ClimbingrobotController(BaseControllerFixed):
         # plotFrameLinear('com position', 1, p.time_log, None, p.com_log)
         # plotFrameLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
         actual_com= p.base_pos_log - p.mat2Gazebo.reshape(3, 1) # mat2Gazebo is WF in matlab
-        time_gazebo = p.time_log - p.start_logging
-        plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
-        plot3D('matlab states', 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
+        #plotJoint('position', p.time_log, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plot3D('basePos', 2,  ['X', 'Y', 'Z'], p.time_log, actual_com, p.ref_time + (p.startJump+p.orientTime), p.ref_com)
+        plot3D('matlab states', 3, ['psi', 'l1', 'l2'], p.time_log, p.simp_model_state_log, p.ref_time + (p.startJump+p.orientTime), np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
+
 
         # plot rope forces
-        # plt.figure()
-        # plt.subplot(2, 1, 1)
-        # plt.ylabel("Fr_l")
-        # plt.plot(p.ref_time, p.Fr_l0, color='red')
-        # plt.plot(time_gazebo, p.Fr_l_log, color='blue')
-        # plt.grid()
-        # plt.subplot(2, 1, 2)
-        # plt.ylabel("Fr_r")
-        # plt.plot(p.ref_time, p.Fr_r0, color='red')
-        # plt.plot(time_gazebo, p.Fr_r_log, color='blue')
-        # plt.grid()
+        plt.figure()
+        plt.subplot(2, 1, 1)
+        plt.ylabel("Fr_l")
+        plt.plot(p.ref_time + (p.startJump+p.orientTime), p.Fr_l0, color='red')
+        plt.plot(p.time_log, p.Fr_l_log, color='blue')
+        plt.grid()
+        plt.subplot(2, 1, 2)
+        plt.ylabel("Fr_r")
+        plt.plot(p.ref_time + (p.startJump+p.orientTime), p.Fr_r0, label="ref", color='red')
+        plt.plot(p.time_log, p.Fr_r_log, label="ref+MPC", color='blue')
+        plt.legend()
+        plt.grid()
 
         #save data
+        time_jump = p.time_log - (p.startJump + p.orientTime)
         filename = f'test_gazebo_MPC_{p.MPC_control}.mat'
         mio.savemat(filename, {'ref_time': p.ref_time, 'ref_com': p.ref_com,
-                                'time_gazebo': time_gazebo, 'actual_com': actual_com,
+                                'time_gazebo': time_jump, 'actual_com': actual_com,
                                 'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
                                 'psi': p.simp_model_state_log[0,:], 'l_1': p.simp_model_state_log[1,:], 'l_2': p.simp_model_state_log[2,:],
                                 'psid': p.psid_log, 'l_1d': p.l_1d_log,'l_2d': p.l_2d_log,
@@ -342,7 +346,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def getIndex(self,t):
         try:
             # get index
-            a_bool = self.jumps[self.jumpNumber]["time"] >= t
+            a_bool = self.jump_data["time"] >= t
             idx = min([i for (i, val) in enumerate(a_bool) if val])-1
             if idx == -1:
                 return 0
@@ -352,10 +356,9 @@ class ClimbingrobotController(BaseControllerFixed):
             return  -1
 
     def getImpulseAngle(self):
-        angle_hip_roll =  math.atan2(self.jumps[self.jumpNumber]["Fleg"][1],
-                                self.jumps[self.jumpNumber]["Fleg"][0])
-        angle_hip_pitch =  math.atan2(self.jumps[self.jumpNumber]["Fleg"][2], self.jumps[self.jumpNumber]["Fleg"][0])
-        print(colored(f"Start orienting leg to (pitch, roll)  : {angle_hip_pitch, angle_hip_roll}", "blue"))
+        angle_hip_roll =  math.atan2(self.jump_data["Fleg"][1], self.jump_data["Fleg"][0])
+        angle_hip_pitch =  math.atan2(self.jump_data["Fleg"][2], self.jump_data["Fleg"][0])
+        print(colored(f"Start orienting leg to (pitch, roll)  {p.time}: {angle_hip_pitch, angle_hip_roll}", "blue"))
         angle_hip_pitch +=-1.57
         return angle_hip_pitch, angle_hip_roll
 
@@ -447,10 +450,9 @@ class ClimbingrobotController(BaseControllerFixed):
     def initOptim(self, p0, pf):
         ##offline optim vars
         self.Fleg_max = 300.
-        self.Fr_max = 90.  # had to increas because of slopes downward jumps it used tp be 90
-        self.Fr_min = 0.  # had to increas because of slopes downward jumps it used tp be 0
+        self.Fr_max = 190.  # had to increas because of slopes  it used tp be 90
+        self.Fr_min = 15.  # had to increas because of downward jumps it used tp be 0
         # down ward jumps
-        #self.Fr_max = 190.  # had to increas because of slopes downward jumps it used tp be 90
         #self.Fr_min = 15.  # had to increas because of slopes downward jumps it used tp be 0
         self.mu = 0.8
         self.optim_params = {}
@@ -474,11 +476,11 @@ class ClimbingrobotController(BaseControllerFixed):
             self.optim_params['w6'] = 0.
             self.optim_params['T_th'] = 0.05
             self.optim_params['obstacle_avoidance'] = 'mesh'
-            self.optim_params['jump_clearance'] = 1.
+            self.optim_params['jump_clearance'] = 0.8
             # Interpolator (note: z must be increasing — here from -10 to 0)
             #correct initial and final positions
-            p0[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1],  self.mesh_x,  self.mesh_y,  self.mesh_z)
-            pf[0] =  self.terrainManager.wall_surface_eval(pf[2], pf[1],  self.mesh_x,  self.mesh_y,  self.mesh_z)
+            #p0[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1],  self.mesh_x,  self.mesh_y,  self.mesh_z) do not correct initial position which is already ok
+            pf[0] =  self.terrainManager.wall_surface_eval(pf[2], pf[1],  self.mesh_x,  self.mesh_y,  self.mesh_z) + 0.2 # shift the point to account for leg length!
             #does not work non matching with test_mex TODO
             # p0= np.array([0.99103, 2.5, -6.])
             # pf= np.array([0.40632, 4., -4.])
@@ -537,13 +539,13 @@ class ClimbingrobotController(BaseControllerFixed):
         self.targetPosIdeal = self.ref_com[:, -1]
         print(colored(f"offline optimization accomplished, p0:{p0}, target(rough integr):{self.targetPos}", "blue"))
         print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
-        self.jumps = [{"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
+        self.jump_data = {"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
                     "targetPos": self.targetPos,  "Fleg":self.Fleg,
-                    "Fr_r": self.Fr_r0, "Fr_l": self.Fr_l0,  "Tf": self.matvars['Tf'] }]
+                    "Fr_r": self.Fr_r0, "Fr_l": self.Fr_l0,  "Tf": self.matvars['Tf'] }
 
         # MPC vars (need to perform before normal optim to know Tf)
         self.mpc_N = int(0.4 * self.optim_params['N_dyn'])
-        self.Fr_max_mpc = 100.
+        self.Fr_max_mpc = 250.
 
         self.optim_params_mpc = {}
         self.optim_params_mpc['int_method'] = 'rk4'
@@ -613,6 +615,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         return self.deltaFr_l[self.mpc_index_ffwd],self.deltaFr_r[self.mpc_index_ffwd], self.propeller_force[self.mpc_index_ffwd]
 
+
     def onlinePlotMPC(self,deltaFr_l, deltaFr_r):
         # debug
         self.ax1.clear()
@@ -639,12 +642,12 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def computeJumpEnergyConsumption(self):
         # get index
-        #a_bool = self.jumps[self.jumpNumber]["time"] > self.jumps[self.jumpNumber]["thrustDuration"]
+        #a_bool = self.jump_data["time"] > self.jump_data["thrustDuration"]
         #lift_off_idx = min([i for (i, val) in enumerate(a_bool) if val]) - 1
-        lift_off_idx = np.max(np.where((self.time_log - self.start_logging) <=self.jumps[self.jumpNumber]["thrustDuration"]))
+        lift_off_idx = np.max(np.where((self.time_log - self.start_logging) <=self.jump_data["thrustDuration"]))
         impulse_work= 0.5 * self.optim_params['m'] *self.base_vel_log[:, lift_off_idx].dot(self.base_vel_log[:, lift_off_idx]) # ekin at liftoff
         # this integral is done on a rough discretization dt
-        touch_down_idx = np.max(np.where( (self.time_log - self.start_logging)  < p.jumps[p.jumpNumber]["Tf"]))
+        touch_down_idx = np.max(np.where( (self.time_log - self.start_logging)  < self.jump_data["Tf"]))
         hoist_work = 0.
         for i in range(touch_down_idx):
             hoist_work = hoist_work + (
@@ -663,32 +666,48 @@ class ClimbingrobotController(BaseControllerFixed):
         p.jumpNumber += 1
         #continue jumping
         if (p.jumpNumber < p.numberOfJumps):
-            p.stateMachine = 'idle'
-            # reset for multiple jumps
+            p.stateMachine = 'start_jump'
+            # reset vars for multiple jumps
+            self.touch_down_detected_prismleg = False
+            self.touch_down_detected_l = False
+            self.touch_down_detected_r = False
+            self.optimal_control_traj_finished = False
+            self.mpc_index = 0
+            self.mpc_index_old = 0
+            self.mpc_index_ffwd = 0  # updated only when we stop recomputing mpc
             p.startJump = p.time
             p.touch_down_detected_prismleg = False
             return False
         else:
-            # p.pause_physics_client()
+            p.stateMachine = 'idle'
             if p.SAVE_BAG:
                 p.recorder.stop_recording_srv()
-            return True
+            #return False # stay there forever
+            return True # exit loop
+
+    def plotReferenceTraj(self,ref_com):
+        # plot intermediate positions (for iterates on rows so I need to transpose)
+        for blob  in ref_com.T:
+            self.ros_pub.add_marker(blob, color="white", radius=0.2, alpha = 0.5)
 
     def stateMachineLoop(self):
 
         terminateFlag = False
-        if ( p.stateMachine == 'idle') and (p.time >= p.startJump):
+        if ( p.stateMachine == 'start_jump') and (p.time >= p.startJump):
             # first run optim and fill in jump variable
             p.pause_physics_client()
-            p.initOptim(p.base_pos - p.mat2Gazebo, p.target)
+            print(colored(f"Start trajectory optimization", "blue"))
+            p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
             p.unpause_physics_client()
+
+
             p.des_leg_orient = p.getImpulseAngle()
 
             #set the end of orienting
             p.end_orienting = p.startJump + p.orientTime
-            p.end_thrusting = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["thrustDuration"]
-            p.end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
-            p.start_logging = p.end_orienting
+            p.end_thrusting = p.startJump + p.orientTime + p.jump_data["thrustDuration"]
+            p.end_flying = p.startJump + p.orientTime + p.jump_data["Tf"]
+
             p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
             if p.SAVE_BAG:
                 p.recorder.start_recording_srv()
@@ -707,9 +726,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 p.q_des[p.hip_roll_joint] = p.des_leg_orient[1]
 
             if  (p.time >= p.end_orienting):
-                print(colored(f"Stop orienting leg", "blue"))
-                print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to optimized target: ",
-                      p.jumps[p.jumpNumber]["targetPos"], " from actual p0 : ", p.base_pos - p.mat2Gazebo)
+                print(colored(f"Stop orienting leg {p.time}", "blue"))
+                print(colored(f"---------Starting jump  number {p.jumpNumber+1} to optimized target: {p.jump_data['targetPos']} from actual p0 : {p.base_pos - p.mat2Gazebo}","red"))
                 print(colored(f"Start trusting", "blue"))
                 p.tau_ffwd = np.zeros(p.robot.na)
                 p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
@@ -718,7 +736,7 @@ class ClimbingrobotController(BaseControllerFixed):
                 print(colored(f"ZERO LEG AND ROPE PD", "red"))
                 p.stateMachine = 'thrusting'
                 p.pid.setPDjoint(p.rope_index, 0., 0., 0.)
-                p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
+                p.w_Fleg = p.jump_data["Fleg"]
 
         if (p.stateMachine == 'thrusting'):
             # apply leg inpulse for thust duration
@@ -728,17 +746,17 @@ class ClimbingrobotController(BaseControllerFixed):
 
             # start also applying forces to ropes
             delta_t = p.time - p.end_orienting
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+            p.Fr_r = p.jump_data["Fr_r"][p.getIndex(delta_t)]
+            p.Fr_l = p.jump_data["Fr_l"][p.getIndex(delta_t)]
 
             # plot rope forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
+            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=1.5)
+            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=1.5)
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
 
             if (p.time > p.end_thrusting):
-                print(colored("Stop Trhusting", "blue"))
+                print(colored(f"Stop Trhusting  {p.time}", "blue"))
                 print(colored(f"RESTORING LEG PD", "red"))
                 # reenable  the PDs of default values for landing and reset the torque on the leg (stop applyng inpulse)
                 p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
@@ -757,7 +775,7 @@ class ClimbingrobotController(BaseControllerFixed):
                     p.q_des[p.leg_index[2]] = 0.25
 
 
-                print(colored("Start "+ p.stateMachine, "blue"))
+                print(colored(f"Start "+ p.stateMachine+f" {p.time}", "blue"))
 
         if (p.stateMachine == 'flying'):
             # after the thrust we start MPC it will start from time 0.05 so the index should be 12
@@ -772,8 +790,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
 
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
+            p.Fr_l = p.jump_data["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
+            p.Fr_r = p.jump_data["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
 
             #plot rope forces
             p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
@@ -784,7 +802,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
 
             if (p.time >= p.end_flying):
-                print(colored("Stop Flying", "blue"))
+                print(colored(f"Stop Flying  {p.time}", "blue"))
                 # reset the qdes
                 # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
                 p.resetRope()
@@ -806,62 +824,68 @@ class ClimbingrobotController(BaseControllerFixed):
 
             if not p.optimal_control_traj_finished:
                 if p.getIndex(delta_t) != -1:
-                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] + deltaFr_l0
-                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
+                    p.Fr_l = p.jump_data["Fr_l"][p.getIndex(delta_t)] + deltaFr_l0
+                    p.Fr_r = p.jump_data["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
                 else:
                     # start again pid gains and reset qdes
                     p.resetRope()
                     p.optimal_control_traj_finished = True
                 # check for early td and in case reset rope I comment otherwise is triggering to early
-                if (p.time>=0.7*p.end_flying) and p.detectTouchDown():
+                if (p.time>=(p.end_thrusting + 0.5*p.jump_data["Tf"]))and p.detectTouchDown():
                     p.resetRope()
+                    p.landing_error = p.printLandingInfo()
                     print(colored("Early TD detected, Starting landing", "blue"))
                     p.stateMachine = 'landing'
                     p.start_landing = p.time
-                    p.landing_error = p.printLandingInfo()
+
             else: # you are checking for delayed TD you have already reset rope and restored PD
                 if p.detectTouchDown():
+                    p.landing_error = p.printLandingInfo()
                     print(colored("Delayed TD detected, Starting landing", "blue"))
                     p.stateMachine = 'landing'
                     p.start_landing = p.time
-                    p.landing_error = p.printLandingInfo()
+
             # plot rope forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
+            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=3.5)
+            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=3.5)
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-            p.end_flying = p.startJump + p.orientTime + p.jumps[p.jumpNumber]["Tf"]
+            p.end_flying = p.startJump + p.orientTime + p.jump_data["Tf"]
 
         if (p.stateMachine == 'landing'):
-                print(colored("Start landing", "blue"))
-                p.prop_force = (-25.)  # push against the wall
-                p.apply_propeller_force(p.prop_force)
+                print(colored(f"Start landing {p.time}", "blue"))
+                # this when you do not want to continue the cycle need to comment checkCycleTermination()
+                #p.prop_force = (-25.)  # push against the wall
+                #p.apply_propeller_force(p.prop_force)
                 terminateFlag = p.checkCycleTermination()
+
+        if (p.stateMachine == 'idle'):
+            pass
 
         return terminateFlag
 
     def printLandingInfo(self):
         print(colored(f"PRINTING LANDING INFO", "red"))
         landing_location = self.base_pos - self.mat2Gazebo
-        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
-        print(colored(f" while from optim it should be  {self.targetPos}", "blue"))
+        print(colored(f" real landing (in matlab convention) is: {landing_location}", "green"))
+        print(colored(f" while from optim it should be  {self.targetPos}", "green"))
 
-        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "blue"))
+        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "green"))
         # jump_length = np.linalg.norm(p0[:2] - self.targetPos[:2])
         # MSE = np.square(np.array(p.MPC_tracking_error)).mean()
         # RMSE = math.sqrt(MSE)
         # print(colored(
         #     f" the relative landing error (norm per jump lenghth)  is {100 * np.linalg.norm(landing_location - self.targetPos) / jump_length}%",
         #     "blue"))
-        print(colored(f" the energy consumption is  {p.computeJumpEnergyConsumption()}", "blue"))
-        print(colored(f" the leg impulse  is  {self.Fleg}", "blue"))
-        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "blue"))
-        self.plotStuff()
+        print(colored(f" the energy consumption is  {p.computeJumpEnergyConsumption()}", "green"))
+        print(colored(f" the leg impulse  is  {self.Fleg}", "green"))
+        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "green"))
         return self.targetPos - landing_location
 
 def talker(p):
     p.start()
     additional_args = ['robot_name:='+p.robot_name,
+                       'gui:=' + str(p.use_gui),
                        'spawn_2x:=' + str(conf.robot_params[p.robot_name]['spawn_2x']),
                        'spawn_2y:=' + str(conf.robot_params[p.robot_name]['spawn_2y']),
                        'spawn_2z:=' + str(conf.robot_params[p.robot_name]['spawn_2z']),
@@ -875,12 +899,13 @@ def talker(p):
     p.loadModelAndPublishers()
 
     # jump params
-    p.numberOfJumps = 1
+    p.numberOfJumps = 3
     # jump starting position
     p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
     # jump landing position
-    p.target = np.array([0.28, 4, -4])
-
+    p.desired_target = [np.array([0.28, 4, -3.7]),
+                        np.array([0.28, 3.5, -6]),
+                        np.array([0.28, 4.2, -11])]
     p.startupProcedure()
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
@@ -895,22 +920,14 @@ def talker(p):
 
     p.startJump = 2.5
     p.orientTime = 1.0
-    p.stateMachine = 'idle'
+    p.stateMachine = 'start_jump'
     p.jumpNumber  = 0
 
-    p.start_logging = np.inf
+    p.start_logging =p.startJump
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     p.q_des[:12] = p.computeJointVariables(p0)
     p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
-    #  wait for a target coming from real robot
-    while True:
-        if p.targetReceived:
-            print(colored(f"---------------Ideal Target landing: {p.target}", "green"))
-            break
-        else:
-            p.print_message("waiting for target", decimate=1000)
-            rate.sleep()
 
     while not ros.is_shutdown():
         # update the kinematics
@@ -918,22 +935,23 @@ def talker(p):
         # jump state machine
         if (p.stateMachineLoop()):
             break
-        # plot ropes as green arrows only when you not save bags because they are ugly
-        if not p.SAVE_BAG:
-            p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
-            p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+
+        p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=2.5)  # arope, already in gazebo
+        p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=2.5)  # arope, already in gazebo
 
         # plot contact force on retractable leg
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=2.5)
 
         #plot target position (whenever is available)
         try:
-            p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3, alpha=1.)
+            p.ros_pub.add_marker(p.mat2Gazebo + p.jump_data["targetPos"], color="red", radius=0.3, alpha=1.)
             p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
         except:
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
         p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.stl", position=p.mat2Gazebo, color="red", alpha=1.0)
+        if hasattr(p, "ref_com"):
+            p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
