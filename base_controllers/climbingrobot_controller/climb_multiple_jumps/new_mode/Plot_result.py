@@ -48,7 +48,7 @@ class CemParams:
     init_mu_continuous: List[float]
     init_std_continuous: List[float]
     min_std_continuous: List[float]
-
+    alpha: float
 @dataclass
 class eliteData:
     fitness: float
@@ -989,7 +989,7 @@ def main():
     plotter.plot_fitness_by_iteration()
     plotter.plot_mesh_pc_traj()
     plotter.plot_2d_iterations_layout(animated=False, compare=True)
-    plotter.plot_3d_iterations_layout(animated=True, compare=True)
+    plotter.plot_3d_iterations_layout(animated=True, compare=False)
     
     print("[INFO] All plots completed!")
 

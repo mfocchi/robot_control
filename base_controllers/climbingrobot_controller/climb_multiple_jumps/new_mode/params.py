@@ -1,5 +1,6 @@
 import os
 import sys
+from matplotlib.collections import PatchCollection
 import numpy as np
 import matlab
 import time
@@ -13,6 +14,11 @@ import matlab.engine
 from base_controllers.components.point_cloud_filter import PointCloudFilter
 from base_controllers.components.patch_surface import PatchSurface
 from base_controllers.components.terrain_manager import TerrainManager
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import matplotlib.patches as mpatches
+
 # ================================================
 # BASE DATA FOR MULTIPLE JUMPS CLIMBING CONTROLLER
 # ================================================
@@ -20,14 +26,14 @@ from base_controllers.components.terrain_manager import TerrainManager
 # P0_INIT = np.array([0.0, 1.46, -2.53])
 # PF_PATCH_INIT = np.array([0.0, 1.46, -5.55])
 
-P0_INIT = np.array([0.0, 1.53, -2.53]) 
-PF_PATCH_INIT=  np.array([0.0, 9.53,-9.53])
+P0_INIT = np.array([0.0, .5,-.5])
+PF_PATCH_INIT=  np.array([0.0, 6.5, -9.3]) 
 PF_INIT = PF_PATCH_INIT
-MAX_JUMP = 10
-THREADS = 20
+MAX_JUMP = 8
+THREADS = 10
 flag_thread = False
 
-MAIN_DIRECTORY = "result/result_1_gaussian_chess"
+MAIN_DIRECTORY = "result/result_new_1"
 
 Fleg_max = 400.
 Fr_max = 50.
@@ -36,11 +42,11 @@ number_of_patches_width = 10
 number_of_patches_height = 10
 mass = 10.
 anchor_distance = 10.
-# [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap ]
-fitness_weights = np.array([1., 1.,1., 1.])
+# [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
+fitness_weights = np.array([1e7, 20.0,10., 0.5, 15.0,50.0])
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([100., 10., 0,10.0])
+filter_weights = np.array([100., 100., 0,10.0])
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
@@ -79,13 +85,13 @@ CEM_DISCRETE_DIM = MAX_JUMP + 1
 
 # Set up parameters OUTER LOOP
 cem_params = CemParams()
-cem_params.seed = int(time.time())
+cem_params.seed =0# int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 15
-cem_params.pop_size = 150
-cem_params.n_elites = int(cem_params.pop_size * 0.3)
-cem_params.decrease_pop_factor = 0.0 # NON RIDURRE LA POPOLAZIONE
+cem_params.cem_iters = 30
+cem_params.pop_size = 500
+cem_params.n_elites = 3 #int(cem_params.pop_size * 0.3)
+cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.0 
 cem_params.alpha = 0.5
 # Discrete
@@ -94,9 +100,9 @@ number_of_patches = number_of_patches_width * number_of_patches_height
 # cem_params.n_values = [3] + [(number_of_patches-1) for _ in range(4)]
 cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(MAX_JUMP)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
-cem_params.min_prob = 0.01
+cem_params.min_prob = 0.005
 # Continuous
-cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # ho posizioni x e y
+cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # x and y positions
 cem_params.max_value_continuous = np.full(cem_params.dim_continuous, 1.0)
 cem_params.min_value_continuous = np.full(cem_params.dim_continuous, 0.0)
 cem_params.init_mu_continuous = np.full(cem_params.dim_continuous, 0.5)
@@ -128,16 +134,15 @@ os.makedirs(result_dir, exist_ok=True)
 # Ly = 10          
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
 terrain_manager  = TerrainManager()
-
-def initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params):
+CORRIDOR_RADIUS = 2.0
+def initialize_terrain_data(terrain_manager, warm_start_mode=False):
     terrain_params = []
     # === 1 POINT CLOUD INITIALIZATION ===
     in_point_clouds = terrain_manager.point_cloud
     point_clouds = PointCloudFilter(in_point_clouds)
     anchor_location = np.array(inner_opt_params['p_a1'])
     
-    
-    # filtro con cambio di costo e colore in base all'altezza
+    # Filter with cost change and color based on height
     point_clouds.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
     # point_clouds.visualize_cost_map()
     # print("\n[INIT] === Smoothing Filter ===")
@@ -171,9 +176,9 @@ def initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_w
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
     patches.visualize_full_cost_map()
     # patch_id = 25
-    # costo = patches.get_patch_cost(patch_id)
-    # if costo is not None:
-    #     print(f"Il costo della patch {patch_id} è: {costo:.4f}")
+    # cost = patches.get_patch_cost(patch_id)
+    # if cost is not None:
+    #     print(f"Cost of patch {patch_id} is: {cost:.4f}")
     #     patches.plot_patch(patch_id)
     # breakpoint()
     
@@ -184,6 +189,25 @@ def initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_w
     })
     # save the terrain data 
     save_terrain_data(terrain_manager,point_clouds, patches)
+    
+    if warm_start_mode:
+        patch_probs = get_warm_start_base_cost(patches)
+        # patch_probs = get_warm_start_line(
+        #     patches, 
+        #     P0_INIT, 
+        #     PF_PATCH_INIT, 
+        #     radius=3.0,     
+        #     sensitivity=5.0 
+        # )
+    
+        patch_probs = plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
+        
+        new_init_probs = []
+        new_init_probs.append(cem_params.init_probs[0])
+        for i in range(1, len(cem_params.n_values)):
+            new_init_probs.append(patch_probs)
+        cem_params.init_probs = new_init_probs
+    
     return point_clouds, patches, cost_grid
 
 def save_terrain_data(terrain_manager,point_clouds, patches):
@@ -387,4 +411,186 @@ def create_inner_opt_params_copy():
         'patch_side': inner_opt_params['patch_side'],
         'contact_normal': None,
     }
+
+# ================================================
+# WARM START TERRAIN DATA
+# ================================================
+# sensitivity: higher --> focus on more valid points
+def get_warm_start_line(patches, p0, pf, radius=4.0, sensitivity=5.0):
+    num_patches = len(patches.patches)
     
+    # 1. Cost Weighting: exp(-k * cost)
+    costs = np.array([p.get('cost_patch', float('inf')) for p in patches.patches])
+    costs[costs == None] = float('inf') # Ensure None becomes inf
+    
+    valid_mask = np.isfinite(costs)
+    if np.any(valid_mask):
+        max_cost = np.max(costs[valid_mask])
+        min_cost = np.min(costs[valid_mask])
+        # Replace infinites with 2x Max
+        costs[~valid_mask] = max_cost * 2.0
+        
+        range_cost = max_cost - min_cost
+        norm_costs = (costs - min_cost) / range_cost if range_cost > 1e-6 else np.zeros_like(costs)
+    else:
+        norm_costs = np.zeros_like(costs)
+
+    w_cost = np.exp(-sensitivity * norm_costs)
+    
+    # 2. Line-based Weighting (Geometric)
+    # Vectors to calculate point-line distance in 3D
+    # Line defined by P0 + t * (PF - P0)
+    line_vec = pf - p0
+    line_len_sq = np.dot(line_vec, line_vec)
+    
+    # Vectorized distance calculation
+    centroids = np.array([p['centroid'] for p in patches.patches])
+    point_vecs = centroids - p0
+    cross_prods = np.cross(point_vecs, line_vec)
+    distances = np.linalg.norm(cross_prods, axis=1) / np.sqrt(line_len_sq)
+    
+    # Inverse linear weight inside radius (Distance 0 -> Weight 1, Distance Radius -> Weight 0)
+    w_line = np.maximum(0.0, 1.0 - (distances / radius))
+            
+    # 3. Combination and Normalization
+    # Multiply the two weights: a patch must be GOOD AND CLOSE to the line
+    raw_probs = w_cost * w_line
+    
+    # Cleanup too low values
+    raw_probs[raw_probs < 1e-9] = 0.0
+    
+    sum_probs = np.sum(raw_probs)
+    
+    if sum_probs == 0:
+        print(colored("[WARN] Warm start generated zero probability space. Reverting to uniform.", "yellow"))
+        return np.full(num_patches, 1.0 / num_patches).tolist()
+    
+    return (raw_probs / sum_probs).tolist()
+
+def get_warm_start_base_cost(patches, sensitivity=10.0): 
+    # 1. Cost extraction maintaining correspondence with centroids
+    num_patches = len(patches.patches)
+    
+    # Vectorized cost extraction
+    costs = np.array([p.get('cost_patch', float('inf')) for p in patches.patches])
+    costs[costs == None] = float('inf')
+    
+    valid_mask = np.isfinite(costs)
+    
+    # If no valid costs, return uniform
+    if not np.any(valid_mask):
+        return np.full(num_patches, 1.0 / num_patches)
+
+    max_cost = np.max(costs[valid_mask])
+    min_cost = np.min(costs[valid_mask])
+    costs[~valid_mask] = max_cost * 2.0
+    
+    range_cost = max_cost - min_cost
+    norm_costs = (costs - min_cost) / range_cost if range_cost > 1e-6 else np.zeros_like(costs)
+
+    # Inverted Softmax
+    weights = np.exp(-sensitivity * norm_costs)
+    
+    # --- MODIFICATION: RELATIVE HARD CUTOFF ---
+    # Calculate max weight (best patch)
+    # Threshold: discard everything below 1% (0.01) of max
+    cutoff_value = np.max(weights) * 0.01
+    weights[weights < cutoff_value] = 0.0
+    # ------------------------------------------
+
+    # Final Normalization
+    sum_weights = np.sum(weights)
+    if sum_weights == 0:
+        return np.full(num_patches, 1.0 / num_patches)
+        
+    return weights / sum_weights
+
+def plot_probability_heatmap(patch_probs, patches_obj, p0, pf):
+    print(colored("\n[PLOT] Generating Probability Heatmap (Sorted by Grid)...", "cyan"))
+    
+    # Geometric patch data
+    width = patches_obj.patch_width
+    height = patches_obj.patch_height
+    
+    # =========================================================
+    # 1. GEOMETRIC SORTING & RE-INDEXING
+    # =========================================================
+    # Create temp list to keep patch-probability association
+    combined_data = [{'patch': p, 'prob': prob} for p, prob in zip(patches_obj.patches, patch_probs)]
+    
+    # Sorting Function:
+    # 1. Sort by Z DESCENDING (since origin is top at Z=0 and goes to negative Z).
+    #    Use round() to group patches in same "row" despite float errors.
+    # 2. Sort by Y ASCENDING (left to right).
+    
+    def sort_key(item):
+        centroid = item['patch']['centroid']
+        # Round Z to patch height for row identification. Negate for descending order.
+        row_index = -round(centroid[2] / height) 
+        return (row_index, centroid[1])
+
+    combined_data.sort(key=sort_key)
+    
+    # Reassign sorted IDs and update original lists
+    sorted_probs = []
+    sorted_patches = [] 
+    
+    for new_id, item in enumerate(combined_data):
+        patch = item['patch']
+        # --- ID CHANGE HERE ---
+        patch['id'] = new_id 
+        sorted_patches.append(patch)
+        sorted_probs.append(item['prob'])
+        
+    # Overwrite list in original object for future consistency
+    patches_obj.patches = sorted_patches
+    plot_probs = np.array(sorted_probs)
+
+    # =========================================================
+    # 2. PLOTTING
+    # =========================================================
+    fig, ax = plt.subplots(figsize=(12, 10))
+    
+    # Efficient rectangle creation
+    centroids = np.array([p['centroid'] for p in patches_obj.patches])
+    y_corners = centroids[:, 1] - (width / 2.0)
+    z_corners = centroids[:, 2] - (height / 2.0)
+    
+    rectangles = [mpatches.Rectangle((y, z), width, height) for y, z in zip(y_corners, z_corners)]
+
+    # Collection Creation
+    pc = PatchCollection(rectangles, cmap='RdYlGn', alpha=0.9, edgecolor='grey')
+    pc.set_array(plot_probs)
+    ax.add_collection(pc)
+    
+    # Colorbar
+    cbar = fig.colorbar(pc, ax=ax)
+    cbar.set_label('Warm Start Probability', rotation=270, labelpad=15)
+
+    # Text Annotations (IDs are now sorted)
+    for i, (y, z) in enumerate(centroids[:, 1:]): # extract y, z from centroids
+        ax.text(y, z, f"{patches_obj.patches[i]['id']}\n{plot_probs[i]:.1%}", 
+                ha='center', va='center', fontsize=6, color='black', fontweight='bold')
+
+    # Start & Goal
+    ax.scatter(p0[1], p0[2], c='blue', s=300, marker='o', edgecolors='white', zorder=10, label='Start')
+    ax.text(p0[1], p0[2]+0.5, "START", ha='center', color='blue', fontweight='bold', zorder=10)
+    
+    ax.scatter(pf[1], pf[2], c='gold', s=400, marker='*', edgecolors='black', zorder=10, label='Goal')
+    ax.text(pf[1], pf[2]-0.5, "GOAL", ha='center', color='orange', fontweight='bold', zorder=10)
+
+    # Axis Config
+    ax.set_xlabel("Terrain Y")
+    ax.set_ylabel("Terrain Z")
+    ax.set_title("Patch Probability Map")
+    ax.legend(loc='upper right')
+    ax.grid(True, linestyle='--', alpha=0.3)
+    
+    ax.autoscale()
+    ax.set_aspect('equal')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # IMPORTANT: Return sorted probabilities, otherwise CEM will use wrong indices!
+    return sorted_probs
