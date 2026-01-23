@@ -54,17 +54,34 @@ from std_srvs.srv import Empty, EmptyResponse
 from base_controllers.utils.common_functions import checkRosMaster
 import os
 
-def signal_process_and_children(pid, signal_to_send, wait=False):
-    process = psutil.Process(pid)
-    for children in process.children(recursive=True):
-        if signal_to_send == 'suspend':
-            children.suspend()
-        elif signal_to_send == 'resume':
-            children.resume()
-        else:
-            children.send_signal(signal_to_send)
-    if wait:
-        process.wait()
+def _pid_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+def signal_process_group(pgid: int, sig: int, wait_pids=None, timeout_s: float = 10.0):
+    """Send signal to a process group and optionally wait for processes to exit."""
+    try:
+        os.killpg(pgid, sig)
+    except ProcessLookupError:
+        return
+
+    if not wait_pids:
+        return
+
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        alive = False
+        for pid in wait_pids:
+            if pid and _pid_exists(pid):
+                alive = True
+                break
+        if not alive:
+            return
+        time.sleep(0.05)
+
 
 
 def format_to_columns(input_list, cols):
@@ -74,82 +91,165 @@ def format_to_columns(input_list, cols):
     lines = (''.join(justify_list[i:i + cols]) for i in range(0, len(justify_list), cols))
     return '\n'.join(lines)
 
-
 class RosbagControlledRecorder(object):
-    """Record a rosbag with service calls to control start, stop  and pause"""
+    """Record a rosbag with service calls to control start, stop and pause."""
 
-    def __init__(self, topics=' -a', bag_name=None, record_from_startup_=False,  bag_folder=None, local_folder=False):
-        rosbag_command_ = "rosbag record"+topics
+    def __init__(self, topics=' -a', bag_name=None, record_from_startup_=False, bag_folder=None, local_folder=False):
+        rosbag_command_ = "rosbag record" + topics
         self.bag_name = bag_name
         self.bag_folder = bag_folder
 
+        self.full_path = None
         if self.bag_name is not None:
             if self.bag_folder is not None:
                 if local_folder:
-                    # Create path relative to the current working directory
                     self.full_path = os.path.join(os.getcwd(), self.bag_folder, self.bag_name)
                 else:
                     self.full_path = f"{self.bag_folder.rstrip('/')}/{self.bag_name}"
-                os.makedirs(os.path.dirname(self.full_path), exist_ok=True)  # Create folder if it doesn't exist
+                os.makedirs(os.path.dirname(self.full_path), exist_ok=True)
             else:
                 self.full_path = self.bag_name
             rosbag_command_ += " -O " + self.full_path
 
         self.rosbag_command = shlex.split(rosbag_command_)
+
         self.recording_started = False
         self.recording_paused = False
         self.recording_stopped = False
         self.pause_resume_times = []
-        self.process_pid = None
+
+        # IMPORTANT: keep the Popen handle, not only PID
+        self._proc = None
+        self._pgid = None
+
         if record_from_startup_:
             self.start_recording_srv()
-        self.exit_loop = False  # Flag to break the loop prematurely
+
+        self.exit_loop = False
+
 
     def start_recording_srv(self, service_message=None):
+        if self._proc is not None and self._proc.poll() is None:
+            rospy.logwarn("rosbag record already running; ignoring start")
+            return EmptyResponse()
+
         print(colored(f"Starting Bag {self.bag_name}", "red"))
-        process = subprocess.Popen(self.rosbag_command)
-        self.process_pid = process.pid
+
+        # Start in its own process group so SIGINT behaves like Ctrl-C for rosbag
+        self._proc = subprocess.Popen(
+            self.rosbag_command,
+            preexec_fn=os.setsid,        # new process group
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        self._pgid = os.getpgid(self._proc.pid)
+
         self.recording_started = True
-        rospy.loginfo("Started recording rosbag")
+        self.recording_paused = False
+        self.recording_stopped = False
+        self.pause_resume_times = []
+
+        rospy.loginfo("Started recording rosbag (pid=%d, pgid=%d)", self._proc.pid, self._pgid)
         return EmptyResponse()
 
     def pause_resume_recording_srv(self, service_message=None):
-        if self.recording_started:
-            if self.recording_paused:
-                signal_process_and_children(self.process_pid, 'resume')
-                self.recording_paused = False
-                rospy.loginfo("Recording resumed")
-            else:
-                signal_process_and_children(self.process_pid, 'suspend')
-                self.recording_paused = True
-                rospy.loginfo("Recording paused")
-            self.pause_resume_times.append(rospy.get_time())
+        if not self.recording_started or self._proc is None or self._proc.poll() is not None:
+            rospy.logwarn("Recording not running - nothing to be done")
             return EmptyResponse()
+
+        try:
+            p = psutil.Process(self._proc.pid)
+        except psutil.NoSuchProcess:
+            rospy.logwarn("Recorder process disappeared")
+            return EmptyResponse()
+
+        if self.recording_paused:
+            # resume
+            for ch in p.children(recursive=True):
+                ch.resume()
+            p.resume()
+            self.recording_paused = False
+            rospy.loginfo("Recording resumed")
         else:
-            rospy.logwarn("Recording not yet started - nothing to be done")
+            # suspend
+            for ch in p.children(recursive=True):
+                ch.suspend()
+            p.suspend()
+            self.recording_paused = True
+            rospy.loginfo("Recording paused")
+
+        self.pause_resume_times.append(rospy.get_time())
+        return EmptyResponse()
 
     def stop_recording_srv(self, service_message=None):
-        print(colored("Saving Bag", "red"))
-        if self.process_pid is not None:
-            if self.recording_paused:  # need to resume process in order to cleanly kill it
-                self.pause_resume_recording_srv()
-            if self.pause_resume_times:  # log pause/resume times for user's reference
-                pause_resume_str = map(str, self.pause_resume_times)
-                pause_resume_str[0:0] = ['PAUSE', 'RESUME']
-                rospy.loginfo("List of pause and resume times:\n%s\n", format_to_columns(pause_resume_str, 2))
-            signal_process_and_children(self.process_pid, signal.SIGINT, wait=True)
-            self.process_pid = None
-            rospy.loginfo("Stopped recording rosbag")
+        print(colored("Saving Bag...wait!", "red"))
+
+        if self._proc is None:
+            self.recording_stopped = True
+            return EmptyResponse()
+
+        if self._proc.poll() is not None:
+            # already exited
+            self._proc = None
+            self._pgid = None
+            self.recording_stopped = True
+            return EmptyResponse()
+
+        # If paused, resume before stopping so rosbag can close cleanly
+        if self.recording_paused:
+            self.pause_resume_recording_srv()
+            rospy.sleep(0.2)
+
+        # Log pause/resume times (fix Python3 map issue)
+        if self.pause_resume_times:
+            pause_resume_str = list(map(str, self.pause_resume_times))
+            pause_resume_str[0:0] = ['PAUSE', 'RESUME']
+            rospy.loginfo("List of pause and resume times:\n%s\n", format_to_columns(pause_resume_str, 2))
+
+        # Send SIGINT like Ctrl-C, to the WHOLE process group
+        try:
+            pgid = self._pgid if self._pgid is not None else os.getpgid(self._proc.pid)
+            signal_process_group(pgid, signal.SIGINT, wait_pids=[self._proc.pid], timeout_s=15.0)
+        except Exception as e:
+            rospy.logwarn("Failed SIGINT to rosbag process group: %s", e)
+
+        # Wait on Popen to ensure clean close + index write
+        try:
+            self._proc.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            rospy.logwarn("rosbag did not exit after SIGINT; sending SIGTERM")
+            try:
+                pgid = os.getpgid(self._proc.pid)
+                signal_process_group(pgid, signal.SIGTERM, wait_pids=[self._proc.pid], timeout_s=1.0)
+                self._proc.wait(timeout=1.0)
+            except Exception:
+                rospy.logwarn("rosbag still alive; sending SIGKILL (may corrupt index)")
+                try:
+                    pgid = os.getpgid(self._proc.pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                except Exception:
+                    pass
+
+        # small flush delay (helps on some FS / docker volumes)
+        time.sleep(0.5)
+
+        # Read stdout/stderr (optional, but useful for debugging)
+        try:
+            out, err = self._proc.communicate(timeout=0.1)
+            if err:
+                rospy.logdebug("rosbag stderr:\n%s", err)
+        except Exception:
+            pass
+
+        self._proc = None
+        self._pgid = None
+
+        self.recording_started = False
+        self.recording_paused = False
         self.recording_stopped = True
 
-        #change ownership to user if you are runing as root
-        import os
-        import pwd
-        import getpass
-        user = getpass.getuser()  # same as $USER
-        pw = pwd.getpwnam(user)
-        os.chown(self.full_path, pw.pw_uid, pw.pw_gid)
-
+        rospy.loginfo("Stopped recording rosbag")
         return EmptyResponse()
 
     def rosbagPlay(self, bag_file, robot_name="tractor", upload_args='', bag_options=''):
