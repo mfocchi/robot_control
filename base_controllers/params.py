@@ -568,14 +568,14 @@ robot_params['climbingrobot_slider'] ={'dt': 0.001,
 robot_params['climbingrobot2'] ={'dt': 0.001,
                        'kp': np.array([0 ,    0,    400,  40,    40,   40,
                                        0 ,    0,   400,  40,    40,   40,
-                                       150, 130, 60]),
+                                       150, 130, 120]),
                        'kd':  np.array([20,    20,    100,   20,     20,   20,
                                         20,    20,    100,   20,     20,   20,
                                         10,   10, 10  ]),
                        # this corresposnds to p = [0.03, 2.5, -6] from matlab WF  which is located in anchor_pos1 and correspods to (rope joint starts from anchor disnace /2)
                        'q_0':  np.array([ 0.0,    1.17  ,  4.0000   ,      0. ,   -1.17 ,        0.,
                                           0.0,  -1.17,    4.0000  ,       0. ,  1.17,           0.,
-                                          -1.57, 0.0, -0.2 ]),
+                                          -1.57, 0.0, -0. ]), # negative knee value is extended
                        # 'q_0': np.array([0.0, 0, 4, 0, 0.0, 0,
                        #                    0.0, 0, 4, 0, 0, 0,
                        #                    -1.57, 0.0, 0.0]),
@@ -595,7 +595,7 @@ robot_params['climbingrobot2'] ={'dt': 0.001,
                        'spawn_2z': 20.0,
                        'wall_inclination': 0.0,
                        'real_robot': False,
-                       'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
+                       'buffer_size': 20000} # note the frames are all aligned with base for joints = 0
 
 robot_params['climbingrobot2landing'] ={'dt': 0.001,
                        'kp': np.array([0 ,    0,    1200,  40,    40,   40,
