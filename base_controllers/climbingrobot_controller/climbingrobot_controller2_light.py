@@ -680,8 +680,7 @@ class ClimbingrobotController(BaseControllerFixed):
             return False
         else:
             p.stateMachine = 'idle'
-            if p.SAVE_BAG:
-                p.recorder.stop_recording_srv()
+            print(colored("Terminating cycle","red"))
             #return False # stay there forever
             return True # exit loop
 
@@ -933,9 +932,7 @@ def talker(p):
         # update the kinematics
         p.updateKinematicsDynamics()
         # jump state machine
-        if (p.stateMachineLoop()):
-            break
-
+        stop = p.stateMachineLoop()
         p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=2.5)  # arope, already in gazebo
         p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=2.5)  # arope, already in gazebo
 
@@ -961,6 +958,9 @@ def talker(p):
             p.logData()
         # wait for synconization of the control loop
         rate.sleep()
+
+        if stop:
+            break
 
 
 
@@ -996,16 +996,17 @@ if __name__ == '__main__':
     try:
         talker(p)
     except (ros.ROSInterruptException, ros.service.ServiceException):
-        ros.signal_shutdown("killed")
-        p.deregister_node()
+        pass
 
-    finally:
-        ros.signal_shutdown("killed")
-        p.deregister_node()
-        if p.landing: # for the landing test you should press Ctrl C to stop everything
-            p.plotStuff()
-            if p.SAVE_BAG:
-                p.recorder.stop_recording_srv()
+    # STOP RECORDER FIRST (if you do ctrl +c you give sigint to all the nodes) here you are not, hence you need to stop the recorder manually before
+    if p.SAVE_BAG:
+        p.recorder.stop_recording_srv()
+    ros.signal_shutdown("killed")
+    p.deregister_node()
+    if p.landing: # for the landing test you should press Ctrl C to stop everything
+        p.plotStuff()
+
+
 
 
         
