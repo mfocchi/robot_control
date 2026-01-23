@@ -87,13 +87,13 @@ class RosbagControlledRecorder(object):
             if self.bag_folder is not None:
                 if local_folder:
                     # Create path relative to the current working directory
-                    full_path = os.path.join(os.getcwd(), self.bag_folder, self.bag_name)
+                    self.full_path = os.path.join(os.getcwd(), self.bag_folder, self.bag_name)
                 else:
-                    full_path = f"{self.bag_folder.rstrip('/')}/{self.bag_name}"
-                os.makedirs(os.path.dirname(full_path), exist_ok=True)  # Create folder if it doesn't exist
+                    self.full_path = f"{self.bag_folder.rstrip('/')}/{self.bag_name}"
+                os.makedirs(os.path.dirname(self.full_path), exist_ok=True)  # Create folder if it doesn't exist
             else:
-                full_path = self.bag_name
-            rosbag_command_ += " -O " + full_path
+                self.full_path = self.bag_name
+            rosbag_command_ += " -O " + self.full_path
 
         self.rosbag_command = shlex.split(rosbag_command_)
         self.recording_started = False
@@ -141,6 +141,15 @@ class RosbagControlledRecorder(object):
             self.process_pid = None
             rospy.loginfo("Stopped recording rosbag")
         self.recording_stopped = True
+
+        #change ownership to user if you are runing as root
+        import os
+        import pwd
+        import getpass
+        user = getpass.getuser()  # same as $USER
+        pw = pwd.getpwnam(user)
+        os.chown(self.full_path, pw.pw_uid, pw.pw_gid)
+
         return EmptyResponse()
 
     def rosbagPlay(self, bag_file, robot_name="tractor", upload_args='', bag_options=''):

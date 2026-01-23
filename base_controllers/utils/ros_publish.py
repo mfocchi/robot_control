@@ -259,7 +259,7 @@ class RosPub():
         self.id_fixed += 1
         self.markerArrayFixed.markers.append(marker)
                             
-    def add_arrow(self, start, vector, color = "green", scale = 1.):
+    def add_arrow(self, start, vector, color = "green", scale = 1., alpha = 1.0):
        marker = Marker()
 
        if isinstance(color, np.ndarray):
@@ -296,7 +296,7 @@ class RosPub():
        marker.scale.x = 0.02*scale
        marker.scale.y = 0.04*scale
        marker.scale.z = 0.02*scale
-       marker.color.a = 1.0
+       marker.color.a = alpha
        marker.lifetime = ros.Duration(self.markers_time_to_live)
        marker.pose.orientation.x = 0.
        marker.pose.orientation.y = 0.
