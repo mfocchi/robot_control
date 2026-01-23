@@ -306,7 +306,7 @@ class PatchSurface:
                 
                 
                 exponent = - ( (diff_y_sq / (2 * sigma_y**2)) + (diff_z_sq / (2 * sigma_z**2)) )
-                gauss_val = weight_gauss_cost * (np.exp(exponent)) #OCCHIO valore basso al centro!!!!
+                gauss_val = weight_gauss_cost * (1-np.exp(exponent)) #OCCHIO valore basso al centro!!!!
                 
                 point['cost'] += gauss_val
                 all_final_costs.append(point['cost'])
@@ -1067,6 +1067,80 @@ class PatchSurface:
         print(f"  - Costo Medio: {np.mean(costs):.3f}")
         print(f"  - Deviazione Standard: {np.std(costs):.3f}")
     
+    
+    def plot_population_density(self, all_sampled_ids):
+        """
+        Visualizza quali patch sono state scelte, colorandole in base alla FREQUENZA di selezione.
+        Più una patch è stata scelta, più il colore sarà intenso/caldo.
+        
+        Args:
+            all_sampled_ids: array o lista contenente TUTTI gli ID campionati (NON usare np.unique prima!)
+        """
+        from collections import Counter
+        import matplotlib.cm as cm
+        import matplotlib.colors as mcolors
+
+        # 1. Conta quante volte ogni patch è stata scelta
+        counts = Counter(all_sampled_ids)
+        if not counts:
+            print("[patch_surface] Nessun ID passato per il plot density.")
+            return
+
+        max_count = max(counts.values())
+        
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.set_title(f'Population descrete distirbution')
+        ax.set_xlabel('X (Depth)')
+        ax.set_ylabel('Y (Width)')
+        ax.set_zlabel('Z (Height)')
+
+        # Usiamo una colormap che va dal trasparente/freddo al caldo/opaco
+        # Esempio: 'plasma' o 'hot_r' o 'Reds'
+        cmap = cm.get_cmap('jet') 
+
+        print(f"[PLOT] Generazione Heatmap selezioni...")
+
+        for patch in self.patches:
+            pid = patch['id']
+            pts = patch.get('points_in_patch', [])
+            if not pts:
+                continue
+
+            P = np.vstack([p['position'] for p in pts])
+            
+            # Logica colore:
+            if pid in counts:
+                frequency = counts[pid]
+                # Normalizziamo tra 0 e 1 rispetto al massimo trovato in questa iterazione
+                intensity = frequency / max_count 
+                
+                # Otteniamo il colore dalla colormap
+                color_val = cmap(intensity)
+                
+                # TRUCCO VISIVO: 
+                # Le patch molto selezionate devono essere opache (alpha=1).
+                # Le patch poco selezionate devono essere trasparenti.
+                # Patch non selezionate: grigio chiarissimo quasi invisibile.
+                alpha_val = 0.3 + (0.7 * intensity) # Minimo 0.3 di opacità se selezionata
+                s_val = 15 + (20 * intensity)       # Anche la dimensione dei punti aumenta se molto frequentata
+                
+            else:
+                # Patch MAI selezionata
+                color_val = 'lightgrey'
+                alpha_val = 0.02 # Praticamente invisibile, solo contesto
+                s_val = 5
+
+            ax.scatter(P[:, 0], P[:, 1], P[:, 2], s=s_val, c=[color_val], alpha=alpha_val)
+
+        # Aggiungiamo una colorbar "finta" per capire la scala (opzionale ma utile)
+        m = cm.ScalarMappable(cmap=cmap)
+        m.set_array([0, max_count])
+        plt.colorbar(m, ax=ax, label='Numero di Selezioni (Frequenza)')
+
+        plt.tight_layout()
+        plt.show()
+        
 def main():
     print("[TEST] STARTING PATCH SURFACE TEST SUITE")
     
