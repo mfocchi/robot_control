@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-
 @dataclass
 class CemParams:
     seed: int = None
@@ -31,14 +30,12 @@ class CemParams:
     init_std_continuous: np.ndarray = None
     min_std_continuous: np.ndarray = None
 
-
-
 @dataclass
 class IterationLog:
     iterations: int = 0
     func_evals: int = 0
     best_discrete: Optional[np.ndarray] = None
-    best_value: float = -np.inf
+    best_value: float = np.inf
     
 
 
@@ -67,8 +64,8 @@ class CrossEntropyMethodMixed:
 
         self.allocate_data_discrete()
 
-        self.population_fit = np.full(params.pop_size, -np.inf)
-        self.fit_best = -np.inf
+        self.population_fit = np.full(params.pop_size, np.inf)
+        self.fit_best = np.inf
         self.history = []
         
     def allocate_data_discrete(self):
@@ -88,7 +85,7 @@ class CrossEntropyMethodMixed:
 
         # Update global best
         for i in range(self.params.pop_size):
-            if self.population_fit[i] > self.fit_best:
+            if self.population_fit[i] < self.fit_best:
                 self.fit_best = np.copy(self.population_fit[i])
                 self.best_discrete = np.copy(self.population_discrete[:, i])
 
@@ -151,7 +148,7 @@ class CrossEntropyMethodMixed:
     def update_distribution_discrete(self):
         p = self.params
         # Sort individuals by their perfomance (best first!)
-        idx = np.argsort(self.population_fit)[::-1]
+        idx = np.argsort(self.population_fit)#[::-1]
 
         # Add elites to population
         self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
