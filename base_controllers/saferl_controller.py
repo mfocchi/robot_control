@@ -18,6 +18,7 @@ import params as conf
 import numpy as np
 from base_controllers.utils.joyManager import JoyManager
 robotName = "aliengo"  # needs to inherit BaseController
+from termcolor import colored
 
 class SafeRLController(QuadrupedController):
 
@@ -83,7 +84,7 @@ if __name__ == '__main__':
             p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
             lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
             ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
-            proj_gravity = p.b_R_w.dot(np.array([0, 0, -1]))
+            proj_gravity_b = p.b_R_w.dot(np.array([0, 0, -1]))
             # pushes of increasing entity
             if p.time % 2. == 0 and isrec and not p.real_robot:
                  p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
@@ -92,16 +93,17 @@ if __name__ == '__main__':
 
             if isrec:
                 # nominal policy
-                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
             else:
                 # backup policy
+                #print(colored("I am executing backup policy!","red"))
                 rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="safe")
+                p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="safe")
             #check this
             #print('ang_vel_b A',ang_vel_b)
             #print('proj_gravity A',proj_gravity)
             if step % decimation == 0:# and isrec:
-                 isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity, joint_pos=p.q, joint_vel=p.qd, threshold=0.8, vf_additional_term = 0.064)
+                 isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.8, vf_additional_term = 0.064)
                  #isrec = True
             #     #print(V_safe)
             # '''elif step % decimation == 0:
@@ -116,9 +118,9 @@ if __name__ == '__main__':
             # time based switch
             # if p.time > (p.startTime + 3.): #backup policy
             #     rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-            #     p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="safe")
+            #     p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="safe")
             # else:
-            #     p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+            #     p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
 
             # switch off wbc
             p.grForcesW_des = np.zeros((12))
