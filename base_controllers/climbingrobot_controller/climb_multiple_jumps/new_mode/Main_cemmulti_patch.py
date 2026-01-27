@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from algo_patch import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
 
-from BilevelOptPatch import BilevelOpt, close_matlab_engines
+from climbingrobot_controller.climb_multiple_jumps.new_mode.BilevelOpt import BilevelOpt, close_matlab_engines
 from params import *
 from base_controllers.climbingrobot_controller.climb_multiple_jumps.new_mode.Plot_result import PlotResultCemMjumps
 from collections import Counter
@@ -44,9 +44,10 @@ def main():
         best_jump_log_points = None
         best_jump = None
         best_trajectory = None
-        best_fitness = -np.inf
+        best_fitness = np.inf
         best_consumed_energy = None
         best_landing_cost = None
+        best_achieved_target = None
         
         start = time.time()
         
@@ -66,6 +67,7 @@ def main():
             all_consumed_energy = [0.0] * cem_params.pop_size
             all_landing_cost = [0.0] * cem_params.pop_size
             all_n_jumps = [0] * cem_params.pop_size
+            all_achieved_target = [None] * cem_params.pop_size
             n_workers = cem_params.n_threads
             
             # print (xd)
@@ -101,6 +103,7 @@ def main():
                         all_consumed_energy[idx] = log_result['consumed_energy']
                         all_landing_cost[idx] = log_result['landing_cost']
                         all_n_jumps[idx] = log_result['n_jumps']
+                        all_achieved_target[idx] = log_result['achieved_target']
                         
                         with best_lock:
                             if log_result['fitness'] < best_fitness: #and (n_jumps + 1) >= 3:
@@ -110,6 +113,7 @@ def main():
                                 best_jump_log_points = log_result['points']
                                 best_trajectory = log_result['traj']
                                 best_jump = log_result['n_jumps']
+                                best_achieved_target = log_result['achieved_target']
                                 print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
                         print(colored(f"complete individual {idx}, Iteration {k+1}", "yellow")) #scrvi in arancione
                 print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
@@ -135,6 +139,7 @@ def main():
                     all_consumed_energy[i] = log_result['consumed_energy']
                     all_landing_cost[i] = log_result['landing_cost']
                     all_n_jumps[i] = log_result['n_jumps']
+                    all_achieved_target[i] = log_result['achieved_target']
                         
                     if log_result['fitness'] < best_fitness:
                         best_fitness = log_result['fitness']
@@ -143,6 +148,7 @@ def main():
                         best_jump_log_points = log_result['points']
                         best_trajectory = log_result['traj']
                         best_jump = log_result['n_jumps']
+                        best_achieved_target = log_result['achieved_target']
                         
                         print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f}","green", attrs=['bold']))
         
@@ -177,6 +183,7 @@ def main():
             elite_patch_ids = np.unique(xd_elites).astype(int).tolist()
             # patches.plot_patches_by_id(elite_patch_ids)
             current_iteration_elites = []
+            
             for idx in elite_indices:
                 elite_sol = {
                     'fitness': float(fitness[idx]),
@@ -186,7 +193,8 @@ def main():
                     'points': [p.tolist() for p in all_log_points[idx]],
                     'traj': [t.tolist() if t is not None else None for t in all_log_traj[idx]],
                     'iteration': k + 1,
-                    'patch_ids': xd[1:, idx].tolist(),        # Gli ID delle patch scelti (saltando il primo che è N_jump)
+                    'patch_ids': xd[1:, idx].tolist(),   
+                    'achieved_target': all_achieved_target[idx].tolist() if all_achieved_target[idx] is not None else None,
                     # 'continuous_coords': xc[:, idx].tolist(), # Coordinate Y,Z relative                    
                 }
                 current_iteration_elites.append(elite_sol)
@@ -197,6 +205,7 @@ def main():
                 "best_consumed_energy_ever": float(best_consumed_energy) if best_consumed_energy is not None else None,
                 "best_landing_cost_ever": float(best_landing_cost) if best_landing_cost is not None else None,
                 "best_trajectory_ever": [t.tolist() if t is not None else None for t in best_trajectory] if best_trajectory is not None else None,
+                "best_achieved_target_ever": best_achieved_target.tolist() if best_achieved_target is not None else None,
                 "best_fitness_this_iter": float(current_iteration_elites[0]['fitness']),
                 "elites": current_iteration_elites
             }
@@ -278,7 +287,7 @@ def main():
             print(colored("[ERROR] Could not plot best trajectory. No solution found or tracking issue.", "red", attrs=['bold']))
 
     if setting["PLOT_MODE"]:
-        print("plot da stampare")
+        print("plot to print")
 if __name__ == "__main__":
     try:
         main()

@@ -58,6 +58,7 @@ class eliteData:
     points: List[List[float]]  
     traj: List[List[List[float]]]
     patch_ids: List[int]
+    achieved_target: List[List[float]]  
     
 
 
@@ -108,6 +109,7 @@ class PlotResultCemMjumps:
         self.best_energy_ever = []      # take from last iteration
         self.best_land_cost_ever = []   # take from last iteration
         self.best_traj_ever = []        # take from last iteration
+        self.best_achieved_target_ever = None  # NEW: actual final position
         self.best_fit_each_iter = []
         self.all_elites = []
         self.iteration_files = sorted([f for f in os.listdir(ITERATIONS_FOLDER) if f.startswith('iteration_') and f.endswith('.json')],
@@ -133,7 +135,8 @@ class PlotResultCemMjumps:
                         landing_cost=e['landing_cost'],
                         points=e['points'],
                         traj=e['traj'],
-                        patch_ids=e['patch_ids']
+                        patch_ids=e['patch_ids'],
+                        achieved_target=e['achieved_target']
                     )
                     iteration_elites.append(elite_instance)
                     
@@ -143,6 +146,7 @@ class PlotResultCemMjumps:
                 self.best_energy_ever = iteration_data['best_consumed_energy_ever']
                 self.best_land_cost_ever = iteration_data['best_landing_cost_ever']
                 self.best_traj_ever = iteration_data['best_trajectory_ever']
+                self.best_achieved_target_ever = iteration_data.get('best_achieved_target_ever', None)
           
     def load_simulation_params(self):
         
@@ -197,8 +201,7 @@ class PlotResultCemMjumps:
         
         print(f"[INFO] Projected point from {point} to {projected_point.tolist()}")
         return projected_point.tolist()
-
-    
+   
     def correct_start_goal_positions(self):
         """
         Correct p0 and pf positions to lie on the terrain surface.
@@ -360,7 +363,7 @@ class PlotResultCemMjumps:
 
         # Setup dell'asse 3D
         if ax is None:
-            fig = plt.figure(figsize=(14, 9)) # Leggermente più grande per far spazio alla colorbar
+            fig = plt.figure(figsize=(14, 9))
             ax = fig.add_subplot(111, projection='3d')
             created = True
         else:
@@ -420,12 +423,26 @@ class PlotResultCemMjumps:
 
         lp = np.array(landing_points)
 
-        # 4. Landing Points, Start (p0) e Goal (pf)
+        # 4. Landing Points, Start (p0), Desired Goal (pf), and Achieved Target
         ax.scatter(lp[:, 0], lp[:, 1], lp[:, 2], c='black', s=25, zorder=11, label='Contact Points')
         ax.scatter(self.p0[0], self.p0[1], self.p0[2], c='lime', s=200, marker='^', 
                    edgecolors='black', linewidths=1.5, zorder=15, label='Start (p0)')
         ax.scatter(self.pf[0], self.pf[1], self.pf[2], c='red', s=200, marker='X', 
-                   edgecolors='black', linewidths=1.5, zorder=15, label='Goal (pf)')
+                   edgecolors='black', linewidths=1.5, zorder=15, label='Desired Goal (pf)')
+        
+        # Plot achieved target if available
+        if self.best_achieved_target_ever:
+            achieved = np.array(self.best_achieved_target_ever).flatten()
+            ax.scatter(achieved[0], achieved[1], achieved[2], c='orange', s=200, marker='D', 
+                       edgecolors='black', linewidths=1.5, zorder=16, label='Achieved Target')
+            
+            # Draw line connecting desired goal to achieved target
+            ax.plot([self.pf[0], achieved[0]], [self.pf[1], achieved[1]], [self.pf[2], achieved[2]],
+                    'r--', linewidth=2, alpha=0.7, zorder=14, label='Goal Discrepancy')
+            
+            # Calculate and display distance
+            distance = np.linalg.norm(np.array(self.pf) - achieved)
+            print(f"[INFO] Distance between desired goal and achieved target: {distance:.4f}m")
 
         # 5. Scaling 1:1:1
         flat_x, flat_y, flat_z = np.concatenate(all_x), np.concatenate(all_y), np.concatenate(all_z)
@@ -437,8 +454,11 @@ class PlotResultCemMjumps:
 
         # 6. Titolo e Legenda
         cost_status = "with Cost Map" if show_cost else ""
-        ax.set_title(f"Best Trajectory {cost_status}\n(Fitness: {self.best_fit_ever:.4f})", 
-                    fontsize=13, fontweight='bold')
+        title_str = f"Best Trajectory {cost_status}\n(Fitness: {self.best_fit_ever:.4f})"
+        if self.best_achieved_target_ever:
+            distance = np.linalg.norm(np.array(self.pf) - np.array(self.best_achieved_target_ever).flatten())
+            title_str += f"\nGoal Error: {distance:.4f}m"
+        ax.set_title(title_str, fontsize=13, fontweight='bold')
         ax.set_xlabel("X (m)")
         ax.set_ylabel("Y (m)")
         ax.set_zlabel("Z (m)")
@@ -490,7 +510,6 @@ class PlotResultCemMjumps:
         else:
             fig = ax.get_figure()
         
-        # Force equal aspect ratio for real proportions
         ax.set_aspect('equal', adjustable='box')
         
         # 2. Draw patches with cost-based coloring and contours (STATIC - only once)
@@ -520,11 +539,21 @@ class PlotResultCemMjumps:
             except Exception:
                 continue
         
-        # 3. Start and Goal markers (STATIC)
+        # 3. Start, Desired Goal, and Achieved Target markers (STATIC)
         ax.scatter(self.p0[1], self.p0[2], c='lime', s=200, marker='^',
                    edgecolors='black', linewidths=2, zorder=15, label='Start (p0)')
         ax.scatter(self.pf[1], self.pf[2], c='red', s=200, marker='X',
-                   edgecolors='black', linewidths=2, zorder=15, label='Goal (pf)')
+                   edgecolors='black', linewidths=2, zorder=15, label='Desired Goal (pf)')
+        
+        # Plot achieved target if available
+        if self.best_achieved_target_ever:
+            achieved = np.array(self.best_achieved_target_ever).flatten()
+            ax.scatter(achieved[1], achieved[2], c='orange', s=200, marker='D',
+                       edgecolors='black', linewidths=2, zorder=16, label='Achieved Target')
+            
+            # Draw line showing discrepancy
+            ax.plot([self.pf[1], achieved[1]], [self.pf[2], achieved[2]],
+                    'r--', linewidth=2, alpha=0.7, zorder=14, label='Goal Discrepancy')
         
         # 4. Prepare iteration data
         iteration_data = []
@@ -751,15 +780,29 @@ class PlotResultCemMjumps:
             ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], 
                     c='black', linewidth=1.2, alpha=0.7, zorder=3, label=label)
         
-        # 5. Start and Goal markers (STATIC)
+        # 5. Start, Desired Goal, and Achieved Target markers (STATIC)
         ax.scatter(self.p0[0], self.p0[1], self.p0[2], c='lime', s=250, marker='^',
                    edgecolors='black', linewidths=2, zorder=15, label='Start (p0)')
         ax.scatter(self.pf[0], self.pf[1], self.pf[2], c='red', s=250, marker='X',
-                   edgecolors='black', linewidths=2, zorder=15, label='Goal (pf)')
+                   edgecolors='black', linewidths=2, zorder=15, label='Desired Goal (pf)')
         
         all_x.extend([self.p0[0], self.pf[0]])
         all_y.extend([self.p0[1], self.pf[1]])
         all_z.extend([self.p0[2], self.pf[2]])
+        
+        # Plot achieved target if available
+        if self.best_achieved_target_ever:
+            achieved = np.array(self.best_achieved_target_ever).flatten()
+            ax.scatter(achieved[0], achieved[1], achieved[2], c='orange', s=250, marker='D',
+                       edgecolors='black', linewidths=2, zorder=16, label='Achieved Target')
+            
+            # Draw line showing discrepancy
+            ax.plot([self.pf[0], achieved[0]], [self.pf[1], achieved[1]], [self.pf[2], achieved[2]],
+                    'r--', linewidth=2.5, alpha=0.7, zorder=14, label='Goal Discrepancy')
+            
+            all_x.extend([achieved[0]])
+            all_y.extend([achieved[1]])
+            all_z.extend([achieved[2]])
         
         # 6. Prepare iteration data
         iteration_data = []
