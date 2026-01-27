@@ -28,6 +28,7 @@ class BilevelOpt:
         eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager)
         local_inner_opt_params = create_inner_opt_params_copy()
         
+        max_waypoints = MAX_JUMP
         # Extract discrete parameters (first array is the possible jumps) and the rest are the patch IDs
         xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
         n_jumps = int(xd[0])
@@ -35,7 +36,6 @@ class BilevelOpt:
         # State tracking
         jump_log_points = []
         jump_log_traj = []
-        fitness = 0.0
         total_consumed_energy = 0.0
         total_landing_cost = 0.0
         all_converged = True  # Flag to monitor overall convergence
@@ -80,26 +80,35 @@ class BilevelOpt:
             if int(res['problem_solved']) not in [1, 2]:
                 all_converged = False
             
-            
             # Update logs and metrics
             jump_log_traj.append(mat_matrix2python(res['p']))
             jump_log_points.append(pf_adj.copy())
             total_consumed_energy += res['consumed_energy']
         
-            jump_fitness,jump_landing_cost = self.calc_fitness(res, contact_abs_pos_yz=pf_adj[1:])
-            fitness += jump_fitness
+            jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
+                res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
             total_landing_cost += jump_landing_cost
             
             # The landing point becomes the new starting point
             p0_adj = pf_adj.copy()
+        
+        if not all_converged:
+            fitness_score = self.fitness_weights[0]  # Penalty for non-convergence
+        else:
+            waypoint_cost = (max_waypoints - n_jumps) * self.fitness_weights[5]
+            energy_cost = (total_consumed_energy + 1) * self.fitness_weights[1]
+            fitness_score = waypoint_cost + energy_cost
 
+        print("xd value: ", xd)
+        print(f"Computed Score (Cost): {fitness_score:.4f}")
+        
         status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
         print(f"--- Evaluation Results ---")
-        print(f"Total Jumps: {n_jumps + 1}, Total Fitness: {fitness:.4f}, Energy Consumed: {total_consumed_energy:.2f}, Global Convergence: {status_msg}")
+        print(f"Total Jumps: {n_jumps + 1}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {total_consumed_energy:.2f}, Global Convergence: {status_msg}")
         print(f"--------------------------")
 
         return {
-            'fitness': fitness,
+            'fitness': fitness_score,
             'points': jump_log_points,
             'traj': jump_log_traj,
             'n_jumps': n_jumps + 1,
@@ -108,31 +117,17 @@ class BilevelOpt:
             'all_converged': all_converged
         }
                
-    def calc_fitness(self,res, patch_id=None, contact_abs_pos_yz=None):
+    def calc_terrain_cost(self, res, patch_id=None, contact_abs_pos_yz=None):
         fit_average_cost_patch = 0.
         fit_landing_cost = 0.
 
-        if (patch_id is not None and  contact_abs_pos_yz is not None):
+        if (patch_id is not None and contact_abs_pos_yz is not None):
             #compute cost for landing candidate
-            fit_landing_cost = -self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
+            fit_landing_cost = self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
             #compute average cost on patch to see how bad /good is terrain there
-            fit_average_cost_patch = -self.patches.get_patch_cost(patch_id)
-            #if fit_landing_costmap is None:
+            fit_average_cost_patch = self.patches.get_patch_cost(patch_id)
 
-        fit_consumed_energy = -res['consumed_energy']
-        if (res['problem_solved']) == 1 or (res['problem_solved']==2): #convergence / semidefinite solution
-            fit_problem_converged = 0
-        else: #problem did not converge
-            fit_problem_converged = -5000
-        # print("jump duration", res['Tf'])
-        # print(f"convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
-        
-        fitness = ( self.fitness_weights[0] * fit_problem_converged + 
-                    self.fitness_weights[1] * fit_consumed_energy +
-                    self.fitness_weights[2] * fit_average_cost_patch + 
-                    self.fitness_weights[3] * fit_landing_cost)
-        #print(f"fitness: {fitness}, convergence: {self.fitness_weights[0]*fit_problem_converged}, energy: {self.fitness_weights[1]*fit_consumed_energy}, avg_cost: {self.fitness_weights[2]*fit_average_cost_patch}, land_cost: {self.fitness_weights[3]*fit_landing_cost}")
-        return fitness,fit_landing_cost
+        return fit_landing_cost, fit_average_cost_patch
     
     def plot_point_traj(self, jump_log_points, jump_log_traj):
         
