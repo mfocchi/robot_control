@@ -31,7 +31,7 @@ PF_PATCH_INIT=  np.array([0.5, 6.5,-7.5])
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 6
 THREADS = 5
-flag_thread = True
+flag_thread = False
 
 MAIN_DIRECTORY = "result/result_new_patch_1"
 
@@ -89,8 +89,8 @@ cem_params = CemParams()
 cem_params.seed =0# int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 15
-cem_params.pop_size = 200
+cem_params.cem_iters = 1
+cem_params.pop_size = 10
 cem_params.n_elites = 3 #int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.0 

@@ -10,7 +10,7 @@ import threading
 import matplotlib.pyplot as plt
 from algo_patch import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
-from LinearOpti import LinearOpti
+from climbingrobot_controller.climb_multiple_jumps.new_mode.LinearOpt import LinearOpti
 from params import *
 from base_controllers.climbingrobot_controller.climb_multiple_jumps.new_mode.Plot_result import PlotResultCemMjumps
 from collections import Counter
