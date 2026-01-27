@@ -26,27 +26,28 @@ import matplotlib.patches as mpatches
 # P0_INIT = np.array([0.0, 1.46, -2.53])
 # PF_PATCH_INIT = np.array([0.0, 1.46, -5.55])
 
-P0_INIT = np.array([0.0, .5,-.5])
-PF_PATCH_INIT=  np.array([0.0, 6.5, -9.3]) 
+P0_INIT = np.array([0.5, 1.5, -1.5])
+PF_PATCH_INIT=  np.array([0.5, 6.5,-7.5]) 
 PF_INIT = PF_PATCH_INIT
-MAX_JUMP = 8
-THREADS = 10
-flag_thread = False
+MAX_JUMP = 6
+THREADS = 5
+flag_thread = True
 
-MAIN_DIRECTORY = "result/result_new_1"
+MAIN_DIRECTORY = "result/result_new_patch_1"
 
-Fleg_max = 400.
-Fr_max = 50.
+Fleg_max = 600.
+Fr_max = 60.
 Fr_min = 10.
 number_of_patches_width = 10
 number_of_patches_height = 10
-mass = 10.
+mass = 5.
 anchor_distance = 10.
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
-fitness_weights = np.array([1e7, 20.0,10., 0.5, 15.0,50.0])
+fitness_weights = np.array([1e7, 1.,1., 1., 1.0,0.0]) # Optimizer
+# fitness_weights = np.array([1e7, 20.0,10., 0.5, 15.0,50.0]) # Linear
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([100., 100., 0,10.0])
+filter_weights = np.array([100., 100., 0,100.0])
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
@@ -88,8 +89,8 @@ cem_params = CemParams()
 cem_params.seed =0# int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 30
-cem_params.pop_size = 500
+cem_params.cem_iters = 15
+cem_params.pop_size = 200
 cem_params.n_elites = 3 #int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.0 
@@ -128,14 +129,13 @@ os.makedirs(result_dir, exist_ok=True)
 # Terrain configuration values for rock terrain, otherwise stay in default
 # wall_depth = 1            
 # grid_size = 100
-# max_ridge_depth = 0.5     
-# seed = 30                 
-# Lz = -50                  
+# max_ridge_depth = 0.5              
+# Lz = -10                  
 # Ly = 10          
-# terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
+# terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
 terrain_manager  = TerrainManager()
 CORRIDOR_RADIUS = 2.0
-def initialize_terrain_data(terrain_manager, warm_start_mode=False):
+def initialize_terrain_data(warm_start_mode=False):
     terrain_params = []
     # === 1 POINT CLOUD INITIALIZATION ===
     in_point_clouds = terrain_manager.point_cloud
@@ -191,14 +191,14 @@ def initialize_terrain_data(terrain_manager, warm_start_mode=False):
     save_terrain_data(terrain_manager,point_clouds, patches)
     
     if warm_start_mode:
-        patch_probs = get_warm_start_base_cost(patches)
-        # patch_probs = get_warm_start_line(
-        #     patches, 
-        #     P0_INIT, 
-        #     PF_PATCH_INIT, 
-        #     radius=3.0,     
-        #     sensitivity=5.0 
-        # )
+        # patch_probs = get_warm_start_base_cost(patches)
+        patch_probs = get_warm_start_line(
+            patches, 
+            P0_INIT, 
+            PF_PATCH_INIT, 
+            radius=3.0,     
+            sensitivity=5.0 
+        )
     
         patch_probs = plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
         
@@ -421,7 +421,7 @@ def get_warm_start_line(patches, p0, pf, radius=4.0, sensitivity=5.0):
     
     # 1. Cost Weighting: exp(-k * cost)
     costs = np.array([p.get('cost_patch', float('inf')) for p in patches.patches])
-    costs[costs == None] = float('inf') # Ensure None becomes inf
+    costs[costs == None] = float('inf') 
     
     valid_mask = np.isfinite(costs)
     if np.any(valid_mask):
@@ -437,7 +437,6 @@ def get_warm_start_line(patches, p0, pf, radius=4.0, sensitivity=5.0):
 
     w_cost = np.exp(-sensitivity * norm_costs)
     
-    # 2. Line-based Weighting (Geometric)
     # Vectors to calculate point-line distance in 3D
     # Line defined by P0 + t * (PF - P0)
     line_vec = pf - p0

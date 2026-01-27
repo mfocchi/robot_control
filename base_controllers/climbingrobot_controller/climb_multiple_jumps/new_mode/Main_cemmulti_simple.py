@@ -19,7 +19,7 @@ def main():
     
     setting = {
         "COMPUTATION_MODE": True,
-        "WARM_START_MODE": True,
+        "WARM_START_MODE": False,
         "PLOT_MODE": True
     }
     
@@ -27,8 +27,8 @@ def main():
         best_lock = threading.Lock()
         
         
-        terrain_manager = TerrainManager()
-        point_clouds, patches, cost_grid = initialize_terrain_data(terrain_manager, warm_start_mode=setting["WARM_START_MODE"])
+        
+        point_clouds, patches, cost_grid = initialize_terrain_data(warm_start_mode=setting["WARM_START_MODE"])
         optimizer = LinearOpti(
             terrain_manager, P0_INIT, PF_PATCH_INIT, 
             fitness_weights=fitness_weights,
@@ -87,8 +87,8 @@ def main():
             all_n_jumps = [0] * cem_params.pop_size
             n_workers = cem_params.n_threads
             
-            patch_ids_esplorati = xd[1:, :].flatten().astype(int)
-            patches.plot_population_density(patch_ids_esplorati)
+            # patch_ids_esplorati = xd[1:, :].flatten().astype(int)
+            # patches.plot_population_density(patch_ids_esplorati)
             
             
             # ============================

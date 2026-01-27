@@ -20,14 +20,15 @@ def main():
     
     setting = {
         "COMPUTATION_MODE": True, 
-        "PLOT_MODE": True
+        "PLOT_MODE": True,
+        "WARM_START_MODE": True
     }
     
     if setting["COMPUTATION_MODE"]:
         best_lock = threading.Lock()
         algo = CrossEntropyMethodMixed(cem_params)
         
-        point_clouds, patches, cost_grid = initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
+        point_clouds, patches, cost_grid = initialize_terrain_data(warm_start_mode=setting["WARM_START_MODE"])
 
         # Pass pre-computed data to the optimizer
         optimizer = BilevelOpt(
@@ -102,7 +103,7 @@ def main():
                         all_n_jumps[idx] = log_result['n_jumps']
                         
                         with best_lock:
-                            if log_result['fitness'] > best_fitness: #and (n_jumps + 1) >= 3:
+                            if log_result['fitness'] < best_fitness: #and (n_jumps + 1) >= 3:
                                 best_fitness = log_result['fitness']
                                 best_consumed_energy = log_result['consumed_energy']
                                 best_landing_cost = log_result['landing_cost']
@@ -135,7 +136,7 @@ def main():
                     all_landing_cost[i] = log_result['landing_cost']
                     all_n_jumps[i] = log_result['n_jumps']
                         
-                    if log_result['fitness'] > best_fitness:
+                    if log_result['fitness'] < best_fitness:
                         best_fitness = log_result['fitness']
                         best_consumed_energy = log_result['consumed_energy']
                         best_landing_cost = log_result['landing_cost']

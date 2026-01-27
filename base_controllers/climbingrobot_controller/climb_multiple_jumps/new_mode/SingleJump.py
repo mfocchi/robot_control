@@ -15,8 +15,8 @@ from base_controllers.utils.matlab_conversions import mat_matrix2python, mat_vec
 
 # Initialize MATLAB engine globally
 eng = matlab.engine.start_matlab()
-eng.addpath('../../codegen_mesh_landing', nargout=0)
-sys.path.insert(0, '../../codegen_mesh_landing')
+eng.addpath('/home/ruby/trento_lab_home/ros_ws/src/locosim/robot_control/base_controllers/climbingrobot_controller/codegen_mesh_landing', nargout=0)
+sys.path.insert(0, '/home/ruby/trento_lab_home/ros_ws/src/locosim/robot_control/base_controllers/climbingrobot_controller/codegen_mesh_landing')
 
 
 from params import *
@@ -26,7 +26,6 @@ class SingleJump:
     """
     Class to handle single jump optimization between two points on a terrain.
     """
-    
     def __init__(self, p0, pf, terrain_manager, point_clouds, patches):
         self.p0 = np.array(p0)
         self.pf = np.array(pf)
@@ -74,7 +73,6 @@ class SingleJump:
         # Update contact normal for this jump
         self.jump_opt_params['contact_normal'] = matlab.double(liftoff_normal)
         
-        # Call MATLAB optimization
         res = eng.optimize_cpp_mex(
             matlab.double(p0_adj.tolist()), 
             matlab.double(pf_adj.tolist()), 
@@ -96,18 +94,18 @@ class SingleJump:
         # Compute patch-related fitness if applicable
         if patch_id is not None and contact_abs_pos_yz is not None:
             # Cost for landing candidate point
-            fit_landing_cost = -self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
+            fit_landing_cost = self.patches.get_cost_in_point(patch_id, contact_abs_pos_yz)
             # Average cost on patch
-            fit_average_cost_patch = -self.patches.get_patch_cost(patch_id)
+            fit_average_cost_patch = self.patches.get_patch_cost(patch_id)
         
         # Energy consumption fitness
-        fit_consumed_energy = -res['consumed_energy']
+        fit_consumed_energy = res['consumed_energy']
         
         # Convergence fitness
         if res['problem_solved'] == 1 or res['problem_solved'] == 2:
             fit_problem_converged = 0.0
         else:
-            fit_problem_converged = -1000.0
+            fit_problem_converged = 10000.0
         
         # Print individual fitness components
         print(f"  convergence: {fitness_weights[0]*fit_problem_converged:.2f}, "
@@ -292,11 +290,8 @@ def main():
     
     # Initialize terrain
     print(colored("\n1. Initializing Terrain...", "yellow"))
-    terrain_manager = TerrainManager()
-    point_clouds, patches, cost_grid = initialize_terrain_data(terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
-    print(colored("   Terrain initialized successfully!", "green"))
     
-    print(colored("\n2. Creating Jump Optimizer...", "yellow"))
+    point_clouds, patches, cost_grid = initialize_terrain_data()
     jump_optimizer = SingleJump(
         P0_INIT, 
         PF_INIT, 
@@ -317,7 +312,15 @@ def main():
     print(f"Final Fitness: {fitness:.2f}")
     print(f"Adjusted Start: {p0_adj}")
     print(f"Adjusted Goal:  {pf_adj}")
-    print(f"Problem Solved: {result['problem_solved']}")
+    
+    status_map = {
+        1: "Problem converged!",
+        -2: "Problem didn-t converge!",
+        2: "semidefinite solution (should modify the cost)",
+        0: "Max number of feval exceeded (10000)"
+    }
+    print(f"Problem Solved: {status_map.get(int(result['problem_solved']), result['problem_solved'])}")
+
     print(f"Consumed Energy: {result['consumed_energy']:.2f}")
     print(f"Jump Duration: {result['Tf']:.2f}s")
     

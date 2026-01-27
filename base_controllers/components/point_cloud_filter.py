@@ -628,14 +628,14 @@ class PointCloudFilter:
 def main():
     
     # Terrain configuration values
-    wall_depth = 1            
-    grid_size = 100
-    max_ridge_depth = 0.5     
-    seed = 30                 
-    Lz = -50                  
-    Ly = 10                   
+    # wall_depth = 1            
+    # grid_size = 100
+    # max_ridge_depth = 0.5     
+    # seed = 30                 
+    # Lz = -50                  
+    # Ly = 10                   
     
-    terrain = TerrainManager(grid_size, wall_depth=wall_depth, max_ridge_depth=max_ridge_depth, seed=seed, Lz=Lz, Ly=Ly)
+    terrain = TerrainManager()
     
 
     pc = terrain.point_cloud
