@@ -915,7 +915,8 @@ def talker(p):
 
     # spawn mesh in gazebo (needs mat2Gazebo)
     if p.OBSTACLE_AVOIDANCE=='mesh':
-        spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo)
+        texture_path = rospkg.RosPack().get_path('climbingrobot_description') + '/media/materials/textures/rocks.jpg'
+        spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo, texture_path=texture_path)
 
     p.startJump = 2.5
     p.orientTime = 1.0
@@ -946,7 +947,7 @@ def talker(p):
         except:
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.stl", position=p.mat2Gazebo, color="red", alpha=1.0)
+        p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.obj", position=p.mat2Gazebo, color=None, alpha=1.0)
         if hasattr(p, "ref_com"):
             p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
         p.ros_pub.publishVisual(delete_markers=False)

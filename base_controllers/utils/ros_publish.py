@@ -308,24 +308,30 @@ class RosPub():
 
     def add_mesh(self, package=None, mesh_path="", position = np.zeros(3), color = "green", alpha = 1.):
         marker = Marker()
-        if isinstance(color, np.ndarray):
-            marker.color.r = color[0]
-            marker.color.g = color[1]
-            marker.color.b = color[2]
+        if color is None:
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
         else:
-            if (color == "green"):
-                marker.color.r = 0.0
-                marker.color.g = 1.0
-                marker.color.b = 0.0
-            if (color == "blue"):
-                marker.color.r = 0.0
-                marker.color.g = 0.0
-                marker.color.b = 1.0
-            if (color == "red"):
-                marker.color.r = 1.0
-                marker.color.g = 0.0
-                marker.color.b = 0.0
-        marker.color.a = alpha
+            if isinstance(color, np.ndarray):
+                marker.color.r = color[0]
+                marker.color.g = color[1]
+                marker.color.b = color[2]
+            else:
+                if (color == "green"):
+                    marker.color.r = 0.0
+                    marker.color.g = 1.0
+                    marker.color.b = 0.0
+                if (color == "blue"):
+                    marker.color.r = 0.0
+                    marker.color.g = 0.0
+                    marker.color.b = 1.0
+                if (color == "red"):
+                    marker.color.r = 1.0
+                    marker.color.g = 0.0
+                    marker.color.b = 0.0
+            marker.color.a = alpha
 
         marker.header.frame_id = self.visual_frame
         marker.type = marker.MESH_RESOURCE
