@@ -161,12 +161,12 @@ def checkRosControllerRunning(controller = '', robot_name=''):
     else:
         return True
 
-def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
+def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), texture_path=None):
     try:
         import meshio
     except ImportError:
         raise RuntimeError("You need to install meshio with: pip install meshio")
-    print(colored("Spawning mesh"),"red")
+    print(colored("Spawning mesh","red"))
 
     # Build triangles
     n_z = mesh_x.shape[0]
@@ -223,15 +223,29 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
     # plt.title("Mesh with Face Normals")
     # plt.show()
 
-    # Export mesh
+    # Always write STL (collision + fallback visual)
+    tmp_stl_path = "/tmp/runtime_mesh.stl"
     mesh = meshio.Mesh(points=points, cells=[("triangle", triangles)])
+    mesh.write(tmp_stl_path)
 
-    # 4. Export to STL and DAE
-    tmp_stl_path = "/tmp/runtime_mesh.stl"  # STL for Gazebo collision
-    mesh.write(tmp_stl_path)  # safer
-
-
-
+    # Optionally write textured DAE for RViz
+    if texture_path is not None:
+        tmp_obj_path = "/tmp/runtime_mesh.obj"
+        write_textured_obj(points, triangles, tmp_obj_path, texture_path)
+        # Use OBJ (textured) for VISUAL
+        visual_uri = f"file://{tmp_obj_path}"
+        material_block = ""  # DO NOT override texture
+    else:
+        visual_uri = f"file://{tmp_stl_path}"
+        #use standard reddish material
+        material_block = """
+                <material>
+                  <ambient>0.545 0.271 0.075 1.0</ambient>
+                  <diffuse>0.545 0.271 0.075 1.0</diffuse>
+                  <specular>0.1 0.1 0.1 1.0</specular>
+                  <emissive>0.4 0.2 0.1 1.0</emissive>
+                </material>
+        """
 
     # === Step 3: Spawn in Gazebo ===
     sdf_template = f"""
@@ -242,15 +256,10 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
           <visual name="visual">
             <geometry>
               <mesh>
-                <uri>file://{tmp_stl_path}</uri>
+                <uri>file://{visual_uri}</uri>
               </mesh>
             </geometry>
-            <material>
-              <ambient>0.545 0.271 0.075 1.0</ambient>
-              <diffuse>0.545 0.271 0.075 1.0</diffuse>
-              <specular>0.1 0.1 0.1 1.0</specular>
-              <emissive>0.4 0.2 0.1 1.0</emissive>
-            </material>
+            {material_block}
           </visual>
           <collision name="collision">
             <geometry>
@@ -278,6 +287,79 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0])):
     except subprocess.CalledProcessError as process_error:
         ros.logfatal('Failed to run spawnModel command with error: \n%s', process_error.output)
         sys.exit(1)
+
+# writes the texture in addition to the mesh
+def write_textured_obj(points, triangles, obj_path, texture_path):
+    import os, shutil
+    import numpy as np
+
+    obj_dir = os.path.dirname(obj_path)
+    base = os.path.splitext(os.path.basename(obj_path))[0]
+    mtl_name = base + ".mtl"
+    mtl_path = os.path.join(obj_dir, mtl_name)
+
+    # Copy texture next to OBJ
+    tex_name = os.path.basename(texture_path)
+    tex_dst = os.path.join(obj_dir, tex_name)
+    if os.path.abspath(texture_path) != os.path.abspath(tex_dst):
+        shutil.copy(texture_path, tex_dst)
+
+    # ---- UVs (planar) ----
+    x, y = points[:, 0], points[:, 1]
+    x0, x1 = x.min(), x.max()
+    y0, y1 = y.min(), y.max()
+    u = (x - x0) / max(x1 - x0, 1e-6)
+    v = 1.0 - (y - y0) / max(y1 - y0, 1e-6)
+    uvs = np.column_stack([u, v])
+
+    # ---- normals ----
+    normals = compute_vertex_normals(points, triangles)
+
+    # ---- MTL ----
+    with open(mtl_path, "w") as f:
+        f.write("newmtl rock_material\n")
+        f.write("Ka 1.0 1.0 1.0\n")
+        f.write("Kd 1.0 1.0 1.0\n")
+        f.write("Ks 0.2 0.2 0.2\n")
+        f.write("Ns 50.0\n")
+        f.write(f"map_Kd {tex_name}\n")
+
+    # ---- OBJ ----
+    with open(obj_path, "w") as f:
+        f.write(f"mtllib {mtl_name}\n")
+        f.write("usemtl rock_material\n")
+
+        for p in points:
+            f.write(f"v {p[0]} {p[1]} {p[2]}\n")
+
+        for uv in uvs:
+            f.write(f"vt {uv[0]} {uv[1]}\n")
+
+        for n in normals:
+            f.write(f"vn {n[0]} {n[1]} {n[2]}\n")
+
+        # faces: v / vt / vn
+        for tri in triangles:
+            a, b, c = tri + 1
+            f.write(f"f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}\n")
+
+def compute_vertex_normals(points, triangles):
+    normals = np.zeros_like(points)
+
+    for tri in triangles:
+        p0, p1, p2 = points[tri]
+        n = np.cross(p1 - p0, p2 - p0)
+        norm = np.linalg.norm(n)
+        if norm > 1e-12:
+            n /= norm
+        for idx in tri:
+            normals[idx] += n
+
+    # normalize
+    norms = np.linalg.norm(normals, axis=1)
+    norms[norms == 0] = 1.0
+    normals /= norms[:, None]
+    return normals
 
 def sendStaticTransform(parent, child, x_pos = np.zeros(3), quat=np.array([1,0,0,0]), static_broadcaster=None):
     static_transformStamped = TransformStamped()
