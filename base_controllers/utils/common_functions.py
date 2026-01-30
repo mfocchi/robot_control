@@ -16,6 +16,7 @@ from matplotlib.collections import PatchCollection
 import sys
 from termcolor import colored
 import rospkg
+import rosparam
 import rospy as ros
 import rosnode
 import roslaunch
@@ -86,6 +87,37 @@ def checkRosMaster():
         print(colored('ROS MASTER is NOT Online, Starting roscore!!','red'))
         parent = ROSLaunchParent("roscore", [], is_core=True)  # run_id can be any string
         parent.start()
+
+def load_rosparams_from_package(package_name: str, rel_path: str, target_namespace: str = '/'):
+    """
+    Load a YAML file from a package and upload its parameters to the ROS parameter server.
+
+    :param package_name: name of ROS package (like 'pronto_aliengo')
+    :param rel_path: path inside the package to the yaml file (like 'config/aliengo_state_estimator.yaml')
+    :param target_namespace: namespace where to upload params (default '/')
+    """
+    rp = rospkg.RosPack()
+    pkg_path = rp.get_path(package_name)
+    yaml_path = os.path.join(pkg_path, rel_path)
+
+    if not os.path.isfile(yaml_path):
+        raise FileNotFoundError(f"YAML file not found: {yaml_path}")
+
+    # rosparam.load_file returns a list of (params_dict, namespace) tuples
+    loaded = rosparam.load_file(yaml_path)
+    if not loaded:
+        ros.logwarn(f"No params found in {yaml_path}")
+        return
+
+    for params_dict, ns_in_file in loaded:
+        # Decide final namespace to upload into:
+        # If the YAML sets a namespace, use it; otherwise use the provided target_namespace.
+        ns = ns_in_file if ns_in_file not in (None, '') else target_namespace
+
+        # rosparam.upload_params(namespace, params_dict)
+        rosparam.upload_params(ns, params_dict)
+        ros.loginfo(f"Uploaded {len(params_dict)} params to namespace '{ns}' from {yaml_path}")
+
 
 def launchFileNode(package,launch_file, additional_args=None):
     launch_file = rospkg.RosPack().get_path(package) + '/launch/'+launch_file
