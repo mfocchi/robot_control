@@ -57,7 +57,7 @@ class ValueFunctionManager:
         self.min_switch = 1
         self.VF = True
         self.count_back = 0
-        self.min_back = 40
+        self.min_back = 200
 
     # Function to load value function
     def load_value(self, file_path):
@@ -103,7 +103,7 @@ class ValueFunctionManager:
             self.count_back += 1
             #print('self.count_back',self.count_back)
             if self.count_back >= self.min_back:
-                #print('Back')
+                print('Back')
                 self.VF =True
                 self.count_back = 0
                 self.count = 0
