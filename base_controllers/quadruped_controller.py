@@ -43,7 +43,7 @@ class QuadrupedController(BaseController):
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
 
-        self.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+        self.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
 
     #####################
     # OVERRIDEN METHODS #
@@ -358,6 +358,10 @@ class QuadrupedController(BaseController):
                                 np.array([-half_lenght, -half_width, half_height])]  # rf_top
 
         self.kfe_idx = [self.robot.model.getFrameId(leg + '_kfe_joint') for leg in ['lf', 'lh', 'rf', 'rh']]
+        #safety layer
+        self.gracefulCollapseFlag = False
+        self.alphaCollapse = 1.0
+        self.collapseTime = 2.
 
     def logData(self):
         # full with new values
@@ -1545,6 +1549,15 @@ class QuadrupedController(BaseController):
         else:
             None
 
+    def gracefulCollapse(self):
+        self.alphaCollapse -= self.dt / self.collapseTime
+        if self.alphaCollapse<=0:
+            self.alphaCollapse = 0.0
+            return True
+        else:
+            self.pid.setPDjoints(self.alphaCollapse * self.kp_act, self.alphaCollapse * self.kd_act, self.alphaCollapse * self.ki_act)
+            return False
+
     def saveVideo(self, path, start_file=None, filename='record', format='mkv',  fps=60, speedUpDown=1, remove_jpg=False):
         # only if camera_xxx.world has been used
         # for details on commands, check https://ffmpeg.org/ffmpeg.html
@@ -1608,8 +1621,8 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
-    use_joy = True
+    rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
+    use_joy = False
     generate_reference = False
 
     if rl_control == 'state_est_based':
@@ -1641,15 +1654,25 @@ if __name__ == '__main__':
         counter = 0
         while not ros.is_shutdown():
             p.updateKinematics()
-
-
-            if rl_control != 'none' and (p.time > (p.startTime + 10.)):
+            if p.gracefulCollapseFlag:
+                if p.gracefulCollapse():
+                    break
+            if rl_control != 'none' and (p.time > (p.startTime + 1.)):
                 if use_joy:
                     axes, buttons = joy.get_commands()
                     #use a scaling to make the joy input less reactive
                     lx = 0.2*axes[0]
                     ly = 0.2*axes[1]
                     ry = 0.2*axes[3]
+                    #safety layer
+                    if buttons[0] and not p.gracefulCollapseFlag:
+                        print(colored("start Graceful collapse","red"))
+                        p.kp_act, p.kd_act, p.ki_act = p.pid.getPDjoints()
+                        print(colored(f"Storing actual pd: {p.kp_act}, {p.kd_act},{p.ki_act}"), "red")
+                        p.gracefulCollapseFlag = True
+                    if buttons[2]:
+                        print(colored("Severe shutdown!", "red"))
+                        break
                     rl_controller.velocity_cmd = np.array([lx, ly, ry])
                 else:
                     rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
@@ -1660,16 +1683,7 @@ if __name__ == '__main__':
                     lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                     ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
                     proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
-                    # if p.time % 2. == 0:
-                    #     p.applyForce(0, 50*counter, 0, 0, 0, 0, 0.25)
-                    #     print(50*counter)
-                    #     counter+=1
-                    # rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                    # p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
-
-
                     p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
-
 
                 if rl_control == 'sensor_based':
                     h_R_b = p.math_utils.eul2Rot(np.array([p.euler[0],p.euler[1],0.]))
@@ -1693,7 +1707,7 @@ if __name__ == '__main__':
                                                                                 p.wJ,
                                                                                 p.h_joints,
                                                                                 p.comPoseW)
-                p.send_command(p.q_des, p.qd_des, p.tau_ffwd, log_data_in_send_command=True)
+                p.send_command(p.q_des, p.qd_des, p.alphaCollapse*p.tau_ffwd, log_data_in_send_command=True)
 
             p.visualizeContacts()
         

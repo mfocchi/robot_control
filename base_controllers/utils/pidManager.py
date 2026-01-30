@@ -25,6 +25,16 @@ class PidManager:
     def getPDs(self):
         return self.joint_pid_log
 
+    def getPDjoints(self):
+        kp = np.zeros(len(self.joint_names))
+        kd = np.zeros(len(self.joint_names))
+        ki = np.zeros(len(self.joint_names))
+        for i in range(len(self.joint_names)):
+            kp[i] = self.joint_pid_log[i].p_value
+            kd[i] = self.joint_pid_log[i].d_value
+            ki[i] = self.joint_pid_log[i].i_value
+        return kp, kd, ki
+
     def setPDs(self, kp, kd, ki = 0):
         """
          Set the same values of PID for all the joints of the robot
