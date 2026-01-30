@@ -105,7 +105,7 @@ def launchFileGeneric(launch_file):
     launch = roslaunch.parent.ROSLaunchParent(uuid, [launch_file])
     launch.start()
 
-def startNode(package, executable, args=''):
+def startNode(package, executable, args='', name=None):
     nodes = rosnode.get_node_names()
     #kill previous instances
     if package in nodes:
@@ -113,7 +113,8 @@ def startNode(package, executable, args=''):
         os.system("rosnode kill /"+package)
     package = package
     executable = executable
-    name = package
+    if name is None:
+        name = executable
     namespace = ''
     node = roslaunch.core.Node(package, executable, name, namespace, args=args, output="screen")
     launch = roslaunch.scriptapi.ROSLaunch()

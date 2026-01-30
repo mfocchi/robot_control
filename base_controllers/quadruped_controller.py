@@ -73,8 +73,12 @@ class QuadrupedController(BaseController):
                 print(f"state_estimation type not known {self.state_estimation}")
         else:#simulation
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,  callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
-
-            if self.state_estimation=='ground_truth':
+            if self.state_estimation == 'pronto':  # use pronto for state estimation
+                # start stateest node (requires publication of msg type sensor:IMU in topic aliengo/imu
+                startNode(package="topic_tools", executable="relay", args="/" + self.robot_name + "/trunk_imu" + "  " + "/" + self.robot_name + "/imu", name="trunk_imu_to_imu")
+                launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
+                self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
+            elif self.state_estimation=='ground_truth':
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,  callback=self._receive_pose,  queue_size=1, tcp_nodelay=True)
             elif self.state_estimation=='odometry':
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry, callback=self._receive_pose_real, queue_size=1, tcp_nodelay=True)
