@@ -10,9 +10,9 @@ import threading
 import matplotlib.pyplot as plt
 from algo_patch import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
-from climbingrobot_controller.climb_multiple_jumps.new_mode.LinearOpt import LinearOpti
+from LinearOpt import LinearOpti
 from params import *
-from base_controllers.climbingrobot_controller.climb_multiple_jumps.new_mode.Plot_result import PlotResultCemMjumps
+from Plot_result import PlotResultCemMjumps
 from collections import Counter
 
 def main():
@@ -25,8 +25,6 @@ def main():
     
     if setting["COMPUTATION_MODE"]:
         best_lock = threading.Lock()
-        
-        
         
         point_clouds, patches, cost_grid = initialize_terrain_data(warm_start_mode=setting["WARM_START_MODE"])
         optimizer = LinearOpti(
@@ -53,18 +51,12 @@ def main():
             iter_start = time.time()
             first_iteration = (k == 0)
             
-            if k==3 and setting["WARM_START_MODE"]:
-                algo.params.min_prob = 0.01
-                for j in range(algo.params.dim_discrete):
-                    n_val = algo.params.n_values[j]
-                    algo.probs[j] = np.full(n_val, 1.0 / n_val)
-                    
             algo.generate_population_discrete(first_iteration)
             
-            if not first_iteration and algo.log.best_discrete is not None:
-                # Substitute the first individual of the random population with the Best Ever (ELITE INJECTION)
-                print(colored(f"[INFO] Injecting previous best solution into population (Iter {k+1})", "cyan"))
-                algo.population_discrete[:, 0] = algo.log.best_discrete
+            # if not first_iteration and algo.log.best_discrete is not None:
+            #     # Substitute the first individual of the random population with the Best Ever (ELITE INJECTION)
+            #     print(colored(f"[INFO] Injecting previous best solution into population (Iter {k+1})", "cyan"))
+            #     algo.population_discrete[:, 0] = algo.log.best_discrete
             
             xd = algo.population_discrete   # shape: dim_discrete x pop_size
             # print(xd)
@@ -72,7 +64,9 @@ def main():
             total = len(xd[0])
             for value in sorted(counter.keys()):
                 perc = counter[value] / total * 100
-                # print(f"Jump {value}: {perc:.2f}%")
+                print(f"Jump {value}: {perc:.2f}%")
+            # patch_ids_esplorati = xd[1:, :].flatten().astype(int)
+            # patches.plot_population_density(patch_ids_esplorati)
             
             
             # Organise inputs into a 2D matrix where we have as columns
@@ -87,8 +81,6 @@ def main():
             all_n_jumps = [0] * cem_params.pop_size
             n_workers = cem_params.n_threads
             
-            # patch_ids_esplorati = xd[1:, :].flatten().astype(int)
-            # patches.plot_population_density(patch_ids_esplorati)
             
             
             # ============================

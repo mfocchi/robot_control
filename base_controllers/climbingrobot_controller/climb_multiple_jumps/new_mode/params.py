@@ -22,37 +22,34 @@ import matplotlib.patches as mpatches
 # ================================================
 # BASE DATA FOR MULTIPLE JUMPS CLIMBING CONTROLLER
 # ================================================
-# start and goal point
-# P0_INIT = np.array([0.0, 1.46, -2.53])
-# PF_PATCH_INIT = np.array([0.0, 1.46, -5.55])
-
 P0_INIT = np.array([0.5, 1.5, -1.5])
-PF_PATCH_INIT=  np.array([0.5, 6.5,-7.5]) 
+PF_PATCH_INIT=  np.array([0.5, 6.5,-8.5]) 
 PF_INIT = PF_PATCH_INIT
-MAX_JUMP = 6
+MAX_JUMP = 5
 THREADS = 5
-flag_thread = False
+flag_thread = True
+CORRIDOR_RADIUS = 4.0 # for linear corridor warm start
+MAIN_DIRECTORY = "result/24_test"
+# [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
+fitness_weights = np.array([1e7, 10.,1., 100., 1.,500.]) # Optimizer
+# fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear
+# weights for point cloud filtering
+# filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
+filter_weights = np.array([10., 10., 0,10.0])
 
-MAIN_DIRECTORY = "result/result_new_patch_1"
-
+# ================================================
+# INNER LOOP OPTIMIZER PARAMETERS
+# ================================================
+# Create inner_opt_params in the EXACT order MATLAB expects
 Fleg_max = 600.
-Fr_max = 60.
+Fr_max = 90.
 Fr_min = 10.
 number_of_patches_width = 10
 number_of_patches_height = 10
 mass = 5.
 anchor_distance = 10.
-# [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
-fitness_weights = np.array([1e7, 1.,1., 1., 1.0,0.0]) # Optimizer
-# fitness_weights = np.array([1e7, 20.0,10., 0.5, 15.0,50.0]) # Linear
-# weights for point cloud filtering
-# filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([100., 100., 0,100.0])
-# ================================================
-# INNER LOOP OPTIMIZER PARAMETERS
-# ================================================
-# Create inner_opt_params in the EXACT order MATLAB expects
 mu = 0.8
+
 inner_opt_params = {}
 inner_opt_params['m'] = mass
 inner_opt_params['num_params'] = 4.
@@ -89,9 +86,9 @@ cem_params = CemParams()
 cem_params.seed =0# int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 1
-cem_params.pop_size = 10
-cem_params.n_elites = 3 #int(cem_params.pop_size * 0.3)
+cem_params.cem_iters = 30
+cem_params.pop_size = 300
+cem_params.n_elites = 30#int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.0 
 cem_params.alpha = 0.5
@@ -101,7 +98,7 @@ number_of_patches = number_of_patches_width * number_of_patches_height
 # cem_params.n_values = [3] + [(number_of_patches-1) for _ in range(4)]
 cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(MAX_JUMP)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
-cem_params.min_prob = 0.005
+cem_params.min_prob = 0.005  # Reduced from 0.1 to allow warm start to dominate more
 # Continuous
 cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # x and y positions
 cem_params.max_value_continuous = np.full(cem_params.dim_continuous, 1.0)
@@ -117,9 +114,8 @@ FILE_TERRAIN_POINTS = f"{MAIN_DIRECTORY}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{MAIN_DIRECTORY}/actual_patch_terrain.json"
 ITERATIONS_FOLDER = f"{MAIN_DIRECTORY}/iteration_reports"
 FILE_SAVE_PARAMS = f"{MAIN_DIRECTORY}/simulation_params.json"
+FILE_DESCRIPTION = f"{MAIN_DIRECTORY}/description.txt"
 
-FILE_BEST_LOG = f"{MAIN_DIRECTORY}/best_trajectory_log.json"
-FILE_PROGRESS = f"{MAIN_DIRECTORY}/cem_iteration_history.json"
 # ================================================
 # COMMON FUNCTIONS
 # ================================================
@@ -134,8 +130,10 @@ os.makedirs(result_dir, exist_ok=True)
 # Ly = 10          
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
 terrain_manager  = TerrainManager()
-CORRIDOR_RADIUS = 2.0
+
 def initialize_terrain_data(warm_start_mode=False):
+    create_description_file(enable=True)
+    
     terrain_params = []
     # === 1 POINT CLOUD INITIALIZATION ===
     in_point_clouds = terrain_manager.point_cloud
@@ -148,39 +146,35 @@ def initialize_terrain_data(warm_start_mode=False):
     # print("\n[INIT] === Smoothing Filter ===")
     # kernel = [point_clouds.smoothing_kernel] 
     # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[0], plot=False)
-    
     print("\n[INIT] === First Derivative (Gradient) ===")
     kernel = [point_clouds.sobel_y, point_clouds.sobel_z] 
     point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[1], plot=False)
-    
     # print("\n[INIT] === Second Derivative (Laplacian) ===")
     # kernel = [point_clouds.laplacian_kernel] 
     # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[2], plot=False)
-    
     # point_clouds.visualize_cost_map()
 
     # === 2 PATCHES INITIALIZATION ===
     pc_t = point_clouds.points_t
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
     cost_grid = patches.get_cost_meshgrid()
-    # patches.plot_patch(99)
+    
     # Update inner_opt_params with terrain data
     inner_opt_params['mesh_x'] = terrain_manager.mesh_x
     inner_opt_params['mesh_y'] = terrain_manager.mesh_y
     inner_opt_params['mesh_z'] = terrain_manager.mesh_z
-    
     inner_opt_params['cost_x'] = cost_grid
     inner_opt_params['cost_y'] = terrain_manager.mesh_y
     inner_opt_params['cost_z'] = terrain_manager.mesh_z
     inner_opt_params['patch_side'] = 1.0 * patches.patch_width
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
     patches.visualize_full_cost_map()
+    
     # patch_id = 25
     # cost = patches.get_patch_cost(patch_id)
     # if cost is not None:
     #     print(f"Cost of patch {patch_id} is: {cost:.4f}")
     #     patches.plot_patch(patch_id)
-    # breakpoint()
     
     terrain_params.append({
         'anchor_location': point_clouds,
@@ -196,20 +190,24 @@ def initialize_terrain_data(warm_start_mode=False):
             patches, 
             P0_INIT, 
             PF_PATCH_INIT, 
-            radius=3.0,     
+            radius=CORRIDOR_RADIUS,     
             sensitivity=5.0 
         )
     
-        patch_probs = plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
-        
+        plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
+
         new_init_probs = []
         new_init_probs.append(cem_params.init_probs[0])
+        
         for i in range(1, len(cem_params.n_values)):
             new_init_probs.append(patch_probs)
         cem_params.init_probs = new_init_probs
     
     return point_clouds, patches, cost_grid
 
+# ================================================
+# SAVE PARAMS AND TERRAIN DATA
+# ================================================
 def save_terrain_data(terrain_manager,point_clouds, patches):
     def convert_to_serializable(obj):
             if isinstance(obj, np.ndarray):
@@ -363,7 +361,6 @@ def save_params():
 # ================================================
 # MATLAB SETUP
 # ================================================
-
 thread_local = threading.local()
 
 def get_matlab_engine(point_clouds=None, cost_grid=None, terrain_manager=None):
@@ -490,9 +487,6 @@ def get_warm_start_base_cost(patches, sensitivity=10.0):
     # Inverted Softmax
     weights = np.exp(-sensitivity * norm_costs)
     
-    # --- MODIFICATION: RELATIVE HARD CUTOFF ---
-    # Calculate max weight (best patch)
-    # Threshold: discard everything below 1% (0.01) of max
     cutoff_value = np.max(weights) * 0.01
     weights[weights < cutoff_value] = 0.0
     # ------------------------------------------
@@ -504,92 +498,110 @@ def get_warm_start_base_cost(patches, sensitivity=10.0):
         
     return weights / sum_weights
 
+# ================================================
+# DESCRIBE RESULT FOLDER
+# ================================================
+
+def create_description_file(enable=bool):
+    if not enable:
+        return
+    print(colored("\n[DESCRIPTION] Insert a description for this experiment.", "cyan"))
+    print(colored("Finish with ENTER. Leave empty to skip.", "cyan"))
+    try:
+        description = input("> ").strip()
+    except KeyboardInterrupt:
+        print(colored("\n[DESCRIPTION] Input cancelled by user.", "yellow"))
+        return
+
+    if description == "":
+        print(colored("[DESCRIPTION] Empty description. File not created.", "yellow"))
+        return
+
+    os.makedirs(os.path.dirname(FILE_DESCRIPTION), exist_ok=True)
+
+    with open(FILE_DESCRIPTION, "w") as f:
+        f.write("=== EXPERIMENT DESCRIPTION ===\n")
+        f.write(description + "\n")
+
+    print(colored(f"[SAVE] Description saved to: {FILE_DESCRIPTION}", "cyan"))
+
+# ================================================
+# PLOTTING FUNCTIONS
+# ================================================
+
 def plot_probability_heatmap(patch_probs, patches_obj, p0, pf):
     print(colored("\n[PLOT] Generating Probability Heatmap (Sorted by Grid)...", "cyan"))
     
     # Geometric patch data
     width = patches_obj.patch_width
     height = patches_obj.patch_height
-    
-    # =========================================================
-    # 1. GEOMETRIC SORTING & RE-INDEXING
-    # =========================================================
-    # Create temp list to keep patch-probability association
-    combined_data = [{'patch': p, 'prob': prob} for p, prob in zip(patches_obj.patches, patch_probs)]
-    
-    # Sorting Function:
-    # 1. Sort by Z DESCENDING (since origin is top at Z=0 and goes to negative Z).
-    #    Use round() to group patches in same "row" despite float errors.
-    # 2. Sort by Y ASCENDING (left to right).
-    
-    def sort_key(item):
-        centroid = item['patch']['centroid']
-        # Round Z to patch height for row identification. Negate for descending order.
-        row_index = -round(centroid[2] / height) 
-        return (row_index, centroid[1])
-
-    combined_data.sort(key=sort_key)
-    
-    # Reassign sorted IDs and update original lists
-    sorted_probs = []
-    sorted_patches = [] 
-    
-    for new_id, item in enumerate(combined_data):
-        patch = item['patch']
-        # --- ID CHANGE HERE ---
-        patch['id'] = new_id 
-        sorted_patches.append(patch)
-        sorted_probs.append(item['prob'])
-        
-    # Overwrite list in original object for future consistency
-    patches_obj.patches = sorted_patches
-    plot_probs = np.array(sorted_probs)
+    patches = patches_obj.patches
+    if len(patch_probs) != len(patches):
+        print(colored(f"[ERROR] Mismatch tra numero probabilità ({len(patch_probs)}) e patch ({len(patches)})", "red"))
+        return patch_probs
 
     # =========================================================
-    # 2. PLOTTING
+    # 2. PREPARAZIONE PLOT
     # =========================================================
     fig, ax = plt.subplots(figsize=(12, 10))
     
-    # Efficient rectangle creation
-    centroids = np.array([p['centroid'] for p in patches_obj.patches])
-    y_corners = centroids[:, 1] - (width / 2.0)
-    z_corners = centroids[:, 2] - (height / 2.0)
-    
-    rectangles = [mpatches.Rectangle((y, z), width, height) for y, z in zip(y_corners, z_corners)]
+    rectangles = []
+    ids_and_probs = []
 
-    # Collection Creation
-    pc = PatchCollection(rectangles, cmap='RdYlGn', alpha=0.9, edgecolor='grey')
-    pc.set_array(plot_probs)
+    for i, patch in enumerate(patches):
+        centroid = patch['centroid']
+        # Calcoliamo l'angolo in basso a sinistra della patch per mpatches.Rectangle
+        # Il centroide è (x, y, z), a noi servono y e z per il piano 2D
+        y_corner = centroid[1] - (width / 2.0)
+        z_corner = centroid[2] - (height / 2.0)
+        
+        rect = mpatches.Rectangle((y_corner, z_corner), width, height)
+        rectangles.append(rect)
+        
+        # Salviamo i dati per le annotazioni testuali
+        ids_and_probs.append({
+            'y': centroid[1],
+            'z': centroid[2],
+            'id': patch['id'],
+            'p': patch_probs[i]
+        })
+
+    # Creazione della collezione di rettangoli (Heatmap)
+    pc = PatchCollection(rectangles, cmap='RdYlGn', alpha=0.9, edgecolor='grey', linewidth=0.5)
+    pc.set_array(patch_probs) # Applica i colori in base alle probabilità
     ax.add_collection(pc)
     
-    # Colorbar
+    # Barra laterale (Colorbar)
     cbar = fig.colorbar(pc, ax=ax)
     cbar.set_label('Warm Start Probability', rotation=270, labelpad=15)
 
-    # Text Annotations (IDs are now sorted)
-    for i, (y, z) in enumerate(centroids[:, 1:]): # extract y, z from centroids
-        ax.text(y, z, f"{patches_obj.patches[i]['id']}\n{plot_probs[i]:.1%}", 
-                ha='center', va='center', fontsize=6, color='black', fontweight='bold')
+    # 3. Annotazioni Testuali (ID e %)
+    for item in ids_and_probs:
+        # Mostra l'ID e la probabilità percentuale al centro della patch
+        ax.text(item['y'], item['z'], f"ID: {item['id']}\n{item['p']:.1%}", 
+                ha='center', va='center', fontsize=7, color='black', fontweight='bold')
 
-    # Start & Goal
+    # =========================================================
+    # 4. START & GOAL (Coordinate Y, Z)
+    # =========================================================
     ax.scatter(p0[1], p0[2], c='blue', s=300, marker='o', edgecolors='white', zorder=10, label='Start')
-    ax.text(p0[1], p0[2]+0.5, "START", ha='center', color='blue', fontweight='bold', zorder=10)
+    ax.text(p0[1], p0[2] + (height * 0.6), "START", ha='center', color='blue', fontweight='bold', zorder=10)
     
     ax.scatter(pf[1], pf[2], c='gold', s=400, marker='*', edgecolors='black', zorder=10, label='Goal')
-    ax.text(pf[1], pf[2]-0.5, "GOAL", ha='center', color='orange', fontweight='bold', zorder=10)
+    ax.text(pf[1], pf[2] - (height * 0.6), "GOAL", ha='center', color='orange', fontweight='bold', zorder=10)
 
-    # Axis Config
-    ax.set_xlabel("Terrain Y")
-    ax.set_ylabel("Terrain Z")
-    ax.set_title("Patch Probability Map")
+    # Configurazione Assi
+    ax.set_xlabel("Terrain Y (Width)")
+    ax.set_ylabel("Terrain Z (Height)")
+    ax.set_title("Patch Probability Map (Top-Left Origin Row-by-Row)")
     ax.legend(loc='upper right')
     ax.grid(True, linestyle='--', alpha=0.3)
     
-    ax.autoscale()
+    # Impostiamo i limiti degli assi in base alla mappa
+    ax.set_xlim(patches_obj.y_min - width, patches_obj.y_max + width)
+    ax.set_ylim(patches_obj.z_min - height, patches_obj.z_max + height)
     ax.set_aspect('equal')
     
     plt.tight_layout()
     plt.show()
     
-    # IMPORTANT: Return sorted probabilities, otherwise CEM will use wrong indices!
-    return sorted_probs

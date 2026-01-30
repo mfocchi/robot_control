@@ -18,20 +18,11 @@ class BilevelOpt:
         self.p0 = p0
         self.pf_patch = pf_patch
         self.fitness_weights = fitness_weights
-        # terrain creation done outside to avoid recomputation at each thread
         self.point_clouds = point_clouds
         self.patches = patches
         self.cost_grid = cost_grid
     
     def eval_pop(self, input_data):
-        # Initialization parameters for matlab engine
-        eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager)
-        local_inner_opt_params = create_inner_opt_params_copy()
-        
-        max_waypoints = MAX_JUMP
-        # Extract discrete parameters (first array is the possible jumps) and the rest are the patch IDs
-        xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
-        n_jumps = int(xd[0])
         
         # State tracking
         jump_log_points = []
@@ -41,6 +32,14 @@ class BilevelOpt:
         all_converged = True  # Flag to monitor overall convergence
         achieved_target = None
         
+        # Initialization parameters for matlab engine
+        eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager)
+        local_inner_opt_params = create_inner_opt_params_copy()
+        
+        # Extract discrete parameters (first array is the possible jumps) and the rest are the patch IDs
+        xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
+        n_jumps = int(xd[0])
+        
         p0_adj = self.p0.copy()
         p0_adj[0] = self.terrain_manager.wall_surface_eval(
             p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
@@ -48,15 +47,15 @@ class BilevelOpt:
         
         jump_log_points.append(p0_adj.copy())
 
-        total_jump = n_jumps + 1  # Including final jump
+        total_jump = n_jumps + 1  # Including final jump with +1
         for i in range(total_jump):
-            if i < n_jumps:
+            if i < n_jumps: # jump btw patches
                 patch_id = int(xd[1 + i])
                 center_relative_patch_yz = [.5, .5]
                 pf_adj = self.patches.getAbsolutePoseOfPointInsidePatch(
                     patch_id, center_relative_patch_yz[0], 
                     center_relative_patch_yz[1], scale=1.0).copy()
-            else: 
+            else: # final jump to target
                 pf_adj = self.pf_patch.copy()
                 patch_id = self.patches.get_patch_id_from_point_2D(pf_adj[1], pf_adj[2]) 
             
@@ -66,7 +65,7 @@ class BilevelOpt:
                     pt[2], pt[1], self.terrain_manager.mesh_x,
                     self.terrain_manager.mesh_y, self.terrain_manager.mesh_z) 
 
-            # Calculate liftoff normal
+            # Calculate normal
             liftoff_normal = self.terrain_manager.wall_normal_eval(
                 p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x
                 , self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
@@ -77,37 +76,39 @@ class BilevelOpt:
                 matlab.double(p0_adj), matlab.double(pf_adj), 
                 Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
             
-            # Convergence Check (1=Converged, 2=Semidefinite)
+            # Convergence Check (1=Converged, 2=Semidefinite(other possible solutions))
             if int(res['problem_solved']) not in [1, 2]:
                 all_converged = False
             
+            jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
+                                            res, patch_id=patch_id, contact_abs_pos_yz=mat_vector2python(res['achieved_target'])[1:])
+            
             # Update logs and metrics
             jump_log_traj.append(mat_matrix2python(res['p']))
-            jump_log_points.append(pf_adj.copy())
+            jump_log_points.append(mat_vector2python(res['achieved_target']).copy())
             total_consumed_energy += res['consumed_energy']
-        
-            jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
-                res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
-            total_landing_cost += jump_landing_cost
+            total_landing_cost += jump_landing_cost # cost of each landing point
             
-            # The landing point becomes the new starting point
-            p0_adj = pf_adj.copy()
-        
+            # acutal target becomes next starting point
+            p0_adj = mat_vector2python(res['achieved_target']) #pf_adj.copy()
+            
         if not all_converged:
             fitness_score = self.fitness_weights[0]  # Penalty for non-convergence
             achieved_target = None
+            avg_jump_landing_cost = 0.0
         else:
-            waypoint_cost = (max_waypoints - n_jumps) * self.fitness_weights[5]
-            energy_cost = (total_consumed_energy + 1) * self.fitness_weights[1]
-            fitness_score = waypoint_cost + energy_cost
+            waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
+            avg_energy_cost = (total_consumed_energy) * self.fitness_weights[1] # / total_jump ??
+            avg_jump_landing_cost = (total_landing_cost) * self.fitness_weights[3] # / total_jump ??
+            
+            fitness_score = waypoint_cost + avg_energy_cost + avg_jump_landing_cost
             achieved_target = mat_vector2python(res['achieved_target']) if res['achieved_target'] is not None else None
 
         print("xd value: ", xd)
         print(f"Computed Score (Cost): {fitness_score:.4f}")
-        
         status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
         print(f"--- Evaluation Results ---")
-        print(f"Total Jumps: {n_jumps + 1}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {total_consumed_energy:.2f}, Global Convergence: {status_msg}")
+        print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {total_consumed_energy:.2f}, avg_jump_landing_cost: {total_landing_cost:.4f} , Global Convergence: {status_msg}")
         print(f"--------------------------")
         
         return {
@@ -115,7 +116,7 @@ class BilevelOpt:
             'points': jump_log_points,
             'traj': jump_log_traj,
             'achieved_target': achieved_target,
-            'n_jumps': n_jumps + 1,
+            'n_jumps': total_jump,
             'consumed_energy': total_consumed_energy,
             'landing_cost': total_landing_cost,
             'all_converged': all_converged
