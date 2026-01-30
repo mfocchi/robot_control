@@ -45,6 +45,14 @@ class QuadrupedController(BaseController):
 
         self.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
 
+        # pid = os.getpid()
+        # print(colored("USER IS ROOT: USING RENICE FOR THREAD PRIORITY", "red"))
+        # # NOTE: use chrt -r 99 command for rt
+        # # need to launch docker as root
+        # os.system(f'sudo renice -n -21 -p {str(pid)}')
+        # # need to launch docker as root
+        # os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
+
     #####################
     # OVERRIDEN METHODS #
     #####################
@@ -60,7 +68,11 @@ class QuadrupedController(BaseController):
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,  callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
             if self.state_estimation == 'pronto':#use pronto for state estimation
                 #start stateest node
-                launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
+                # self.u.putIntoGlobalParamServer("use_sim_time", str("false"))
+                # load_rosparams_from_package('pronto_aliengo', 'config/aliengo_state_estimator.yaml', target_namespace='/')
+                # startNode(package="pronto_aliengo", executable="pronto_aliengo_node", args='', name="pronto_aliengo")
+                # startNode(package="pronto_aliengo", executable="aliengo_joint_swapper", args='',name="aliengo_joint_swapper")
+
                 self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry,  callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
             elif self.state_estimation=='odometry':#use odometry
                 self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,  callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
@@ -365,7 +377,7 @@ class QuadrupedController(BaseController):
         #safety layer
         self.gracefulCollapseFlag = False
         self.alphaCollapse = 1.0
-        self.collapseTime = 2.
+        self.collapseTime = 1.
 
     def logData(self):
         # full with new values
@@ -1557,6 +1569,8 @@ class QuadrupedController(BaseController):
         self.alphaCollapse -= self.dt / self.collapseTime
         if self.alphaCollapse<=0:
             self.alphaCollapse = 0.0
+            ros.signal_shutdown("killed")
+            p.deregister_node()
             return True
         else:
             self.pid.setPDjoints(self.alphaCollapse * self.kp_act, self.alphaCollapse * self.kd_act, self.alphaCollapse * self.ki_act)
@@ -1646,9 +1660,10 @@ if __name__ == '__main__':
         if use_joy:
             joy = JoyManager()
         p.startupProcedure()
+        if p.state_estimation=='pronto':
+            launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
         if rl_control != 'none':
             p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12,0))
-
         p.counter = 0
         p.startTime = p.time
 
@@ -1665,19 +1680,21 @@ if __name__ == '__main__':
                 if use_joy:
                     axes, buttons = joy.get_commands()
                     #use a scaling to make the joy input less reactive
-                    lx = 0.2*axes[0]
-                    ly = 0.2*axes[1]
-                    ry = 0.2*axes[3]
+                    long_x = 0.2*axes[0]
+                    long_y = 0.2*axes[1]
+                    rot_z = 0.3*axes[2]
                     #safety layer
                     if buttons[0] and not p.gracefulCollapseFlag:
                         print(colored("start Graceful collapse","red"))
                         p.kp_act, p.kd_act, p.ki_act = p.pid.getPDjoints()
                         print(colored(f"Storing actual pd: {p.kp_act}, {p.kd_act},{p.ki_act}"), "red")
                         p.gracefulCollapseFlag = True
-                    if buttons[2]:
+                    if buttons[1]:
                         print(colored("Severe shutdown!", "red"))
+                        ros.signal_shutdown("killed")
+                        p.deregister_node()
                         break
-                    rl_controller.velocity_cmd = np.array([lx, ly, ry])
+                    rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
                 else:
                     rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
@@ -1711,7 +1728,7 @@ if __name__ == '__main__':
                                                                                 p.wJ,
                                                                                 p.h_joints,
                                                                                 p.comPoseW)
-                p.send_command(p.q_des, p.qd_des, p.alphaCollapse*p.tau_ffwd, log_data_in_send_command=True)
+                p.send_command(p.q_des, p.qd_des, p.alphaCollapse*p.tau_ffwd, log_data_in_send_command=False)
 
             p.visualizeContacts()
         
