@@ -59,34 +59,33 @@ class JoyManager:
         try:
             # jessica joy
             # Right stick (move lateral)
-            # rx = self.latest_msg.axes[4]
-            # ry = self.latest_msg.axes[3]
-            # # Left stick (move forward/backward)
-            # lx = self.latest_msg.axes[1]
-            # ly = self.latest_msg.axes[0]
+            rot_z = self.latest_msg.axes[3]
+            # Left stick (move forward/backward)
+            long_x = self.latest_msg.axes[1]
+            long_y = self.latest_msg.axes[0]
+            graceful_shutdown = self.latest_msg.buttons[2]
+            hard_shutdown = self.latest_msg.buttons[1]
 
             # focchi joy
-            ## Left stick (move forward/backward)
-            rx = self.latest_msg.axes[5]
-            ry = self.latest_msg.axes[4]
-            # Right stick (move lateral)
-            lx = self.latest_msg.axes[3]
-            ly = self.latest_msg.axes[2]
+            ## Left stick  (move lateral)
+            # rot_z = self.latest_msg.axes[0]
+            # # Right stick  (move forward/backward)
+            # long_x = self.latest_msg.axes[3]
+            # long_y = self.latest_msg.axes[2]
+            # graceful_shutdown = self.latest_msg.buttons[0]
+            # hard_shutdown = self.latest_msg.buttons[2]
 
             threshold = 0.05
             axes = np.array([
-                lx if abs(lx) >= threshold else 0,
-                ly if abs(ly) >= threshold else 0,
-                rx if abs(rx) >= threshold else 0,
-                ry if abs(ry) >= threshold else 0
+                long_x if abs(long_x) >= threshold else 0,
+                long_y if abs(long_y) >= threshold else 0,
+                rot_z if abs(rot_z) >= threshold else 0,
             ])
 
             # Digital buttons (X,Y,B,A)
             buttons = np.array([
-                self.latest_msg.buttons[0],
-                self.latest_msg.buttons[3],
-                self.latest_msg.buttons[2],
-                self.latest_msg.buttons[1]
+                graceful_shutdown,
+                hard_shutdown
             ], dtype=int)
 
             return axes, buttons
