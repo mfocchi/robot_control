@@ -24,25 +24,24 @@ class LinearOpti:
         self.p0 = p0
         self.pf = pf
         self.fitness_weights = fitness_weights
-        
-        # terrain creation done outside to avoid recomputation at each thread
         self.point_clouds = point_clouds
         self.patches = patches
         self.cost_grid = cost_grid
     
     def eval_pop(self, input_data):
-        # Extract discrete parameters
-        xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
-        
-        max_waypoints = MAX_JUMP 
-        n_jumps = int(xd[0])
-        
+        # State tracking
         jump_log_points = []
         jump_log_traj = []
         total_consumed_energy = 0.0
         total_linear_dist = 0.0
         total_landing_cost = 0.0
-        all_converged = True  
+        all_converged = True
+        achieved_target = None
+        
+        # Extract discrete parameters
+        xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
+        n_jumps = int(xd[0])
+        
         p0_adj = self.p0.copy()
         p0_adj[0] = self.terrain_manager.wall_surface_eval(
             p0_adj[2], p0_adj[1], self.terrain_manager.mesh_x,
@@ -50,21 +49,19 @@ class LinearOpti:
         
         jump_log_points.append(p0_adj.copy())
         
-        total_jump = n_jumps + 1  
-        
-        for i in range(total_jump):
-            # Define Target Point for this jump
+        total_jump = n_jumps + 1   # Including final jump with +1
+        for i in range(total_jump): # jump btw patches
             if i < n_jumps:
                 patch_id = int(xd[1 + i])
                 contact_relative_to_patch_yz = [0.5, 0.5] # center of the patch
                 pf_adj = self.patches.getAbsolutePoseOfPointInsidePatch(
                     patch_id, contact_relative_to_patch_yz[0],
                     contact_relative_to_patch_yz[1], scale=1.0).copy()
-            else: 
+            else: # final jump to target
                 pf_adj = self.pf.copy()
                 patch_id = None
             
-            # Projection on the surface 
+            # Projection on the surface the points considered for optimization
             for pt in [p0_adj, pf_adj]:   
                 pt[0] = self.terrain_manager.wall_surface_eval(
                     pt[2], pt[1], self.terrain_manager.mesh_x,
@@ -76,28 +73,31 @@ class LinearOpti:
             total_linear_dist += dist
 
             res = self.linear_computation_exponential(p0_adj, pf_adj, a=EXP_A)
-            total_consumed_energy += res['consumed_energy']
-            jump_log_traj.append(res['linear_trajectory'])
+            
             if int(res['problem_solved']) != 1: all_converged = False
 
-            jump_log_points.append(pf_adj.copy())
-            # Compute Landing Cost (kept for dictionary completeness, though not in main score formula)
             jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
                                                         res, patch_id=patch_id, contact_abs_pos_yz=pf_adj[1:])
+            # Update logs and metrics
+            jump_log_traj.append(res['linear_trajectory'])
+            jump_log_points.append(pf_adj.copy())
+            total_consumed_energy += res['consumed_energy']
             total_landing_cost += jump_landing_cost
-
             # The landing point becomes the new starting point
             p0_adj = pf_adj.copy()
+            achieved_target = pf_adj.copy()
 
 
         if not all_converged:
             fitness_score = fitness_weights[0]
+            achieved_target = None
+            avg_jump_landing_cost = 0.0
         else:
-            waypoint_cost = (max_waypoints - n_jumps) * fitness_weights[5]
-            cost_dist = total_linear_dist * fitness_weights[4]
-            energy_cost = np.log(total_consumed_energy + 1) * fitness_weights[1]
-            terrain_cost = total_landing_cost * fitness_weights[3]
-    
+            waypoint_cost = (MAX_JUMP - total_jump) * fitness_weights[5]
+            cost_dist = (total_linear_dist/total_jump) * fitness_weights[4]
+            energy_cost = np.log(total_consumed_energy + 1) * fitness_weights[1] # ha il log perche e' esponenziale
+            terrain_cost = (total_landing_cost/total_jump) * fitness_weights[3]
+            
             fitness_score = waypoint_cost + energy_cost + cost_dist + terrain_cost
 
         print("xd value: " , xd)    
@@ -105,14 +105,15 @@ class LinearOpti:
         
         status_msg = "CONVERGED" if all_converged else "FAILED"
         print(f"--- Evaluation Results ---")
-        print(f"Status: {status_msg}, Waypoints Used: {n_jumps}/{max_waypoints}, Total Energy: {total_consumed_energy:.2f}, Terrain Cost: {total_landing_cost:.2f}")
+        print(f"Status: {status_msg}, Waypoints Used: {total_jump}/{MAX_JUMP}, Total Energy: {total_consumed_energy:.2f}, Terrain Cost: {total_landing_cost:.2f}")
         print(f"--------------------------")
 
         return {
             'fitness':  fitness_score,  # This is now a COST (minimize this value)
             'points': jump_log_points,
             'traj': jump_log_traj,
-            'n_jumps': n_jumps + 1,
+            'achieved_target': achieved_target,
+            'n_jumps': total_jump,
             'consumed_energy': total_consumed_energy,
             'landing_cost': total_landing_cost,
             'all_converged': all_converged
@@ -124,7 +125,7 @@ class LinearOpti:
         problem_solved = 1 if distance is not None else 0
         num_points = 50 
         t = np.linspace(0, 1, num_points)
-        # interpolation
+        # linear interpolation 
         trajectory = np.zeros((3, num_points))
         for i in range(3): 
             trajectory[i, :] = p0[i] + t * (pf[i] - p0[i])

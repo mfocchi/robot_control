@@ -1,5 +1,5 @@
 import json
-from typing import Any, List
+from typing import Any, List, Optional
 from attr import dataclass
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -13,10 +13,12 @@ from params import *
 import matplotlib
 matplotlib.use('Qt5Agg')
 
-FILE_TERRAIN_POINTS = f"{MAIN_DIRECTORY}/actual_point_terrain.json"
-FILE_TERRAIN_PATCHES = f"{MAIN_DIRECTORY}/actual_patch_terrain.json"
-ITERATIONS_FOLDER = f"{MAIN_DIRECTORY}/iteration_reports"
-FILE_SAVE_PARAMS = f"{MAIN_DIRECTORY}/simulation_params.json"
+FOLDER_MAIN = "result/four_test_simple"
+
+FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
+FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
+ITERATIONS_FOLDER = f"{FOLDER_MAIN}/iteration_reports"
+FILE_SAVE_PARAMS = f"{FOLDER_MAIN}/simulation_params.json"
 
 @dataclass
 class InnerParams:
@@ -58,7 +60,7 @@ class eliteData:
     points: List[List[float]]  
     traj: List[List[List[float]]]
     patch_ids: List[int]
-    achieved_target: List[List[float]]  
+    achieved_target: Optional[List[float]]  
     
 
 
@@ -136,7 +138,7 @@ class PlotResultCemMjumps:
                         points=e['points'],
                         traj=e['traj'],
                         patch_ids=e['patch_ids'],
-                        achieved_target=e['achieved_target']
+                        achieved_target=e.get('achieved_target', None)
                     )
                     iteration_elites.append(elite_instance)
                     
@@ -269,7 +271,7 @@ class PlotResultCemMjumps:
         fig.tight_layout()
         
         if created:
-            save_path = f'{MAIN_DIRECTORY}/plot_jumps_histogram.png'
+            save_path = f'{FOLDER_MAIN}/plot_jumps_histogram.png'
             fig.savefig(save_path)
             print(f"Histogram saved to: {save_path}")
             plt.show()
@@ -345,7 +347,7 @@ class PlotResultCemMjumps:
         fig.tight_layout()
 
         if created:
-            save_path = f'{MAIN_DIRECTORY}/plot_fitness_colormap_redbest.png'
+            save_path = f'{FOLDER_MAIN}/plot_fitness_colormap_redbest.png'
             fig.savefig(save_path)
             print(f"Fitness plot saved to: {save_path}")
             plt.show()
@@ -670,8 +672,8 @@ class PlotResultCemMjumps:
             fig1.tight_layout()
             fig2.tight_layout()
             
-            save_path1 = f'{MAIN_DIRECTORY}/plot_2d_compare_first.png'
-            save_path2 = f'{MAIN_DIRECTORY}/plot_2d_compare_last.png'
+            save_path1 = f'{FOLDER_MAIN}/plot_2d_compare_first.png'
+            save_path2 = f'{FOLDER_MAIN}/plot_2d_compare_last.png'
             fig1.savefig(save_path1, dpi=150, bbox_inches='tight')
             fig2.savefig(save_path2, dpi=150, bbox_inches='tight')
             print(f"2D comparison saved to: {save_path1} and {save_path2}")
@@ -690,7 +692,7 @@ class PlotResultCemMjumps:
             
             if created:
                 fig.tight_layout()
-                save_path = f'{MAIN_DIRECTORY}/plot_2d_iterations_static.png'
+                save_path = f'{FOLDER_MAIN}/plot_2d_iterations_static.png'
                 fig.savefig(save_path, dpi=150, bbox_inches='tight')
                 print(f"2D static layout saved to: {save_path}")
                 plt.show()
@@ -941,8 +943,8 @@ class PlotResultCemMjumps:
             fig1.tight_layout()
             fig2.tight_layout()
             
-            save_path1 = f'{MAIN_DIRECTORY}/plot_3d_compare_first.png'
-            save_path2 = f'{MAIN_DIRECTORY}/plot_3d_compare_last.png'
+            save_path1 = f'{FOLDER_MAIN}/plot_3d_compare_first.png'
+            save_path2 = f'{FOLDER_MAIN}/plot_3d_compare_last.png'
             fig1.savefig(save_path1, dpi=150)
             fig2.savefig(save_path2, dpi=150)
             print(f"3D comparison saved to: {save_path1} and {save_path2}")
@@ -962,7 +964,7 @@ class PlotResultCemMjumps:
             
             if created:
                 plt.tight_layout()
-                save_path = f'{MAIN_DIRECTORY}/plot_3d_iterations_static.png'
+                save_path = f'{FOLDER_MAIN}/plot_3d_iterations_static.png'
                 fig.savefig(save_path, dpi=150)
                 print(f"3D static layout saved to: {save_path}")
                 plt.show()
@@ -1020,6 +1022,89 @@ class PlotResultCemMjumps:
             if created:
                 plt.tight_layout()
                 plt.show()
+                    
+    def plot_best_per_iteration_grid(self, show_cost=True, plots_per_figure=5):
+        """
+        Visualizza il miglior risultato per ogni iterazione in una griglia di subplot.
+        Include il rombo (Achieved Target) e la linea di errore rispetto al goal.
+        """
+        num_iters = len(self.all_elites)
+        if num_iters == 0:
+            print("WARNING: Nessuna iterazione trovata.")
+            return
+
+        num_figures = int(np.ceil(num_iters / plots_per_figure))
+        
+        # Dati del terreno
+        px = np.array([p['position'][0] for p in self.points_t_data])
+        py = np.array([p['position'][1] for p in self.points_t_data])
+        pz = np.array([p['position'][2] for p in self.points_t_data])
+        costs = np.array([p['cost'] for p in self.points_t_data])
+
+        for fig_idx in range(num_figures):
+            start_iter = fig_idx * plots_per_figure
+            end_iter = min(start_iter + plots_per_figure, num_iters)
+            current_batch_size = end_iter - start_iter
+            
+            fig = plt.figure(figsize=(20, 6))
+            
+            for i in range(current_batch_size):
+                iter_idx = start_iter + i
+                ax = fig.add_subplot(1, plots_per_figure, i + 1, projection='3d')
+                
+                # Selezione miglior elite dell'iterazione
+                elites_this_iter = self.all_elites[iter_idx]
+                if not elites_this_iter: continue
+                best_elite = min(elites_this_iter, key=lambda e: e.fitness)
+                
+                # 1. Plot Terreno
+                ax.scatter(px, py, pz, c=costs if show_cost else 'gray', 
+                           cmap='RdYlGn_r', s=0.5, alpha=0.3)
+                
+                # 2. Plot Traiettoria
+                for segment in best_elite.traj:
+                    seg_np = np.array(segment)
+                    if seg_np.shape[0] == 3 and seg_np.shape[1] != 3:
+                        xs, ys, zs = seg_np[0, :], seg_np[1, :], seg_np[2, :]
+                    else:
+                        xs, ys, zs = seg_np[:, 0], seg_np[:, 1], seg_np[:, 2]
+                    ax.plot(xs, ys, zs, color='blue', linewidth=1.5, alpha=0.8)
+
+                # 3. Marker Start e Desired Goal (p0, pf)
+                ax.scatter(self.p0[0], self.p0[1], self.p0[2], c='lime', s=60, marker='^', edgecolors='black')
+                ax.scatter(self.pf[0], self.pf[1], self.pf[2], c='red', s=60, marker='X', edgecolors='black')
+                
+                # 4. Plot Achieved Target (Il rombo come richiesto)
+                if best_elite.achieved_target:
+                    achieved = np.array(best_elite.achieved_target).flatten()
+                    # Rombo arancione
+                    ax.scatter(achieved[0], achieved[1], achieved[2], c='orange', s=70, 
+                               marker='D', edgecolors='black', linewidths=1, zorder=16)
+                    
+                    # Linea tratteggiata rossa di discrepanza dal goal desiderato
+                    ax.plot([self.pf[0], achieved[0]], [self.pf[1], achieved[1]], [self.pf[2], achieved[2]],
+                            'r--', linewidth=1.5, alpha=0.7, zorder=14)
+                
+                # 5. Titolo e Formattazione
+                ax.set_title(f"Iter: {iter_idx+1}\nFit: {best_elite.fitness:.4f}", fontsize=10, fontweight='bold')
+                
+                # Scaling 1:1:1
+                all_pts = np.array([p['position'] for p in self.points_t_data])
+                mid_x, mid_y, mid_z = all_pts.mean(axis=0)
+                max_range = (all_pts.max(axis=0) - all_pts.min(axis=0)).max() / 2.0
+                ax.set_xlim(mid_x - max_range, mid_x + max_range)
+                ax.set_ylim(mid_y - max_range, mid_y + max_range)
+                ax.set_zlim(mid_z - max_range, mid_z + max_range)
+                
+                ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
+                ax.view_init(elev=30, azim=-60)
+
+            plt.tight_layout()
+            save_path = f'{FOLDER_MAIN}/grid_best_iter_batch_{fig_idx}.png'
+            fig.savefig(save_path, dpi=150)
+            print(f"Salvataggio griglia con target: {save_path}")
+            plt.show()
+
 
 def main():
     """Main execution function."""
@@ -1031,6 +1116,7 @@ def main():
     plotter.count_jump_histogram(use_last_iter_only=False)
     plotter.plot_fitness_by_iteration()
     plotter.plot_mesh_pc_traj()
+    plotter.plot_best_per_iteration_grid(show_cost=True, plots_per_figure=5)
     plotter.plot_2d_iterations_layout(animated=False, compare=True)
     plotter.plot_3d_iterations_layout(animated=True, compare=False)
     

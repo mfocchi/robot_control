@@ -320,7 +320,7 @@ def main():
     # Initialize terrain
     print(colored("[1/3] Initializing Terrain...", "yellow"))
     terrain_manager = TerrainManager()
-    point_clouds, patches, cost_grid = initialize_terrain_data (terrain_manager, filter_weights, number_of_patches_width, number_of_patches_height, inner_opt_params)
+    point_clouds, patches, cost_grid = initialize_terrain_data ()
         
     print(colored("✓ Terrain ready\n", "green"))
     
