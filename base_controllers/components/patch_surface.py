@@ -71,8 +71,8 @@ class PatchSurface:
         
         patch_id = 0
         
-        for i in range(self.number_of_patches_width):
-            for j in range(self.number_of_patches_height):
+        for j in reversed(range(self.number_of_patches_height)): # ora parte da alto a sx e va ogni riga
+            for i in range(self.number_of_patches_width):
                 #border of the patch
                 y_min = y_edges[i]
                 y_max = y_edges[i + 1]
@@ -110,8 +110,9 @@ class PatchSurface:
             return False
         
         # Calculate patch boundaries
-        i = patch_id // self.number_of_patches_height
-        j = patch_id % self.number_of_patches_height
+        row_idx = patch_id // self.number_of_patches_width
+        i = patch_id % self.number_of_patches_width
+        j = (self.number_of_patches_height - 1) - row_idx
         # Calcola i confini usando gli stessi edges di create_patches()
         y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
         z_edges = self.z_min + np.arange(self.number_of_patches_height + 1) * self.patch_height
@@ -159,8 +160,9 @@ class PatchSurface:
             return False
         
         # Calculate patch boundaries
-        i = patch_id // self.number_of_patches_height
-        j = patch_id % self.number_of_patches_height
+        row_idx = patch_id // self.number_of_patches_width
+        i = patch_id % self.number_of_patches_width
+        j = (self.number_of_patches_height - 1) - row_idx
         # Calcola i confini usando gli stessi edges di create_patches()
         y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
         z_edges = self.z_min + np.arange(self.number_of_patches_height + 1) * self.patch_height
@@ -588,8 +590,9 @@ class PatchSurface:
             return None
         
         # Step 2: Calculate patch boundaries using the same logic as create_patches()
-        i = patch_id // self.number_of_patches_height
-        j = patch_id % self.number_of_patches_height
+        row_idx = patch_id // self.number_of_patches_width
+        i = patch_id % self.number_of_patches_width
+        j = (self.number_of_patches_height - 1) - row_idx
         
         # Calculate edges using the same method as create_patches()
         y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
@@ -1141,6 +1144,117 @@ class PatchSurface:
         plt.tight_layout()
         plt.show()
         
+    def plot_patches_2D_with_ids(self, figsize=(14, 10), show_ids=True, fontsize=8):
+        """
+        Visualize patches in 2D (YZ plane) with their IDs and colors based on average cost.
+        
+        Args:
+            figsize: tuple, figure size (width, height)
+            show_ids: bool, whether to display patch IDs
+            fontsize: int, font size for patch ID labels
+        """
+        print("[patch_surface] Plotting 2D patches with IDs and cost coloring...")
+        
+        # Collect all patch costs for normalization
+        costs = np.array([
+            patch.get('cost_patch', 0.0) if patch.get('cost_patch') is not None else 0.0
+            for patch in self.patches
+        ], dtype=float)
+        
+        min_cost, max_cost = np.min(costs), np.max(costs)
+        
+        # Normalize costs
+        if max_cost - min_cost > 0:
+            norm_costs = (costs - min_cost) / (max_cost - min_cost)
+        else:
+            norm_costs = np.zeros_like(costs)
+        
+        # Use colormap (red-yellow-green reversed: high cost = red, low cost = green)
+        cmap = cm.get_cmap('RdYlGn_r')
+        
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_title('2D Patch Map - Colored by Average Cost', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Y (m) - Width', fontsize=12)
+        ax.set_ylabel('Z (m) - Height', fontsize=12)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Calculate patch edges for rectangles
+        y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
+        z_edges = self.z_min + np.arange(self.number_of_patches_height + 1) * self.patch_height
+        
+        # Plot each patch as a rectangle
+        for patch in self.patches:
+            patch_id = patch['id']
+            
+            # Calculate patch boundaries
+            i = patch_id // self.number_of_patches_height
+            j = patch_id % self.number_of_patches_height
+            
+            y_min = y_edges[i]
+            y_max = y_edges[i + 1]
+            z_min = z_edges[j]
+            z_max = z_edges[j + 1]
+            
+            # Get color based on normalized cost
+            color = cmap(norm_costs[patch_id])
+            
+            # Draw rectangle for patch
+            from matplotlib.patches import Rectangle
+            rect = Rectangle((y_min, z_min), 
+                            y_max - y_min, 
+                            z_max - z_min,
+                            facecolor=color[:3], 
+                            edgecolor='black', 
+                            linewidth=0.5,
+                            alpha=0.7)
+            ax.add_patch(rect)
+            
+            # Add patch ID text at centroid
+            if show_ids:
+                centroid = patch.get('centroid')
+                if centroid is not None:
+                    y_center = centroid[1]
+                    z_center = centroid[2]
+                    
+                    # Choose text color based on background brightness
+                    brightness = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
+                    text_color = 'white' if brightness < 0.5 else 'black'
+                    
+                    ax.text(y_center, z_center, str(patch_id),
+                           ha='center', va='center',
+                           fontsize=fontsize, fontweight='bold',
+                           color=text_color)
+        
+        # Set axis limits
+        ax.set_xlim(self.y_min - 0.1, self.y_max + 0.1)
+        ax.set_ylim(self.z_min - 0.1, self.z_max + 0.1)
+        ax.set_aspect('equal', adjustable='box')
+        
+        # Add colorbar
+        sm = cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=min_cost, vmax=max_cost))
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label('Average Patch Cost', fontsize=11, fontweight='bold')
+        
+        # Add statistics text
+        stats_text = f'Total Patches: {len(self.patches)}\n'
+        stats_text += f'Cost Range: [{min_cost:.3f}, {max_cost:.3f}]\n'
+        stats_text += f'Mean Cost: {np.mean(costs):.3f}'
+        
+        ax.text(0.02, 0.98, stats_text,
+               transform=ax.transAxes,
+               fontsize=9,
+               verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"[patch_surface] 2D plot generated with {len(self.patches)} patches")
+        print(f"[patch_surface] Cost range: [{min_cost:.3f}, {max_cost:.3f}]")
+        
+        return fig, ax
+        
 def main():
     print("[TEST] STARTING PATCH SURFACE TEST SUITE")
     
@@ -1306,7 +1420,7 @@ def main():
         pf_on_surface = patch_surface.get_point_t_in_surface(
             patch_pf, PF_INIT[1], PF_INIT[2], print_info=True, plot_patch=False)
         if pf_on_surface:
-            print(f"[patch_su   rface] PF projected on surface: {pf_on_surface['position']}")
+            print(f"[patch_surface] PF projected on surface: {pf_on_surface['position']}")
     
     # # TEST 13: Generate cost mesh grid
     # print("\n[TEST] === TEST 13: Generating Cost Mesh Grid ===")
@@ -1315,6 +1429,11 @@ def main():
     # TEST 14: print list of patches
     print("\n[TEST] === TEST 14: Plotting Specific Patches by ID ===")
     patches_list = [1 , 10 , 50 , 60 , 4 , 8 , 28]
-    patch_surface.plot_patches_by_id(patches_list)    
+    patch_surface.plot_patches_by_id(patches_list)
+    
+    # TEST 15: Plot 2D patch map with IDs
+    print("\n[TEST] === TEST 15: Plotting 2D Patch Map with IDs ===")
+    patch_surface.plot_patches_2D_with_ids(figsize=(14, 10), show_ids=True, fontsize=10)
+    
 if __name__ == "__main__":
     main()
