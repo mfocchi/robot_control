@@ -10,8 +10,7 @@ import threading
 import matplotlib.pyplot as plt
 from algo_patch import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
-
-from BilevelOpt import BilevelOpt, close_matlab_engines
+from ParabolicOpt import ParabolicOptimizer
 from params import *
 from Plot_result import PlotResultCemMjumps
 from collections import Counter
@@ -19,17 +18,16 @@ from collections import Counter
 def main():
     
     setting = {
-        "COMPUTATION_MODE": True, 
-        "PLOT_MODE": True,
-        "WARM_START_MODE": True
+        "COMPUTATION_MODE": True,
+        "WARM_START_MODE": False,
+        "PLOT_MODE": True
     }
     
     if setting["COMPUTATION_MODE"]:
         best_lock = threading.Lock()
         
         point_clouds, patches, cost_grid = initialize_terrain_data(warm_start_mode=setting["WARM_START_MODE"])
-        
-        optimizer = BilevelOpt(
+        optimizer = ParabolicOptimizer(
             terrain_manager, P0_INIT, PF_PATCH_INIT, 
             fitness_weights=fitness_weights,
             point_clouds=point_clouds,
@@ -37,9 +35,11 @@ def main():
             cost_grid=cost_grid
         )
         
-        algo = CrossEntropyMethodMixed(cem_params)
+        patch_pf = patches.get_patch_id_from_point_2D(PF_PATCH_INIT[1], PF_PATCH_INIT[2])
+        patch_p0 = patches.get_patch_id_from_point_2D(P0_INIT[1], P0_INIT[2])
+        algo = CrossEntropyMethodMixed(cem_params, patch_p0, patch_pf)
         
-        cost_hist = np.zeros(cem_params.cem_iters)      
+        cost_hist = np.zeros(cem_params.cem_iters)
         best_jump_log_points = None
         best_jump = None
         best_trajectory = None
@@ -66,6 +66,12 @@ def main():
             
             first_iteration = (k == 0)
             algo.generate_population_discrete(first_iteration)
+            
+            # if not first_iteration and algo.log.best_discrete is not None:
+            #     # Substitute the first individual of the random population with the Best Ever (ELITE INJECTION)
+            #     print(colored(f"[INFO] Injecting previous best solution into population (Iter {k+1})", "cyan"))
+            #     algo.population_discrete[:, 0] = algo.log.best_discrete
+            
             xd = algo.population_discrete   # shape: dim_discrete x pop_size
             
             inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
@@ -77,7 +83,9 @@ def main():
             # total = len(xd[0])
             # for value in sorted(counter.keys()):
             #     perc = counter[value] / total * 100
-            #     # print(f"Jump {value}: {perc:.2f}%")
+            #     print(f"Jump {value}: {perc:.2f}%")
+            
+            
             
             # ============================
             # flag_thread == TRUE: multi-threaded evaluation
@@ -92,7 +100,7 @@ def main():
                     # map futures to their input indices
                     future_to_index = {executor.submit(optimizer.eval_pop, inputs[i]): i 
                                     for i in range(cem_params.pop_size)}
-                
+                    
                     for future in as_completed(future_to_index):
                         idx = future_to_index[future]
                         log_result = future.result()
@@ -102,10 +110,9 @@ def main():
                         all_consumed_energy[idx] = log_result['consumed_energy']
                         all_landing_cost[idx] = log_result['landing_cost']
                         all_n_jumps[idx] = log_result['n_jumps']
-                        all_achieved_target[idx] = log_result['achieved_target']
                         all_converged[idx] = log_result['all_converged']
-                        
                         with best_lock:
+                            
                             if log_result['fitness'] < best_fitness: #and (n_jumps + 1) >= 3:
                                 best_fitness = log_result['fitness']
                                 best_consumed_energy = log_result['consumed_energy']
@@ -113,11 +120,12 @@ def main():
                                 best_jump_log_points = log_result['points']
                                 best_trajectory = log_result['traj']
                                 best_jump = log_result['n_jumps']
-                                best_achieved_target = log_result['achieved_target']
-                                best_all_converged = log_result['all_converged']
                                 print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
                         print(colored(f"complete individual {idx}, Iteration {k+1}", "yellow")) #scrvi in arancione
+                
+                print() 
                 print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
+            
             # ============================
             # flag_thread == FALSE: sequential evaluation
             # ============================
@@ -129,66 +137,60 @@ def main():
                 for i, population_inputs in enumerate(inputs):
                     log_result = optimizer.eval_pop(population_inputs)
                     
-                    # if k == 0 and i == 0:
-                    #     print(colored(f"\n[PLOT] Visualizzazione primo individuo dell'iterazione 1...", "magenta", attrs=['bold']))
-                    #     optimizer.plot_mesh_traj(log_result['points'], log_result['traj'], log_result['fitness'])
+                    # if log_result['all_converged'] == True:
+                    #     #plot
+                    #     optimizer.plot_point_traj(log_result['points'], log_result['traj'])
+                        # optimizer.plot_mesh_traj(log_result['points'], log_result['traj'],log_result['fitness'])
                     
-                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "cyan", attrs=['bold']))
-                    
+                    print(colored(f"\n[COMPLETE] Individual {i+1}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "red", attrs=['bold']))
+
                     fitness[i] = log_result['fitness']
                     all_log_points[i] = log_result['points']
                     all_log_traj[i] = log_result['traj']
                     all_consumed_energy[i] = log_result['consumed_energy']
                     all_landing_cost[i] = log_result['landing_cost']
                     all_n_jumps[i] = log_result['n_jumps']
-                    all_achieved_target[i] = log_result['achieved_target']
                     all_converged[i] = log_result['all_converged']
-                    
                     if log_result['fitness'] < best_fitness:
                         best_fitness = log_result['fitness']
                         best_consumed_energy = log_result['consumed_energy']
                         best_landing_cost = log_result['landing_cost']
                         best_jump_log_points = log_result['points']
-                        best_trajectory = log_result['traj']
                         best_jump = log_result['n_jumps']
-                        best_achieved_target = log_result['achieved_target']
-                        best_all_converged = log_result['all_converged']
-                        print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f}","green", attrs=['bold']))
-        
+                        best_trajectory = log_result['traj']
+                        
+                        print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f} with {best_jump} jumps", "green", attrs=['bold']))
 
-            
+                
+                    
             # Update distributions
             algo.evaluate_population(fitness)
             algo.update_distributions()
-            
             cost_hist[k] = algo.log.best_value 
                    
             print ("finish iteration ", k+1)
             iter_time = time.time() - iter_start
             
+            # if flag_thread == False:
+                # optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
+                # optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
+                
             print(colored(f"\n{'='*60}", "cyan", attrs=['bold']))
             print(colored(f"  Iteration {k+1} completed in {iter_time:.2f}s", "cyan", attrs=['bold']))
             print(colored(f"  Best value this iteration: {algo.log.best_value:.4f}", "cyan", attrs=['bold']))
             print(colored(f"{'='*60}\n", "cyan", attrs=['bold']))
             
-            # if flag_thread == False:
-            #     optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
-            #     optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
-                
+            
             # =======================
-            # SAVE PARTS INSIDE THE ITERATION LOOP
+            # SAVE PARTS
             # =======================
             
-            # 1. Save elites of current iteration and baste of until thi iteration
+            # 1. Save elites of current iteration
             num_elites = cem_params.n_elites
-            sorted_indices = np.argsort(fitness)#[::-1]
+            sorted_indices = np.argsort(fitness)
             elite_indices = sorted_indices[:num_elites]
-            xd_elites = xd[1:, elite_indices]
-            elite_patch_ids = np.unique(xd_elites).astype(int).tolist()
-            # patches.plot_patches_by_id(elite_patch_ids)
             
             current_iteration_elites = []
-            
             for idx in elite_indices:
                 elite_sol = {
                     'fitness': float(fitness[idx]),
@@ -198,8 +200,9 @@ def main():
                     'points': [p.tolist() for p in all_log_points[idx]],
                     'traj': [t.tolist() if t is not None else None for t in all_log_traj[idx]],
                     'iteration': k + 1,
-                    'patch_ids': xd[1:, idx].tolist(),   
-                    'achieved_target': all_achieved_target[idx].tolist() if all_achieved_target[idx] is not None else None,                    
+                    'n_jumps_var': int(xd[0, idx]),
+                    'patch_ids': xd[1:, idx].tolist(),        # Gli ID delle patch scelti (saltando il primo che è N_jump)
+                    'achieved_target': all_achieved_target[idx].tolist() if all_achieved_target[idx] is not None else None,
                 }
                 current_iteration_elites.append(elite_sol)
             
@@ -216,6 +219,7 @@ def main():
             
             subdir = "iteration_reports"
             iteration_filename = f"iteration_{k+1:03d}_report.json"
+            
             save_dir = os.path.join(result_dir, subdir)
             os.makedirs(save_dir, exist_ok=True)
             with open(os.path.join(save_dir, iteration_filename), "w") as f:
@@ -229,9 +233,11 @@ def main():
                 current_traj = [t.tolist() if t is not None else None for t in all_log_traj[i]] if all_log_traj[i] is not None else None
                 current_points = [p.tolist() for p in all_log_points[i]] if all_log_points[i] is not None else None
 
-                step_info = {"i": i,
-                    "patch_ids": xd[1:, i].tolist(), 
+                step_info = {
+                    "i": i,
+                    "n_jumps_var": int(xd[0, i]),
                     "n_jumps": int(all_n_jumps[i]),
+                    'patch_ids': xd[1:, idx].tolist(),  
                     "converged": bool(all_converged[i]),
                     "fitness": float(fitness[i]),
                     "consumed_energy": float(all_consumed_energy[i]),
@@ -255,8 +261,9 @@ def main():
             print(colored(f"[SAVE] Full population report saved to: {all_comb_filename}", "blue"))
                 
         n_workers = cem_params.n_threads
-        with ThreadPoolExecutor(max_workers=n_workers) as executor:
-            executor.map(lambda x: close_matlab_engines(), range(n_workers))
+        
+        # with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        #     executor.map(lambda x: close_matlab_engines(), range(n_workers))
             
         # Save wall-time
         end = time.time()
@@ -265,9 +272,11 @@ def main():
         xd = algo.best_discrete
         
         # =======================
-        # FINAL SAVE 
+        # FINAL SAVE
         # =======================
-        print(f"Best discrete solution: {xd}")        
+        print(f"Best discrete solution: {xd}")
+        # Generate and save report json
+        
         iteration_history = []
         for h in algo.history:
             iter_data = {
@@ -289,7 +298,18 @@ def main():
                 },
                 "iteration_history": iteration_history
             }, f, indent=2)
-        print(colored(f"[SAVE] Iteration CEM history saved to: {history_save_path}", "blue"))
+        print(colored(f"[SAVE] Iteration history saved to: {history_save_path}", "blue"))
+        
+        #save best log_points and trajectory
+        best_log_data={
+            "best_jump_log_points": [p.tolist() for p in best_jump_log_points] if best_jump_log_points is not None else None,
+            "best_trajectory": [t.tolist() if t is not None else None for t in best_trajectory] if best_trajectory is not None else None
+        }
+        # best_log_filename = "best_trajectory_log.json"
+        # best_log_save_path = os.path.join(result_dir, best_log_filename)
+        # with open(best_log_save_path, "w") as f:
+        #     json.dump(best_log_data, f, indent=2)
+        # print(colored(f"[SAVE] Best trajectory log saved to: {best_log_save_path}", "blue"))
         
         # Plot best trajectory at the end
         print(colored(f"\n{'='*70}", "green", attrs=['bold']))
@@ -303,11 +323,11 @@ def main():
             optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
         else:
             print(colored("[ERROR] Could not plot best trajectory. No solution found or tracking issue.", "red", attrs=['bold']))
-
     if setting["PLOT_MODE"]:
-        print("plot to print")
+        
+        print("plot da stampare")
 if __name__ == "__main__":
-    try:
+    # try:
         main()
-    finally:
-        close_matlab_engines()
+    # finally:
+    #     close_matlab_engines()
