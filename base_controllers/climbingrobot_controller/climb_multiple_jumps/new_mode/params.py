@@ -24,15 +24,16 @@ import matplotlib.patches as mpatches
 # ================================================
 P0_INIT = np.array([0.5, 1.5, -1.5])
 PF_PATCH_INIT=  np.array([0.5, 6.5,-8.5]) 
+
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 5
 THREADS = 5
-flag_thread = True
+flag_thread = False
 CORRIDOR_RADIUS = 4.0 # for linear corridor warm start
-MAIN_DIRECTORY = "result/24_test"
+MAIN_DIRECTORY = "result/test_parabolic"
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
-fitness_weights = np.array([1e7, 10.,1., 100., 1.,500.]) # Optimizer
-# fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear
+# fitness_weights = np.array([1e7, 10.,1., 100., 1.,500.]) # Optimizer
+fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
 filter_weights = np.array([10., 10., 0,10.0])
@@ -88,7 +89,7 @@ cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 30
 cem_params.pop_size = 300
-cem_params.n_elites = 30#int(cem_params.pop_size * 0.3)
+cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.0 
 cem_params.alpha = 0.5
@@ -183,6 +184,7 @@ def initialize_terrain_data(warm_start_mode=False):
     })
     # save the terrain data 
     save_terrain_data(terrain_manager,point_clouds, patches)
+    
     
     if warm_start_mode:
         # patch_probs = get_warm_start_base_cost(patches)

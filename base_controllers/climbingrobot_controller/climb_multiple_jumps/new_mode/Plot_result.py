@@ -13,7 +13,7 @@ from params import *
 import matplotlib
 matplotlib.use('Qt5Agg')
 
-FOLDER_MAIN = "result/four_test_simple"
+FOLDER_MAIN = "result/test_parabolic"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -165,6 +165,50 @@ class PlotResultCemMjumps:
         with open(FILE_TERRAIN_PATCHES, 'r') as file:
             data_terrain_patches = json.load(file)
         return data_terrain_patches
+    
+    def load_all_comb_history(self):
+        """
+        Carica i report completi 'all_comb_in_iter_X_report.json'.
+        Controlla se la cartella e i file esistono.
+        """
+        self.all_comb_data = []
+        
+        if not os.path.exists(ITERATIONS_FOLDER):
+            print(f"[WARNING] La cartella {ITERATIONS_FOLDER} non esiste.")
+            return
+
+        # Trova tutti i file che corrispondono al pattern
+        files = [f for f in os.listdir(ITERATIONS_FOLDER) 
+                 if f.startswith("all_comb_in_iter_") and f.endswith(".json")]
+        
+        if not files:
+            print(f"[WARNING] Nessun file 'all_comb' trovato in {ITERATIONS_FOLDER}.")
+            return
+
+        # Ordina i file in base al numero dell'iterazione
+        # Formato atteso: all_comb_in_iter_{k}_report.json
+        def extract_iter_num(filename):
+            try:
+                # Split: ['all', 'comb', 'in', 'iter', 'NUM', 'report.json']
+                parts = filename.split('_')
+                return int(parts[4])
+            except (IndexError, ValueError):
+                return 0
+        
+        files.sort(key=extract_iter_num)
+
+        print(f"[INFO] Trovati {len(files)} file di report combinazioni. Caricamento in corso...")
+
+        for f_name in files:
+            full_path = os.path.join(ITERATIONS_FOLDER, f_name)
+            try:
+                with open(full_path, 'r') as f:
+                    data = json.load(f)
+                    self.all_comb_data.append(data)
+            except Exception as e:
+                print(f"[ERROR] Errore nel caricamento di {f_name}: {e}")
+                
+        print(f"[INFO] Caricamento completato.")
     
     def project_point_to_surface(self, point):
         target_y, target_z = point[1], point[2]
@@ -1105,6 +1149,77 @@ class PlotResultCemMjumps:
             print(f"Salvataggio griglia con target: {save_path}")
             plt.show()
 
+    def plot_convergence_histogram(self, ax=None):
+            """
+            Plotta un istogramma stacked bar chart.
+            Asse X: Iterazioni
+            Asse Y: Dimensione Popolazione
+            Colori: Verde (Conversi), Rosso (Non Conversi)
+            """
+            # Assicuriamoci che i dati siano caricati
+            if not hasattr(self, 'all_comb_data') or not self.all_comb_data:
+                self.load_all_comb_history()
+                if not self.all_comb_data:
+                    return
+
+            # Preparazione dati per il plot
+            iterations = []
+            converged_counts = []
+            failed_counts = []
+            
+            for entry in self.all_comb_data:
+                iterations.append(entry['iteration'])
+                steps = entry.get('steps', [])
+                
+                # Conta quanti hanno 'converged' == True
+                n_conv = sum(1 for s in steps if s.get('converged', False) is True)
+                n_fail = len(steps) - n_conv
+                
+                converged_counts.append(n_conv)
+                failed_counts.append(n_fail)
+
+            # Creazione Plot
+            created = False
+            if ax is None:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                created = True
+            else:
+                fig = ax.get_figure()
+
+            # Larghezza barre
+            width = 0.6
+            
+            # Barre "Conversi" (parte bassa)
+            p1 = ax.bar(iterations, converged_counts, width, label='Converged', color='limegreen', edgecolor='black', alpha=0.8)
+            
+            # Barre "Non Conversi" (parte alta, bottom=converged_counts)
+            p2 = ax.bar(iterations, failed_counts, width, bottom=converged_counts, label='Failed', color='tomato', edgecolor='black', alpha=0.8)
+
+            # Etichette e Titoli
+            ax.set_xlabel('Iteration', fontsize=12)
+            ax.set_ylabel('Population Size (Count)', fontsize=12)
+            ax.set_title('Convergence Rate per Iteration', fontsize=14, fontweight='bold')
+            ax.legend(loc='best')
+            ax.grid(axis='y', linestyle='--', alpha=0.5)
+
+            # Imposta i tick dell'asse X come interi
+            ax.set_xticks(iterations)
+
+            # Aggiungi etichette numeriche sopra le barre (opzionale, utile per vedere i numeri esatti)
+            # Mostra la percentuale di convergenza
+            for i, (conv, fail) in enumerate(zip(converged_counts, failed_counts)):
+                total = conv + fail
+                if total > 0:
+                    perc = (conv / total) * 100
+                    ax.text(iterations[i], total + (total*0.02), f"{perc:.1f}%", 
+                            ha='center', va='bottom', fontsize=8, fontweight='bold', color='black')
+
+            if created:
+                plt.tight_layout()
+                save_path = f'{FOLDER_MAIN}/plot_convergence_histogram.png'
+                fig.savefig(save_path, dpi=150)
+                print(f"[PLOT] Istogramma convergenza salvato in: {save_path}")
+                plt.show()
 
 def main():
     """Main execution function."""
@@ -1119,7 +1234,7 @@ def main():
     plotter.plot_best_per_iteration_grid(show_cost=True, plots_per_figure=5)
     plotter.plot_2d_iterations_layout(animated=False, compare=True)
     plotter.plot_3d_iterations_layout(animated=True, compare=False)
-    
+    plotter.plot_convergence_histogram()
     print("[INFO] All plots completed!")
 
 if __name__ == "__main__":
