@@ -37,7 +37,10 @@ def main():
             cost_grid=cost_grid
         )
         
-        algo = CrossEntropyMethodMixed(cem_params)
+        patch_pf = patches.get_patch_id_from_point_2D(PF_PATCH_INIT[1], PF_PATCH_INIT[2])
+        patch_p0 = patches.get_patch_id_from_point_2D(P0_INIT[1], P0_INIT[2])
+        
+        algo = CrossEntropyMethodMixed(cem_params, patch_p0, patch_pf)
         
         cost_hist = np.zeros(cem_params.cem_iters)      
         best_jump_log_points = None
