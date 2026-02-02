@@ -40,9 +40,12 @@ class IterationLog:
 
 
 class CrossEntropyMethodMixed:
-    def __init__(self, params: CemParams):
+    def __init__(self, params: CemParams, patch_p0, patch_pf):
         
+        self.patch_p0 = patch_p0
+        self.patch_pf = patch_pf
         
+        self.alpha = params.alpha
         self.params = params
         self.log = IterationLog()
         self.update_coeff = 1.0 / float(params.n_elites)
@@ -74,7 +77,6 @@ class CrossEntropyMethodMixed:
         self.elites_discrete = np.zeros((p.dim_discrete, p.n_elites), dtype=int)
         self.best_discrete = np.zeros(p.dim_discrete, dtype=int)
         self.probs = p.init_probs.copy()
-
 
     def generate_population(self):
         self.generate_population_discrete()
@@ -108,42 +110,64 @@ class CrossEntropyMethodMixed:
 
     def generate_population_discrete(self,first_iteration=False) -> None:
         for i in range(self.params.pop_size):
+            used_patches = set()
+            forbidden_patches = {self.patch_p0, self.patch_pf}
             for j in range(self.params.dim_discrete):
                 if j == 0 and i == 0 and first_iteration == True:
                     self.population_discrete[j, i] = 0
+                    continue
+                
+                current_probs = self.probs[j].copy()
+                
+                # For all cases except the first individual in first iteration, mask index 0
+                if j == 0:
+                    current_probs[0] = 0.0
+                
+                if j > 0:
+                    all_to_mask = used_patches.union(forbidden_patches)
+                    for forbidden in all_to_mask:
+                        if forbidden is not None and 0 <= forbidden < len(current_probs):
+                            current_probs[forbidden] = 0.0
+                
+                # Renormalize
+                total_prob = np.sum(current_probs)
+                if total_prob > 0:
+                    current_probs = current_probs / total_prob
                 else:
-                    p = self.rng.random()
-                    s = 0.0
-                    chosen_k = self.params.n_values[j] - 1
-                    for k in range(1, self.params.n_values[j]):
-                        
-                        n_prob = self.probs[j][k] / (1.0 - self.probs[j][0])
-                        s += n_prob
-                        if p < s:
-                            chosen_k = k
-                            break
-                    self.population_discrete[j, i] = chosen_k
+                    current_probs[:] = 1.0
+                    if j == 0:
+                        current_probs[0] = 0.0
+                    if j > 0:
+                        for forbidden in all_to_mask:
+                            if forbidden is not None and 0 <= forbidden < len(current_probs):
+                                current_probs[forbidden] = 0.0
+                    current_probs /= np.sum(current_probs)
+                
+                candidates = np.arange(len(current_probs))
+                chosen_k = self.rng.choice(candidates, p=current_probs)
+                
+                self.population_discrete[j, i] = chosen_k
+                if j > 0:
+                    used_patches.add(chosen_k)
 
     # def update_distribution_discrete(self):
     #     p = self.params
     #     # Sort individuals by their perfomance (best first!)
-    #     idx = np.argsort(self.population_fit)[::-1]
+    #     idx = np.argsort(self.population_fit)#[::-1]
 
     #     # Add elites to population
     #     self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
 
     #     # Update probabilities using the elites
     #     for j in range(self.params.dim_discrete):
-    #         new_probs_elites = np.zeros(p.n_values[j])
+    #         counter = [0.0 for _ in range(p.n_values[j])]
     #         for i in range(p.n_elites):
-    #             val = self.elites_discrete[j, i]
-    #             new_probs_elites[val] += 1.0
-            
-    #         new_probs_elites = new_probs_elites / p.n_elites
-            
-    #         updated_probs = (new_probs_elites * self.alpha) + (np.array(self.probs[j]) * (1.0 - self.alpha))
-    #         updated_probs += p.min_prob
-    #         self.probs[j] = updated_probs / np.sum(updated_probs)
+    #             counter[self.elites_discrete[j, i]] += 1
+    #         for k in range(p.n_values[j]):
+    #             self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
+
+    #         self.probs[j] = self.probs[j] / np.sum(self.probs[j])
+    
     
     def update_distribution_discrete(self):
         p = self.params
@@ -155,11 +179,130 @@ class CrossEntropyMethodMixed:
 
         # Update probabilities using the elites
         for j in range(self.params.dim_discrete):
-            counter = [0.0 for _ in range(p.n_values[j])]
+            new_probs_elites = np.zeros(p.n_values[j])
             for i in range(p.n_elites):
-                counter[self.elites_discrete[j, i]] += 1
-            for k in range(p.n_values[j]):
-                self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
-
-            self.probs[j] = self.probs[j] / np.sum(self.probs[j])
+                val = self.elites_discrete[j, i]
+                new_probs_elites[val] += 1.0
+            
+            new_probs_elites = new_probs_elites / p.n_elites
+            
+            updated_probs = (new_probs_elites * self.alpha) + (np.array(self.probs[j]) * (1.0 - self.alpha))
+            updated_probs += p.min_prob
+            self.probs[j] = updated_probs / np.sum(updated_probs)
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # def update_distribution_discrete(self):
+    #     p = self.params
+    #     # Sort individuals by their perfomance (best first!)
+    #     idx = np.argsort(self.population_fit)#[::-1]
+
+    #     # Add elites to population
+    #     self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
+
+    #     # Update probabilities using the elites
+    #     for j in range(self.params.dim_discrete):
+    #         counts = np.bincount(self.elites_discrete[j, :], minlength=p.n_values[j])
+    #         mle_probs = counts / p.n_elites
+            
+    #         if hasattr(p, 'alpha') and p.alpha is not None:
+    #             current_probs = np.array(self.probs[j])
+    #             updated_probs = (p.alpha * mle_probs) + ((1.0 - p.alpha) * current_probs)
+    #         else:
+    #             updated_probs = mle_probs
+
+    #         # C. Enforce Constraints (Exploration/Min Prob)
+    #         # Ensure no probability drops below min_prob to maintain exploration
+    #         if p.min_prob is not None and p.min_prob > 0:
+    #             updated_probs = updated_probs + p.min_prob
+    #             # Renormalize to ensure sum equals 1.0
+    #             updated_probs = updated_probs / np.sum(updated_probs)
+            
+    #         self.probs[j] = updated_probs
+    
+    # def update_distribution_discrete(self, thershold_min=0.001):
+    #     p = self.params
+    #     idx = np.argsort(self.population_fit)
+    #     self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
+
+    #     for j in range(p.dim_discrete):
+    #         # 1. Conta quante volte ogni patch è stata scelta dagli elite
+    #         counter = np.zeros(p.n_values[j])
+    #         for i in range(p.n_elites):
+    #             valore_scelto = int(self.elites_discrete[j, i])
+    #             counter[valore_scelto] += 1
+            
+    #         # 2. Calcola la probabilità base (frequenza degli elite)
+    #         # Non aggiungere min_prob qui a tappeto se vuoi che il threshold funzioni!
+    #         new_probs = counter / p.n_elites
+            
+    #         # 3. Applica il THRESHOLD
+    #         # Se una patch non è stata scelta da nessuno o quasi, va a zero
+    #         new_probs[new_probs < thershold_min] = 0.0
+            
+    #         # 4. Aggiungi un min_prob minuscolo solo a chi è sopravvissuto (opzionale)
+    #         # o lascia che la rinormalizzazione faccia il suo corso.
+            
+    #         # 5. Rinormalizzazione
+    #         s = np.sum(new_probs)
+    #         if s > 0:
+    #             self.probs[j] = new_probs / s
+    #         else:
+    #             # Se tutti sono a zero (estremamente raro), reset uniforme
+    #             self.probs[j] = np.full(p.n_values[j], 1.0 / p.n_values[j])
+    
+    
+    # def update_distribution_discrete(self):
+    #     p = self.params
+    #     # Sort individuals by their perfomance (best first!)
+    #     idx = np.argsort(self.population_fit)#[::-1]
+
+    #     # Add elites to population
+    #     self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
+
+    #     # Update probabilities using the elites
+    #     for j in range(self.params.dim_discrete):
+    #         # A. Calculate Maximum Likelihood Estimate (MLE) from Elites
+    #         # We count occurrences of each value in the elites for dimension j
+    #         # np.bincount is faster than a python for-loop
+    #         counts = np.bincount(self.elites_discrete[j, :], minlength=p.n_values[j])
+    #         mle_probs = counts / p.n_elites
+            
+    #         # B. Apply Smoothing (The Standard CEM Update Rule)
+    #         # new_param = alpha * mle_estimate + (1 - alpha) * old_param
+    #         # This incorporates history to stabilize learning.
+    #         if hasattr(p, 'alpha') and p.alpha is not None:
+    #             current_probs = np.array(self.probs[j])
+    #             updated_probs = (p.alpha * mle_probs) + ((1.0 - p.alpha) * current_probs)
+    #         else:
+    #             updated_probs = mle_probs
+
+    #         # C. Enforce Constraints (Exploration/Min Prob)
+    #         # Ensure no probability drops below min_prob to maintain exploration
+    #         if p.min_prob is not None and p.min_prob > 0:
+    #             updated_probs = updated_probs + p.min_prob
+    #             # Renormalize to ensure sum equals 1.0
+    #             updated_probs = updated_probs / np.sum(updated_probs)
+            
+    #         self.probs[j] = updated_probs
