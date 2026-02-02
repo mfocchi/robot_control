@@ -207,30 +207,34 @@ class BaseController(threading.Thread):
 
     def _receive_contact_lf(self, msg):
         grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] =  msg.states[0].wrenches[0].force.y
-        grf[2] =  msg.states[0].wrenches[0].force.z
+        if msg.states:
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
         self.u.setLegJointState(self.u.leg_map["LF"], grf, self.grForcesLocal_gt)
 
     def _receive_contact_rf(self, msg):
         grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] =  msg.states[0].wrenches[0].force.y
-        grf[2] =  msg.states[0].wrenches[0].force.z
+        if msg.states:
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
         self.u.setLegJointState(self.u.leg_map["RF"], grf, self.grForcesLocal_gt)
 
     def _receive_contact_lh(self, msg):
         grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] =  msg.states[0].wrenches[0].force.y
-        grf[2] =  msg.states[0].wrenches[0].force.z
+        if   msg.states:
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
         self.u.setLegJointState(self.u.leg_map["LH"], grf, self.grForcesLocal_gt)
 
     def _receive_contact_rh(self, msg):
         grf = np.zeros(3)
-        grf[0] = msg.states[0].wrenches[0].force.x
-        grf[1] =  msg.states[0].wrenches[0].force.y
-        grf[2] =  msg.states[0].wrenches[0].force.z
+        if  msg.states:
+            grf[0] = msg.states[0].wrenches[0].force.x
+            grf[1] =  msg.states[0].wrenches[0].force.y
+            grf[2] =  msg.states[0].wrenches[0].force.z
         self.u.setLegJointState(self.u.leg_map["RH"], grf, self.grForcesLocal_gt)
 
     def _receive_pose(self, msg):
