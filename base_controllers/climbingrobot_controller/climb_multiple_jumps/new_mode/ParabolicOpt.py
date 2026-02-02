@@ -96,11 +96,11 @@ class ParabolicOptimizer:
             avg_jump_landing_cost = 0.0
             
             # base_penalty = self.fitness_weights[0]
-            # # Penalità 1: Più salti fai, meno paghi (Gradiente sul progresso)
+            # # first penalty: n_jumps missed
             # jumps_missed = MAX_JUMP - successful_jumps
             # progress_penalty = jumps_missed * 1e5 
-            # # Penalità 2: Distanza euclidea dal target finale (Gradiente spaziale)
-            # # Se achieved_target è None (fallito al primo salto), usa p0
+            # # second penalty: Euclidean distance from the final target (Spatial gradient)
+            # # If achieved_target is None (failed at the first jump), use p0
             # current_pos = achieved_target if achieved_target is not None else self.p0
             # dist_to_goal = np.linalg.norm(self.pf - current_pos)
             # dist_penalty = dist_to_goal * 1000.0
