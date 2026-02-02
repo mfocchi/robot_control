@@ -28,23 +28,24 @@ def plot_patch(landing_patch_center, params, wallSurfaceEval):
     landing_patch_center = np.array(landing_patch_center).flatten()
 
     resolution = 0.1
-    n_points = int(np.floor(params['patch_side'] / resolution))
+    n_points_z = int(np.floor(params['patch_side_y'] / resolution))
+    n_points_y = int(np.floor(params['patch_side_z'] / resolution))
 
     dy = np.linspace(
-        landing_patch_center[1] - params['patch_side'] / 2,
-        landing_patch_center[1] + params['patch_side'] / 2,
-        n_points
+        landing_patch_center[1] - params['patch_side_y'] / 2,
+        landing_patch_center[1] + params['patch_side_y'] / 2,
+        n_points_y
     )
 
     dz = np.linspace(
-        landing_patch_center[2] - params['patch_side'] / 2,
-        landing_patch_center[2] + params['patch_side']/ 2,
-        n_points
+        landing_patch_center[2] - params['patch_side_z'] / 2,
+        landing_patch_center[2] + params['patch_side_z']/ 2,
+        n_points_z
     )
 
     # Plot each point like MATLAB plot3
-    for i in range(n_points):
-        for j in range(n_points):
+    for i in range(n_points_y):
+        for j in range(n_points_z):
             x = wallSurfaceEval(dz[j], dy[i], params['mesh_x'], params['mesh_y'] ,params['mesh_z']  )
             y = dy[i]
             z = dz[j]
@@ -73,7 +74,7 @@ def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
     return X, Y, Z
 
 def initOptim(p0, pf):
-    mass = 5.
+    mass = 5.08
     params = {}
     params['m'] = mass
     anchor_distance = 5.
@@ -86,12 +87,13 @@ def initOptim(p0, pf):
     params['p_a1'] = matlab.double([0.,0.,0.]).reshape(3,1)
     params['p_a2'] = matlab.double([0.,params['b'],0.]).reshape(3,1)
     params['g'] = 9.81
-    params['w1']= 1. # smooth
+    params['w1']= 0.001 # smooth
     params['w2']= 0. # hoist work
-    params['w3']= 300. # patch cost
+    params['w3']= 1000. # patch cost
     params['T_th'] =  0.05
     params['obstacle_avoidance'] = 'mesh'
-    params['jump_clearance'] = 1.
+    params['jump_clearance'] = 0.5
+    params['debug'] = False #enables print of cost
 
     # Interpolator (note: z must be increasing — here from -10 to 0)
     p0[0] = terrainManager.wall_surface_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z)
@@ -106,7 +108,8 @@ def initOptim(p0, pf):
     params['cost_x'] = cost_x
     params['cost_y'] = cost_y
     params['cost_z'] = cost_z
-    params['patch_side'] =  1.;
+    params['patch_side_z'] =  1.
+    params['patch_side_y'] = 1.
 
     params['contact_normal'] = matlab.double(normal)
     return p0, pf, params
@@ -126,8 +129,8 @@ terrainManager = TerrainManager(generate_terrain=False)
 #TERRAIN 1
 mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.3)
 ###jump params
-p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
-pf=  np.array([0.0, 4,-4])
+p0 = np.array([0.5, 3.5, -6]) #unit test ,  there is singularity for px = 0!
+pf=  np.array([0.5, 3,-4])
 
 #TERRAIN 2
 #mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.1)
@@ -136,13 +139,13 @@ pf=  np.array([0.0, 4,-4])
 # pf=  np.array([0.0, 4,-12])
 
 #cost map
-gaussian_center = pf + np.array([0, -0.5, 0.5])
-max_cost = 3
-cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=gaussian_center, max_cost = max_cost);
+point_highest_cost = pf + np.array([0, -0.5, 0.5])
+max_cost = 200
+cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=point_highest_cost, max_cost = max_cost);
 
 Fleg_max = 300.
-Fr_max = 90.
-Fr_min = 0.
+Fr_max = 190.
+Fr_min = 15.
 mu = 0.8
 p0_adj, pf_adj, params = initOptim(p0, pf)
 solution = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
@@ -162,7 +165,7 @@ ax = fig.add_subplot(111, projection='3d')
 # Surface plot
 ax.plot_surface(params['mesh_x'], params['mesh_y'], params['mesh_z'],  alpha=0.4, cmap='Blues', edgecolor='k', linewidth=0.2)
 plot_patch(pf, params, terrainManager.wall_surface_eval)
-ax.plot_surface(3.-params['cost_x'], params['cost_y'], params['cost_z'],  alpha=0.4, cmap='Blues', edgecolor='k', linewidth=0.2)
+ax.plot_surface(2.-params['cost_x']/max_cost, params['cost_y'], params['cost_z'],  alpha=0.4, cmap='Blues', edgecolor='k', linewidth=0.2)
 
 ax.set_xlabel('X (m)')
 ax.set_ylabel('Y (m)')
