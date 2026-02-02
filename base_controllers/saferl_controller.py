@@ -17,6 +17,7 @@ from base_controllers.components.safe_rl.value_function.value_function_manager i
 from base_controllers.utils.common_functions import launchFileNode
 import params as conf
 import numpy as np
+import os
 from base_controllers.utils.joyManager import JoyManager
 robotName = "aliengo"  # needs to inherit BaseController
 from termcolor import colored
@@ -70,11 +71,14 @@ if __name__ == '__main__':
             p.recorder.start_recording_srv()
         #p.setSimSpeed(max_update_rate=300)
         p.startupProcedure()
-        if p.state_estimation == 'pronto':
-            launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
+        if p.state_estimation=='pronto':
+            launchFileNode("pronto_aliengo", "pronto_aliengo.launch", additional_args=['pronto_conf:='+p.pronto_config,
+                                                                                       'use_sim_time:='+str(not p.real_robot)])
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
         p.counter = 0
         p.startTime = p.time
+        #to reduce simulation frequency
+        #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
         while not ros.is_shutdown():
             p.updateKinematics()
             if p.gracefulCollapseFlag:
@@ -97,6 +101,10 @@ if __name__ == '__main__':
                         p.gracefulCollapseFlag = True
                     if buttons[1]:
                         print(colored("Severe shutdown!", "red"))
+                        if p.state_estimation == 'pronto':
+                            os.system(" rosnode kill /aliengo_joint_swapper")
+                            os.system(" rosnode kill /pronto_aliengo")
+                        ros.signal_shutdown("killed")
                         ros.signal_shutdown("killed")
                         p.deregister_node()
                         break
