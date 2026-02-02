@@ -43,7 +43,6 @@ class QuadrupedController(BaseController):
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
 
-        self.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
 
         # pid = os.getpid()
         # print(colored("USER IS ROOT: USING RENICE FOR THREAD PRIORITY", "red"))
@@ -73,6 +72,8 @@ class QuadrupedController(BaseController):
                 # startNode(package="pronto_aliengo", executable="pronto_aliengo_node", args='', name="pronto_aliengo")
                 # startNode(package="pronto_aliengo", executable="aliengo_joint_swapper", args='',name="aliengo_joint_swapper")
 
+                #we start the pronto node only after startup!
+                self.pronto_config = "aliengo_state_estimator.yaml"
                 self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry,  callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
             elif self.state_estimation=='odometry':#use odometry
                 self.sub_imu_euler = ros.Subscriber("/" + self.robot_name + "/euler_imu", Vector3,  callback=self._receive_euler, queue_size=1, tcp_nodelay=True)
@@ -86,9 +87,9 @@ class QuadrupedController(BaseController):
         else:#simulation
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,  callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
             if self.state_estimation == 'pronto':  # use pronto for state estimation
-                # start stateest node (requires publication of msg type sensor:IMU in topic aliengo/imu
+                #  stateest node requires publication of msg type sensor:IMU in topic aliengo/imu we remap
                 startNode(package="topic_tools", executable="relay", args="/" + self.robot_name + "/trunk_imu" + "  " + "/" + self.robot_name + "/imu", name="trunk_imu_to_imu")
-                launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
+                self.pronto_config = "aliengo_state_estimator.yaml"
                 self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
             elif self.state_estimation=='ground_truth':
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,  callback=self._receive_pose,  queue_size=1, tcp_nodelay=True)
@@ -1569,6 +1570,9 @@ class QuadrupedController(BaseController):
         self.alphaCollapse -= self.dt / self.collapseTime
         if self.alphaCollapse<=0:
             self.alphaCollapse = 0.0
+            if p.state_estimation=='pronto':
+                os.system(" rosnode kill /aliengo_joint_swapper")
+                os.system(" rosnode kill /pronto_aliengo")
             ros.signal_shutdown("killed")
             p.deregister_node()
             return True
@@ -1639,8 +1643,9 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
-    use_joy = False
+    p.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+    rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
+    use_joy = True
     generate_reference = False
 
     if rl_control == 'state_est_based':
@@ -1661,7 +1666,8 @@ if __name__ == '__main__':
             joy = JoyManager()
         p.startupProcedure()
         if p.state_estimation=='pronto':
-            launchFileNode("pronto_aliengo", "pronto_aliengo.launch")
+            launchFileNode("pronto_aliengo", "pronto_aliengo.launch", additional_args=['pronto_conf:='+p.pronto_config,
+                                                                                       'use_sim_time:='+str(not p.real_robot)])
         if rl_control != 'none':
             p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12,0))
         p.counter = 0
@@ -1671,6 +1677,8 @@ if __name__ == '__main__':
             p.ref_gen = QuadrupedTasks(task='pushup', robot_conf=conf.robot_params[p.robot_name], gui=True, quadruped=p)
             p.ref_gen.startUp(p.time)
         counter = 0
+        #to reduce simulation frequency
+        #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
         while not ros.is_shutdown():
             p.updateKinematics()
             if p.gracefulCollapseFlag:
@@ -1691,6 +1699,9 @@ if __name__ == '__main__':
                         p.gracefulCollapseFlag = True
                     if buttons[1]:
                         print(colored("Severe shutdown!", "red"))
+                        if p.state_estimation == 'pronto':
+                            os.system(" rosnode kill /aliengo_joint_swapper")
+                            os.system(" rosnode kill /pronto_aliengo")
                         ros.signal_shutdown("killed")
                         p.deregister_node()
                         break
@@ -1728,7 +1739,7 @@ if __name__ == '__main__':
                                                                                 p.wJ,
                                                                                 p.h_joints,
                                                                                 p.comPoseW)
-                p.send_command(p.q_des, p.qd_des, p.alphaCollapse*p.tau_ffwd, log_data_in_send_command=False)
+                p.send_command(p.q_des, p.qd_des, p.alphaCollapse*p.tau_ffwd, log_data_in_send_command=True)
 
             p.visualizeContacts()
         

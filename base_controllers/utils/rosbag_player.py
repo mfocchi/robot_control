@@ -8,12 +8,12 @@ if __name__ == '__main__':
     checkRosMaster()
     rospy.init_node('rosbag_controlled_recording')
     recorder = RosbagControlledRecorder()
-    bag_location = os.environ["LOCOSIM_DIR"]+"/robot_control/base_controllers/tracked_robot/simulator/BAGS/"
-    bag_name = "openLoop3DModel_sloped_test_left_Distr_True.bag"
+    bag_location = os.environ["LOCOSIM_DIR"]+"/robot_control/base_controllers/"
+    bag_name = "saferl.bag"
 
     if not os.path.exists(bag_location+bag_name):
         print(colored("Bag File does not exists.", "red"))
     else:
-        recorder.rosbagPlay(robot_name="tractor", bag_file=bag_location+bag_name, bag_options="-r 5")
+        recorder.rosbagPlay(robot_name="aliengo", bag_file=bag_location+bag_name, bag_options="-r 0.5 -s 10 ")
 
 
