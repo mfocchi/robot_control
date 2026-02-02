@@ -91,23 +91,23 @@ class ParabolicOptimizer:
 
 
         if not all_converged:
-            fitness_score = fitness_weights[0]
-            achieved_target = None
-            avg_jump_landing_cost = 0.0
-            
-            # base_penalty = self.fitness_weights[0]
-            # # first penalty: n_jumps missed
-            # jumps_missed = MAX_JUMP - successful_jumps
-            # progress_penalty = jumps_missed * 1e5 
-            # # second penalty: Euclidean distance from the final target (Spatial gradient)
-            # # If achieved_target is None (failed at the first jump), use p0
-            # current_pos = achieved_target if achieved_target is not None else self.p0
-            # dist_to_goal = np.linalg.norm(self.pf - current_pos)
-            # dist_penalty = dist_to_goal * 1000.0
-            
-            # fitness_score = base_penalty + progress_penalty + dist_penalty
-            
+            # fitness_score = fitness_weights[0]
+            # achieved_target = None
             # avg_jump_landing_cost = 0.0
+            
+            base_penalty = self.fitness_weights[0]
+            # first penalty: n_jumps missed
+            jumps_missed = MAX_JUMP - successful_jumps
+            progress_penalty = jumps_missed * 1e5 
+            # second penalty: Euclidean distance from the final target (Spatial gradient)
+            # If achieved_target is None (failed at the first jump), use p0
+            current_pos = achieved_target if achieved_target is not None else self.p0
+            dist_to_goal = np.linalg.norm(self.pf - current_pos)
+            dist_penalty = dist_to_goal * 1000.0
+            
+            fitness_score = base_penalty + progress_penalty + dist_penalty
+            
+            avg_jump_landing_cost = 0.0
             
         else:
             waypoint_cost = (MAX_JUMP - total_jump) * fitness_weights[5]
@@ -192,18 +192,18 @@ class ParabolicOptimizer:
             trajectory[2, j] = p0[2] + t[j] * (pf[2] - p0[2])
 
 
-        # # collision check
-        # if problem_solved == 1:
-        #     for k in range(3, num_points - 3):  
-        #         x_curr = trajectory[0, k]
-        #         y_curr = trajectory[1, k]
-        #         z_curr = trajectory[2, k]
-        #         terrain_x = self.terrain_manager.wall_surface_eval(
-        #             z_curr, y_curr, self.terrain_manager.mesh_x,
-        #             self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
-        #         if x_curr < terrain_x:
-        #             problem_solved = 0
-        #             break
+        # collision check
+        if problem_solved == 1:
+            for k in range(3, num_points - 3):  
+                x_curr = trajectory[0, k]
+                y_curr = trajectory[1, k]
+                z_curr = trajectory[2, k]
+                terrain_x = self.terrain_manager.wall_surface_eval(
+                    z_curr, y_curr, self.terrain_manager.mesh_x,
+                    self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
+                if x_curr < terrain_x:
+                    problem_solved = 0
+                    break
 
 
 
