@@ -38,9 +38,9 @@ class ParabolicOptimizer:
         all_converged = True
         achieved_target = None
         successful_jumps = 0
-        
         # Extract discrete parameters
         xd = input_data[0] if isinstance(input_data, list) and len(input_data) > 0 else input_data
+        
         n_jumps = int(xd[0])
         
         p0_adj = self.p0.copy()
@@ -51,6 +51,34 @@ class ParabolicOptimizer:
         jump_log_points.append(p0_adj.copy())
         
         total_jump = n_jumps + 1   # Including final jump with +1
+        
+        # fitness about "duplicate" jumps inside xd
+        used_patches = [int(xd[1 + i]) for i in range(n_jumps)]
+        
+        # DOPPIONE PISELLONE CHECK
+        if len(used_patches) != len(set(used_patches)):
+            print("DOPPIONE PISELLONE!")
+            all_converged = False
+            fitness_score = self.fitness_weights[0]
+            
+            print("xd value: " , xd)    
+            print(f"Computed Score (Cost): {fitness_score:.4f}")
+            print(f"--- Evaluation Results ---")
+            print(f"Status: FAILED (DUPLICATE), Waypoints Used: 0/{MAX_JUMP}, Total Energy: 0.00, Terrain Cost: 0.00")
+            print(f"--------------------------")
+            
+            return {
+                'fitness': fitness_score,
+                'points': [],  # Changed from None to empty list
+                'traj': [],    # Changed from None to empty list
+                'achieved_target': None,
+                'n_jumps': 0,
+                'consumed_energy': 0.0,
+                'landing_cost': 0.0,
+                'all_converged': False
+            }
+            
+                    
         for i in range(total_jump): # jump btw patches
             if i < n_jumps:
                 patch_id = int(xd[1 + i])

@@ -29,11 +29,11 @@ PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 5
 THREADS = 5
 flag_thread = False
-CORRIDOR_RADIUS = 4.0 # for linear corridor warm start
-MAIN_DIRECTORY = "result/test_parabolic"
+CORRIDOR_RADIUS = 1.0 # for linear corridor warm start
+MAIN_DIRECTORY = "result/test_meeting_4"
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
 # fitness_weights = np.array([1e7, 10.,1., 100., 1.,500.]) # Optimizer
-fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear
+fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
 filter_weights = np.array([10., 10., 0,10.0])
@@ -42,9 +42,9 @@ filter_weights = np.array([10., 10., 0,10.0])
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
-Fleg_max = 600.
-Fr_max = 90.
-Fr_min = 10.
+Fleg_max = 300.
+Fr_max = 190.
+Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
 mass = 5.
@@ -74,7 +74,6 @@ inner_opt_params['mesh_z'] = None
 inner_opt_params['cost_x'] = None
 inner_opt_params['cost_y'] = None
 inner_opt_params['cost_z'] = None
-inner_opt_params['patch_side'] = 1.0
 inner_opt_params['contact_normal'] = None
 
 # ================================================
@@ -87,11 +86,11 @@ cem_params = CemParams()
 cem_params.seed =0# int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 30
-cem_params.pop_size = 300
+cem_params.cem_iters = 50
+cem_params.pop_size = 150
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
-cem_params.fraction_elites_reused = 0.0 
+cem_params.fraction_elites_reused = 0.1
 cem_params.alpha = 0.5
 # Discrete
 cem_params.dim_discrete = CEM_DISCRETE_DIM
@@ -171,6 +170,9 @@ def initialize_terrain_data(warm_start_mode=False):
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
     patches.visualize_full_cost_map()
     
+    inner_opt_params['patch_side'] = patches.patch_height
+    # inner_opt_params['patch_side_y'] = 1.0 * patches.patch_width
+    
     # patch_id = 25
     # cost = patches.get_patch_cost(patch_id)
     # if cost is not None:
@@ -186,6 +188,21 @@ def initialize_terrain_data(warm_start_mode=False):
     save_terrain_data(terrain_manager,point_clouds, patches)
     
     
+        
+    patch_pf = patches.get_patch_id_from_point_2D(PF_PATCH_INIT[1], PF_PATCH_INIT[2])
+    patch_p0 = patches.get_patch_id_from_point_2D(P0_INIT[1], P0_INIT[2])
+    
+    # Update n_values to exclude p0 and pf patches
+    number_of_patches = number_of_patches_width * number_of_patches_height
+    all_patches = list(range(number_of_patches))
+    
+    # Remove p0 and pf from available patches
+    valid_patches = [p for p in all_patches if p != patch_p0 and p != patch_pf]
+    
+    # Update cem_params.n_values with the new structure
+    cem_params.n_values = [MAX_JUMP] + [valid_patches.copy() for _ in range(MAX_JUMP)]
+    
+    # Update init_probs accordingly
     if warm_start_mode:
         # patch_probs = get_warm_start_base_cost(patches)
         patch_probs = get_warm_start_line(
@@ -198,12 +215,27 @@ def initialize_terrain_data(warm_start_mode=False):
     
         plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
 
+        # Create new init_probs with filtered probabilities
         new_init_probs = []
-        new_init_probs.append(cem_params.init_probs[0])
+        # First dimension remains the same (number of jumps)
+        new_init_probs.append([1.0 / MAX_JUMP for _ in range(MAX_JUMP)])
         
+        # For patch selections, filter out p0 and pf probabilities
         for i in range(1, len(cem_params.n_values)):
-            new_init_probs.append(patch_probs)
+            filtered_probs = [patch_probs[idx] for idx in valid_patches]
+            # Renormalize
+            sum_probs = sum(filtered_probs)
+            if sum_probs > 0:
+                filtered_probs = [p / sum_probs for p in filtered_probs]
+            else:
+                filtered_probs = [1.0 / len(valid_patches) for _ in valid_patches]
+            new_init_probs.append(filtered_probs)
+        
         cem_params.init_probs = new_init_probs
+    else:
+        # Uniform distribution over valid patches
+        cem_params.init_probs = [[1.0 / MAX_JUMP for _ in range(MAX_JUMP)]] + \
+                                [[1.0 / len(valid_patches) for _ in valid_patches] for _ in range(MAX_JUMP)]
     
     return point_clouds, patches, cost_grid
 
@@ -606,4 +638,3 @@ def plot_probability_heatmap(patch_probs, patches_obj, p0, pf):
     
     plt.tight_layout()
     plt.show()
-    
