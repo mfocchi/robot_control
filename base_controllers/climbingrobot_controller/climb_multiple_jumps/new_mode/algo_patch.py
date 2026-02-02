@@ -108,48 +108,144 @@ class CrossEntropyMethodMixed:
             })
         
 
-    def generate_population_discrete(self,first_iteration=False) -> None:
+    def generate_population_discrete(self, first_iteration=False) -> None:
         for i in range(self.params.pop_size):
-            used_patches = set()
-            forbidden_patches = {self.patch_p0, self.patch_pf}
+            if not first_iteration and self.log.iterations > 0 and i < self.elites_reuse_size:
+                self.population_discrete[:, i] = self.elites_discrete[:, i]
+                continue
+            
             for j in range(self.params.dim_discrete):
                 if j == 0 and i == 0 and first_iteration == True:
                     self.population_discrete[j, i] = 0
-                    continue
-                
-                current_probs = self.probs[j].copy()
-                
-                # For all cases except the first individual in first iteration, mask index 0
-                if j == 0:
-                    current_probs[0] = 0.0
-                
-                if j > 0:
-                    all_to_mask = used_patches.union(forbidden_patches)
-                    for forbidden in all_to_mask:
-                        if forbidden is not None and 0 <= forbidden < len(current_probs):
-                            current_probs[forbidden] = 0.0
-                
-                # Renormalize
-                total_prob = np.sum(current_probs)
-                if total_prob > 0:
-                    current_probs = current_probs / total_prob
                 else:
-                    current_probs[:] = 1.0
-                    if j == 0:
-                        current_probs[0] = 0.0
-                    if j > 0:
-                        for forbidden in all_to_mask:
-                            if forbidden is not None and 0 <= forbidden < len(current_probs):
-                                current_probs[forbidden] = 0.0
-                    current_probs /= np.sum(current_probs)
-                
-                candidates = np.arange(len(current_probs))
-                chosen_k = self.rng.choice(candidates, p=current_probs)
-                
-                self.population_discrete[j, i] = chosen_k
-                if j > 0:
-                    used_patches.add(chosen_k)
+                    # Check if n_values[j] is an integer or a list
+                    if isinstance(self.params.n_values[j], int):
+                        # Original behavior: sample from 0 to n_values[j]-1
+                        p = self.rng.random()
+                        s = 0.0
+                        for k in range(self.params.n_values[j]):
+                            s += self.probs[j][k]
+                            if p < s:
+                                break
+                        self.population_discrete[j, i] = k
+                    else:
+                        # New behavior: n_values[j] is a list of valid indices
+                        valid_indices = self.params.n_values[j]
+                        p = self.rng.random()
+                        s = 0.0
+                        for idx, valid_k in enumerate(valid_indices):
+                            s += self.probs[j][idx]
+                            if p < s:
+                                break
+                        self.population_discrete[j, i] = valid_k
+                        
+    # def generate_population_discrete(self,first_iteration=False) -> None:
+    #     # Generate random gaussian values from pure Normal distribution (mean=0, std=1)
+    #     for i in range(self.params.pop_size):
+    #         if not first_iteration and self.log.iterations > 0 and i < self.elites_reuse_size:
+    #             self.population_discrete[:, i] = self.elites_discrete[:, i]
+    #             continue
+    #         for j in range(self.params.dim_discrete):
+    #             if j == 0 and i == 0 and first_iteration == True:
+    #                 self.population_discrete[j, i] = 0
+    #             else: 
+    #                 p = self.rng.random()
+    #                 s = 0.0
+    #                 for k in range(1, self.params.n_values[j]):  # Start from 1 instead of 0
+    #                     s += self.probs[j][k]
+    #                     if p < s:
+    #                         break
+    #                 self.population_discrete[j, i] = k
 
+    # def generate_population_discrete(self,first_iteration=False) -> None:
+    #     for i in range(self.params.pop_size):
+    #         # Inject elites from previous iteration (skip if first iteration or if i >= elites_reuse_size)
+    #         if not first_iteration and self.log.iterations > 0 and i < self.elites_reuse_size:
+    #             self.population_discrete[:, i] = self.elites_discrete[:, i]
+    #             continue
+            
+    #         used_patches = set()
+    #         forbidden_patches = {self.patch_p0, self.patch_pf}
+    #         for j in range(self.params.dim_discrete):
+    #             if j == 0 and i == 0 and first_iteration == True:
+    #                 self.population_discrete[j, i] = 0
+    #                 continue
+                
+    #             current_probs = self.probs[j].copy()
+                
+    #             # For all cases except the first individual in first iteration, mask index 0
+    #             if j == 0:
+    #                 current_probs[0] = 0.0
+                
+    #             if j > 0:
+    #                 all_to_mask = used_patches.union(forbidden_patches)
+    #                 for forbidden in all_to_mask:
+    #                     if forbidden is not None and 0 <= forbidden < len(current_probs):
+    #                         current_probs[forbidden] = 0.0
+                
+    #             # Renormalize
+    #             total_prob = np.sum(current_probs)
+    #             if total_prob > 0:
+    #                 current_probs = current_probs / total_prob
+    #             else:
+    #                 current_probs[:] = 1.0
+    #                 if j == 0:
+    #                     current_probs[0] = 0.0
+    #                 if j > 0:
+    #                     for forbidden in all_to_mask:
+    #                         if forbidden is not None and 0 <= forbidden < len(current_probs):
+    #                             current_probs[forbidden] = 0.0
+    #                 current_probs /= np.sum(current_probs)
+                
+    #             candidates = np.arange(len(current_probs))
+    #             chosen_k = self.rng.choice(candidates, p=current_probs)
+                
+    #             self.population_discrete[j, i] = chosen_k
+    #             if j > 0:
+    #                 used_patches.add(chosen_k)
+
+    def update_distribution_discrete(self):
+        p = self.params
+        # Sort individuals by their perfomance (best first!)
+        idx = np.argsort(self.population_fit)
+
+        # Add elites to population
+        self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
+
+        # Update probabilities using the elites
+        for j in range(self.params.dim_discrete):
+            # Check if n_values[j] is an integer or a list
+            if isinstance(p.n_values[j], int):
+                # Original behavior: count occurrences of each value
+                counter = [0.0 for _ in range(p.n_values[j])]
+                for i in range(p.n_elites):
+                    counter[self.elites_discrete[j, i]] += 1
+                for k in range(p.n_values[j]):
+                    self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
+            else:
+                # New behavior: n_values[j] is a list of valid indices
+                valid_indices = p.n_values[j]
+                num_valid = len(valid_indices)
+                counter = [0.0 for _ in range(num_valid)]
+                
+                # Count occurrences - map actual patch IDs to probability indices
+                for i in range(p.n_elites):
+                    actual_patch_id = self.elites_discrete[j, i]
+                    # Find the index in valid_indices list
+                    try:
+                        idx_in_list = valid_indices.index(actual_patch_id)
+                        counter[idx_in_list] += 1
+                    except ValueError:
+                        # This shouldn't happen, but handle it gracefully
+                        pass
+                
+                # Update probabilities
+                for k in range(num_valid):
+                    self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
+
+            self.probs[j] = self.probs[j] / np.sum(self.probs[j])
+    
+    
     # def update_distribution_discrete(self):
     #     p = self.params
     #     # Sort individuals by their perfomance (best first!)
@@ -160,35 +256,16 @@ class CrossEntropyMethodMixed:
 
     #     # Update probabilities using the elites
     #     for j in range(self.params.dim_discrete):
-    #         counter = [0.0 for _ in range(p.n_values[j])]
+    #         new_probs_elites = np.zeros(p.n_values[j])
     #         for i in range(p.n_elites):
-    #             counter[self.elites_discrete[j, i]] += 1
-    #         for k in range(p.n_values[j]):
-    #             self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
-
-    #         self.probs[j] = self.probs[j] / np.sum(self.probs[j])
-    
-    
-    def update_distribution_discrete(self):
-        p = self.params
-        # Sort individuals by their perfomance (best first!)
-        idx = np.argsort(self.population_fit)#[::-1]
-
-        # Add elites to population
-        self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
-
-        # Update probabilities using the elites
-        for j in range(self.params.dim_discrete):
-            new_probs_elites = np.zeros(p.n_values[j])
-            for i in range(p.n_elites):
-                val = self.elites_discrete[j, i]
-                new_probs_elites[val] += 1.0
+    #             val = self.elites_discrete[j, i]
+    #             new_probs_elites[val] += 1.0
             
-            new_probs_elites = new_probs_elites / p.n_elites
+    #         new_probs_elites = new_probs_elites / p.n_elites
             
-            updated_probs = (new_probs_elites * self.alpha) + (np.array(self.probs[j]) * (1.0 - self.alpha))
-            updated_probs += p.min_prob
-            self.probs[j] = updated_probs / np.sum(updated_probs)
+    #         updated_probs = (new_probs_elites * self.alpha) + (np.array(self.probs[j]) * (1.0 - self.alpha))
+    #         updated_probs += p.min_prob
+    #         self.probs[j] = updated_probs / np.sum(updated_probs)
     
     
     

@@ -37,6 +37,7 @@ def main():
         
         patch_pf = patches.get_patch_id_from_point_2D(PF_PATCH_INIT[1], PF_PATCH_INIT[2])
         patch_p0 = patches.get_patch_id_from_point_2D(P0_INIT[1], P0_INIT[2])
+        
         algo = CrossEntropyMethodMixed(cem_params, patch_p0, patch_pf)
         
         cost_hist = np.zeros(cem_params.cem_iters)
@@ -197,8 +198,8 @@ def main():
                     'n_jumps':   int(all_n_jumps[idx]),
                     'consumed_energy': float(all_consumed_energy[idx]),
                     'landing_cost': float(all_landing_cost[idx]),
-                    'points': [p.tolist() for p in all_log_points[idx]],
-                    'traj': [t.tolist() if t is not None else None for t in all_log_traj[idx]],
+                    'points': [p.tolist() for p in all_log_points[idx]] if all_log_points[idx] else [],  # Added safety check
+                    'traj': [t.tolist() if t is not None else None for t in all_log_traj[idx]] if all_log_traj[idx] else [],  # Added safety check
                     'iteration': k + 1,
                     'n_jumps_var': int(xd[0, idx]),
                     'patch_ids': xd[1:, idx].tolist(),        # Gli ID delle patch scelti (saltando il primo che è N_jump)
