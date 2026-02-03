@@ -45,15 +45,15 @@ if __name__ == '__main__':
     p = SafeRLController('aliengo')
     world_name = 'fast.world'
     use_gui=False#True
-    p.state_estimation = 'ground_truth'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+    p.state_estimation = 'pronto'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
     rl_controller = RlVelocityController(p.robot_name, p.dt)
     p.SAVE_BAG = False  #
     vf_frequency = 100  # Hz
-    decimation = (1 / p.dt) / (vf_frequency)
+    vf_decimation = (1 / p.dt) / (vf_frequency)
     step = 0
     isrec = True
-    use_joy = False
-    sim_push = True
+    use_joy = True
+    sim_push = False
 
     if use_joy:
         joy = JoyManager()
@@ -77,10 +77,13 @@ if __name__ == '__main__':
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
         p.counter = 0
         p.startTime = p.time
+
+        #profiler = Profiler(function_name=vf.computeValueFnc)
         #to reduce simulation frequency
         #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
         while not ros.is_shutdown():
             p.updateKinematics()
+
             if p.gracefulCollapseFlag:
                 if p.gracefulCollapse():
                     break
@@ -102,7 +105,6 @@ if __name__ == '__main__':
                         os.system(" rosnode kill /aliengo_joint_swapper")
                         os.system(" rosnode kill /pronto_aliengo")
                     ros.signal_shutdown("killed")
-                    ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
             if  (p.time > (p.startTime + 3.)):
@@ -118,11 +120,10 @@ if __name__ == '__main__':
                 ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
                 proj_gravity_b = p.b_R_w.dot(np.array([0, 0, -1]))
                 # pushes of increasing entity
-                if p.time % 2. == 0 and isrec and not p.real_robot and sim_push:
+                if not p.real_robot and p.time % 2. == 0 and isrec and sim_push:
                      p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
                      print(50*p.counter)
                      p.counter+=1
-
                 if isrec:
                      # nominal policy
                      p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
@@ -165,7 +166,7 @@ if __name__ == '__main__':
                                                                                 p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.alphaCollapse * p.tau_ffwd, log_data_in_send_command=False)
 
-            #p.visualizeContacts()
+            p.visualizeContacts()
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         if p.SAVE_BAG:

@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch
 # Value function network load
@@ -52,7 +54,7 @@ class ValueFunctionManager:
         #model_path = "components/safe_rl/value_function/models/VF_new_policies3f.pkl"#0.43 2 #e.pkl" 0.4 1
         #model_path = "components/safe_rl/value_function/models/VF_new_policies2e.pkl"
         #model_path = "components/safe_rl/value_function/models/VF_new2.pkl" #150N lateral push triggers backup
-        model_path = "components/safe_rl/value_function/models/VF_new2b.pkl"  # 50N lateral push  triggers backup
+        model_path = os.environ['LOCOSIM_DIR']+"/robot_control/base_controllers/components/safe_rl/value_function/models/VF_new2b.pkl"  # 50N lateral push  triggers backup
         self.model = self.load_value(model_path)
         self.setup_value_function(self.model)
         print("Loaded model parameters.")

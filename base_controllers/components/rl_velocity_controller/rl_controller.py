@@ -50,7 +50,7 @@ class RlVelocityController():
         
     def action(self, base_lin_vel, base_ang_vel, pj_gravity, q, qd, policy_type='default'):
         
-        if self.decimation_counter == 0 :
+        if (self.decimation_counter % self.decimation) == 0 :
 
             joint_pos_rel = q - self.q_def
 
@@ -74,13 +74,9 @@ class RlVelocityController():
 
             self.prev_action = action
             
-            final_action = self.q_def + ( self.action_scale * action) 
-
-            
+            final_action = self.q_def + ( self.action_scale * action)
             self.q_des = final_action
-            
-        
-        self.decimation_counter = (self.decimation_counter+1) % self.decimation
+        self.decimation_counter += 1
         
         return self.q_des
         

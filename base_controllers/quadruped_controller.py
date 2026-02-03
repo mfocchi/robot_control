@@ -1648,7 +1648,7 @@ if __name__ == '__main__':
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = True
     generate_reference = False
-    p.SAVE_BAG = True  #
+    p.SAVE_BAG = False  #
 
     if rl_control == 'state_est_based':
         if p.real_robot and p.state_estimation != 'pronto':
@@ -1663,7 +1663,8 @@ if __name__ == '__main__':
         p.startController(world_name=world_name,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
-                                           'go0_conf:=standDown'])
+                                           'go0_conf:=standDown',
+                                           'rviz:=true'])
         if p.SAVE_BAG:
             p.recorder = RosbagControlledRecorder(bag_name="quadruped.bag", record_from_startup_=False)
             p.recorder.start_recording_srv()
@@ -1709,7 +1710,7 @@ if __name__ == '__main__':
                     ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
-            if rl_control != 'none' and (p.time > (p.startTime + 1.)):
+            if rl_control != 'none' and (p.time > (p.startTime + 3.)):
                 if use_joy:
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
                 else:
