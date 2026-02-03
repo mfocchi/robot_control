@@ -22,6 +22,7 @@ from base_controllers.utils.joyManager import JoyManager
 robotName = "aliengo"  # needs to inherit BaseController
 from termcolor import colored
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
+from base_controllers.utils.profiler import Profiler
 
 class SafeRLController(QuadrupedController):
 
@@ -107,7 +108,10 @@ if __name__ == '__main__':
                     ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
-            if  (p.time > (p.startTime + 3.)):
+            if np.all(p.pronto_contacts) and not p.controller_ready:
+                print(colored("ALL FEET ARE IN STANCE: Starting RL controller", "red"))
+                p.controller_ready = True
+            if  (p.time > (p.startTime + 4.)) and p.controller_ready:
                 #rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
                 if use_joy:
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
@@ -135,10 +139,13 @@ if __name__ == '__main__':
                 #check this
                 #print('ang_vel_b A',ang_vel_b)
                 #print('proj_gravity A',proj_gravity)
-                if step % decimation == 0:# and isrec:
-                     isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.6, vf_additional_term = 0.0)
-                #     #isrec = True #just record value functtion but dont use
-                #     #print(V_safe)
+
+
+
+                if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
+                    isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.6, vf_additional_term = 0.0)
+                    isrec = True #just record value functtion but dont use
+                     #print(V_safe)
                 # '''elif step % decimation == 0:
                 #     if np.all(np.abs(lin_vel_b < 10e-2)) and np.all(np.abs(p.qd) < 10e-2):
                 #         #print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')

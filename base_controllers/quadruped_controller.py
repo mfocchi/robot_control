@@ -53,6 +53,7 @@ class QuadrupedController(BaseController):
         # # need to launch docker as root
         # os.system(f'sudo echo -20 > /proc/{str(pid)}/autogroup')
 
+
     #####################
     # OVERRIDEN METHODS #
     #####################
@@ -72,7 +73,8 @@ class QuadrupedController(BaseController):
                 # load_rosparams_from_package('pronto_aliengo', 'config/aliengo_state_estimator.yaml', target_namespace='/')
                 # startNode(package="pronto_aliengo", executable="pronto_aliengo_node", args='', name="pronto_aliengo")
                 # startNode(package="pronto_aliengo", executable="aliengo_joint_swapper", args='',name="aliengo_joint_swapper")
-
+                from pronto_msgs.msg import QuadrupedStance
+                self.pronto_contacts_sub = ros.Subscriber("/state_estimator_pronto/stance", QuadrupedStance, callback=self._receive_pronto_contacts, queue_size=1, tcp_nodelay=True)
                 #we start the pronto node only after startup!
                 self.pronto_config = "aliengo_state_estimator.yaml"
                 self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry,  callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
@@ -138,6 +140,11 @@ class QuadrupedController(BaseController):
         self.euler[1] = msg.y
         self.euler[2] = msg.z
 
+    def _receive_pronto_contacts(self, msg):
+        self.pronto_contacts[0] = msg.lf
+        self.pronto_contacts[1] = msg.rf
+        self.pronto_contacts[2] = msg.lh
+        self.pronto_contacts[3] = msg.rh
 
     # def _receive_contact_force_real(self, msg):
     #     #53.0, 82.0, 87.0, 78.0
@@ -379,7 +386,10 @@ class QuadrupedController(BaseController):
         #safety layer
         self.gracefulCollapseFlag = False
         self.alphaCollapse = 1.0
-        self.collapseTime = 1.
+        self.collapseTime = 2.
+
+        self.pronto_contacts = np.zeros(4)
+        self.controller_ready = False
 
     def logData(self):
         # full with new values
@@ -1710,7 +1720,10 @@ if __name__ == '__main__':
                     ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
-            if rl_control != 'none' and (p.time > (p.startTime + 3.)):
+            if np.all(p.pronto_contacts) and not p.controller_ready:
+                print(colored("ALL FEET ARE IN STANCE: Starting RL controller","red"))
+                p.controller_ready = True
+            if rl_control != 'none' and (p.time > (p.startTime + 3.)) and p.controller_ready:
                 if use_joy:
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
                 else:
