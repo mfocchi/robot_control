@@ -24,6 +24,7 @@ from ros_impedance_controller.msg import EffortPid
 from base_controllers.components.imu_utils import IMU_utils
 from base_controllers.components.quadruped_tasks import QuadrupedTasks
 from base_controllers.components.state_machine import StateMachine
+from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
 
 
 class QuadrupedController(BaseController):
@@ -1647,6 +1648,7 @@ if __name__ == '__main__':
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = True
     generate_reference = False
+    p.SAVE_BAG = True  #
 
     if rl_control == 'state_est_based':
         if p.real_robot and p.state_estimation != 'pronto':
@@ -1662,6 +1664,9 @@ if __name__ == '__main__':
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown'])
+        if p.SAVE_BAG:
+            p.recorder = RosbagControlledRecorder(bag_name="quadruped.bag", record_from_startup_=False)
+            p.recorder.start_recording_srv()
         if use_joy:
             joy = JoyManager()
         p.startupProcedure()
@@ -1744,6 +1749,8 @@ if __name__ == '__main__':
             p.visualizeContacts()
         
     except (ros.ROSInterruptException, ros.service.ServiceException):
+        if p.SAVE_BAG:
+            p.recorder.stop_recording_srv()
         ros.signal_shutdown("killed")
         p.deregister_node()
         
@@ -1754,3 +1761,5 @@ if __name__ == '__main__':
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
         plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
                   title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+    if p.SAVE_BAG:
+        p.recorder.stop_recording_srv()
