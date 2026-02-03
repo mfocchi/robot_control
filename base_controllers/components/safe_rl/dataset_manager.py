@@ -223,7 +223,7 @@ class DatasetManager():
 
         stats = np.array(stats, dtype=int)
 
-        np.save(os.path.join(save_path, "observations_dataset12.npy"), padded_obs)
+        np.save(os.path.join(save_path, "observations_dataset_newB.npy"), padded_obs)
 
         print(f"Episodi completati: {n_episodes}")
         print(f"Caduti: {np.sum(stats[:, 0])}, CP raggiunto: {np.sum(stats[:, 1])}")

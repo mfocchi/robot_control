@@ -49,7 +49,9 @@ def critic_inference(critic_model, params, obs):
 
 class ValueFunctionManager:
     def __init__(self):
-        model_path = "components/safe_rl/value_function/models/VF_backup_policy12.pkl"
+        model_path = "components/safe_rl/value_function/models/VF_new_policies3f.pkl"#0.43 2 #e.pkl" 0.4 1
+        model_path = "components/safe_rl/value_function/models/VF_new_policies2e.pkl"
+        model_path = "components/safe_rl/value_function/models/VF_new2b.pkl"
         self.model = self.load_value(model_path)
         self.setup_value_function(self.model)
         print("Loaded model parameters.")
@@ -87,7 +89,9 @@ class ValueFunctionManager:
         obs_flax = normalize_inputs(obs_flax, self.mean, self.std)
 
         V_safe = critic_inference(self.critic_model, self.critic_network.params, obs_flax)
-
+        #print(V_safe)
+        #self.VF = True
+        #return self.VF, V_safe
         if V_safe - vf_additional_term > threshold and self.VF:
             #  print(f"\033[92mV_safe: {V_safe:.4f}\033[0m")
             self.count = 0
