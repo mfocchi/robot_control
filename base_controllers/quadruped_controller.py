@@ -1644,7 +1644,7 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    p.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+    p.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = True
     generate_reference = False
@@ -1689,27 +1689,28 @@ if __name__ == '__main__':
             if p.gracefulCollapseFlag:
                 if p.gracefulCollapse():
                     break
+            if use_joy:
+                axes, buttons = joy.get_commands()
+                # use a scaling to make the joy input less reactive
+                long_x = 0.2 * axes[0]
+                long_y = 0.2 * axes[1]
+                rot_z = 0.3 * axes[2]
+                # safety layer
+                if buttons[0] and not p.gracefulCollapseFlag:
+                    print(colored("start Graceful collapse", "red"))
+                    p.kp_act, p.kd_act, p.ki_act = p.pid.getPDjoints()
+                    print(colored(f"Storing actual pd: {p.kp_act}, {p.kd_act},{p.ki_act}"), "red")
+                    p.gracefulCollapseFlag = True
+                if buttons[1]:
+                    print(colored("Severe shutdown!", "red"))
+                    if p.state_estimation == 'pronto':
+                        os.system(" rosnode kill /aliengo_joint_swapper")
+                        os.system(" rosnode kill /pronto_aliengo")
+                    ros.signal_shutdown("killed")
+                    p.deregister_node()
+                    break
             if rl_control != 'none' and (p.time > (p.startTime + 1.)):
                 if use_joy:
-                    axes, buttons = joy.get_commands()
-                    #use a scaling to make the joy input less reactive
-                    long_x = 0.2*axes[0]
-                    long_y = 0.2*axes[1]
-                    rot_z = 0.3*axes[2]
-                    #safety layer
-                    if buttons[0] and not p.gracefulCollapseFlag:
-                        print(colored("start Graceful collapse","red"))
-                        p.kp_act, p.kd_act, p.ki_act = p.pid.getPDjoints()
-                        print(colored(f"Storing actual pd: {p.kp_act}, {p.kd_act},{p.ki_act}"), "red")
-                        p.gracefulCollapseFlag = True
-                    if buttons[1]:
-                        print(colored("Severe shutdown!", "red"))
-                        if p.state_estimation == 'pronto':
-                            os.system(" rosnode kill /aliengo_joint_swapper")
-                            os.system(" rosnode kill /pronto_aliengo")
-                        ros.signal_shutdown("killed")
-                        p.deregister_node()
-                        break
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
                 else:
                     rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
