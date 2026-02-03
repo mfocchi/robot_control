@@ -1571,11 +1571,11 @@ class QuadrupedController(BaseController):
         self.alphaCollapse -= self.dt / self.collapseTime
         if self.alphaCollapse<=0:
             self.alphaCollapse = 0.0
-            if p.state_estimation=='pronto':
+            if self.state_estimation=='pronto':
                 os.system(" rosnode kill /aliengo_joint_swapper")
                 os.system(" rosnode kill /pronto_aliengo")
             ros.signal_shutdown("killed")
-            p.deregister_node()
+            self.deregister_node()
             return True
         else:
             self.pid.setPDjoints(self.alphaCollapse * self.kp_act, self.alphaCollapse * self.kd_act, self.alphaCollapse * self.ki_act)

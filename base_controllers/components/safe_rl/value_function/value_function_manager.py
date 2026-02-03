@@ -49,9 +49,10 @@ def critic_inference(critic_model, params, obs):
 
 class ValueFunctionManager:
     def __init__(self):
-        model_path = "components/safe_rl/value_function/models/VF_new_policies3f.pkl"#0.43 2 #e.pkl" 0.4 1
-        model_path = "components/safe_rl/value_function/models/VF_new_policies2e.pkl"
-        model_path = "components/safe_rl/value_function/models/VF_new2b.pkl"
+        #model_path = "components/safe_rl/value_function/models/VF_new_policies3f.pkl"#0.43 2 #e.pkl" 0.4 1
+        #model_path = "components/safe_rl/value_function/models/VF_new_policies2e.pkl"
+        #model_path = "components/safe_rl/value_function/models/VF_new2.pkl" #150N lateral push triggers backup
+        model_path = "components/safe_rl/value_function/models/VF_new2b.pkl"  # 50N lateral push  triggers backup
         self.model = self.load_value(model_path)
         self.setup_value_function(self.model)
         print("Loaded model parameters.")
@@ -60,6 +61,7 @@ class ValueFunctionManager:
         self.VF = True
         self.count_back = 0
         self.min_back = 200
+        self.backup_trigger_counter = 0
 
     # Function to load value function
     def load_value(self, file_path):
@@ -98,9 +100,10 @@ class ValueFunctionManager:
             self.VF = True
         elif self.VF:
             self.count += 1
-            print(f"\033[91mV_safe: {V_safe:.4f}\033[0m", self.count)
+            print(f"\033[91mV_safe: {V_safe:.4f}\033[0m",self.backup_trigger_counter)
             if self.count >= self.min_switch:
                 self.VF = False
+                self.backup_trigger_counter+=1
             else:
                 self.VF = True
         elif V_safe - vf_additional_term > threshold and not self.VF:
