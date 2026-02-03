@@ -28,9 +28,9 @@ PF_PATCH_INIT=  np.array([0.5, 6.5,-8.5])
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 5
 THREADS = 5
-flag_thread = True
+flag_thread = False
 CORRIDOR_RADIUS = 1.0 # for linear corridor warm start
-MAIN_DIRECTORY = "result/27_test"
+MAIN_DIRECTORY = "result/28"
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
 fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
 # fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear or parabolic
@@ -115,7 +115,7 @@ FILE_TERRAIN_PATCHES = f"{MAIN_DIRECTORY}/actual_patch_terrain.json"
 ITERATIONS_FOLDER = f"{MAIN_DIRECTORY}/iteration_reports"
 FILE_SAVE_PARAMS = f"{MAIN_DIRECTORY}/simulation_params.json"
 FILE_DESCRIPTION = f"{MAIN_DIRECTORY}/description.txt"
-
+FILE_FOR_GAZEBO_SIM = f"{MAIN_DIRECTORY}/info_for_gazebo.json"
 # ================================================
 # COMMON FUNCTIONS
 # ================================================
@@ -129,7 +129,7 @@ os.makedirs(result_dir, exist_ok=True)
 # Lz = -10                  
 # Ly = 10          
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
-terrain_manager  = TerrainManager()
+terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='gaussian_bumps')
 
 def initialize_terrain_data(warm_start_mode=False):
     create_description_file(enable=True)
@@ -198,7 +198,6 @@ def initialize_terrain_data(warm_start_mode=False):
     
     # Remove p0 and pf from available patches
     valid_patches = [p for p in all_patches if p != patch_p0 and p != patch_pf]
-    
     # Update cem_params.n_values with the new structure
     cem_params.n_values = [MAX_JUMP] + [valid_patches.copy() for _ in range(MAX_JUMP)]
     
@@ -391,6 +390,33 @@ def save_params():
     with open(FILE_SAVE_PARAMS, "w") as f:
         json.dump(params, f, indent=2)
     print(colored(f"[SAVE] Simulation parameters saved to: {FILE_SAVE_PARAMS}", "cyan"))
+
+
+def save_gazebo_info(best_points, terrain_manager):
+    gazebo_data = {
+        "terrain_info": {
+            "grid_size": terrain_manager.grid_size,
+            "wall_depth": terrain_manager.wall_depth,
+            "max_ridge_depth": terrain_manager.max_ridge_depth,
+            "seed": terrain_manager.seed,
+            "Lz": terrain_manager.Lz,
+            "Ly": terrain_manager.Ly,
+            "generate_terrain": terrain_manager.generate_terrain,
+            "terrain_type": terrain_manager.terrain_type
+        },
+        "target_points": [point.tolist() if isinstance(point, np.ndarray) else point 
+                         for point in best_points] if best_points is not None else []
+    }
+    
+    os.makedirs(os.path.dirname(FILE_FOR_GAZEBO_SIM), exist_ok=True)
+    
+    with open(FILE_FOR_GAZEBO_SIM, "w") as f:
+        json.dump(gazebo_data, f, indent=2)
+    
+    print(colored(f"[SAVE] Gazebo simulation info saved to: {FILE_FOR_GAZEBO_SIM}", "cyan"))
+    print(colored(f"       - Terrain type: {terrain_manager.terrain_type}", "cyan"))
+    print(colored(f"       - Target points: {len(best_points) if best_points else 0}", "cyan"))
+
 
 # ================================================
 # MATLAB SETUP

@@ -319,6 +319,8 @@ def main():
         print(colored(f"  Total Time: {wall_time:.2f}s", "green", attrs=['bold']))
         print(colored(f"{'='*70}\n", "green", attrs=['bold']))
         
+        save_gazebo_info(best_jump_log_points, terrain_manager)
+        
         if best_jump_log_points and best_trajectory:
             optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
             optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
