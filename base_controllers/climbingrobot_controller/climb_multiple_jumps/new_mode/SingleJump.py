@@ -13,30 +13,31 @@ from base_controllers.components.point_cloud_filter import PointCloudFilter
 from base_controllers.components.patch_surface import PatchSurface
 from base_controllers.utils.matlab_conversions import mat_matrix2python, mat_vector2python
 
-# Initialize MATLAB engine globally
-eng = matlab.engine.start_matlab()
-eng.addpath('/home/ruby/trento_lab_home/ros_ws/src/locosim/robot_control/base_controllers/climbingrobot_controller/codegen_mesh_landing', nargout=0)
-sys.path.insert(0, '/home/ruby/trento_lab_home/ros_ws/src/locosim/robot_control/base_controllers/climbingrobot_controller/codegen_mesh_landing')
-
 
 from params import *
 
 
+        
 class SingleJump:
     """
     Class to handle single jump optimization between two points on a terrain.
     """
-    def __init__(self, p0, pf, terrain_manager, point_clouds, patches):
+    def __init__(self, p0, pf, terrain_manager, point_clouds, patches, cost_grid):
         self.p0 = np.array(p0)
         self.pf = np.array(pf)
         self.terrain_manager = terrain_manager
         self.point_clouds = point_clouds
         self.patches = patches
-        self.jump_opt_params = inner_opt_params.copy()
-    
+        self.cost_grid = cost_grid
+        self.jump_opt_params = create_inner_opt_params_copy()
+        
+        
     def execute_jump(self, patch_id=None, contact_relative_to_patch_yz=None):
         p0_adj = self.p0.copy()
         pf_adj = self.pf.copy()
+        
+        eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager)
+        
         
         # If patch information provided, compute landing position
         if patch_id is not None and contact_relative_to_patch_yz is not None:
@@ -297,7 +298,8 @@ def main():
         PF_INIT, 
         terrain_manager, 
         point_clouds, 
-        patches
+        patches,
+        cost_grid
     )
     print(colored("\n3. Executing Jump Optimization...", "yellow"))
     start_time = time.time()

@@ -156,15 +156,15 @@ class LinearMultiJumpParams:
                     all_converged = False
                     print(colored(f"Failed (solver status: {problem_solved})", "red"))
                     self.trajectories.append(None)
-                    self.fitness_values.append(-1000.0)
-                    total_fitness -= 1000.0
+                    self.fitness_values.append(fitness_weights[0])
+                    total_fitness += fitness_weights[0]
                     self.jump_results.append({
                         'jump_number': i + 1,
                         'p0': self.waypoints[i].tolist(),
                         'pf': self.waypoints[i + 1].tolist(),
                         'p0_adjusted': p0_adj.tolist(),
                         'pf_adjusted': pf_adj.tolist(),
-                        'fitness': -1000.0,
+                        'fitness':  fitness_weights[0],
                         'problem_solved': problem_solved,
                         'consumed_energy': 0.0,
                         'jump_duration': 0.0
@@ -216,15 +216,15 @@ class LinearMultiJumpParams:
                 print(colored(f"Exception: {str(e)}", "red"))
                 all_converged = False
                 self.trajectories.append(None)
-                self.fitness_values.append(-1000.0)
-                total_fitness -= 1000.0
+                self.fitness_values.append(fitness_weights[0])
+                total_fitness +=  fitness_weights[0]
                 self.jump_results.append({
                     'jump_number': i + 1,
                     'p0': self.waypoints[i].tolist(),
                     'pf': self.waypoints[i + 1].tolist(),
                     'p0_adjusted': p0_adj.tolist(),
                     'pf_adjusted': pf_adj.tolist(),
-                    'fitness': -1000.0,
+                    'fitness': fitness_weights[0],
                     'problem_solved': 0,
                     'consumed_energy': 0.0,
                     'jump_duration': 0.0
@@ -625,7 +625,7 @@ def main():
     print(f"Start: {P0_INIT} | Goal: {PF_INIT} | Jumps: {MAX_JUMP}")
     # patch_selected = [31, 54,66]
     # patch_selected = [22, 55,66]
-    patch_selected = [13, 35, 46, 66]
+    patch_selected = [13, 33, 46, 66]
     multi_jump = LinearMultiJumpParams(
         P0_INIT, PF_INIT, terrain_manager, point_clouds, patches, patch_selected
     )
