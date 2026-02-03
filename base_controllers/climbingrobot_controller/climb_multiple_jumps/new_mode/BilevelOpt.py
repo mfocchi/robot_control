@@ -48,6 +48,33 @@ class BilevelOpt:
         jump_log_points.append(p0_adj.copy())
 
         total_jump = n_jumps + 1  # Including final jump with +1
+        
+        # DOPPIONE PISELLONE CHECK
+        # fitness about "duplicate" jumps inside xd
+        used_patches = [(xd[1 + i]) for i in range(n_jumps)]
+        if len(used_patches) != len(set(used_patches)):
+            print("DOPPIONE PISELLONE!")
+            all_converged = False
+            fitness_score = self.fitness_weights[0]
+            
+            print("xd value: " , xd)    
+            print(f"Computed Score (Cost): {fitness_score:.4f}")
+            print(f"--- Evaluation Results ---")
+            print(f"Status: FAILED (DUPLICATE), Waypoints Used: 0/{MAX_JUMP}, Total Energy: 0.00, Terrain Cost: 0.00")
+            print(f"--------------------------")
+            
+            return {
+                'fitness': fitness_score,
+                'points': [],  # Changed from None to empty list
+                'traj': [],    # Changed from None to empty list
+                'achieved_target': None,
+                'n_jumps': 0,
+                'consumed_energy': 0.0,
+                'landing_cost': 0.0,
+                'all_converged': False
+            }
+        
+        
         for i in range(total_jump):
             if i < n_jumps: # jump btw patches
                 patch_id = int(xd[1 + i])
@@ -58,6 +85,9 @@ class BilevelOpt:
             else: # final jump to target
                 pf_adj = self.pf_patch.copy()
                 patch_id = self.patches.get_patch_id_from_point_2D(pf_adj[1], pf_adj[2]) 
+                # mettere patch side a 0.1
+                local_inner_opt_params['patch_side_y'] = 0.1
+                local_inner_opt_params['patch_side_z'] = 0.1
             
             # Projection on the surface the points considered for optimization
             for pt in [p0_adj, pf_adj]:   
@@ -96,19 +126,20 @@ class BilevelOpt:
             fitness_score = self.fitness_weights[0]  # Penalty for non-convergence
             achieved_target = None
             avg_jump_landing_cost = 0.0
+            avg_energy_cost = total_consumed_energy
         else:
-            waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
+            # waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
             avg_energy_cost = (total_consumed_energy) * self.fitness_weights[1] # / total_jump ??
             avg_jump_landing_cost = (total_landing_cost) * self.fitness_weights[3] # / total_jump ??
             
-            fitness_score = waypoint_cost + avg_energy_cost + avg_jump_landing_cost
+            fitness_score = avg_energy_cost + avg_jump_landing_cost #+ waypoint_cost
             achieved_target = mat_vector2python(res['achieved_target']) if res['achieved_target'] is not None else None
 
         print("xd value: ", xd)
         print(f"Computed Score (Cost): {fitness_score:.4f}")
         status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
         print(f"--- Evaluation Results ---")
-        print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {total_consumed_energy:.2f}, avg_jump_landing_cost: {total_landing_cost:.4f} , Global Convergence: {status_msg}")
+        print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {avg_energy_cost:.2f}, avg_jump_landing_cost: {avg_jump_landing_cost:.4f} , Global Convergence: {status_msg}")
         print(f"--------------------------")
         
         return {
@@ -117,8 +148,8 @@ class BilevelOpt:
             'traj': jump_log_traj,
             'achieved_target': achieved_target,
             'n_jumps': total_jump,
-            'consumed_energy': total_consumed_energy,
-            'landing_cost': total_landing_cost,
+            'consumed_energy': avg_energy_cost, #total_consumed_energy,
+            'landing_cost': avg_jump_landing_cost, #total_landing_cost,
             'all_converged': all_converged
         }
                

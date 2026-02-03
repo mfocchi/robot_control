@@ -21,7 +21,7 @@ def main():
     setting = {
         "COMPUTATION_MODE": True, 
         "PLOT_MODE": True,
-        "WARM_START_MODE": True
+        "WARM_START_MODE": False
     }
     
     if setting["COMPUTATION_MODE"]:

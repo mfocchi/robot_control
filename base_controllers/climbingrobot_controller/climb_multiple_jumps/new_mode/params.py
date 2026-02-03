@@ -28,12 +28,12 @@ PF_PATCH_INIT=  np.array([0.5, 6.5,-8.5])
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 5
 THREADS = 5
-flag_thread = False
+flag_thread = True
 CORRIDOR_RADIUS = 1.0 # for linear corridor warm start
-MAIN_DIRECTORY = "result/test_meeting_4"
+MAIN_DIRECTORY = "result/27_test"
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
-# fitness_weights = np.array([1e7, 10.,1., 100., 1.,500.]) # Optimizer
-fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear or parabolic
+fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
+# fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
 filter_weights = np.array([10., 10., 0,10.0])
@@ -62,12 +62,12 @@ inner_opt_params['b'] = anchor_distance
 inner_opt_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
 inner_opt_params['p_a2'] = matlab.double([0., inner_opt_params['b'], 0.]).reshape(3, 1)
 inner_opt_params['g'] = 9.81
-inner_opt_params['w1'] = 1.  # smooth
+inner_opt_params['w1'] = 0.001  # smooth
 inner_opt_params['w2'] = 0.  # hoist work
-inner_opt_params['w3'] = 300.
+inner_opt_params['w3'] = 1000.
 inner_opt_params['T_th'] = 0.05
 inner_opt_params['obstacle_avoidance'] = 'mesh'
-inner_opt_params['jump_clearance'] = 1.
+inner_opt_params['jump_clearance'] = 0.5
 inner_opt_params['mesh_x'] = None
 inner_opt_params['mesh_y'] = None
 inner_opt_params['mesh_z'] = None
@@ -75,7 +75,7 @@ inner_opt_params['cost_x'] = None
 inner_opt_params['cost_y'] = None
 inner_opt_params['cost_z'] = None
 inner_opt_params['contact_normal'] = None
-
+inner_opt_params['debug'] = False
 # ================================================
 # OUTER LOOP OPTIMIZER PARAMETERS
 # ================================================
@@ -86,7 +86,7 @@ cem_params = CemParams()
 cem_params.seed =0# int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 50
+cem_params.cem_iters = 30
 cem_params.pop_size = 150
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
@@ -166,12 +166,12 @@ def initialize_terrain_data(warm_start_mode=False):
     inner_opt_params['cost_x'] = cost_grid
     inner_opt_params['cost_y'] = terrain_manager.mesh_y
     inner_opt_params['cost_z'] = terrain_manager.mesh_z
-    inner_opt_params['patch_side'] = 1.0 * patches.patch_width
+    # inner_opt_params['patch_side'] = 1.0 * patches.patch_width
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
     patches.visualize_full_cost_map()
     
-    inner_opt_params['patch_side'] = patches.patch_height
-    # inner_opt_params['patch_side_y'] = 1.0 * patches.patch_width
+    inner_opt_params['patch_side_z'] = patches.patch_height
+    inner_opt_params['patch_side_y'] = 1.0 * patches.patch_width
     
     # patch_id = 25
     # cost = patches.get_patch_cost(patch_id)
@@ -433,14 +433,17 @@ def create_inner_opt_params_copy():
         'T_th': inner_opt_params['T_th'],
         'obstacle_avoidance': inner_opt_params['obstacle_avoidance'],
         'jump_clearance': inner_opt_params['jump_clearance'],
+        'debug': inner_opt_params['debug'],
         'mesh_x': inner_opt_params['mesh_x'],
         'mesh_y': inner_opt_params['mesh_y'],
         'mesh_z': inner_opt_params['mesh_z'],
         'cost_x': inner_opt_params['cost_x'],
         'cost_y': inner_opt_params['cost_y'],
         'cost_z': inner_opt_params['cost_z'],
-        'patch_side': inner_opt_params['patch_side'],
+        'patch_side_z': inner_opt_params['patch_side_z'],
+        'patch_side_y': inner_opt_params['patch_side_y'],
         'contact_normal': None,
+        
     }
 
 # ================================================

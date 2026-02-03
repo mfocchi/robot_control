@@ -119,8 +119,7 @@ class CrossEntropyMethodMixed:
                     self.population_discrete[j, i] = 0
                 else:
                     # Check if n_values[j] is an integer or a list
-                    if isinstance(self.params.n_values[j], int):
-                        # Original behavior: sample from 0 to n_values[j]-1
+                    if isinstance(self.params.n_values[j], int): # hanlde number of jumps
                         p = self.rng.random()
                         s = 0.0
                         for k in range(self.params.n_values[j]):
@@ -128,8 +127,7 @@ class CrossEntropyMethodMixed:
                             if p < s:
                                 break
                         self.population_discrete[j, i] = k
-                    else:
-                        # New behavior: n_values[j] is a list of valid indices
+                    else: # hanlde list of patches
                         valid_indices = self.params.n_values[j]
                         p = self.rng.random()
                         s = 0.0
@@ -208,27 +206,21 @@ class CrossEntropyMethodMixed:
         p = self.params
         # Sort individuals by their perfomance (best first!)
         idx = np.argsort(self.population_fit)
-
         # Add elites to population
         self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
 
         # Update probabilities using the elites
         for j in range(self.params.dim_discrete):
-            # Check if n_values[j] is an integer or a list
-            if isinstance(p.n_values[j], int):
-                # Original behavior: count occurrences of each value
+            if isinstance(p.n_values[j], int): # hanlde number of jumps
                 counter = [0.0 for _ in range(p.n_values[j])]
                 for i in range(p.n_elites):
                     counter[self.elites_discrete[j, i]] += 1
                 for k in range(p.n_values[j]):
                     self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
-            else:
-                # New behavior: n_values[j] is a list of valid indices
+            else: # hanlde list of patches
                 valid_indices = p.n_values[j]
                 num_valid = len(valid_indices)
                 counter = [0.0 for _ in range(num_valid)]
-                
-                # Count occurrences - map actual patch IDs to probability indices
                 for i in range(p.n_elites):
                     actual_patch_id = self.elites_discrete[j, i]
                     # Find the index in valid_indices list

@@ -181,5 +181,7 @@ ax.scatter(pf_adj[0], pf_adj[1], pf_adj[2], color='green', s=200)  # s = size
 ax.plot3D(ref_com[0,:], ref_com[1,:],ref_com[2,:],color='red', linewidth=2.5)
 ax.scatter(achieved_target[0], achieved_target[1], achieved_target[2], color='red', s=300)  # s = size
 
-eng.exit
+plt.show()
+
+# Properly close MATLAB engine
 eng.quit()

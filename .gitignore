@@ -543,3 +543,4 @@
 /base_controllers/doretta/.DS_Store
 /base_controllers/doretta/controllers/.DS_Store
 *pyc
+/base_controllers/climbingrobot_controller/climb_multiple_jumps/new_mode/result
