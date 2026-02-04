@@ -1677,7 +1677,8 @@ if __name__ == '__main__':
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown',
-                                           'rviz:=true'])
+                                           'rviz:=true',
+                                           *(['task_period:=0.002'] if p.real_robot else [])]) #change task period for real robot
         if p.SAVE_BAG:
             p.recorder = RosbagControlledRecorder(bag_name="quadruped.bag", record_from_startup_=False)
             p.recorder.start_recording_srv()
