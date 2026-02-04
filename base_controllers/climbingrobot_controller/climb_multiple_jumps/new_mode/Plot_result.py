@@ -13,7 +13,7 @@ from params import *
 import matplotlib
 matplotlib.use('Qt5Agg')
 
-FOLDER_MAIN = "result/test_meeting_4"
+FOLDER_MAIN = "result/302_opti_focchi"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -605,13 +605,28 @@ class PlotResultCemMjumps:
         iteration_data = []
         num_iters = len(self.all_elites)
         cmap_iters = plt.get_cmap('viridis', num_iters)
-        
+    
+        # Get patch boundaries from patch_plotter
+        y_min = self.patch_plotter.y_min
+        y_max = self.patch_plotter.y_max
+        z_min = self.patch_plotter.z_min
+        z_max = self.patch_plotter.z_max
+            
         for iter_idx, iteration_list in enumerate(self.all_elites):
             iter_points_y, iter_points_z = [], []
             for elite in iteration_list:
-                for pt in elite.points:
-                    iter_points_y.append(pt[1])
-                    iter_points_z.append(pt[2])
+                # Skip first point (start) and optionally last (if outside)
+                for i, pt in enumerate(elite.points):
+                    # Skip start point
+                    if i == 0:
+                        continue
+                        
+                    # Check if point is within patch boundaries
+                    if (y_min <= pt[1] <= y_max) and (z_min <= pt[2] <= z_max):
+                        iter_points_y.append(pt[1])
+                        iter_points_z.append(pt[2])
+                    else:
+                        print(f"[DEBUG] Iter {iter_idx}, Elite point {i} outside bounds: Y={pt[1]:.2f}, Z={pt[2]:.2f}")
             
             if iter_points_y:
                 iteration_data.append({
@@ -1230,9 +1245,9 @@ def main():
     plotter.base_plot()
     plotter.count_jump_histogram(use_last_iter_only=False)
     plotter.plot_fitness_by_iteration()
-    plotter.plot_mesh_pc_traj()
+    # plotter.plot_mesh_pc_traj()
     # plotter.plot_best_per_iteration_grid(show_cost=True, plots_per_figure=5)
-    # plotter.plot_2d_iterations_layout(animated=False, compare=True)
+    plotter.plot_2d_iterations_layout(animated=False, compare=True)
     # plotter.plot_3d_iterations_layout(animated=True, compare=False)
     plotter.plot_convergence_histogram()
     print("[INFO] All plots completed!")

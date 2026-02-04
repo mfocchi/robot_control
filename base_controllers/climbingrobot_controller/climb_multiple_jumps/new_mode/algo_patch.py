@@ -126,7 +126,7 @@ class CrossEntropyMethodMixed:
                             s += self.probs[j][k]
                             if p < s:
                                 break
-                        self.population_discrete[j, i] = k
+                        self.population_discrete[j, i] = k +1
                     else: # hanlde list of patches
                         valid_indices = self.params.n_values[j]
                         p = self.rng.random()
@@ -136,7 +136,42 @@ class CrossEntropyMethodMixed:
                             if p < s:
                                 break
                         self.population_discrete[j, i] = valid_k
-                        
+    
+    
+    
+    def update_distribution_discrete(self):
+        p = self.params
+        # Sort individuals by their perfomance (best first!)
+        idx = np.argsort(self.population_fit)
+        # Add elites to population
+        self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
+        
+        # Update probabilities using the elites
+        for j in range(self.params.dim_discrete):
+            if isinstance(p.n_values[j], int): # hanlde number of jumps
+                counter = [0.0 for _ in range(p.n_values[j])]
+                for i in range(p.n_elites):
+                    counter[self.elites_discrete[j, i] -1] += 1
+                for k in range(p.n_values[j]):
+                    self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
+            else: # hanlde list of patches
+                
+                valid_indices = p.n_values[j]
+                num_valid = len(valid_indices)
+                counter = [0.0 for _ in range(num_valid)]
+                for i in range(p.n_elites):
+                    actual_patch_id = self.elites_discrete[j, i]
+                    # Find the index in valid_indices list
+                    
+                    idx_in_list = valid_indices.index(actual_patch_id)
+                    counter[idx_in_list] += 1
+                
+                # Update probabilities
+                for k in range(num_valid):
+                    self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
+
+            self.probs[j] = self.probs[j] / np.sum(self.probs[j])
+                     
     # def generate_population_discrete(self,first_iteration=False) -> None:
     #     # Generate random gaussian values from pure Normal distribution (mean=0, std=1)
     #     for i in range(self.params.pop_size):
@@ -202,40 +237,6 @@ class CrossEntropyMethodMixed:
     #             if j > 0:
     #                 used_patches.add(chosen_k)
 
-    def update_distribution_discrete(self):
-        p = self.params
-        # Sort individuals by their perfomance (best first!)
-        idx = np.argsort(self.population_fit)
-        # Add elites to population
-        self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
-
-        # Update probabilities using the elites
-        for j in range(self.params.dim_discrete):
-            if isinstance(p.n_values[j], int): # hanlde number of jumps
-                counter = [0.0 for _ in range(p.n_values[j])]
-                for i in range(p.n_elites):
-                    counter[self.elites_discrete[j, i]] += 1
-                for k in range(p.n_values[j]):
-                    self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
-            else: # hanlde list of patches
-                valid_indices = p.n_values[j]
-                num_valid = len(valid_indices)
-                counter = [0.0 for _ in range(num_valid)]
-                for i in range(p.n_elites):
-                    actual_patch_id = self.elites_discrete[j, i]
-                    # Find the index in valid_indices list
-                    try:
-                        idx_in_list = valid_indices.index(actual_patch_id)
-                        counter[idx_in_list] += 1
-                    except ValueError:
-                        # This shouldn't happen, but handle it gracefully
-                        pass
-                
-                # Update probabilities
-                for k in range(num_valid):
-                    self.probs[j][k] = counter[k] / p.n_elites + p.min_prob
-
-            self.probs[j] = self.probs[j] / np.sum(self.probs[j])
     
     
     # def update_distribution_discrete(self):
