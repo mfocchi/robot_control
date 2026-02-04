@@ -92,11 +92,17 @@ class QuadrupedController(BaseController):
                 print(f"state_estimation type not known {self.state_estimation}")
         else:#simulation
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Imu,  callback=self._receive_imu_acc, queue_size=1, tcp_nodelay=True)
+
             if self.state_estimation == 'pronto':  # use pronto for state estimation
                 #  stateest node requires publication of msg type sensor:IMU in topic aliengo/imu we remap
                 startNode(package="topic_tools", executable="relay", args="/" + self.robot_name + "/trunk_imu" + "  " + "/" + self.robot_name + "/imu", name="trunk_imu_to_imu")
-                self.pronto_config = "aliengo_state_estimator.yaml"
+                self.pronto_config = "aliengo_state_estimator_sim.yaml"
+                from pronto_msgs.msg import QuadrupedStance, QuadrupedForceTorqueSensors
+                self.pronto_contacts_sub = ros.Subscriber("/state_estimator_pronto/stance", QuadrupedStance, callback=self._receive_pronto_contacts, queue_size=1, tcp_nodelay=True)
                 self.sub_pose = ros.Subscriber("/state_estimator_pronto/odom", Odometry, callback=self._receive_pose, queue_size=1, tcp_nodelay=True)
+                #these on real robot are published by hw interface
+                self.pub_feet_forces = ros.Publisher("/" + self.robot_name + "/feet_forces", QuadrupedForceTorqueSensors, queue_size=1, tcp_nodelay=True)
+
             elif self.state_estimation=='ground_truth':
                 self.sub_pose = ros.Subscriber("/" + self.robot_name + "/ground_truth", Odometry,  callback=self._receive_pose,  queue_size=1, tcp_nodelay=True)
             elif self.state_estimation=='odometry':
@@ -253,7 +259,7 @@ class QuadrupedController(BaseController):
 
         self.grForcesW_des = np.empty(3 * self.robot.nee) * np.nan
         self.grForcesW_wbc = np.empty(3 * self.robot.nee) * np.nan
-        self.grForcesB = np.empty(3 * self.robot.nee) * np.nan
+        self.grForcesB = np.empty(3 * self.robot.nee) * np.nan #not used
         self.grForcesB_ffwd = np.empty(3 * self.robot.nee) * np.nan
 
         # load gains
@@ -503,7 +509,6 @@ class QuadrupedController(BaseController):
             remove_jpg_cmd = 'for f in /tmp/camera_save/*; do rm "$f"; done'
             os.system(remove_jpg_cmd)
             print(colored('Jpg files removed', 'blue'), flush=True)
-
         self.loadModelAndPublishers(xacro_path)    # load robot and all the publishers
         #self.resetGravity(True)
         self.initVars()                            # overloaded method
@@ -797,6 +802,16 @@ class QuadrupedController(BaseController):
                                                                                       update_legOdom=update_legOdom)
         self.imu_utils.compute_lin_vel(self.baseLinAccW, self.loop_time)
         super(QuadrupedController, self).updateKinematics()
+
+        #publish contact forces in the topic for pronto
+        if self.state_estimation == 'pronto':
+            from pronto_msgs.msg import QuadrupedForceTorqueSensors
+            msg = QuadrupedForceTorqueSensors()
+            msg.lf.force.z = self.u.getLegJointState(self.u.leg_map["LF"], self.grForcesW)[2] #z component
+            msg.rf.force.z = self.u.getLegJointState(self.u.leg_map["RF"], self.grForcesW)[2]  # z component
+            msg.lh.force.z = self.u.getLegJointState(self.u.leg_map["LH"], self.grForcesW)[2]  # z component
+            msg.rh.force.z = self.u.getLegJointState(self.u.leg_map["RH"], self.grForcesW)[2] # z component
+            self.pub_feet_forces.publish(msg)
 
     def checkBaseCollisions(self):
         # base control points
