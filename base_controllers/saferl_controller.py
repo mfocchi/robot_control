@@ -48,12 +48,12 @@ if __name__ == '__main__':
     use_gui=False#True
     p.state_estimation = 'pronto'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
     rl_controller = RlVelocityController(p.robot_name, p.dt)
-    p.SAVE_BAG = False  #
+    p.SAVE_BAG = True  #
     vf_frequency = 100  # Hz
     vf_decimation = (1 / p.dt) / (vf_frequency)
     step = 0
     isrec = True
-    use_joy = True
+    use_joy = False
     sim_push = False
 
     if use_joy:
@@ -66,7 +66,9 @@ if __name__ == '__main__':
         p.startController(world_name=world_name,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:=' + str(use_gui),
-                                           'go0_conf:=standDown'])
+                                           'go0_conf:=standDown',
+                                           'rviz:=true',
+                                           *(['task_period:=0.002'] if p.real_robot else [])])  # change task period for real robot
         if p.SAVE_BAG:
             p.recorder = RosbagControlledRecorder(bag_name="saferl.bag", record_from_startup_=False)
             p.recorder.start_recording_srv()
@@ -108,10 +110,13 @@ if __name__ == '__main__':
                     ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
-            if np.all(p.pronto_contacts) and not p.controller_ready:
-                print(colored("ALL FEET ARE IN STANCE: Starting RL controller", "red"))
+            if p.state_estimation == 'pronto':
+                if np.all(p.pronto_contacts) and not p.controller_ready:
+                    print(colored("ALL FEET ARE IN STANCE: It is possible to start RL controller", "red"))
+                    p.controller_ready = True
+            else:
                 p.controller_ready = True
-            if  (p.time > (p.startTime + 4.)) and p.controller_ready:
+            if (p.time > (p.startTime + 4.)) and p.controller_ready:
                 #rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
                 if use_joy:
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
@@ -130,6 +135,7 @@ if __name__ == '__main__':
                      p.counter+=1
                 if isrec:
                      # nominal policy
+                     #rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
                      p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
                 else:
                     # backup policy
@@ -144,7 +150,7 @@ if __name__ == '__main__':
 
                 if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
                     isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.6, vf_additional_term = 0.0)
-                    isrec = True #just record value functtion but dont use
+                    #isrec = True #just record value functtion but dont use
                      #print(V_safe)
                 # '''elif step % decimation == 0:
                 #     if np.all(np.abs(lin_vel_b < 10e-2)) and np.all(np.abs(p.qd) < 10e-2):
@@ -173,7 +179,7 @@ if __name__ == '__main__':
                                                                                 p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.alphaCollapse * p.tau_ffwd, log_data_in_send_command=False)
 
-            p.visualizeContacts()
+            #p.visualizeContacts()
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         if p.SAVE_BAG:
@@ -182,11 +188,12 @@ if __name__ == '__main__':
         p.deregister_node()
 
     if conf.plotting:
-        plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
-                  start=0, end=-1)
-        plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
-                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
-        plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
-                  title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        pass
+        # plotJoint('position', time_log=p.time_log, q_log=p.q_log, q_des_log=p.q_des_log, sharex=True, sharey=False,
+        #           start=0, end=-1)
+        # plotFrame('position', time_log=p.time_log, des_Pose_log=p.basePoseW_des_log, Pose_log=p.basePoseW_log,
+        #           title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
+        # plotFrame('velocity', time_log=p.time_log, des_Twist_log=p.baseTwistW_des_log, Twist_log=p.baseTwistW_log,
+        #           title='Base', frame='W', sharex=True, sharey=False, start=0, end=-1)
     if p.SAVE_BAG:
         p.recorder.stop_recording_srv()

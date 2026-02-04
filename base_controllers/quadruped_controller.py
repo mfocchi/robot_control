@@ -1672,8 +1672,8 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    p.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
-    rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
+    p.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+    rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = False
     generate_reference = False
     p.SAVE_BAG = False  #
@@ -1739,9 +1739,10 @@ if __name__ == '__main__':
                     ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
-            if p.state_estimation == 'pronto' and np.all(p.pronto_contacts) and not p.controller_ready:
-                print(colored("ALL FEET ARE IN STANCE: It is possible to start RL controller","red"))
-                p.controller_ready = True
+            if p.state_estimation == 'pronto':
+                if np.all(p.pronto_contacts) and not p.controller_ready:
+                    print(colored("ALL FEET ARE IN STANCE: It is possible to start RL controller","red"))
+                    p.controller_ready = True
             else:
                 p.controller_ready = True
             if rl_control != 'none' and (p.time > (p.startTime + 3.)) and p.controller_ready:
