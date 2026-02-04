@@ -31,7 +31,7 @@ class QuadrupedController(BaseController):
     def __init__(self, robot_name="hyq", launch_file=None):
         super(QuadrupedController, self).__init__(robot_name, launch_file)
         self.qj_0 = conf.robot_params[self.robot_name]['q_0']
-        self.dt = conf.robot_params[self.robot_name]['dt']
+
 
         self.ee_frames = conf.robot_params[self.robot_name]['ee_frames']
         self.leg_names = [foot[:2] for foot in self.ee_frames]
@@ -40,9 +40,12 @@ class QuadrupedController(BaseController):
         if not self.real_robot:
             self.gravity_comp_duration = 0.5 #1.5
             self.standup_period = 1. #3
+            self.dt = conf.robot_params[self.robot_name]['dt']
         else:
             self.gravity_comp_duration = 1.5
             self.standup_period = 3.
+            print(colored("overriding default dt: quadruped controller for real robot runs at 250Hz!","red"))
+            self.dt = 0.004
 
 
         # pid = os.getpid()
