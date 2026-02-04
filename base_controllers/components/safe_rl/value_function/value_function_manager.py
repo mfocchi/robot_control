@@ -54,7 +54,7 @@ class ValueFunctionManager:
         #model_path = "components/safe_rl/value_function/models/VF_new_policies3f.pkl"#0.43 2 #e.pkl" 0.4 1
         #model_path = "components/safe_rl/value_function/models/VF_new_policies2e.pkl"
         #model_path = "components/safe_rl/value_function/models/VF_new2.pkl" #150N lateral push triggers backup
-        model_path = os.environ['LOCOSIM_DIR']+"/robot_control/base_controllers/components/safe_rl/value_function/models/VF_new2b.pkl"  # 50N lateral push  triggers backup
+        model_path = os.environ['LOCOSIM_DIR']+"/robot_control/base_controllers/components/safe_rl/value_function/models/VF_new2d.pkl"  # 50N lateral push  triggers backup
         self.model = self.load_value(model_path)
         self.setup_value_function(self.model)
         print("Loaded model parameters.")
@@ -102,10 +102,11 @@ class ValueFunctionManager:
             self.VF = True
         elif self.VF:
             self.count += 1
-            print(f"\033[91mV_safe: {V_safe:.4f}\033[0m",self.backup_trigger_counter)
+            print(f"\033[91mV_safe: {V_safe:.4f} : {self.backup_trigger_counter}\033[0m")
             if self.count >= self.min_switch:
                 self.VF = False
                 self.backup_trigger_counter+=1
+                print(self.backup_trigger_counter)
             else:
                 self.VF = True
         elif V_safe - vf_additional_term > threshold and not self.VF:
