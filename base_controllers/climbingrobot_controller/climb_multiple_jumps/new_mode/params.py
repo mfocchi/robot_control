@@ -22,28 +22,45 @@ import matplotlib.patches as mpatches
 # ================================================
 # BASE DATA FOR MULTIPLE JUMPS CLIMBING CONTROLLER
 # ================================================
-P0_INIT = np.array([0.5, 1.5, -1.5])
-PF_PATCH_INIT=  np.array([0.5, 6.5,-8.5]) 
+# 1. P0_INIT
+p0_str = os.environ.get("P0_INIT_STR") 
+if p0_str:
+    P0_INIT = np.array(json.loads(p0_str))
+else:
+    P0_INIT = np.array([0.5, 1.5, -1.5])
+    
+pf_str = os.environ.get("PF_INIT_STR")
+if pf_str:
+    PF_PATCH_INIT = np.array(json.loads(pf_str))
+else:
+    PF_PATCH_INIT = np.array([0.5, 6.5, -8.5])
+
+
 
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 5
-THREADS = 5
-flag_thread = False
+THREADS = 10
+flag_thread = True
+
 CORRIDOR_RADIUS = 1.0 # for linear corridor warm start
-MAIN_DIRECTORY = "result/28"
+# MAIN_DIRECTORY = "result/2_test"
+
+MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
 fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
-# fitness_weights = np.array([1e7, 30.0,10., 0.5, 10.0,50.0]) # Linear or parabolic
+# fitness_weights = np.array([1e6, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
 filter_weights = np.array([10., 10., 0,10.0])
+
+
 
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
-Fleg_max = 300.
-Fr_max = 190.
+Fleg_max = 150.
+Fr_max = 80.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
@@ -86,8 +103,8 @@ cem_params = CemParams()
 cem_params.seed =0# int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 30
-cem_params.pop_size = 150
+cem_params.cem_iters = 3
+cem_params.pop_size = 10
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.1
@@ -98,7 +115,8 @@ number_of_patches = number_of_patches_width * number_of_patches_height
 # cem_params.n_values = [3] + [(number_of_patches-1) for _ in range(4)]
 cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(MAX_JUMP)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
-cem_params.min_prob = 0.005  # Reduced from 0.1 to allow warm start to dominate more
+# cem_params.min_prob = 0.01  
+cem_params.min_prob = float(os.environ.get("CEM_MIN_PROB", 0.01))
 # Continuous
 cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # x and y positions
 cem_params.max_value_continuous = np.full(cem_params.dim_continuous, 1.0)
@@ -129,8 +147,8 @@ os.makedirs(result_dir, exist_ok=True)
 # Lz = -10                  
 # Ly = 10          
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
+# terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-12, Ly=10, generate_terrain=True, terrain_type='custom_gaussians')
 terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='gaussian_bumps')
-
 def initialize_terrain_data(warm_start_mode=False):
     create_description_file(enable=True)
     
@@ -168,7 +186,7 @@ def initialize_terrain_data(warm_start_mode=False):
     inner_opt_params['cost_z'] = terrain_manager.mesh_z
     # inner_opt_params['patch_side'] = 1.0 * patches.patch_width
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
-    patches.visualize_full_cost_map()
+    # patches.visualize_full_cost_map()
     
     inner_opt_params['patch_side_z'] = patches.patch_height
     inner_opt_params['patch_side_y'] = 1.0 * patches.patch_width

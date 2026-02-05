@@ -13,7 +13,7 @@ from params import *
 import matplotlib
 matplotlib.use('Qt5Agg')
 
-FOLDER_MAIN = "result/302_opti_focchi"
+FOLDER_MAIN = "result/305_opti_parabolic"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -1245,7 +1245,7 @@ def main():
     plotter.base_plot()
     plotter.count_jump_histogram(use_last_iter_only=False)
     plotter.plot_fitness_by_iteration()
-    # plotter.plot_mesh_pc_traj()
+    plotter.plot_mesh_pc_traj()
     # plotter.plot_best_per_iteration_grid(show_cost=True, plots_per_figure=5)
     plotter.plot_2d_iterations_layout(animated=False, compare=True)
     # plotter.plot_3d_iterations_layout(animated=True, compare=False)

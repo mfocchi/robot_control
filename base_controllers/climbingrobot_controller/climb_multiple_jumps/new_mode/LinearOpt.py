@@ -89,7 +89,7 @@ class LinearOpti:
 
 
         if not all_converged:
-            fitness_score = fitness_weights[0]
+            fitness_score = -fitness_weights[0]  # Negative for maximization
             achieved_target = None
             avg_jump_landing_cost = 0.0
         else:
@@ -98,10 +98,10 @@ class LinearOpti:
             energy_cost = np.log(total_consumed_energy + 1) * fitness_weights[1] # ha il log perche e' esponenziale
             terrain_cost = (total_landing_cost/total_jump) * fitness_weights[3]
             
-            fitness_score = waypoint_cost + energy_cost + cost_dist + terrain_cost
+            fitness_score = -(waypoint_cost + energy_cost + cost_dist + terrain_cost)  # Negative for maximization
 
         print("xd value: " , xd)    
-        print(f"Computed Score (Cost): {fitness_score:.4f}")
+        print(f"Computed Score (Fitness): {fitness_score:.4f}")
         
         status_msg = "CONVERGED" if all_converged else "FAILED"
         print(f"--- Evaluation Results ---")
@@ -109,7 +109,7 @@ class LinearOpti:
         print(f"--------------------------")
 
         return {
-            'fitness':  fitness_score,  # This is now a COST (minimize this value)
+            'fitness':  fitness_score,  # This is now a FITNESS (maximize this value, 0 is best)
             'points': jump_log_points,
             'traj': jump_log_traj,
             'achieved_target': achieved_target,
