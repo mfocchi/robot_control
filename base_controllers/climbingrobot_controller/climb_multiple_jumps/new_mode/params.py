@@ -100,11 +100,11 @@ CEM_DISCRETE_DIM = MAX_JUMP + 1
 
 # Set up parameters OUTER LOOP
 cem_params = CemParams()
-cem_params.seed =0# int(time.time())
+cem_params.seed =int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 3
-cem_params.pop_size = 10
+cem_params.cem_iters = 30
+cem_params.pop_size = 150
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.1
