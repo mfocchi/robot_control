@@ -19,7 +19,7 @@ def main():
     
     setting = {
         "COMPUTATION_MODE": True,
-        "WARM_START_MODE": False,
+        "WARM_START_MODE": True,
         "PLOT_MODE": False,
         "EARLY_STOP": True
     }
@@ -54,7 +54,7 @@ def main():
         start = time.time()
         
         # early stop:
-        patience = 5
+        patience = 10
         no_improvement_counter = 0
         min_delta = 1e-4
         last_best_fitness = -np.inf  # Changed from np.inf to -np.inf
