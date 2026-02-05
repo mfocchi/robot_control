@@ -150,7 +150,7 @@ os.makedirs(result_dir, exist_ok=True)
 # terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-12, Ly=10, generate_terrain=True, terrain_type='custom_gaussians')
 terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='gaussian_bumps')
 def initialize_terrain_data(warm_start_mode=False):
-    create_description_file(enable=True)
+    create_description_file(enable=False)
     
     terrain_params = []
     # === 1 POINT CLOUD INITIALIZATION ===

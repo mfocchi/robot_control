@@ -20,7 +20,7 @@ def main():
     
     setting = {
         "COMPUTATION_MODE": True, 
-        "PLOT_MODE": True,
+        "PLOT_MODE": False,
         "WARM_START_MODE": False,
         "EARLY_STOP": True
     }
@@ -321,14 +321,14 @@ def main():
         print(colored(f"{'='*70}\n", "green", attrs=['bold']))
         
         save_gazebo_info(best_jump_log_points, terrain_manager)
+        
+    if setting["PLOT_MODE"]:
         if best_jump_log_points and best_trajectory:
             optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
             optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
         else:
             print(colored("[ERROR] Could not plot best trajectory. No solution found or tracking issue.", "red", attrs=['bold']))
 
-    if setting["PLOT_MODE"]:
-        print("plot to print")
 if __name__ == "__main__":
     try:
         main()
