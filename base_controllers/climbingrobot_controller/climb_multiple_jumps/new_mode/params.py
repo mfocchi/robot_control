@@ -42,13 +42,13 @@ MAX_JUMP = 5
 THREADS = 10
 flag_thread = True
 
-CORRIDOR_RADIUS = 1.0 # for linear corridor warm start
+CORRIDOR_RADIUS = 4.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
 MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
 fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
-# fitness_weights = np.array([1e6, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
+# fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
 filter_weights = np.array([10., 10., 0,10.0])
@@ -103,11 +103,11 @@ cem_params = CemParams()
 cem_params.seed =int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
-cem_params.cem_iters = 30
+cem_params.cem_iters = 50
 cem_params.pop_size = 150
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
-cem_params.fraction_elites_reused = 0.1
+cem_params.fraction_elites_reused = 0.05
 cem_params.alpha = 0.5
 # Discrete
 cem_params.dim_discrete = CEM_DISCRETE_DIM
@@ -116,7 +116,7 @@ number_of_patches = number_of_patches_width * number_of_patches_height
 cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(MAX_JUMP)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
 # cem_params.min_prob = 0.01  
-cem_params.min_prob = float(os.environ.get("CEM_MIN_PROB", 0.01))
+cem_params.min_prob = float(os.environ.get("CEM_MIN_PROB", 0.02))
 # Continuous
 cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # x and y positions
 cem_params.max_value_continuous = np.full(cem_params.dim_continuous, 1.0)
@@ -140,6 +140,7 @@ FILE_FOR_GAZEBO_SIM = f"{MAIN_DIRECTORY}/info_for_gazebo.json"
 result_dir = os.path.join(os.path.abspath(os.getcwd()), MAIN_DIRECTORY)
 os.makedirs(result_dir, exist_ok=True)
 
+terrain_type = os.environ.get("TERRAIN_TYPE", "gaussian_bumps")
 # Terrain configuration values for rock terrain, otherwise stay in default
 # wall_depth = 1            
 # grid_size = 100
@@ -147,8 +148,8 @@ os.makedirs(result_dir, exist_ok=True)
 # Lz = -10                  
 # Ly = 10          
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
-# terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-12, Ly=10, generate_terrain=True, terrain_type='custom_gaussians')
-terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='gaussian_bumps')
+# terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='custom_gaussians')
+terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type=terrain_type)
 def initialize_terrain_data(warm_start_mode=False):
     create_description_file(enable=False)
     
@@ -221,16 +222,22 @@ def initialize_terrain_data(warm_start_mode=False):
     
     # Update init_probs accordingly
     if warm_start_mode:
-        # patch_probs = get_warm_start_base_cost(patches)
-        patch_probs = get_warm_start_line(
+        
+        patch_probs = get_warm_start_line_distance_only(
             patches, 
             P0_INIT, 
             PF_PATCH_INIT, 
-            radius=CORRIDOR_RADIUS,     
-            sensitivity=5.0 
-        )
+            radius=CORRIDOR_RADIUS )
+        
+        # patch_probs = get_warm_start_base_cost(patches)
+        # patch_probs = get_warm_start_line(
+        #     patches, 
+        #     P0_INIT, 
+        #     PF_PATCH_INIT, 
+        #     radius=CORRIDOR_RADIUS,     
+        #     sensitivity=5.0 )
     
-        plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
+        # plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
 
         # Create new init_probs with filtered probabilities
         new_init_probs = []
@@ -543,6 +550,53 @@ def get_warm_start_line(patches, p0, pf, radius=4.0, sensitivity=5.0):
         return np.full(num_patches, 1.0 / num_patches).tolist()
     
     return (raw_probs / sum_probs).tolist()
+def get_warm_start_line_distance_only(patches, p0, pf, radius=8.0):
+    """
+    Compute patch probabilities based on 2D perpendicular distance from the line between p0 and pf.
+    Only considers y and z coordinates (ignores x).
+    """
+    num_patches = len(patches.patches)
+    
+    # Extract only y and z coordinates (ignore x)
+    p0_2d = p0[1:]  # [y, z]
+    pf_2d = pf[1:]  # [y, z]
+    
+    # Define line vector in 2D
+    line_vec_2d = pf_2d - p0_2d
+    line_len_sq = np.dot(line_vec_2d, line_vec_2d)
+    
+    # Handle degenerate case where p0 == pf in 2D
+    if line_len_sq < 1e-9:
+        print(colored("[WARN] Start and goal are the same point in 2D. Using uniform distribution.", "yellow"))
+        return np.full(num_patches, 1.0 / num_patches).tolist()
+    
+    # Extract centroids for all patches (vectorized) - only y and z
+    centroids = np.array([p['centroid'] for p in patches.patches])
+    centroids_2d = centroids[:, 1:]  # Take only y and z columns
+    
+    # Calculate perpendicular distance from each centroid to the line in 2D
+    # For 2D: distance = |cross_product_z_component| / ||line_vec||
+    # cross_product_z = (point_y - p0_y) * line_z - (point_z - p0_z) * line_y
+    point_vecs_2d = centroids_2d - p0_2d
+    
+    # 2D cross product (scalar result)
+    cross_prod_z = point_vecs_2d[:, 0] * line_vec_2d[1] - point_vecs_2d[:, 1] * line_vec_2d[0]
+    distances = np.abs(cross_prod_z) / np.sqrt(line_len_sq)
+    
+    # Inverse linear weight: distance 0 -> weight 1, distance >= radius -> weight 0
+    weights = np.maximum(0.0, 1.0 - (distances / radius))
+    
+    # Cleanup very small values
+    weights[weights < 1e-9] = 0.0
+    
+    # Normalize to probabilities
+    sum_weights = np.sum(weights)
+    
+    if sum_weights == 0:
+        print(colored("[WARN] All patches outside corridor radius. Reverting to uniform distribution.", "yellow"))
+        return np.full(num_patches, 1.0 / num_patches).tolist()
+    
+    return (weights / sum_weights).tolist()
 
 def get_warm_start_base_cost(patches, sensitivity=10.0): 
     # 1. Cost extraction maintaining correspondence with centroids
