@@ -11,7 +11,7 @@ do
     #file name folder
     DIR_NAME="result/${name_folder}_${i}"
 
-    CURRENT_MIN_PROB=$(python3 -c "print(0.01 * $i)")
+    # CURRENT_MIN_PROB=$(python3 -c "print(0.01 * $i)")
     echo "=================================================="
     echo "=================================================="
     echo "RUN $i: Output -> $DIR_NAME"
@@ -22,7 +22,7 @@ do
     echo "=================================================="
 
     # EXPERIMENT_DIR="$DIR_NAME" CEM_MIN_PROB="$CURRENT_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" python3 Main_cemmulti_simple.py
-    EXPERIMENT_DIR="$DIR_NAME" CEM_MIN_PROB="$CURRENT_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" python3 Main_cemmulti_parabolic.py
+    EXPERIMENT_DIR="$DIR_NAME" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" python3 Main_cemmulti_parabolic.py
     # EXPERIMENT_DIR="$DIR_NAME" CEM_MIN_PROB="$CURRENT_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" python3 Main_cemmulti_patch.py
 
 
@@ -33,3 +33,28 @@ do
 done
 
 echo "All $NUM_RUNS experiments have completed."
+
+
+# Plot results for each experiment
+echo ""
+echo "=================================================="
+echo "Starting visualization of results..."
+echo "=================================================="
+
+for ((i=1; i<=NUM_RUNS; i++))
+do
+    DIR_NAME="result/${name_folder}_${i}"
+    
+    echo ""
+    echo "=================================================="
+    echo "PLOTTING RUN $i: $DIR_NAME"
+    echo "=================================================="
+    
+    FOLDER_PLOT="\"$DIR_NAME\"" python3 Plot_result.py
+    
+    echo "Plotting for Run $i completed."
+    sleep 2
+done
+
+echo ""
+echo "All visualizations have completed."
