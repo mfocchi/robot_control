@@ -35,8 +35,7 @@ class IterationLog:
     iterations: int = 0
     func_evals: int = 0
     best_discrete: Optional[np.ndarray] = None
-    best_value: float = np.inf
-    
+    best_value: float = -np.inf  # Changed from np.inf to -np.inf for maximization
 
 
 class CrossEntropyMethodMixed:
@@ -67,8 +66,8 @@ class CrossEntropyMethodMixed:
 
         self.allocate_data_discrete()
 
-        self.population_fit = np.full(params.pop_size, np.inf)
-        self.fit_best = np.inf
+        self.population_fit = np.full(params.pop_size, -np.inf)  # Changed from np.inf to -np.inf
+        self.fit_best = -np.inf  # Changed from np.inf to -np.inf
         self.history = []
         
     def allocate_data_discrete(self):
@@ -85,9 +84,9 @@ class CrossEntropyMethodMixed:
         # Store calculated fitness score
         self.population_fit = np.copy(population_fit)
 
-        # Update global best
+        # Update global best (now looking for maximum)
         for i in range(self.params.pop_size):
-            if self.population_fit[i] < self.fit_best:
+            if self.population_fit[i] > self.fit_best:  # Changed from < to >
                 self.fit_best = np.copy(self.population_fit[i])
                 self.best_discrete = np.copy(self.population_discrete[:, i])
 
@@ -141,8 +140,8 @@ class CrossEntropyMethodMixed:
     
     def update_distribution_discrete(self):
         p = self.params
-        # Sort individuals by their perfomance (best first!)
-        idx = np.argsort(self.population_fit)
+        # Sort individuals by their perfomance (best first - now descending for maximization!)
+        idx = np.argsort(self.population_fit)[::-1]  # Added [::-1] to reverse sort
         # Add elites to population
         self.elites_discrete = self.population_discrete[:, idx[: p.n_elites]]
         

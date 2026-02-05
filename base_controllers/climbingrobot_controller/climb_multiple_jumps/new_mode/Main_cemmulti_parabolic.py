@@ -20,7 +20,8 @@ def main():
     setting = {
         "COMPUTATION_MODE": True,
         "WARM_START_MODE": False,
-        "PLOT_MODE": True
+        "PLOT_MODE": True,
+        "EARLY_STOP": True
     }
     
     if setting["COMPUTATION_MODE"]:
@@ -44,13 +45,19 @@ def main():
         best_jump_log_points = None
         best_jump = None
         best_trajectory = None
-        best_fitness = np.inf
+        best_fitness = -np.inf  # Changed from np.inf to -np.inf
         best_consumed_energy = None
         best_landing_cost = None
         best_achieved_target = None
         best_all_converged = None
         
         start = time.time()
+        
+        # early stop:
+        patience = 5
+        no_improvement_counter = 0
+        min_delta = 1e-4
+        last_best_fitness = -np.inf  # Changed from np.inf to -np.inf
         
         for k in range(cem_params.cem_iters):
             # set time and paramters
@@ -114,7 +121,7 @@ def main():
                         all_converged[idx] = log_result['all_converged']
                         with best_lock:
                             
-                            if log_result['fitness'] < best_fitness: #and (n_jumps + 1) >= 3:
+                            if log_result['fitness'] > best_fitness:  # Changed comparison for maximization
                                 best_fitness = log_result['fitness']
                                 best_consumed_energy = log_result['consumed_energy']
                                 best_landing_cost = log_result['landing_cost']
@@ -152,7 +159,7 @@ def main():
                     all_landing_cost[i] = log_result['landing_cost']
                     all_n_jumps[i] = log_result['n_jumps']
                     all_converged[i] = log_result['all_converged']
-                    if log_result['fitness'] < best_fitness:
+                    if log_result['fitness'] > best_fitness:  # Changed comparison for maximization
                         best_fitness = log_result['fitness']
                         best_consumed_energy = log_result['consumed_energy']
                         best_landing_cost = log_result['landing_cost']
@@ -168,9 +175,10 @@ def main():
             algo.evaluate_population(fitness)
             algo.update_distributions()
             cost_hist[k] = algo.log.best_value 
-                   
+            
             print ("finish iteration ", k+1)
             iter_time = time.time() - iter_start
+            
             
             # if flag_thread == False:
                 # optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
@@ -188,7 +196,7 @@ def main():
             
             # 1. Save elites of current iteration
             num_elites = cem_params.n_elites
-            sorted_indices = np.argsort(fitness)
+            sorted_indices = np.argsort(fitness)[::-1]  # Added [::-1] for descending sort
             elite_indices = sorted_indices[:num_elites]
             
             current_iteration_elites = []
@@ -260,7 +268,18 @@ def main():
                 json.dump(all_comb_report, f, indent=2)
             
             print(colored(f"[SAVE] Full population report saved to: {all_comb_filename}", "blue"))
-                
+            
+            if setting["EARLY_STOP"]:
+                # Early stopping check (now checking for improvement in maximization)
+                if best_fitness - last_best_fitness > min_delta:  # Changed comparison direction
+                    no_improvement_counter = 0
+                    last_best_fitness = best_fitness
+                else:
+                    no_improvement_counter += 1
+                if no_improvement_counter >= patience:
+                    print(colored(f"[EARLY STOP] No improvement in the last {patience} iterations. Stopping optimization.", "red", attrs=['bold']))
+                    break
+            
         n_workers = cem_params.n_threads
         
         # with ThreadPoolExecutor(max_workers=n_workers) as executor:

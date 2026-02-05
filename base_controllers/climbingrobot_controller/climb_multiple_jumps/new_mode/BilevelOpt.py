@@ -55,10 +55,10 @@ class BilevelOpt:
         if len(used_patches) != len(set(used_patches)):
             print("DOPPIONE PISELLONE!")
             all_converged = False
-            fitness_score = self.fitness_weights[0]
+            fitness_score = -self.fitness_weights[0]  # Negative for maximization
             
             print("xd value: " , xd)    
-            print(f"Computed Score (Cost): {fitness_score:.4f}")
+            print(f"Computed Score (Fitness): {fitness_score:.4f}")
             print(f"--- Evaluation Results ---")
             print(f"Status: FAILED (DUPLICATE), Waypoints Used: 0/{MAX_JUMP}, Total Energy: 0.00, Terrain Cost: 0.00")
             print(f"--------------------------")
@@ -123,7 +123,7 @@ class BilevelOpt:
             p0_adj = mat_vector2python(res['achieved_target']) #pf_adj.copy()
             
         if not all_converged:
-            fitness_score = self.fitness_weights[0]  # Penalty for non-convergence
+            fitness_score = -self.fitness_weights[0]  # Negative for maximization
             achieved_target = None
             avg_jump_landing_cost = 0.0
             avg_energy_cost = total_consumed_energy
@@ -132,24 +132,24 @@ class BilevelOpt:
             avg_energy_cost = (total_consumed_energy) * self.fitness_weights[1] # / total_jump ??
             avg_jump_landing_cost = (total_landing_cost) * self.fitness_weights[3] # / total_jump ??
             
-            fitness_score = avg_energy_cost + avg_jump_landing_cost #+ waypoint_cost
+            fitness_score = -(avg_energy_cost + avg_jump_landing_cost)  # Negative for maximization
             achieved_target = mat_vector2python(res['achieved_target']) if res['achieved_target'] is not None else None
 
         print("xd value: ", xd)
-        print(f"Computed Score (Cost): {fitness_score:.4f}")
+        print(f"Computed Score (Fitness): {fitness_score:.4f}")
         status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
         print(f"--- Evaluation Results ---")
         print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {avg_energy_cost:.2f}, avg_jump_landing_cost: {avg_jump_landing_cost:.4f} , Global Convergence: {status_msg}")
         print(f"--------------------------")
         
         return {
-            'fitness': fitness_score,
+            'fitness': fitness_score,  # This is now a FITNESS (maximize this value, 0 is best)
             'points': jump_log_points,
             'traj': jump_log_traj,
             'achieved_target': achieved_target,
             'n_jumps': total_jump,
-            'consumed_energy': avg_energy_cost, #total_consumed_energy,
-            'landing_cost': avg_jump_landing_cost, #total_landing_cost,
+            'consumed_energy': avg_energy_cost,
+            'landing_cost': avg_jump_landing_cost,
             'all_converged': all_converged
         }
                
