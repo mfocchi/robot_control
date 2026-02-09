@@ -50,12 +50,12 @@ class PatchSurface:
     #dimension of the map and patches 
     def dimension_of_map(self):
         '''
-        Ritorna le dimensioni totali della mappa e delle singole patch
+        Returns the total dimensions of the map and individual patches
         '''
         Ly = self.y_max - self.y_min
         Lz = self.z_max - self.z_min
         
-        # Dimensioni della singola patch
+        # Dimensions of single patch
         patch_width = Ly / self.number_of_patches_width if self.number_of_patches_width else 0.0
         patch_height = Lz / self.number_of_patches_height if self.number_of_patches_height else 0.0
         return Ly, Lz, patch_height, patch_width
@@ -826,13 +826,16 @@ class PatchSurface:
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
-        #select fast mode: 
         
         total_points = sum(len(patch.get('points_in_patch', [])) for patch in self.patches)
         num_patches = len(self.patches)
         
         # Automatically switch to fast mode if too many points or patches
         use_fast_mode = total_points > 1000001
+        
+        # Collect all points for equal axis scaling
+        all_x, all_y, all_z = [], [], []
+        
         if use_fast_mode:
             print(f"[patch_surface] Using fast mode: {total_points} total points, {num_patches} patches")
             # Fast mode: show only centroids
@@ -848,6 +851,9 @@ class PatchSurface:
                 centroids = np.array(centroids)
                 ax.scatter(centroids[:, 0], centroids[:, 1], centroids[:, 2], 
                           s=24, c=colors, alpha=0.8, marker='s')
+                all_x = centroids[:, 0]
+                all_y = centroids[:, 1]
+                all_z = centroids[:, 2]
         else: 
             for patch in self.patches:
                 pts = patch.get('points_in_patch') or patch.get('points') or []
@@ -856,14 +862,29 @@ class PatchSurface:
 
                 P = np.vstack([p['position'] for p in pts])  
                 s = np.array([p['size_point'] for p in pts])
+                all_x.extend(P[:, 0])
+                all_y.extend(P[:, 1])
+                all_z.extend(P[:, 2])
             
                 color = patch.get('color_patch')
                 ax.scatter(P[:, 0], P[:, 1], P[:, 2], s=s, alpha=alpha, color=color)
-                
-                # centroid = patch.get('centroid')
-                # if centroid is not None:
-                #     ax.scatter(centroid[0], centroid[1], centroid[2], 
-                #             s=20, c='blue', marker='o', alpha=1.0, edgecolors='white', linewidth=1)
+        
+        # Equal axis scaling
+        if all_x:
+            all_x, all_y, all_z = np.array(all_x), np.array(all_y), np.array(all_z)
+            max_range = np.array([
+                all_x.max() - all_x.min(),
+                all_y.max() - all_y.min(),
+                all_z.max() - all_z.min()
+            ]).max() / 2.0
+            
+            mid_x = (all_x.max() + all_x.min()) * 0.5
+            mid_y = (all_y.max() + all_y.min()) * 0.5
+            mid_z = (all_z.max() + all_z.min()) * 0.5
+            
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
         plt.tight_layout()
         plt.show()
@@ -875,43 +896,67 @@ class PatchSurface:
             
         fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(111, projection='3d')
-        ax.set_title(f'Contesto Mappa - Patch Evidenziate: {target_ids}')
+        ax.set_title(f'Map Context - Highlighted Patches: {target_ids}')
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
 
-        # Colori
+        # Colors
         colore_evidenziato = 'purple'
-        colore_sfondo = 'lightgrey' # Grigio chiaro per il resto della mappa
+        colore_sfondo = 'lightgrey' # Light gray for the rest of the map
+
+        # Collect all points for equal axis scaling
+        all_x, all_y, all_z = [], [], []
 
         for patch in self.patches:
             pts = patch.get('points_in_patch', [])
             if not pts:
                 continue
 
-            # Estrazione coordinate
+            # Extract coordinates
             P = np.vstack([p['position'] for p in pts])
             s = np.array([p['size_point'] for p in pts]) if (len(pts) > 0 and 'size_point' in pts[0]) else 10
             
-            # Decidiamo colore e trasparenza in base all'ID
+            all_x.extend(P[:, 0])
+            all_y.extend(P[:, 1])
+            all_z.extend(P[:, 2])
+            
+            # Decide color and transparency based on ID
             if patch['id'] in target_ids:
-                # Patch selezionata: VIOLA e OPACA
+                # Selected patch: PURPLE and OPAQUE
                 current_color = colore_evidenziato
                 current_alpha = 0.8
-                zorder = 5 # Porta in primo piano
+                zorder = 5 # Bring to foreground
                 
-                # Aggiungiamo centroide e testo solo per queste
+                # Add centroid and text only for these
                 centroid = patch.get('centroid')
             else:
-                # Resto della mappa: GRIGIO e SEMI-TRASPARENTE
+                # Rest of the map: GRAY and SEMI-TRANSPARENT
                 current_color = colore_sfondo
-                current_alpha = 0.3 # Molto leggero per non disturbare la vista
+                current_alpha = 0.3 # Very light to not disturb the view
                 zorder = 1
 
-            # Disegno della patch
+            # Draw the patch
             ax.scatter(P[:, 0], P[:, 1], P[:, 2], s=s, alpha=current_alpha, color=current_color, zorder=zorder)
 
-        # Ottimizzazione visualizzazione
+        # Equal axis scaling
+        if all_x:
+            all_x, all_y, all_z = np.array(all_x), np.array(all_y), np.array(all_z)
+            max_range = np.array([
+                all_x.max() - all_x.min(),
+                all_y.max() - all_y.min(),
+                all_z.max() - all_z.min()
+            ]).max() / 2.0
+            
+            mid_x = (all_x.max() + all_x.min()) * 0.5
+            mid_y = (all_y.max() + all_y.min()) * 0.5
+            mid_z = (all_z.max() + all_z.min()) * 0.5
+            
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        # Optimization visualization
         plt.tight_layout()
         plt.show()
         return fig, ax
@@ -926,13 +971,16 @@ class PatchSurface:
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
-        #select fast mode: 
         
         total_points = sum(len(patch.get('points_in_patch', [])) for patch in self.patches)
         num_patches = len(self.patches)
         
         # Automatically switch to fast mode if too many points or patches
         use_fast_mode = total_points > 1000001
+        
+        # Collect all points for equal axis scaling
+        all_x, all_y, all_z = [], [], []
+        
         if use_fast_mode:
             print(f"[patch_surface] Using fast mode: {total_points} total points, {num_patches} patches")
             # Fast mode: show only centroids
@@ -948,6 +996,9 @@ class PatchSurface:
                 centroids = np.array(centroids)
                 ax.scatter(centroids[:, 0], centroids[:, 1], centroids[:, 2], 
                           s=24, c=colors, alpha=0.8, marker='s')
+                all_x = centroids[:, 0]
+                all_y = centroids[:, 1]
+                all_z = centroids[:, 2]
         else: 
             for patch in self.patches:
                 pts = patch.get('points_in_patch') or patch.get('points') or []
@@ -956,6 +1007,10 @@ class PatchSurface:
 
                 P = np.vstack([p['position'] for p in pts])  
                 s = np.array([p['size_point'] for p in pts])
+                
+                all_x.extend(P[:, 0])
+                all_y.extend(P[:, 1])
+                all_z.extend(P[:, 2])
                 
                 # Check for blue points and preserve their color
                 colors = []
@@ -971,6 +1026,23 @@ class PatchSurface:
                 # if centroid is not None:
                 #     ax.scatter(centroid[0], centroid[1], centroid[2], 
                 #             s=20, c='blue', marker='o', alpha=1.0, edgecolors='white', linewidth=1)
+
+        # Equal axis scaling
+        if all_x:
+            all_x, all_y, all_z = np.array(all_x), np.array(all_y), np.array(all_z)
+            max_range = np.array([
+                all_x.max() - all_x.min(),
+                all_y.max() - all_y.min(),
+                all_z.max() - all_z.min()
+            ]).max() / 2.0
+            
+            mid_x = (all_x.max() + all_x.min()) * 0.5
+            mid_y = (all_y.max() + all_y.min()) * 0.5
+            mid_z = (all_z.max() + all_z.min()) * 0.5
+            
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
         plt.tight_layout()
         plt.show()
@@ -1020,20 +1092,27 @@ class PatchSurface:
             ax.scatter(centroid[0], centroid[1], centroid[2], 
                        s=50, c='red', marker='o', alpha=1.0, edgecolors='white', linewidth=1)
         
+        # Equal axis scaling
+        max_range = np.ptp(P, axis=0).max() / 2.0
+        mid = np.mean(P, axis=0)
+        ax.set_xlim(mid[0] - max_range, mid[0] + max_range)
+        ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
+        ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
+        
         plt.tight_layout()
         plt.show()
     
     def visualize_full_cost_map(self):
-        # 1. Raccolta di tutti i punti da tutte le patch
+        # 1. Collection of all points from all patches
         all_points_list = []
         for patch in self.patches:
             all_points_list.extend(patch.get('points_in_patch', []))
 
         if not all_points_list:
-            print("[patch_surface] Nessun punto trovato nelle patch per la visualizzazione.")
+            print("[patch_surface] No points found in patches for visualization.")
             return
 
-        # 2. Estrazione dati per il plotting
+        # 2. Extract data for plotting
         x_coords = np.array([p['position'][0] for p in all_points_list])
         y_coords = np.array([p['position'][1] for p in all_points_list])
         z_coords = np.array([p['position'][2] for p in all_points_list])
@@ -1041,36 +1120,52 @@ class PatchSurface:
         costs = np.array([p['cost'] for p in all_points_list])
         sizes = np.array([p['size_point'] for p in all_points_list])
 
-        # 3. Creazione del grafico (replica subplot di PointCloudFilter)
+        # 3. Create plot (replica of PointCloudFilter subplot)
         fig = plt.figure(figsize=(16, 8))
         
-        # Subplot 1: Point cloud 3D colorata per costo
+        # Subplot 1: 3D point cloud colored by cost
         ax1 = fig.add_subplot(1, 2, 1, projection='3d')
         ax1.scatter(x_coords, y_coords, z_coords, c=colors, s=sizes, alpha=0.8)
-        ax1.set_xlabel('X (m) - Altezza')
+        
+        # Equal axis scaling for 3D plot
+        max_range = np.array([
+            x_coords.max() - x_coords.min(),
+            y_coords.max() - y_coords.min(),
+            z_coords.max() - z_coords.min()
+        ]).max() / 2.0
+        
+        mid_x = (x_coords.max() + x_coords.min()) * 0.5
+        mid_y = (y_coords.max() + y_coords.min()) * 0.5
+        mid_z = (z_coords.max() + z_coords.min()) * 0.5
+        
+        ax1.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax1.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax1.set_zlim(mid_z - max_range, mid_z + max_range)
+        
+        ax1.set_xlabel('X (m) - Height')
         ax1.set_ylabel('Y (m)')
         ax1.set_zlabel('Z (m)')
-        ax1.set_title('Mappa 3D - Colore basato sul Costo\n(Verde=Basso, Rosso=Alto)')
+        ax1.set_title('3D Map - Color based on Cost\n(Green=Low, Red=High)')
         
-        # Subplot 2: Vista 2D dall'alto (Piano YZ)
+        # Subplot 2: 2D top view (YZ Plane)
         ax2 = fig.add_subplot(1, 2, 2)
-        scatter2 = ax2.scatter(y_coords, z_coords, c=colors, s=sizes*2, alpha=0.8)
+        scatter2 = ax2.scatter(y_coords, z_coords, c=colors, s=sizes*3, alpha=1.0) 
         ax2.set_xlabel('Y (m)')
         ax2.set_ylabel('Z (m)')
-        ax2.set_title('Vista 2D Mappa dei Costi\n(Proiezione YZ)')
+        ax2.set_title('2D Cost Map View\n(YZ Projection)')
+        ax2.set_aspect('equal', adjustable='box')
         ax2.grid(True, alpha=0.3)
         
         plt.tight_layout()
         plt.show()
         
-        # 4. Statistiche dei costi (replica logica PointCloudFilter)
-        print(f"\n[patch_surface] Statistiche Costi Globali (su {len(all_points_list)} punti):")
-        print(f"  - Costo Minimo: {np.min(costs):.3f}")
-        print(f"  - Costo Massimo: {np.max(costs):.3f}")
-        print(f"  - Costo Medio: {np.mean(costs):.3f}")
-        print(f"  - Deviazione Standard: {np.std(costs):.3f}")
-    
-    
+        # 4. Cost statistics (replica of PointCloudFilter logic)
+        print(f"\n[patch_surface] Global Cost Statistics (on {len(all_points_list)} points):")
+        print(f"  - Minimum Cost: {np.min(costs):.3f}")
+        print(f"  - Maximum Cost: {np.max(costs):.3f}")
+        print(f"  - Mean Cost: {np.mean(costs):.3f}")
+        print(f"  - Standard Deviation: {np.std(costs):.3f}")
+      
     def plot_population_density(self, all_sampled_ids):
         """
         Visualizza quali patch sono state scelte, colorandole in base alla FREQUENZA di selezione.
@@ -1093,16 +1188,19 @@ class PatchSurface:
         
         fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(111, projection='3d')
-        ax.set_title(f'Population descrete distirbution')
+        ax.set_title(f'Population Discrete Distribution')
         ax.set_xlabel('X (Depth)')
         ax.set_ylabel('Y (Width)')
         ax.set_zlabel('Z (Height)')
 
-        # Usiamo una colormap che va dal trasparente/freddo al caldo/opaco
-        # Esempio: 'plasma' o 'hot_r' o 'Reds'
+        # Use a colormap that goes from transparent/cold to hot/opaque
+        # Example: 'plasma' or 'hot_r' or 'Reds'
         cmap = cm.get_cmap('jet') 
 
-        print(f"[PLOT] Generazione Heatmap selezioni...")
+        print(f"[PLOT] Generating Selection Heatmap...")
+
+        # Collect all points for equal axis scaling
+        all_x, all_y, all_z = [], [], []
 
         for patch in self.patches:
             pid = patch['id']
@@ -1111,35 +1209,55 @@ class PatchSurface:
                 continue
 
             P = np.vstack([p['position'] for p in pts])
+            all_x.extend(P[:, 0])
+            all_y.extend(P[:, 1])
+            all_z.extend(P[:, 2])
             
-            # Logica colore:
+            # Color logic:
             if pid in counts:
                 frequency = counts[pid]
-                # Normalizziamo tra 0 e 1 rispetto al massimo trovato in questa iterazione
+                # Normalize between 0 and 1 relative to the maximum found in this iteration
                 intensity = frequency / max_count 
                 
-                # Otteniamo il colore dalla colormap
+                # Get color from colormap
                 color_val = cmap(intensity)
                 
-                # TRUCCO VISIVO: 
-                # Le patch molto selezionate devono essere opache (alpha=1).
-                # Le patch poco selezionate devono essere trasparenti.
-                # Patch non selezionate: grigio chiarissimo quasi invisibile.
-                alpha_val = 0.3 + (0.7 * intensity) # Minimo 0.3 di opacità se selezionata
-                s_val = 15 + (20 * intensity)       # Anche la dimensione dei punti aumenta se molto frequentata
+                # VISUAL TRICK: 
+                # Highly selected patches should be opaque (alpha=1).
+                # Less selected patches should be transparent.
+                # Unselected patches: very light gray almost invisible.
+                alpha_val = 0.3 + (0.7 * intensity) # Minimum 0.3 opacity if selected
+                s_val = 15 + (20 * intensity)       # Point size also increases if heavily trafficked
                 
             else:
-                # Patch MAI selezionata
+                # NEVER selected patch
                 color_val = 'lightgrey'
-                alpha_val = 0.02 # Praticamente invisibile, solo contesto
+                alpha_val = 0.02 # Practically invisible, just context
                 s_val = 5
 
             ax.scatter(P[:, 0], P[:, 1], P[:, 2], s=s_val, c=[color_val], alpha=alpha_val)
 
-        # Aggiungiamo una colorbar "finta" per capire la scala (opzionale ma utile)
+        # Equal axis scaling
+        if all_x:
+            all_x, all_y, all_z = np.array(all_x), np.array(all_y), np.array(all_z)
+            max_range = np.array([
+                all_x.max() - all_x.min(),
+                all_y.max() - all_y.min(),
+                all_z.max() - all_z.min()
+            ]).max() / 2.0
+            
+            mid_x = (all_x.max() + all_x.min()) * 0.5
+            mid_y = (all_y.max() + all_y.min()) * 0.5
+            mid_z = (all_z.max() + all_z.min()) * 0.5
+            
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        # Add a "fake" colorbar to understand the scale (optional but useful)
         m = cm.ScalarMappable(cmap=cmap)
         m.set_array([0, max_count])
-        plt.colorbar(m, ax=ax, label='Numero di Selezioni (Frequenza)')
+        plt.colorbar(m, ax=ax, label='Number of Selections (Frequency)')
 
         plt.tight_layout()
         plt.show()
@@ -1259,7 +1377,7 @@ def main():
     print("[TEST] STARTING PATCH SURFACE TEST SUITE")
     
     print("[TEST] === SETUP: Loading Terrain and Filtering Point Cloud ===")
-    terrain = TerrainManager(terrain_type='rock')
+    terrain  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type="custom_gaussians")
     pc = terrain.point_cloud
     pcs = PointCloudFilter(pc, h_min=1.0, h_max=4.0)    
     pcs.print_map_pc()

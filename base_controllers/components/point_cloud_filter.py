@@ -354,6 +354,15 @@ class PointCloudFilter:
         ax = fig.add_subplot(111, projection='3d') 
         
         ax.scatter(x_points, y_points, z_points, c=color, s=size_point) 
+        
+        # Equal axis scaling to prevent stretching
+        all_pts = np.column_stack([x_points, y_points, z_points])
+        max_range = np.ptp(all_pts, axis=0).max() / 2.0
+        mid = np.mean(all_pts, axis=0)
+        ax.set_xlim(mid[0] - max_range, mid[0] + max_range)
+        ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
+        ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
+        
         ax.set_xlabel('X (m) - Height')
         ax.set_ylabel('Y (m)')
         ax.set_zlabel('Z (m)')
@@ -396,6 +405,15 @@ class PointCloudFilter:
                    c=point_colors, 
                    s=point_sizes, 
                    alpha=0.8)
+        
+        # Equal axis scaling for subplot 2
+        all_pts = np.column_stack([x_points, y_points, z_points])
+        max_range = np.ptp(all_pts, axis=0).max() / 2.0
+        mid = np.mean(all_pts, axis=0)
+        ax2.set_xlim(mid[0] - max_range, mid[0] + max_range)
+        ax2.set_ylim(mid[1] - max_range, mid[1] + max_range)
+        ax2.set_zlim(mid[2] - max_range, mid[2] + max_range)
+        
         ax2.set_xlabel('X (m)')
         ax2.set_ylabel('Y (m)')
         ax2.set_zlabel('Z (m)')
@@ -446,6 +464,15 @@ class PointCloudFilter:
             s=point_sizes,  
             alpha=0.8
         )
+        
+        # Equal axis scaling for 3D plot
+        all_pts = np.column_stack([x_points, y_points, z_points])
+        max_range = np.ptp(all_pts, axis=0).max() / 2.0
+        mid = np.mean(all_pts, axis=0)
+        ax1.set_xlim(mid[0] - max_range, mid[0] + max_range)
+        ax1.set_ylim(mid[1] - max_range, mid[1] + max_range)
+        ax1.set_zlim(mid[2] - max_range, mid[2] + max_range)
+        
         ax1.set_xlabel('X (m) - Height')
         ax1.set_ylabel('Y (m)')
         ax1.set_zlabel('Z (m)')
@@ -462,6 +489,7 @@ class PointCloudFilter:
         ax2.set_xlabel('Y (m)')
         ax2.set_ylabel('Z (m)')
         ax2.set_title('Top-Down Cost Map\n(Green=Low Cost, Red=High Cost)')
+        ax2.set_aspect('equal', adjustable='box')  # Equal aspect for 2D plot
         ax2.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
@@ -488,6 +516,18 @@ class PointCloudFilter:
         for point in point_xyz[1:-1]:
             ax.scatter(point[0], point[1], point[2], c='blue', s=100, marker='X')
         ax.scatter(point_xyz[-1][0], point_xyz[-1][1], point_xyz[-1][2], c='purple', s=100, marker='X')
+        
+        # Equal axis scaling
+        all_x = np.concatenate([x_points, [p[0] for p in point_xyz]])
+        all_y = np.concatenate([y_points, [p[1] for p in point_xyz]])
+        all_z = np.concatenate([z_points, [p[2] for p in point_xyz]])
+        all_pts = np.column_stack([all_x, all_y, all_z])
+        max_range = np.ptp(all_pts, axis=0).max() / 2.0
+        mid = np.mean(all_pts, axis=0)
+        ax.set_xlim(mid[0] - max_range, mid[0] + max_range)
+        ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
+        ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
+        
         ax.set_xlabel('X (m) - Height')
         ax.set_ylabel('Y (m)')
         ax.set_zlabel('Z (m)')
@@ -512,6 +552,26 @@ class PointCloudFilter:
         ax.set_zlabel('Z (m)')
         ax.set_title('Point Cloud with Target Points - Animated')
         ax.scatter(x_points, y_points, z_points, c=color, s=size_point, alpha=0.6)
+        
+        # Calculate initial equal axis scaling
+        all_x = np.concatenate([x_points, [p[0] for p in point_xyz]])
+        all_y = np.concatenate([y_points, [p[1] for p in point_xyz]])
+        all_z = np.concatenate([z_points, [p[2] for p in point_xyz]])
+        
+        max_range = np.array([
+            all_x.max() - all_x.min(),
+            all_y.max() - all_y.min(),
+            all_z.max() - all_z.min()
+        ]).max() / 2.0
+        
+        mid_x = (all_x.max() + all_x.min()) * 0.5
+        mid_y = (all_y.max() + all_y.min()) * 0.5
+        mid_z = (all_z.max() + all_z.min()) * 0.5
+        
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+        
         fig.canvas.draw()
         fig.canvas.flush_events()
         time.sleep(1.0) 
@@ -555,12 +615,37 @@ class PointCloudFilter:
         color = np.array([point['color'] for point in self.points_t])
         size_point = np.array([point['size_point'] for point in self.points_t])
         
-    
-
         self.ax.clear()
-        self.ax.set_xlim([0, 4])
-        self.ax.set_ylim([0, 7])
-        self.ax.set_zlim([-10, 2])
+        
+        # Calculate equal axis scaling including trajectory points
+        all_x = [x_points]
+        all_y = [y_points]
+        all_z = [z_points]
+        
+        for traj in trajectory_xyz:
+            if traj is not None and traj.size > 0:
+                all_x.append(traj[0, :])
+                all_y.append(traj[1, :])
+                all_z.append(traj[2, :])
+        
+        all_x = np.concatenate(all_x + [[p[0] for p in point_xyz]])
+        all_y = np.concatenate(all_y + [[p[1] for p in point_xyz]])
+        all_z = np.concatenate(all_z + [[p[2] for p in point_xyz]])
+        
+        max_range = np.array([
+            all_x.max() - all_x.min(),
+            all_y.max() - all_y.min(),
+            all_z.max() - all_z.min()
+        ]).max() / 2.0
+        
+        mid_x = (all_x.max() + all_x.min()) * 0.5
+        mid_y = (all_y.max() + all_y.min()) * 0.5
+        mid_z = (all_z.max() + all_z.min()) * 0.5
+        
+        self.ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        self.ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        self.ax.set_zlim(mid_z - max_range, mid_z + max_range)
+        
         self.ax.set_xlabel('X (m) - Height')
         self.ax.set_ylabel('Y (m)')
         self.ax.set_zlabel('Z (m)')
@@ -590,7 +675,6 @@ class PointCloudFilter:
             self.ax.plot3D(ref_com[0,:], ref_com[1,:],ref_com[2,:],color=marker_color, linewidth=2.5)
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
-
 
         self.ax.set_title(f'Point Cloud with Target Points - Complete Path\n'
                     f'Total points: {len(point_xyz)}')
@@ -624,7 +708,9 @@ class PointCloudFilter:
             
         # print(f"Colored {len(source_points)} points based on cost values")
         # print(f"Cost range: {cost_min:.3f} to {cost_max:.3f}")
-        
+    
+    
+    
 def main():
     
     # Terrain configuration values
@@ -634,9 +720,9 @@ def main():
     # seed = 30                 
     # Lz = -50                  
     # Ly = 10                   
-    
-    terrain = TerrainManager()
-    
+    # terrain  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type="custom_gaussians")
+    # terrain = TerrainManager()
+    terrain  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type="hemisphere")
 
     pc = terrain.point_cloud
     # Point cloud filter test
@@ -645,32 +731,32 @@ def main():
     print("\n[TEST] === Original Map ===")
     pc_filter.print_map_pc()
     
-    #filtro con cancellazione punti
-    print("\n[TEST] === Height Filter ===")
-    # pc_filter.filter_height()
-    pc_filter.print_map_pc()
+    # #filtro con cancellazione punti
+    # print("\n[TEST] === Height Filter ===")
+    # # pc_filter.filter_height()
+    # pc_filter.print_map_pc()
     
-    print("\n[TEST] === Logarithmic Height Cost Filter ===")    
-    # filtro con cambio di costo e colore in base all'altezza
-    pc_filter.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
-    pc_filter.visualize_cost_map()
+    # print("\n[TEST] === Logarithmic Height Cost Filter ===")    
+    # # filtro con cambio di costo e colore in base all'altezza
+    # pc_filter.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
+    # pc_filter.visualize_cost_map()
     
-    print("\n[TEST] === Smoothing Filter ===")
-    kernel = [pc_filter.smoothing_kernel] 
-    pc_filter.filter_process_points_pipeline(kernel, weight=1.0, plot=True)
+    # print("\n[TEST] === Smoothing Filter ===")
+    # kernel = [pc_filter.smoothing_kernel] 
+    # pc_filter.filter_process_points_pipeline(kernel, weight=1.0, plot=True)
     
-    print("\n[TEST] === First Derivative (Gradient) ===")
+    print("\n[TEST] === First Derivative (Gradient) ==")
     kernel = [pc_filter.sobel_y, pc_filter.sobel_z] 
-    pc_filter.filter_process_points_pipeline(kernel, plot=True)
+    pc_filter.filter_process_points_pipeline(kernel,weight=1.0, plot=True)
     
     print("\n[TEST] === Second Derivative (Laplacian) ===")
     kernel = [pc_filter.laplacian_kernel] 
     pc_filter.filter_process_points_pipeline(kernel, plot=True)
     
     
-    print("\n[TEST] === Laplacian of Gaussian (LoG) ===")
-    kernel = [pc_filter.log_kernel] 
-    pc_filter.filter_process_points_pipeline(kernel, plot=True)
+    # print("\n[TEST] === Laplacian of Gaussian (LoG) ===")
+    # kernel = [pc_filter.log_kernel] 
+    # pc_filter.filter_process_points_pipeline(kernel, plot=True)
     
 
 if __name__ == "__main__":
