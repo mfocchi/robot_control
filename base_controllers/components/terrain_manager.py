@@ -37,7 +37,7 @@ class TerrainManager:
                 # Generate the terrain automatically
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
-                    self.max_ridge_depth, self.seed
+                    self.max_ridge_depth, self.seed, x_offset=-0.5
                 )
             if self.terrain_type=='hemisphere':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 2, grid_size=self.grid_size)
@@ -45,7 +45,7 @@ class TerrainManager:
             if self.terrain_type == 'gaussian_bumps':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
-                    standard_deviation=0.5, n_gaussian=5, seed=self.seed, casual=False, x_offset=1
+                    standard_deviation=0.5, n_gaussian=5, seed=self.seed, casual=False, x_offset=0.
                 )
                 
             if self.terrain_type == 'mini_tower_each_patch':
@@ -103,8 +103,10 @@ class TerrainManager:
             # Convert to point cloud format and store
             self.point_cloud = self.convert_meshgrid_to_pc(self.mesh_x, self.mesh_y, self.mesh_z)
 
-    
-    def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, x_offset = 0):
+    def get_mesh(self):
+        return self.mesh_x, self.mesh_y, self.mesh_z
+
+    def generate_rock_wall_map(self, Lz, Ly, grid_size=100, wall_depth=2, max_ridge_depth=0.5, seed=None, x_offset = 0.01):
         """
         Generate a 3D rock wall height map with fractal noise, ridges, and pillars.
 
@@ -213,7 +215,7 @@ class TerrainManager:
         
         return X, Y, Z
     
-    def generate_hemisferic_map(self, Lz, Ly, cz = -10, cy = 2.5, radius = 3, grid_size=100, x_offset = 0.1):
+    def generate_hemisferic_map(self, Lz, Ly, cz = -10, cy = 2.5, radius = 3, grid_size=100, x_offset = 0.01):
         X = np.zeros((grid_size, grid_size))
         # Add hemispherical bulge
         z = np.linspace(Lz, 0, grid_size)
