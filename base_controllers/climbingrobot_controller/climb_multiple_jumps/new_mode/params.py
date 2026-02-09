@@ -27,13 +27,13 @@ p0_str = os.environ.get("P0_INIT_STR")
 if p0_str:
     P0_INIT = np.array(json.loads(p0_str))
 else:
-    P0_INIT = np.array([0.5, 1.5, -1.5])
+    P0_INIT = np.array([0.5, 6.5, -8.5])
     
 pf_str = os.environ.get("PF_INIT_STR")
 if pf_str:
     PF_PATCH_INIT = np.array(json.loads(pf_str))
 else:
-    PF_PATCH_INIT = np.array([0.5, 6.5, -8.5])
+    PF_PATCH_INIT = np.array([0.5, 3.5, -1.5])
 
 
 
@@ -42,7 +42,7 @@ MAX_JUMP = 5
 THREADS = 10
 flag_thread = True
 
-CORRIDOR_RADIUS = 4.0 # for linear corridor warm start
+CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
 MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test")
@@ -51,7 +51,7 @@ fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([10., 10., 0,10.0])
+filter_weights = np.array([10., 10., 10.0,10.0])
 
 
 
@@ -59,8 +59,8 @@ filter_weights = np.array([10., 10., 0,10.0])
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
-Fleg_max = 150.
-Fr_max = 80.
+Fleg_max = 300.
+Fr_max = 190.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
@@ -104,10 +104,10 @@ cem_params.seed =int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 50
-cem_params.pop_size = 150
+cem_params.pop_size = 200
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
-cem_params.fraction_elites_reused = 0.05
+cem_params.fraction_elites_reused = 0.0
 cem_params.alpha = 0.5
 # Discrete
 cem_params.dim_discrete = CEM_DISCRETE_DIM
@@ -140,7 +140,7 @@ FILE_FOR_GAZEBO_SIM = f"{MAIN_DIRECTORY}/info_for_gazebo.json"
 result_dir = os.path.join(os.path.abspath(os.getcwd()), MAIN_DIRECTORY)
 os.makedirs(result_dir, exist_ok=True)
 
-terrain_type = os.environ.get("TERRAIN_TYPE", "gaussian_bumps")
+terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere
 # Terrain configuration values for rock terrain, otherwise stay in default
 # wall_depth = 1            
 # grid_size = 100
@@ -169,8 +169,8 @@ def initialize_terrain_data(warm_start_mode=False):
     kernel = [point_clouds.sobel_y, point_clouds.sobel_z] 
     point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[1], plot=False)
     # print("\n[INIT] === Second Derivative (Laplacian) ===")
-    # kernel = [point_clouds.laplacian_kernel] 
-    # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[2], plot=False)
+    kernel = [point_clouds.laplacian_kernel] 
+    point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[2], plot=False)
     # point_clouds.visualize_cost_map()
 
     # === 2 PATCHES INITIALIZATION ===

@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 class TerrainManager:
     
-    def __init__(self, grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='gaussian_bumps'):
+    def __init__(self, grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='custom_gaussians'):
         
         # INPUT VARIABLES
         self.wall_depth = wall_depth
@@ -29,24 +29,26 @@ class TerrainManager:
         self.patch_discretization_width = 20
         self.patch_discretization_height = 20
         self.number_of_points_in_patch = self.patch_discretization_width *self.patch_discretization_height
-
-        if generate_terrain:
-            if terrain_type=='rock':
+        self.generate_terrain = generate_terrain
+        self.terrain_type = terrain_type
+        
+        if self.generate_terrain:
+            if self.terrain_type=='rock':
                 # Generate the terrain automatically
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
                     self.max_ridge_depth, self.seed
                 )
-            if terrain_type=='hemisphere':
-                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 0.7, grid_size=self.grid_size)
+            if self.terrain_type=='hemisphere':
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 2, grid_size=self.grid_size)
 
-            if terrain_type == 'gaussian_bumps':
+            if self.terrain_type == 'gaussian_bumps':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
                     standard_deviation=0.5, n_gaussian=5, seed=self.seed, casual=False, x_offset=1
                 )
                 
-            if terrain_type == 'mini_tower_each_patch':
+            if self.terrain_type == 'mini_tower_each_patch':
                 
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_patched_towers(
                     n_patches_w=int(self.number_of_patches_width),
@@ -57,7 +59,7 @@ class TerrainManager:
                     x_offset=0.2 # Move everything forward to avoid singularity issues
                 )
             
-            if terrain_type == 'single_central_tower':
+            if self.terrain_type == 'single_central_tower':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_single_central_tower(
                     h_tower=2.0,   # Più alta
                     sigma=1.5,     # Più larga
@@ -65,6 +67,36 @@ class TerrainManager:
                     x_offset=1.0
                 )
             
+            if self.terrain_type == 'mix_obst':
+                # Example: generate 3 hemispheres at different positions
+                n_hemi = 3
+                centers = [(2, -5), (5, -2.5), (5.0, -7 )]
+                radii = [1.5, 1.0, 1.2]
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_multi_hemisphere_map(
+                    n_hemispheres=n_hemi,
+                    centers=centers,
+                    radii=radii,
+                    grid_size=self.grid_size,
+                    x_offset=0.1
+                )
+                
+            
+            if self.terrain_type == 'custom_gaussians':
+                # Example: generate 4 Gaussian bumps at custom positions
+                n_gauss = 3
+                
+                centers = [(3, -5), (6, -2.5), (6.0, -7 )]
+                amplitudes = [1.5, 1.0, 1.2]
+                sigmas = [0.8, 1.0, 0.6]
+                
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_multi_gaussian_map(
+                    n_gaussians=n_gauss,
+                    centers=centers,
+                    amplitudes=amplitudes,
+                    sigmas=sigmas,
+                    grid_size=self.grid_size,
+                    x_offset=0.1
+                )
                 
             # self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
 
@@ -348,6 +380,124 @@ class TerrainManager:
                 
         return X, Y, Z    
     
+    def generate_multi_hemisphere_map(self, n_hemispheres, centers, radii, grid_size=100, x_offset=0.1):
+        
+        assert n_hemispheres == len(centers), "Number of hemispheres must match number of centers"
+        assert x_offset != 0, "X offset should not be 0 to avoid singular dynamics"
+        
+        # Handle radii input
+        if np.isscalar(radii):
+            radii = [radii] * n_hemispheres
+        else:
+            assert len(radii) == n_hemispheres, "Number of radii must match number of hemispheres"
+        
+        X = np.zeros((grid_size, grid_size))
+        
+        # Create grid
+        z = np.linspace(self.Lz, 0, grid_size)
+        y = np.linspace(0, self.Ly, grid_size)
+        Z, Y = np.meshgrid(z, y)
+        
+        # Add each hemisphere
+        for i in range(n_hemispheres):
+            cy, cz = centers[i]
+            radius = radii[i]
+            
+            # Calculate distance from center
+            dist2 = (Z - cz) ** 2 + (Y - cy) ** 2
+            mask = dist2 <= radius ** 2
+            
+            # Create hemisphere
+            hemisphere = np.zeros_like(X)
+            hemisphere[mask] = np.sqrt(radius ** 2 - dist2[mask])
+            
+            # Add to terrain (use max to avoid overlapping issues)
+            X = np.maximum(X, hemisphere)
+        
+        # Add offset
+        X = X + x_offset
+        
+        # Setup patches
+        self.patch_width = self.Ly / self.number_of_patches_width
+        self.patch_height = abs(self.Lz) / self.number_of_patches_height
+        patch_id = 0
+        for i in range(self.number_of_patches_width):
+            for j in range(self.number_of_patches_height):
+                self.patch_origins[patch_id] = np.array([
+                    self.patch_width * i,
+                    self.Lz + (self.patch_height * j)
+                ])
+                patch_id += 1
+        
+        return X, Y, Z
+    
+    def generate_multi_gaussian_map(self, n_gaussians, centers, amplitudes, sigmas, grid_size=100, x_offset=0.1):
+        assert n_gaussians == len(centers), "Number of Gaussians must match number of centers"
+        
+        # Handle amplitudes input
+        if np.isscalar(amplitudes):
+            amplitudes = [amplitudes] * n_gaussians
+        else:
+            assert len(amplitudes) == n_gaussians, "Number of amplitudes must match number of Gaussians"
+        
+        # Handle sigmas input
+        if np.isscalar(sigmas):
+            # Single scalar: same isotropic sigma for all
+            sigmas = [(sigmas, sigmas)] * n_gaussians
+        elif isinstance(sigmas, list):
+            processed_sigmas = []
+            for sigma in sigmas:
+                if np.isscalar(sigma):
+                    # Isotropic sigma
+                    processed_sigmas.append((sigma, sigma))
+                elif isinstance(sigma, (tuple, list)) and len(sigma) == 2:
+                    # Anisotropic sigma (sigma_y, sigma_z)
+                    processed_sigmas.append(tuple(sigma))
+                else:
+                    raise ValueError("Each sigma must be a scalar or a tuple/list of 2 values (sigma_y, sigma_z)")
+            sigmas = processed_sigmas
+            assert len(sigmas) == n_gaussians, "Number of sigmas must match number of Gaussians"
+        else:
+            raise ValueError("sigmas must be a scalar, list of scalars, or list of tuples")
+        
+        X = np.zeros((grid_size, grid_size))
+        
+        # Create grid
+        z = np.linspace(self.Lz, 0, grid_size)
+        y = np.linspace(0, self.Ly, grid_size)
+        Z, Y = np.meshgrid(z, y)
+        
+        # Add each Gaussian
+        for i in range(n_gaussians):
+            cy, cz = centers[i]
+            amplitude = amplitudes[i]
+            sigma_y, sigma_z = sigmas[i]
+            
+            # Create Gaussian bump
+            gaussian = amplitude * np.exp(
+                -((Y - cy)**2 / (2 * sigma_y**2) + (Z - cz)**2 / (2 * sigma_z**2))
+            )
+            
+            # Add to terrain
+            X += gaussian
+        
+        # Add offset
+        X = X + x_offset
+        
+        # Setup patches
+        self.patch_width = self.Ly / self.number_of_patches_width
+        self.patch_height = abs(self.Lz) / self.number_of_patches_height
+        patch_id = 0
+        for i in range(self.number_of_patches_width):
+            for j in range(self.number_of_patches_height):
+                self.patch_origins[patch_id] = np.array([
+                    self.patch_width * i,
+                    self.Lz + (self.patch_height * j)
+                ])
+                patch_id += 1
+        
+        return X, Y, Z
+        
     def convert_meshgrid_to_pc(self, X, Y, Z):
         x_position = X.flatten()
         y_position = Y.flatten()
