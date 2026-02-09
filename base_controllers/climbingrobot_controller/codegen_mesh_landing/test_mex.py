@@ -73,7 +73,7 @@ def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
 
     return X, Y, Z
 
-def initOptim(p0, pf):
+def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     mass = 5.08
     params = {}
     params['m'] = mass
@@ -127,27 +127,29 @@ Ly = 5  # Width (horizontal extent) of wall in meters
 terrainManager = TerrainManager(generate_terrain=False)
 
 #TERRAIN 1
-mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.3)
-###jump params
-p0 = np.array([0.5, 3.5, -6]) #unit test ,  there is singularity for px = 0!
-pf=  np.array([0.5, 3,-4])
+# mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.01)
+# ##jump params
+# p0 = np.array([0.5, 3.5, -6]) #unit test ,  there is singularity for px = 0!
+# pf=  np.array([0.5, 3,-4])
 
 #TERRAIN 2
-#mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.1)
+Lz = -20  # Height of wall in meters
+Ly = 10  # Width (horizontal extent) of wall in meters
+mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=0.7, grid_size=grid_size, x_offset = 0.01)
 # #jump params
-# p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
-# pf=  np.array([0.0, 4,-12])
+p0 = np.array([0.1,    6.0334,  -8]) #unit test ,  there is singularity for px = 0!
+pf=  np.array([0.1,  7.5,   -5.5 ])
 
 #cost map
 point_highest_cost = pf + np.array([0, -0.5, 0.5])
 max_cost = 200
-cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=point_highest_cost, max_cost = max_cost);
+cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=point_highest_cost, max_cost = max_cost)
 
-Fleg_max = 300.
-Fr_max = 190.
+Fleg_max = 150.
+Fr_max = 120.
 Fr_min = 15.
 mu = 0.8
-p0_adj, pf_adj, params = initOptim(p0, pf)
+p0_adj, pf_adj, params = initOptim(p0, pf, mesh_x, mesh_y, mesh_z)
 solution = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
 ref_com  = mat_matrix2python(solution['p'])
 achieved_target = mat_matrix2python(solution['achieved_target'])

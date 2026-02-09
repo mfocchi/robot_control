@@ -28,6 +28,8 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress
 import  base_controllers.params as conf
 robotName = "climbingrobot2"
 from base_controllers.utils.common_functions import SafeTFBroadcaster
+import json
+from base_controllers.components.terrain_manager import TerrainManager
 
 
 class ClimbingrobotController(BaseControllerFixed):
@@ -54,18 +56,6 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if self.OBSTACLE_AVOIDANCE=='mesh':
             sys.path.insert(0, './codegen_mesh')
-            from base_controllers.components.terrain_manager import TerrainManager
-            # generate terrain
-            # Parameters (direct translation from MATLAB)
-            wall_depth = 1  # how
-            grid_size = 100
-            max_ridge_depth = 0.5
-            seed = "default"
-            Lz = -20  # Height of wall in meters
-            Ly = 5  # Width (horizontal extent) of wall in meters
-            # Generate rock wall map
-            self.terrainManager = TerrainManager()
-            self.mesh_x, self.mesh_y, self.mesh_z = self.terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=-0.5)
         else:
             sys.path.insert(0, './codegen')
 
@@ -689,6 +679,8 @@ class ClimbingrobotController(BaseControllerFixed):
         for blob  in ref_com.T:
             self.ros_pub.add_marker(blob, color="white", radius=0.2, alpha = 0.5)
 
+
+
     def stateMachineLoop(self):
 
         terminateFlag = False
@@ -881,6 +873,12 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "green"))
         return self.targetPos - landing_location
 
+    def readJsonFile(self, terrain="hemi"):
+        json_path = "multiple_jumps_"+terrain+".json"
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        return data
+
 def talker(p):
     p.start()
     additional_args = ['robot_name:='+p.robot_name,
@@ -897,14 +895,29 @@ def talker(p):
 
     p.loadModelAndPublishers()
 
+
+    #############hard coded
     # jump params
-    p.numberOfJumps = 3
     # jump starting position
     p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
+    p.numberOfJumps = 3
     # jump landing position
     p.desired_target = [np.array([0.28, 4, -3.7]),
                         np.array([0.28, 3.5, -6]),
                         np.array([0.28, 4.2, -11])]
+    p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
+    ######################
+
+    #############Json
+    # data = p.readJsonFile(terrain="gaussian") # hemi, gaussian
+    # p0 = np.array(data["target_points"][0])
+    # p.desired_target = [np.array(t) for t in data["target_points"][1:]]
+    # p.numberOfJumps = len(p.desired_target)
+    # p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
+    #                                   seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
+    ##############
+
+    p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
     p.startupProcedure()
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
@@ -918,7 +931,7 @@ def talker(p):
         texture_path = rospkg.RosPack().get_path('climbingrobot_description') + '/media/materials/textures/rocks.jpg'
         spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo, texture_path=texture_path)
 
-    p.startJump = 2.5
+    p.startJump = np.linalg.norm(p0)/2
     p.orientTime = 1.0
     p.stateMachine = 'start_jump'
     p.jumpNumber  = 0
@@ -926,7 +939,10 @@ def talker(p):
     p.start_logging =p.startJump
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
-    p.q_des[:12] = p.computeJointVariables(p0)
+    p0_adj = p0.copy()
+    p0_adj[0] = p.terrainManager.wall_surface_eval(p0[2], p0[1], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2 # account for leg
+    p.q_des[:12] = p.computeJointVariables(p0_adj)
+
     p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
     while not ros.is_shutdown():
