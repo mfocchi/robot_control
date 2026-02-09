@@ -1,0 +1,29 @@
+{
+  "terrain_info": {
+    "grid_size": 100,
+    "wall_depth": 10,
+    "max_ridge_depth": 0.5,
+    "seed": "default",
+    "Lz": -10,
+    "Ly": 5,
+    "generate_terrain": true,
+    "terrain_type": "hemisphere"
+  },
+  "target_points": [
+    [
+      0.1,
+      2.5,
+      -6.5
+    ],
+    [
+      1.960330223464712,
+      2.37777216480697,
+      -4.748192449373701
+    ],
+    [
+      -0.014383148996230971,
+      3.5810953976892974,
+      -3.5132858366355968
+    ]
+  ]
+}
