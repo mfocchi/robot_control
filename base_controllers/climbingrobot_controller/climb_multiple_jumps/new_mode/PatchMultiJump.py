@@ -186,7 +186,7 @@ class LinearMultiJumpParams:
                 landing_cost = self.patches.get_cost_in_point(patch_id, achieved_target[1:])
                 
                 # Compute jump fitness (lower is better)
-                jump_fitness = consumed_energy * fitness_weights[1] + landing_cost * fitness_weights[3]
+                jump_fitness = -(consumed_energy * fitness_weights[1] + landing_cost * fitness_weights[3])
                 
                 self.trajectories.append(trajectory)
                 self.fitness_values.append(jump_fitness)
@@ -267,46 +267,47 @@ class LinearMultiJumpParams:
         fig = plt.figure(figsize=(16, 12))
         ax = fig.add_subplot(111, projection='3d')
         
-        # 1. Terrain (Point Cloud)
-        ax.scatter(x_pts, y_pts, z_pts, c=colors, s=sizes, alpha=0.1, label='Terrain', zorder=1)
+        # 1. Terrain (Point Cloud) - Reduced opacity
+        ax.scatter(x_pts, y_pts, z_pts, c=colors, s=sizes, alpha=0.8, label='Terrain', zorder=1)
         
-        # 2. Waypoints
+        # 2. Waypoints - More prominent
         for i, point in enumerate(self.waypoints):
             if i == 0:
-                ax.scatter(point[0], point[1], point[2], c='lime', s=200, marker='o', 
-                          edgecolors='darkgreen', linewidths=3, label='Start', zorder=10)
+                ax.scatter(point[0], point[1], point[2], c='lime', s=300, marker='o', 
+                          edgecolors='darkgreen', linewidths=4, label='Start', zorder=10)
             elif i == len(self.waypoints) - 1:
-                ax.scatter(point[0], point[1], point[2], c='red', s=200, marker='o', 
-                          edgecolors='darkred', linewidths=3, label='Goal', zorder=10)
+                ax.scatter(point[0], point[1], point[2], c='red', s=300, marker='o', 
+                          edgecolors='darkred', linewidths=4, label='Goal', zorder=10)
             else:
-                ax.scatter(point[0], point[1], point[2], c='orange', s=140, marker='o', 
-                          edgecolors='darkorange', linewidths=2, 
+                ax.scatter(point[0], point[1], point[2], c='cyan', s=180, marker='o', 
+                          edgecolors='blue', linewidths=3, 
                           label='Waypoint' if i == 1 else '', zorder=9)
                 ax.text(point[0], point[1], point[2], f'  W{i}', 
-                       fontsize=9, color='black', weight='bold')
+                       fontsize=10, color='blue', weight='bold')
         
-        # 3. Planned path line (Dashed)
+        # 3. Planned path line (Dashed) - More visible
         wps = np.array(self.waypoints)
-        ax.plot(wps[:, 0], wps[:, 1], wps[:, 2], 'k--', linewidth=1.5, 
+        ax.plot(wps[:, 0], wps[:, 1], wps[:, 2], 'k--', linewidth=2.5, 
                alpha=1.0, label='Planned Path', zorder=3)
         
-        # 4. Trajectories (Jump segments)
-        traj_colors = plt.cm.plasma(np.linspace(0, 1, len(self.trajectories)))
+        # 4. Trajectories (Jump segments) - Bright colors and thicker lines
+        # Use more saturated colormap for better visibility
+        traj_colors = plt.cm.rainbow(np.linspace(0, 1, len(self.trajectories)))
         
         for i, traj in enumerate(self.trajectories):
             if traj is not None and traj.size > 0 and traj.ndim == 2 and traj.shape[0] == 3:
-                ax.plot(traj[0, :], traj[1, :], traj[2, :], color=traj_colors[i], linewidth=3.0, 
+                ax.plot(traj[0, :], traj[1, :], traj[2, :], color=traj_colors[i], linewidth=5.0, 
                        label=f'Jump {i+1} ({self.fitness_values[i]:.1f})' if i < 5 else '',
-                       alpha=0.9, zorder=5)
+                       alpha=1.0, zorder=15)
                 
-                # Direction arrow
+                # Direction arrow - More visible
                 mid = traj.shape[1] // 2
                 if 0 < mid < traj.shape[1] - 1:
                     d = traj[:, mid+1] - traj[:, mid]
                     ax.quiver(traj[0, mid], traj[1, mid], traj[2, mid],
                              d[0], d[1], d[2], color=traj_colors[i], 
-                             length=0.1, normalize=True, # Fixed arrow params
-                             arrow_length_ratio=0.3, linewidth=2, zorder=6)
+                             length=0.15, normalize=True,
+                             arrow_length_ratio=0.4, linewidth=3, zorder=16)
 
         # --- LOGICA DI SCALATURA (Equal Aspect Ratio) ---
         # Raccogliamo tutti i dati esistenti per calcolare il bounding box globale
@@ -404,7 +405,7 @@ class LinearMultiJumpParams:
                         alpha=1.0, zorder=15)
 
         # 5. Fix Legenda e Styling
-        terrain_proxy = mpatches.Patch(color='sienna', alpha=0.5, label='Terrain Wall')
+        terrain_proxy = mpatches.Patch(color='sienna', alpha=0.8, label='Terrain Wall')
         handles, labels = ax.get_legend_handles_labels()
         handles.insert(0, terrain_proxy)
         ax.legend(handles=handles, loc='upper left')
@@ -611,7 +612,6 @@ def main():
     
     # Initialize terrain
     print(colored("[1/4] Initializing Terrain...", "yellow"))
-    terrain_manager = TerrainManager()
     point_clouds, patches, cost_grid = initialize_terrain_data()
     print(colored("✓ Terrain initialized\n", "green"))
     
@@ -625,7 +625,8 @@ def main():
     print(f"Start: {P0_INIT} | Goal: {PF_INIT} | Jumps: {MAX_JUMP}")
     # patch_selected = [31, 54,66]
     # patch_selected = [22, 55,66]
-    patch_selected = [13, 33, 46, 66]
+    # patch_selected = [13, 33, 46, 66]
+    patch_selected = [67, 46, 26 ,24]
     multi_jump = LinearMultiJumpParams(
         P0_INIT, PF_INIT, terrain_manager, point_clouds, patches, patch_selected
     )
