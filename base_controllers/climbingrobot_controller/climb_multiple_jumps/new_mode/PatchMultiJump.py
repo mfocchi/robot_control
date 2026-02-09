@@ -111,6 +111,8 @@ class LinearMultiJumpParams:
         
         num_jumps = len(self.waypoints) - 1
         
+        print(colored(f"\nInitial Start Position: {self.waypoints[0]}", "cyan"))
+        
         for i in range(num_jumps):
             print(colored(f"Jump {i+1}/{num_jumps}: ", "yellow"), end="")
             
@@ -131,6 +133,7 @@ class LinearMultiJumpParams:
                 self.terrain_manager.mesh_z
             )
             
+            print(colored(f"\n  Target: {pf_adj}", "white"))
             # Calculate liftoff normal
             liftoff_normal = self.terrain_manager.wall_normal_eval(
                 p0_adj[2], p0_adj[1],
@@ -177,6 +180,7 @@ class LinearMultiJumpParams:
                 consumed_energy = float(res['consumed_energy'])
                 jump_duration = float(res['Tf'])
                 
+                print(colored(f"  Achieved: {achieved_target}", "green"))
                 # Calculate landing cost
                 if i < len(self.patch_selected):
                     patch_id = self.patch_selected[i]
