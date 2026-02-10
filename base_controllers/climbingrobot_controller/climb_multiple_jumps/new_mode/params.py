@@ -27,21 +27,20 @@ p0_str = os.environ.get("P0_INIT_STR")
 if p0_str:
     P0_INIT = np.array(json.loads(p0_str))
 else:
-    P0_INIT = np.array([0.5, 6.5, -8.5])
+    P0_INIT = np.array([ 0.5,  2.5,  -7.5])
     
 pf_str = os.environ.get("PF_INIT_STR")
 if pf_str:
     PF_PATCH_INIT = np.array(json.loads(pf_str))
 else:
-    PF_PATCH_INIT = np.array([0.5, 3.5, -1.5])
-
+    PF_PATCH_INIT = np.array([ 0.01,  1.5,  -5.5 ])
 
 
 PF_INIT = PF_PATCH_INIT
-MAX_JUMP = 5
-THREADS = 10
-flag_thread = True
-
+MAX_JUMP = 10
+THREADS = 5
+flag_thread = False
+patience = 10
 CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
@@ -51,16 +50,14 @@ fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([10., 10., 10.0,10.0])
-
-
+filter_weights = np.array([0., 0., 0.0,1000.0])
 
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
 Fleg_max = 300.
-Fr_max = 190.
+Fr_max = 150.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
@@ -104,7 +101,7 @@ cem_params.seed =int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 50
-cem_params.pop_size = 200
+cem_params.pop_size = 500
 cem_params.n_elites = int(cem_params.pop_size * 0.3)
 cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
 cem_params.fraction_elites_reused = 0.0
@@ -116,7 +113,7 @@ number_of_patches = number_of_patches_width * number_of_patches_height
 cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(MAX_JUMP)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
 # cem_params.min_prob = 0.01  
-cem_params.min_prob = float(os.environ.get("CEM_MIN_PROB", 0.02))
+# cem_params.min_prob = float(os.environ.get("CEM_MIN_PROB", 1/100))
 # Continuous
 cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # x and y positions
 cem_params.max_value_continuous = np.full(cem_params.dim_continuous, 1.0)
@@ -142,14 +139,13 @@ os.makedirs(result_dir, exist_ok=True)
 
 terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere
 # Terrain configuration values for rock terrain, otherwise stay in default
-# wall_depth = 1            
-# grid_size = 100
-# max_ridge_depth = 0.5              
-# Lz = -10                  
-# Ly = 10          
+wall_depth = 1            
+grid_size = number_of_patches_height * number_of_patches_width
+max_ridge_depth = 0.5   
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
 # terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='custom_gaussians')
-terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type=terrain_type)
+terrain_manager  = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=-number_of_patches_height, Ly=number_of_patches_width, generate_terrain=True, terrain_type=terrain_type)
+
 def initialize_terrain_data(warm_start_mode=False):
     create_description_file(enable=False)
     
@@ -160,7 +156,7 @@ def initialize_terrain_data(warm_start_mode=False):
     anchor_location = np.array(inner_opt_params['p_a1'])
     
     # Filter with cost change and color based on height
-    point_clouds.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
+    # point_clouds.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
     # point_clouds.visualize_cost_map()
     # print("\n[INIT] === Smoothing Filter ===")
     # kernel = [point_clouds.smoothing_kernel] 
@@ -176,21 +172,22 @@ def initialize_terrain_data(warm_start_mode=False):
     # === 2 PATCHES INITIALIZATION ===
     pc_t = point_clouds.points_t
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
-    cost_grid = patches.get_cost_meshgrid()
+
+    patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
+    cost_grid, cost_y, cost_z  = patches.get_cost_meshgrid(grid_size=grid_size)
+    patches.visualize_full_cost_map()
     
     # Update inner_opt_params with terrain data
     inner_opt_params['mesh_x'] = terrain_manager.mesh_x
     inner_opt_params['mesh_y'] = terrain_manager.mesh_y
     inner_opt_params['mesh_z'] = terrain_manager.mesh_z
     inner_opt_params['cost_x'] = cost_grid
-    inner_opt_params['cost_y'] = terrain_manager.mesh_y
-    inner_opt_params['cost_z'] = terrain_manager.mesh_z
-    # inner_opt_params['patch_side'] = 1.0 * patches.patch_width
-    patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
-    # patches.visualize_full_cost_map()
+    inner_opt_params['cost_y'] = cost_y
+    inner_opt_params['cost_z'] = cost_z
     
+    # inner_opt_params['patch_side'] = 1.0 * patches.patch_width
     inner_opt_params['patch_side_z'] = patches.patch_height
-    inner_opt_params['patch_side_y'] = 1.0 * patches.patch_width
+    inner_opt_params['patch_side_y'] = patches.patch_width
     
     # patch_id = 25
     # cost = patches.get_patch_cost(patch_id)
@@ -205,8 +202,6 @@ def initialize_terrain_data(warm_start_mode=False):
     })
     # save the terrain data 
     save_terrain_data(terrain_manager,point_clouds, patches)
-    
-    
         
     patch_pf = patches.get_patch_id_from_point_2D(PF_PATCH_INIT[1], PF_PATCH_INIT[2])
     patch_p0 = patches.get_patch_id_from_point_2D(P0_INIT[1], P0_INIT[2])
@@ -219,6 +214,8 @@ def initialize_terrain_data(warm_start_mode=False):
     valid_patches = [p for p in all_patches if p != patch_p0 and p != patch_pf]
     # Update cem_params.n_values with the new structure
     cem_params.n_values = [MAX_JUMP] + [valid_patches.copy() for _ in range(MAX_JUMP)]
+    
+    cem_params.min_prob = 1/len(patches.patches)
     
     # Update init_probs accordingly
     if warm_start_mode:
@@ -237,7 +234,7 @@ def initialize_terrain_data(warm_start_mode=False):
         #     radius=CORRIDOR_RADIUS,     
         #     sensitivity=5.0 )
     
-        # plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
+        plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
 
         # Create new init_probs with filtered probabilities
         new_init_probs = []
@@ -416,7 +413,6 @@ def save_params():
         json.dump(params, f, indent=2)
     print(colored(f"[SAVE] Simulation parameters saved to: {FILE_SAVE_PARAMS}", "cyan"))
 
-
 def save_gazebo_info(best_points, terrain_manager):
     gazebo_data = {
         "terrain_info": {
@@ -550,6 +546,7 @@ def get_warm_start_line(patches, p0, pf, radius=4.0, sensitivity=5.0):
         return np.full(num_patches, 1.0 / num_patches).tolist()
     
     return (raw_probs / sum_probs).tolist()
+
 def get_warm_start_line_distance_only(patches, p0, pf, radius=8.0):
     """
     Compute patch probabilities based on 2D perpendicular distance from the line between p0 and pf.
@@ -584,7 +581,7 @@ def get_warm_start_line_distance_only(patches, p0, pf, radius=8.0):
     distances = np.abs(cross_prod_z) / np.sqrt(line_len_sq)
     
     # Inverse linear weight: distance 0 -> weight 1, distance >= radius -> weight 0
-    weights = np.maximum(0.0, 1.0 - (distances / radius))
+    weights = np.maximum(0.0, 1.0 - (distances**2 / radius))
     
     # Cleanup very small values
     weights[weights < 1e-9] = 0.0

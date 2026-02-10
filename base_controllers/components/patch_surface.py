@@ -311,6 +311,7 @@ class PatchSurface:
                 gauss_val = weight_gauss_cost * (1-np.exp(exponent)) #OCCHIO valore basso al centro!!!!
                 
                 point['cost'] += gauss_val
+                
                 all_final_costs.append(point['cost'])
                 
             costs = [p['cost'] for p in points_in_patch]
@@ -640,51 +641,40 @@ class PatchSurface:
             return None
         return self.patches[patch_id].get('points_in_patch', [])
     
-    def get_cost_meshgrid(self, grid_size_y=None, grid_size_z=None, plot_mesh=False):
-        '''
-        Generate a meshgrid of costs over the entire map surface.
-        '''
-        # Set default grid sizes
-        if grid_size_y is None:
-            grid_size_y = self.number_of_patches_width * 10
-        if grid_size_z is None:
-            grid_size_z = self.number_of_patches_height * 10
+    
+    def get_cost_meshgrid(self, grid_size):
+        # Create regular grid in Y-Z plane
+        z = np.linspace(self.z_min, self.z_max, grid_size)
+        y = np.linspace(self.y_min, self.y_max, grid_size)
+        Z_grid, Y_grid = np.meshgrid(z, y)
         
-        # Add small epsilon to avoid boundary issues
-        epsilon = 1e-6
+        y_points = []
+        z_points = []
+        cost_points = []
         
-        # Create coordinate arrays (avoid exact boundaries)
-        y_coords = np.linspace(self.y_min, self.y_max - epsilon, grid_size_y)
-        z_coords = np.linspace(self.z_min, self.z_max - epsilon, grid_size_z)
+        for patch in self.patches:
+            points_in_patch = patch.get('points_in_patch', [])
+            for point in points_in_patch:
+                pos = point['position']
+                y_points.append(pos[1])
+                z_points.append(pos[2])
+                cost_points.append(point['cost'])
+        y_points = np.array(y_points)
+        z_points = np.array(z_points)
+        cost_points = np.array(cost_points)
         
-        # Create meshgrid
-        Y_grid, Z_grid = np.meshgrid(y_coords, z_coords)
+        points = np.column_stack((y_points, z_points))
+        grid_points = np.column_stack((Y_grid.ravel(), Z_grid.ravel()))
         
-        # Initialize cost grid
-        cost_grid = np.zeros_like(Y_grid)
+        X_grid = griddata(points, cost_points, grid_points, method='linear', fill_value=np.nan)
         
-        # Fill cost grid
-        for i in range(grid_size_z):
-            for j in range(grid_size_y):
-                y_point = Y_grid[i, j]
-                z_point = Z_grid[i, j]
-                
-                # Find which patch this point belongs to
-                patch_id = self.get_patch_id_from_point_2D(y_point, z_point)
-                
-                if patch_id is not None:
-                    # Get interpolated cost at this point
-                    abs_pointyz = np.array([y_point, z_point])
-                    try:
-                        cost_grid[i, j] = self.get_cost_in_point(patch_id, abs_pointyz)
-                    except Exception:
-                        # Fallback to patch average cost if interpolation fails
-                        cost_grid[i, j] = self.patches[patch_id].get('cost_patch', 0.0) or 0.0
-                else:
-                    # Point outside all patches - use default cost
-                    cost_grid[i, j] = np.nan
+        if np.any(np.isnan(X_grid)):
+            X_grid_nearest = griddata(points, cost_points, grid_points, method='nearest')
+            X_grid = np.where(np.isnan(X_grid), X_grid_nearest, X_grid)
         
-        return cost_grid
+        X_grid = X_grid.reshape(Z_grid.shape)
+        
+        return X_grid, Y_grid, Z_grid
     
     #  === SET METHODS ====
     def set_new_point_in_patch(self, patch_id, y_point, z_point, update_centroid=True, update_cost=True, plot=True, k_neighbors=5):
