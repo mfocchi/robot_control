@@ -109,6 +109,7 @@ class BilevelOpt:
             # Convergence Check (1=Converged, 2=Semidefinite(other possible solutions))
             if int(res['problem_solved']) not in [1, 2]:
                 all_converged = False
+                break
             
             jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
                                             res, patch_id=patch_id, contact_abs_pos_yz=mat_vector2python(res['achieved_target'])[1:])
@@ -119,6 +120,18 @@ class BilevelOpt:
             total_consumed_energy += res['consumed_energy']
             total_landing_cost += jump_landing_cost # cost of each landing point
             
+            if np.isnan(mat_vector2python(res['achieved_target'])[0]):
+                print("a")
+                breakpoint()
+            vec = mat_vector2python(res['achieved_target'])
+            if (vec[1] < 0 or vec[1] > 10) or (vec[2] > 0 or vec[2] < -10):
+                print("b")
+                breakpoint()
+            
+            vec = p0_adj
+            if (vec[1] < 0 or vec[1] > 10) or (vec[2] > 0 or vec[2] < -10):
+                print("c")
+                breakpoint()
             # acutal target becomes next starting point
             p0_adj = mat_vector2python(res['achieved_target']) #pf_adj.copy()
             
@@ -126,7 +139,7 @@ class BilevelOpt:
             fitness_score = -self.fitness_weights[0]  # Negative for maximization
             achieved_target = None
             avg_jump_landing_cost = 0.0
-            avg_energy_cost = total_consumed_energy
+            avg_energy_cost = 0.0
         else:
             # waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
             avg_energy_cost = (total_consumed_energy) * self.fitness_weights[1] # / total_jump ??

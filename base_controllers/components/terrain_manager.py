@@ -40,7 +40,7 @@ class TerrainManager:
                     self.max_ridge_depth, self.seed, x_offset=-0.5
                 )
             if self.terrain_type=='hemisphere':
-                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 2, grid_size=self.grid_size)
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 2.0, grid_size=self.grid_size, x_offset=0.01)
 
             if self.terrain_type == 'gaussian_bumps':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
