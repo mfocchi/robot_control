@@ -17,7 +17,7 @@ plot_str = os.environ.get("FOLDER_PLOT")
 if plot_str:
     FOLDER_MAIN = np.array(json.loads(plot_str))
 else:
-    FOLDER_MAIN = "result/obstacels_A_3"
+    FOLDER_MAIN = "result/common_test"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -342,7 +342,7 @@ class PlotResultCemMjumps:
         x_best, y_best = [], []
         
         # Tolleranza per il confronto di numeri float
-        tolerance = 1e-9 
+        tolerance = 1e-8
 
         all_fitness_values_for_norm = [] # Serve per calcolare min/max globali
 

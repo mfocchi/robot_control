@@ -51,7 +51,6 @@ def main():
         start = time.time()
         
         # early stop:
-        patience = 5
         no_improvement_counter = 0
         min_delta = 1e-4
         last_best_fitness = -np.inf  # Changed from np.inf to -np.inf
