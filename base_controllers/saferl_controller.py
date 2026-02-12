@@ -34,6 +34,7 @@ class SafeRLController(QuadrupedController):
         super().initVars()
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
 
+        self.startPush = 0.
 
     def logData(self):
         if (self.log_counter < conf.robot_params[self.robot_name]['buffer_size']):
@@ -131,6 +132,8 @@ if __name__ == '__main__':
                 # pushes of increasing entity
                 if not p.real_robot and p.time % 2. == 0 and isrec and sim_push:
                      p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
+                     p.startPush = p.time
+
                      print(50*p.counter)
                      p.counter+=1
                 if isrec:
@@ -179,7 +182,9 @@ if __name__ == '__main__':
                                                                                 p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.alphaCollapse * p.tau_ffwd, log_data_in_send_command=False)
 
-            #p.visualizeContacts()
+            if p.time < (p.startPush+0.25):
+                p.ros_pub.add_arrow(p.basePoseW[:3], np.array([0, 50 * p.counter, 0]) / 300, "blue", scale=1.5)
+            p.visualizeContacts(delete_markers=True)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         if p.SAVE_BAG:
