@@ -16,7 +16,7 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress
 import matplotlib.pyplot as plt
 eng = matlab.engine.start_matlab()
 
-def plot_patch(landing_patch_center, params, wallSurfaceEval):
+def plot_patch(landing_patch_center, params, wallSurfaceEval, axis):
     """
     Python translation of the MATLAB function plot_patch.
     - landing_patch_center : array-like (3,)
@@ -27,7 +27,7 @@ def plot_patch(landing_patch_center, params, wallSurfaceEval):
     # Ensure column vector (flatten)
     landing_patch_center = np.array(landing_patch_center).flatten()
 
-    resolution = 0.1
+    resolution = 0.05
     n_points_z = int(np.floor(params['patch_side_y'] / resolution))
     n_points_y = int(np.floor(params['patch_side_z'] / resolution))
 
@@ -49,7 +49,7 @@ def plot_patch(landing_patch_center, params, wallSurfaceEval):
             x = wallSurfaceEval(dz[j], dy[i], params['mesh_x'], params['mesh_y'] ,params['mesh_z']  )
             y = dy[i]
             z = dz[j]
-            ax.scatter(x, y, z, marker='.', s=40, color='blue')  # s approx = MarkerSize 20
+            axis.scatter(x, y, z, marker='.', s=40, color='blue')  # s approx = MarkerSize 20
 
 
 def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
@@ -69,12 +69,14 @@ def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
                      (Y - gaussian_center[1])**2) / (2 * radius**2))
 
     # Height map (X in MATLAB code)
-    X = -bulge * max_cost
+    X = max_cost -bulge * max_cost
 
     return X, Y, Z
 
 def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     mass = 5.08
+    N_patches_z = 20
+    N_patches_y = 5
     params = {}
     params['m'] = mass
     anchor_distance = 5.
@@ -89,7 +91,7 @@ def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     params['g'] = 9.81
     params['w1']= 0.001 # smooth
     params['w2']= 0. # hoist work
-    params['w3']= 1000. # patch cost
+    params['w3']= 1000. # landing patch cost
     params['T_th'] =  0.05
     params['obstacle_avoidance'] = 'mesh'
     params['jump_clearance'] = 0.5
@@ -108,45 +110,113 @@ def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     params['cost_x'] = cost_x
     params['cost_y'] = cost_y
     params['cost_z'] = cost_z
-    params['patch_side_z'] =  1.
-    params['patch_side_y'] = 1.
+    params['patch_side_z'] =  math.fabs(Lz)/N_patches_z
+    params['patch_side_y'] = math.fabs(Ly)/N_patches_y
 
     params['contact_normal'] = matlab.double(normal)
     return p0, pf, params
 
 
+def plotStuff():
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    p_a1 = np.zeros(3)
+    p_a2 = np.array([0, params['b'],0.])
+    # Anchor 1 line
+    ax.plot(  [p_a1[0], p0[0]],  [p_a1[1], p0[1]],  [p_a1[2], p0[2]],   'k--' )
+    # Anchor 1 point
+    ax.plot([p_a1[0]],   [p_a1[1]],   [p_a1[2]], marker='*', color='k', markersize=10,   linestyle='None')
+    # Anchor 2 line
+    ax.plot([p_a2[0], p0[0]],[p_a2[1], p0[1]], [p_a2[2], p0[2]],'k--' )
+    # Anchor 2 point
+    ax.plot([p_a2[0]],  [p_a2[1]],  [p_a2[2]],  marker='*',    color='k',     markersize=10,     linestyle='None')
+    #plot X=0 wall
+
+    # MESH Surface plot
+    ax.plot_surface(params['mesh_x'], params['mesh_y'], params['mesh_z'], alpha=0.4, cmap='Blues', edgecolor='k', linewidth=0.2)
+    # plot landing patch in blue
+    plot_patch(pf, params, terrainManager.wall_surface_eval, ax)
+    # plot surface
+    ax.plot_surface(params['cost_x'] / 5, params['cost_y'], params['cost_z'], alpha=0.4, cmap='Blues', edgecolor='k', linewidth=0.2)
+
+    # limit plot as in matlab
+    min_x = min(np.min(ref_com[0, :]), pf[0]) - 3
+    max_x = max(np.max(ref_com[0, :]), pf[0]) + 3
+    min_y = min(np.min(ref_com[1, :]), pf[1]) - 3
+    max_y = max(np.max(ref_com[1, :]), pf[1]) + 3
+    min_z = min(p0[2], pf[2]) - 4
+    max_z = 2
+
+    #plot wall
+    # Create 2x2 grid for a rectangular wall at X = 0
+    Yw, Zw = np.meshgrid(  [min_y, max_y],  [min_z, max_z]  )
+    Xw = np.zeros_like(Yw)  # X = 0 plane
+    # Draw the wall
+    ax.plot_surface( Xw,  Yw,    Zw,    color='b',    alpha=0.5 )
+
+    ax.set_xlim([min_x, max_x])
+    ax.set_ylim([min_y, max_y])
+    ax.set_zlim([min_z, max_z])
+    # Alternative method using set_box_aspect for proportional scaling
+    # ax.set_box_aspect([x_range, y_range, z_range])
+    ax.set_box_aspect([1, 1, 1])  # axis equal
+    ax.grid(True)
+    # Camera position equivalent
+    ax.view_init(elev=20, azim=60)  # Adjust to approximate MATLAB CameraPosition
+
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)')
+
+    # plot initial location
+    ax.scatter(p0_adj[0], p0_adj[1], p0_adj[2], color='blue', s=300)  # s = size
+    # plot center of landing patch
+    ax.scatter(pf_adj[0], pf_adj[1], pf_adj[2], color='green', s=200)  # s = size
+    # plot reference jump trajectory
+    ax.plot3D(ref_com[0, :], ref_com[1, :], ref_com[2, :], color='red', linewidth=2.5)
+    # plot achieved target
+    ax.scatter(achieved_target[0], achieved_target[1], achieved_target[2], color='red', s=300)  # s = size
+
+    plt.show()
+
+status_map = {
+    0: "converged",
+    2: "semidef.converg",
+    1: "not converged",
+    -2: "max number of function evaluations"
+}
 #terrain
 # Parameters (direct translation from MATLAB)
 wall_depth = 1  # how
 grid_size = 100
 max_ridge_depth = 0.5
-seed = "default"
-Lz = -20  # Height of wall in meters
-Ly = 5  # Width (horizontal extent) of wall in meters
-# Generate rock wall map
+seed = 47
 terrainManager = TerrainManager(generate_terrain=False)
 
-#TERRAIN 1
-# mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.01)
+
+#TERRAIN 1:Generate rock wall map
+# Lz = -20  # Height of wall in meters
+# Ly = 5  # Width (horizontal extent) of wall in meters
+# mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.0)
 # ##jump params
 # p0 = np.array([0.5, 3.5, -6]) #unit test ,  there is singularity for px = 0!
 # pf=  np.array([0.5, 3,-4])
 
 #TERRAIN 2
 Lz = -20  # Height of wall in meters
-Ly = 10  # Width (horizontal extent) of wall in meters
-mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=0.7, grid_size=grid_size, x_offset = 0.01)
+Ly = 5  # Width (horizontal extent) of wall in meters
+mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 1.)
 # #jump params
-p0 = np.array([0.1,    6.0334,  -8]) #unit test ,  there is singularity for px = 0!
-pf=  np.array([0.1,  7.5,   -5.5 ])
+p0 = np.array([0.1,    4,  -12]) #unit test ,  there is singularity for px = 0!
+pf=  np.array([0.1,  3,   -5.5 ])
 
 #cost map
-point_highest_cost = pf + np.array([0, -0.5, 0.5])
-max_cost = 200
-cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=point_highest_cost, max_cost = max_cost)
+point_lowest_cost = pf + np.array([0, 0.5, -0.5])
+max_cost = 20
+cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
 
-Fleg_max = 150.
-Fr_max = 120.
+Fleg_max = 300.
+Fr_max = 190.
 Fr_min = 15.
 mu = 0.8
 p0_adj, pf_adj, params = initOptim(p0, pf, mesh_x, mesh_y, mesh_z)
@@ -157,33 +227,14 @@ print("p0 ", p0_adj)
 print("target (rought integration) ", ref_com[:,-1] )
 print("achieved target (fine integration)", solution['achieved_target'])
 print("Fleg ", solution['Fleg'])
+print("cost ", solution['cost'])
 print("target error", pf-solution['achieved_target'].reshape(1,3))
 print("jump duration", solution['Tf'])
 print("consumed_energy", solution['consumed_energy'])
-print("problem converged: ", solution['problem_solved'] in [0, 2])
+status = status_map.get(solution['problem_solved'], "unknown status")
+print(f"problem converged?: {status}")
+plotStuff()
 
-fig = plt.figure(figsize=(10, 8))
-ax = fig.add_subplot(111, projection='3d')
-# Surface plot
-ax.plot_surface(params['mesh_x'], params['mesh_y'], params['mesh_z'],  alpha=0.4, cmap='Blues', edgecolor='k', linewidth=0.2)
-plot_patch(pf, params, terrainManager.wall_surface_eval)
-ax.plot_surface(2.-params['cost_x']/max_cost, params['cost_y'], params['cost_z'],  alpha=0.4, cmap='Blues', edgecolor='k', linewidth=0.2)
-
-ax.set_xlabel('X (m)')
-ax.set_ylabel('Y (m)')
-ax.set_zlabel('Z (m)')
-ax.set_xlim([0, 4])
-ax.set_ylim([0, 7])
-ax.set_zlim([-10, 2])
-# Alternative method using set_box_aspect for proportional scaling
-# ax.set_box_aspect([x_range, y_range, z_range])
-ax.view_init(elev=20, azim=9)
-ax.scatter(p0_adj[0], p0_adj[1], p0_adj[2], color='blue', s=300)  # s = size
-ax.scatter(pf_adj[0], pf_adj[1], pf_adj[2], color='green', s=200)  # s = size
-ax.plot3D(ref_com[0,:], ref_com[1,:],ref_com[2,:],color='red', linewidth=2.5)
-ax.scatter(achieved_target[0], achieved_target[1], achieved_target[2], color='red', s=300)  # s = size
-
-plt.show()
 
 # Properly close MATLAB engine
 eng.quit()
