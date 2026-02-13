@@ -138,9 +138,10 @@ class TerrainManager:
         """
         # Set random seed - handle "default" string like MATLAB
         if seed == "default" or seed is None:
-            np.random.seed(47)
+            seed_val = 47
         else:
-            np.random.seed(int(seed))
+            seed_val = int(seed)
+        rng = np.random.RandomState(seed_val)  # MT19937 like MATLAB's 'twister'
 
         # 1) Fractal noise / multi-scale Perlin-like structures for roughness
         frequencies = [1, 2, 4]
@@ -156,7 +157,7 @@ class TerrainManager:
         for i, scale in enumerate(frequencies):
             # Generate noise at different scales
             noise_size = max(1, grid_size // scale)
-            noise = np.random.rand(noise_size, noise_size).T #MATLAB fills out a matrix down columns, while python goes down rows. So in order to get the same matrices in both, you have to transpose:
+            noise = rng.rand(noise_size, noise_size).T #MATLAB fills out a matrix down columns, while python goes down rows. So in order to get the same matrices in both, you have to transpose:
 
             # Resize noise to grid size (equivalent to MATLAB's imresize with bilinear)
             noise_resized = cv2.resize(noise, (grid_size, grid_size), interpolation=cv2.INTER_LINEAR)
@@ -182,13 +183,13 @@ class TerrainManager:
         # 3) Pillars
         num_pillars = 10
         for i in range(num_pillars):
-            cz = np.random.randint(0, grid_size)
-            cy = np.random.randint(0, grid_size)
+            cz = rng.randint(0, grid_size)
+            cy = rng.randint(0, grid_size)
             # Create meshgrid for pillar calculation
             Z_mesh, Y_mesh = np.meshgrid(np.arange(grid_size), np.arange(grid_size))
 
             # Random radius for pillar
-            radius = np.random.randint(5, 11)  # randint is exclusive of upper bound
+            radius = rng.randint(5, 11)  # randint is exclusive of upper bound
 
             # Create Gaussian bulge for pillar
             bulge = np.exp(-((Z_mesh - cz) ** 2 + (Y_mesh - cy) ** 2) / (2 * radius ** 2))
