@@ -50,7 +50,7 @@ fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([0., 0., 0.0,1000.0])
+filter_weights = np.array([0., 10., 10.0,0.0])
 
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
@@ -139,8 +139,8 @@ os.makedirs(result_dir, exist_ok=True)
 
 terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere
 # Terrain configuration values for rock terrain, otherwise stay in default
-wall_depth = 1            
-grid_size = number_of_patches_height * number_of_patches_width
+wall_depth = 1           
+grid_size = 100
 max_ridge_depth = 0.5   
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
 # terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='custom_gaussians')
@@ -173,9 +173,27 @@ def initialize_terrain_data(warm_start_mode=False):
     pc_t = point_clouds.points_t
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
 
+    patches.visualize_full_cost_map()
+    
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
     cost_grid, cost_y, cost_z  = patches.get_cost_meshgrid(grid_size=grid_size)
+    
+    patches.plot_cost_meshgrid(grid_size=100, plot_type='surface')
+
+    # Visualizza solo mappa di contorno
+    patches.plot_cost_meshgrid(grid_size=100, plot_type='contour')
+
+    # Visualizza entrambi
+    patches.plot_cost_meshgrid(grid_size=100, plot_type='both')
+    
     patches.visualize_full_cost_map()
+    
+    patches.plot_map_with_cost_meshgrid_overlay(
+        grid_size=100,        # Risoluzione della griglia
+        x_offset=0.5,        # Offset in X per il cost mesh
+        alpha_mesh=0.7,      # Trasparenza del mesh (0-1)
+        alpha_points=0.2     # Trasparenza dei punti
+    )
     
     # Update inner_opt_params with terrain data
     inner_opt_params['mesh_x'] = terrain_manager.mesh_x

@@ -12,6 +12,7 @@ from base_controllers.components.terrain_manager import TerrainManager
 from base_controllers.utils.matlab_conversions import mat_vector2python, mat_matrix2python
 from termcolor import colored
 
+
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress = True)
 import matplotlib.pyplot as plt
 eng = matlab.engine.start_matlab()
@@ -51,7 +52,6 @@ def plot_patch(landing_patch_center, params, wallSurfaceEval, axis):
             z = dz[j]
             axis.scatter(x, y, z, marker='.', s=40, color='blue')  # s approx = MarkerSize 20
 
-
 def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
     """
     Python equivalent of the MATLAB function:
@@ -62,7 +62,7 @@ def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
     z = np.linspace(Lz, 0, grid_size)
     y = np.linspace(0, Ly, grid_size)
     Z, Y = np.meshgrid(z, y)   # Z: vertical, Y: horizontal
-
+    
     # Gaussian bump
     radius = 0.25
     bulge = np.exp(-((Z - gaussian_center[2])**2 +
@@ -79,7 +79,7 @@ def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     N_patches_y = 5
     params = {}
     params['m'] = mass
-    anchor_distance = 5.
+    anchor_distance = 10.
     params['num_params'] = 4.
     params['int_method'] = 'rk4'
     params['N_dyn'] = 30.
@@ -95,7 +95,7 @@ def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     params['T_th'] =  0.05
     params['obstacle_avoidance'] = 'mesh'
     params['jump_clearance'] = 0.5
-    params['debug'] = False #enables print of cost
+    params['debug'] = True #enables print of cost
 
     # Interpolator (note: z must be increasing — here from -10 to 0)
     p0[0] = terrainManager.wall_surface_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z)
@@ -314,6 +314,7 @@ p0_adj, pf_adj, params = initOptim(p0, pf, mesh_x, mesh_y, mesh_z)
 solution = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
 ref_com  = mat_matrix2python(solution['p'])
 achieved_target = mat_matrix2python(solution['achieved_target'])
+breakpoint()
 print("p0 ", p0_adj)
 print("target (rought integration) ", ref_com[:,-1] )
 print("achieved target (fine integration)", solution['achieved_target'])
@@ -329,6 +330,8 @@ if status not in [0,2]:
     eval_constraints(solution['c'], solution['num_constr'], solution['constr_tolerance'], debug=False)
 
 plotStuff()
+
+
 
 
 # Properly close MATLAB engine

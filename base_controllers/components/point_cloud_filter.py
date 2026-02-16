@@ -83,7 +83,7 @@ class PointCloudFilter:
         
         # Laplacian kernel
         self.laplacian_kernel = np.array([[0,  1, 0],
-                                            [1, -10, 1],
+                                            [1, -8, 1],
                                             [0,  1, 0]])
         
         # Laplacian of Gaussian (LoG) kernel
@@ -94,7 +94,33 @@ class PointCloudFilter:
                                     [0, -1, -2, -1,  0],
                                     [0,  0, -1,  0,  0]
                                 ])
+        size = 5
+        sigma = 1.0
+        ax = np.linspace(-(size - 1) / 2., (size - 1) / 2., size)
+        gauss = np.exp(-0.5 * np.square(ax) / np.square(sigma))
+        kernel_2d = np.outer(gauss, gauss)
+        self.gaussian_bump_kernel = kernel_2d / kernel_2d.sum()
 
+    def compute_bump_detection(self, source_points=None, weight=1.0, plot=False):
+        '''
+        Rileva rigonfiamenti eliminando il bias dell'altezza media (DoG).
+        '''
+        if source_points is None:
+            source_points = self.points_t
+        if self.surface is None:
+            self.interpolation_to_surface(source_points)
+        s1 = ndimage.gaussian_filter(self.surface, sigma=.0) # sigma piccolo per mantenere i dettagli, ma potrebbe essere un parametro da regolare
+        s2 = ndimage.gaussian_filter(self.surface, sigma=10.0) # sigma più grande per catturare la tendenza generale del terreno (piano di riferimento)        
+        # La differenza isola il rigonfiamento rispetto al piano
+        bump_response = s1 - s2
+        # Filtriamo i valori negativi (che indicherebbero buche invece di cupole)
+        bump_response = np.maximum(bump_response, 0)
+        # Mappatura sui punti
+        gradient_at_points = self.convolution_into_points(source_points, bump_response)
+        # Calcolo costo con normalizzazione per portare il giallo verso il verde
+        self.compute_cost(gradient_at_points, source_points, weight=weight, plot=plot, normalize=False)
+    
+    
     # ==== filter methods           
     def filter_height(self):
         '''
@@ -184,7 +210,7 @@ class PointCloudFilter:
         self.surface = griddata((y_points,z_points),
                                 x_points,
                                 (self.grid_Y, self.grid_Z),
-                                method="linear",
+                                method="linear", # cubic
                                 fill_value=0.0, 
                                 )
                
@@ -195,6 +221,7 @@ class PointCloudFilter:
         
         '''
         mode = 'nearest'
+        
         # To try: surface = ndimage.gaussian_filter(surface, sigma=smooth_sigma, mode="reflect") and other ndimage filters
         if len(kernel) == 1:
             print("[point_cloud_filter] kernel single")
@@ -263,7 +290,7 @@ class PointCloudFilter:
         self.surface = None
         return gradient_at_points
     
-    def compute_cost(self,gradient_at_points,source_points=None,weight = 1.0,plot=False):
+    def compute_cost(self,gradient_at_points,source_points=None,weight = 1.0,plot=False,normalize=False):
         '''
         Compute cost based on gradient at points. con costo incrementale
         '''
@@ -272,24 +299,32 @@ class PointCloudFilter:
         if gradient_at_points is None:
             raise ValueError("gradient_at_points cannot be None, do the compute_conv_step first")
         
-        #cost_values = gradient_at_points.copy()
-        cost_values = np.abs(gradient_at_points.copy()) #per valori sempre positivi scoomenta qua!!!
+        # 1. Prendi i valori assoluti
+        cost_values = np.abs(gradient_at_points.copy()) 
         
-        grad_min,grad_max = np.min(cost_values) , np.max(cost_values)
+        # 2. Calcola Min e Max del filtro corrente
+        grad_min, grad_max = np.min(cost_values), np.max(cost_values)
         
+        # 3. Calcola i valori normalizzati [0, 1]
         if grad_max > grad_min: 
-            normalized_for_colors_plot = (cost_values - grad_min) / (grad_max - grad_min)
+            normalized_values = (cost_values - grad_min) / (grad_max - grad_min)
         else:
-            normalized_for_colors_plot = np.zeros_like(cost_values)
+            normalized_values = np.zeros_like(cost_values)
+
+        # Gestione colori (usa sempre i normalizzati)
         cmap = LinearSegmentedColormap.from_list("green_yellow_red", ["green", "yellow", "red"])
-        gradient_colors = cmap(normalized_for_colors_plot)
+        gradient_colors = cmap(normalized_values)
         
         for i, point in enumerate(source_points):
-            # incremental cost
             old_cost = point['cost']
-            new_cost = float(cost_values[i])
-            point['cost'] = old_cost + (new_cost * weight)
-            #print(f"Point {i}: Old Cost = {old_cost:.2f}, New Cost = {new_cost:.2f}, Total Cost = {point['cost']:.2f}")     
+            
+            if normalize:
+                val_to_add = float(normalized_values[i])
+            else:
+                val_to_add = float(cost_values[i])
+            
+            point['cost'] = old_cost + (val_to_add * weight)
+            
         self.plot_color_cost_given_cost(source_points)
         if plot:
             self.visualize_cost_map(source_points)

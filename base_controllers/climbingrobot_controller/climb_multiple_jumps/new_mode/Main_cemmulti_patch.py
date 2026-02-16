@@ -16,6 +16,13 @@ from params import *
 from Plot_result import PlotResultCemMjumps
 from collections import Counter
 
+
+def _eval_with_timing(optimizer, inp, idx):
+    t0 = time.time()
+    result = optimizer.eval_pop(inp)
+    elapsed = time.time() - t0
+    return idx, result, elapsed
+
 def main():
     
     setting = {
@@ -60,6 +67,12 @@ def main():
         min_delta = 1e-4
         last_best_fitness = -np.inf  # Changed from np.inf to -np.inf
         
+        # Timing logs
+        timing_log = {
+            "iterations": [],
+            "total_wall_time": None
+        }
+        
         for k in range(cem_params.cem_iters):
             # set time and paramters
             iter_start = time.time()
@@ -72,6 +85,7 @@ def main():
             all_achieved_target = [None] * cem_params.pop_size
             n_workers = cem_params.n_threads
             all_converged = [False] * cem_params.pop_size
+            individual_times = [0.0] * cem_params.pop_size
             
             first_iteration = (k == 0)
             algo.generate_population_discrete(first_iteration)
@@ -97,14 +111,14 @@ def main():
                 print(colored(f"{n_workers} Thread evaluation with ThreadPoolExecutor, Iteration {k+1}/{cem_params.cem_iters}", "yellow", attrs=['bold']))
                 print(colored(f"{'='*60}\n", "yellow"))
                 
+                
                 with ThreadPoolExecutor(max_workers=n_workers) as executor:
-                    # map futures to their input indices
-                    future_to_index = {executor.submit(optimizer.eval_pop, inputs[i]): i 
+                    future_to_index = {executor.submit(_eval_with_timing, optimizer, inputs[i], i): i 
                                     for i in range(cem_params.pop_size)}
                 
                     for future in as_completed(future_to_index):
-                        idx = future_to_index[future]
-                        log_result = future.result()
+                        idx, log_result, elapsed = future.result()
+                        individual_times[idx] = elapsed
                         fitness[idx] = log_result['fitness']
                         all_log_points[idx] = log_result['points']
                         all_log_traj[idx] = log_result['traj']
@@ -125,7 +139,7 @@ def main():
                                 best_achieved_target = log_result['achieved_target']
                                 best_all_converged = log_result['all_converged']
                                 print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
-                        print(colored(f"complete individual {idx}, Iteration {k+1}", "yellow"))
+                        print(colored(f"complete individual {idx}, Iteration {k+1} ({elapsed:.2f}s)", "yellow"))
                 print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
             # ============================
             # flag_thread == FALSE: sequential evaluation
@@ -136,13 +150,12 @@ def main():
                 print(colored(f"{'='*60}\n", "yellow"))
                 
                 for i, population_inputs in enumerate(inputs):
+                    ind_start = time.time()
                     log_result = optimizer.eval_pop(population_inputs)
+                    ind_elapsed = time.time() - ind_start
+                    individual_times[i] = ind_elapsed
                     
-                    # if k == 0 and i == 0:
-                    #     print(colored(f"\n[PLOT] Visualizzazione primo individuo dell'iterazione 1...", "magenta", attrs=['bold']))
-                    #     optimizer.plot_mesh_traj(log_result['points'], log_result['traj'], log_result['fitness'])
-                    
-                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}\n", "cyan", attrs=['bold']))
+                    print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}, time = {ind_elapsed:.2f}s\n", "cyan", attrs=['bold']))
                     
                     fitness[i] = log_result['fitness']
                     all_log_points[i] = log_result['points']
@@ -174,6 +187,14 @@ def main():
                    
             print ("finish iteration ", k+1)
             iter_time = time.time() - iter_start
+            
+            # Store timing for this iteration
+            timing_log["iterations"].append({
+                "iteration": k + 1,
+                "iteration_time_s": round(iter_time, 4),
+                "individual_times_s": [round(t, 4) for t in individual_times],
+                "mean_individual_time_s": round(float(np.mean(individual_times)), 4),
+            })
             
             print(colored(f"\n{'='*60}", "cyan", attrs=['bold']))
             print(colored(f"  Iteration {k+1} completed in {iter_time:.2f}s", "cyan", attrs=['bold']))
@@ -282,6 +303,17 @@ def main():
         # Save wall-time
         end = time.time()
         wall_time = end - start
+
+        # Save timing report
+        timing_log["total_wall_time_s"] = round(wall_time, 4)                       #tempo totale
+        timing_log["total_iterations_completed"] = len(timing_log["iterations"])    #iterazioni completate
+        
+        
+        timing_filename = "timing_report.json"
+        timing_save_path = os.path.join(result_dir, timing_filename)
+        with open(timing_save_path, "w") as f:
+            json.dump(timing_log, f, indent=2)
+        print(colored(f"[SAVE] Timing report saved to: {timing_save_path}", "blue"))
 
         xd = algo.best_discrete
         
