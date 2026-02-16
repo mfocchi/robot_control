@@ -85,7 +85,9 @@ def main():
             all_achieved_target = [None] * cem_params.pop_size
             n_workers = cem_params.n_threads
             all_converged = [False] * cem_params.pop_size
+            all_converg_log = [None] * cem_params.pop_size
             individual_times = [0.0] * cem_params.pop_size
+            
             
             first_iteration = (k == 0)
             algo.generate_population_discrete(first_iteration)
@@ -127,6 +129,7 @@ def main():
                         all_n_jumps[idx] = log_result['n_jumps']
                         all_achieved_target[idx] = log_result['achieved_target']
                         all_converged[idx] = log_result['all_converged']
+                        all_converg_log[idx] = log_result['convergence_log']                        
                         
                         with best_lock:
                             if log_result['fitness'] > best_fitness:  # Changed from < to > for maximization
@@ -165,6 +168,7 @@ def main():
                     all_n_jumps[i] = log_result['n_jumps']
                     all_achieved_target[i] = log_result['achieved_target']
                     all_converged[i] = log_result['all_converged']
+                    all_converg_log[i] = log_result['convergence_log']
                     
                     if log_result['fitness'] > best_fitness:  # Changed from < to > for maximization
                         best_fitness = log_result['fitness']
@@ -230,6 +234,7 @@ def main():
                     'iteration': k + 1,
                     'patch_ids': xd[1:, idx].tolist(),   
                     'achieved_target': all_achieved_target[idx].tolist() if all_achieved_target[idx] is not None else None,                    
+                    'convergence_log': all_converg_log[idx]
                 }
                 current_iteration_elites.append(elite_sol)
             
@@ -267,7 +272,8 @@ def main():
                     "consumed_energy": float(all_consumed_energy[i]),
                     "landing_cost": float(all_landing_cost[i]),
                     "traj": current_traj,
-                    "points": current_points
+                    "points": current_points,
+                    "convergence_log": all_converg_log[i]
                 }
                 all_steps_data.append(step_info)
             
