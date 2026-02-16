@@ -61,8 +61,10 @@ Fr_max = 150.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
-mass = 5.
-anchor_distance = 10.
+Ly = 10.
+Lz = -10.
+mass = 5.08
+anchor_distance = Ly
 mu = 0.8
 
 inner_opt_params = {}
@@ -72,7 +74,7 @@ inner_opt_params['int_method'] = 'rk4'
 inner_opt_params['N_dyn'] = 30.
 inner_opt_params['FRICTION_CONE'] = 1.
 inner_opt_params['int_steps'] = 5.
-inner_opt_params['b'] = anchor_distance
+inner_opt_params['b'] = Ly #anchor_distance
 inner_opt_params['p_a1'] = matlab.double([0., 0., 0.]).reshape(3, 1)
 inner_opt_params['p_a2'] = matlab.double([0., inner_opt_params['b'], 0.]).reshape(3, 1)
 inner_opt_params['g'] = 9.81
@@ -102,9 +104,9 @@ cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 50
 cem_params.pop_size = 500
-cem_params.n_elites = int(cem_params.pop_size * 0.3)
-cem_params.decrease_pop_factor = 0.0 # DO NOT REDUCE POPULATION
-cem_params.fraction_elites_reused = 0.0
+cem_params.n_elites = int(cem_params.pop_size * 0.5)
+cem_params.decrease_pop_factor = 0.0 
+cem_params.fraction_elites_reused = 0.0 
 cem_params.alpha = 0.5
 # Discrete
 cem_params.dim_discrete = CEM_DISCRETE_DIM
@@ -137,14 +139,14 @@ FILE_FOR_GAZEBO_SIM = f"{MAIN_DIRECTORY}/info_for_gazebo.json"
 result_dir = os.path.join(os.path.abspath(os.getcwd()), MAIN_DIRECTORY)
 os.makedirs(result_dir, exist_ok=True)
 
-terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere
+terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere | rock | gaussian_bumps
 # Terrain configuration values for rock terrain, otherwise stay in default
 wall_depth = 1           
 grid_size = 100
 max_ridge_depth = 0.5   
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
 # terrain_manager  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type='custom_gaussians')
-terrain_manager  = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=-number_of_patches_height, Ly=number_of_patches_width, generate_terrain=True, terrain_type=terrain_type)
+terrain_manager  = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type=terrain_type)
 
 def initialize_terrain_data(warm_start_mode=False):
     create_description_file(enable=False)
