@@ -140,8 +140,8 @@ def plotStuff():
     # limit plot as in matlab
     min_x = min(np.min(ref_com[0, :]), pf[0]) - 3
     max_x = max(np.max(ref_com[0, :]), pf[0]) + 3
-    min_y = min(np.min(ref_com[1, :]), pf[1]) - 3
-    max_y = max(np.max(ref_com[1, :]), pf[1]) + 3
+    min_y = 0
+    max_y = p_a2[1]
     min_z = min(p0[2], pf[2]) - 4
     max_z = 2
 

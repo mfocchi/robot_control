@@ -524,59 +524,60 @@ class TerrainManager:
         return points_in_patch
 
     def wall_surface_eval(self, z_query, y_query, mesh_x, mesh_y, mesh_z):
-
         """
-         Evaluate the wall surface height at given query points using interpolation.
-
-         Parameters:
-         -----------
-         z_query : float or array-like
-             Z coordinate(s) where surface height is to be evaluated
-         y_query : float or array-like
-             Y coordinate(s) where surface height is to be evaluated
-        'mesh_x': Height map array (surface heights)
-        'mesh_y': Y coordinate meshgrid
-        'mesh_z': Z coordinate meshgrid
-
-         Returns:
-         --------
-         val : float or ndarray
-             Surface height value(s) at the query point(s)
-         """
+        Evaluate wall surface height at given query points using:
+        - linear interpolation inside the grid
+        - nearest (clamped) extrapolation outside the grid
+        (MATLAB: griddedInterpolant(..., 'linear', 'nearest'))
+        """
 
         # Extract coordinate arrays from meshgrids
         z_coords = mesh_z[0, :]  # Z coordinates (1D array)
-        y_coords = mesh_y[:, 0]  # Y Coordinates (1D array)
+        y_coords = mesh_y[:, 0]  # Y coordinates (1D array)
 
-        # Create interpolation function using RegularGridInterpolator
-        # Note: RegularGridInterpolator expects (y, z) order for 2D data
+        # Ensure coords are increasing (RegularGridInterpolator expects monotonic)
+        # If your grids can be decreasing, this handles it safely.
+        if z_coords[0] > z_coords[-1]:
+            z_coords = z_coords[::-1]
+            mesh_x = mesh_x[:, ::-1]
+        if y_coords[0] > y_coords[-1]:
+            y_coords = y_coords[::-1]
+            mesh_x = mesh_x[::-1, :]
+
+        # Base interpolator: linear; allow out-of-bounds (we clamp ourselves)
         wall_surface_fcn = RegularGridInterpolator(
             (y_coords, z_coords),
             mesh_x,
-            method='linear',
+            method="linear",
             bounds_error=False,
-            fill_value=0
+            fill_value=None,
         )
+
+        y_min, y_max = float(y_coords[0]), float(y_coords[-1])
+        z_min, z_max = float(z_coords[0]), float(z_coords[-1])
 
         # Handle both scalar and array inputs
         if np.isscalar(z_query) and np.isscalar(y_query):
-            # Single point query
-            query_points = np.array([[y_query, z_query]])
+            # Clamp to bounds for "nearest" extrapolation
+            yq = float(np.clip(y_query, y_min, y_max))
+            zq = float(np.clip(z_query, z_min, z_max))
+
+            query_points = np.array([[yq, zq]])
             val = wall_surface_fcn(query_points)[0]
         else:
-            # Multiple points query
-            z_query = np.asarray(z_query)
-            y_query = np.asarray(y_query)
+            z_query = np.asarray(z_query, dtype=float)
+            y_query = np.asarray(y_query, dtype=float)
 
             # Ensure same shape for broadcasting
             if z_query.shape != y_query.shape:
                 z_query, y_query = np.meshgrid(z_query, y_query)
 
-            # Flatten for interpolation
-            z_flat = z_query.flatten()
-            y_flat = y_query.flatten()
-            query_points = np.column_stack([y_flat, z_flat])
+            # Clamp to bounds for "nearest" extrapolation
+            yq = np.clip(y_query, y_min, y_max)
+            zq = np.clip(z_query, z_min, z_max)
 
+            # Flatten for interpolation
+            query_points = np.column_stack([yq.ravel(), zq.ravel()])
             val = wall_surface_fcn(query_points)
 
             # Reshape back to original query shape if needed
