@@ -235,7 +235,7 @@ def initialize_terrain_data(warm_start_mode=False):
     # Update cem_params.n_values with the new structure
     cem_params.n_values = [MAX_JUMP] + [valid_patches.copy() for _ in range(MAX_JUMP)]
     
-    cem_params.min_prob = 1/len(patches.patches)
+    cem_params.min_prob = 1/len(patches.patches) *0.1
     
     # Update init_probs accordingly
     if warm_start_mode:
