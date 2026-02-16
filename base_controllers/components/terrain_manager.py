@@ -37,15 +37,15 @@ class TerrainManager:
                 # Generate the terrain automatically
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
-                    self.max_ridge_depth, self.seed, x_offset=-0.5
+                    self.max_ridge_depth, self.seed, x_offset=0.01
                 )
             if self.terrain_type=='hemisphere':
-                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 2.0, grid_size=self.grid_size, x_offset=0.01)
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size, x_offset=0.01)
 
             if self.terrain_type == 'gaussian_bumps':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
-                    standard_deviation=0.5, n_gaussian=5, seed=self.seed, casual=False, x_offset=0.
+                    standard_deviation=.7, n_gaussian=5, seed=self.seed, casual=False, x_offset=0.01
                 )
                 
             if self.terrain_type == 'mini_tower_each_patch':
@@ -56,7 +56,7 @@ class TerrainManager:
                     h_tower=self.wall_depth,
                     sigma=0.5, # radius tower
                     p_exp=10,  # plane of the top
-                    x_offset=0.2 # Move everything forward to avoid singularity issues
+                    x_offset=0.01 # Move everything forward to avoid singularity issues
                 )
             
             if self.terrain_type == 'single_central_tower':
@@ -64,7 +64,7 @@ class TerrainManager:
                     h_tower=2.0,   # Più alta
                     sigma=1.5,     # Più larga
                     p_exp=10,       # Più simile a una collina (morbida)
-                    x_offset=1.0
+                    x_offset=0.01
                 )
             
             if self.terrain_type == 'mix_obst':
@@ -95,7 +95,7 @@ class TerrainManager:
                     amplitudes=amplitudes,
                     sigmas=sigmas,
                     grid_size=self.grid_size,
-                    x_offset=0.1
+                    x_offset=0.01
                 )
                 
             # self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
