@@ -14,11 +14,9 @@ END_POS = np.array([9, 9])
 EXP_A = 0.1
 
 # Cost weights
-MISSING_WAYPOINT_PENALTY = 60.0
-WAYPOINT_REWARD = 10.0
-ENERGY_WEIGHT = 0.1
-ENERGY_LOG_WEIGHT = 20.0
-LINEAR_DIST_WEIGHT = 10.0
+MISSING_WAYPOINT_PENALTY = 40.0  # Reduced to encourage more waypoints
+ENERGY_LOG_WEIGHT = 15.0  # Reduced to balance cost
+LINEAR_DIST_WEIGHT = 5.0  # Reduced weight
 
 # Wall obstacles
 WALLS = {
@@ -91,13 +89,13 @@ def evaluate_fitness(population: np.ndarray, max_waypoints: int) -> np.ndarray:
             total_energy += res['consumed_energy']
         
         if collision:
-            scores[i] = 1e7  # Penalty for collision
+            scores[i] = -1e7  # Penalty for collision
         else:
             n_intermediate = len(path) - 2
             waypoint_cost = (max_waypoints - n_intermediate) * MISSING_WAYPOINT_PENALTY
             cost_dist = total_linear_dist * LINEAR_DIST_WEIGHT
             energy_cost = np.log(total_energy + 1) * ENERGY_LOG_WEIGHT
-            scores[i] = waypoint_cost + energy_cost + cost_dist
+            scores[i] = -(waypoint_cost + energy_cost + cost_dist)
             
     return scores
 
@@ -175,16 +173,20 @@ def run_cem_trajectory():
     MAX_WAYPOINTS = 10
     n_values = [MAX_WAYPOINTS + 1] + [N_TILES] * MAX_WAYPOINTS
     
-    # Initialize probability distributions - favor many waypoints
-    p_len = np.array([(i + 1) ** 2 for i in range(MAX_WAYPOINTS + 1)])
+    # Initialize probability distributions - more uniform for better exploration
+    p_len = np.ones(MAX_WAYPOINTS + 1) / (MAX_WAYPOINTS + 1)
+    # Give slight bias to middle range
+    for i in range(3, 8):
+        p_len[i] *= 1.5
     p_len = p_len / np.sum(p_len)
+    
     init_probs = [p_len] + [np.ones(N_TILES) / N_TILES for _ in range(MAX_WAYPOINTS)]
     
     print("Initial waypoint count distribution:")
     for i, prob in enumerate(p_len):
         print(f"  {i} waypoints: {prob:.3f}")
     
-    # CEM parameters
+    # CEM parameters - adjusted for better exploration
     params = CemParams(
         seed=0,
         pop_size=2500,
@@ -193,12 +195,11 @@ def run_cem_trajectory():
         dim_discrete=len(n_values),
         n_values=n_values,
         init_probs=init_probs,
-        min_prob=0.005,
-        alpha=0.6,
-        fraction_elites_reused=0.0
+        min_prob=0.01,  # Increased for more exploration
+        fraction_elites_reused=0.2,  # Added elite reuse
     )
     
-    cem = CrossEntropyMethodMixed(params)
+    cem = CrossEntropyMethodMixed(params,patch_p0=None, patch_pf=None)
     all_chosen_tiles = []
     
     print("\nStarting optimization...")
