@@ -117,7 +117,7 @@ class ParabolicOptimizer:
             p0_adj = pf_adj.copy()
             achieved_target = pf_adj.copy()
 
-
+        
         if not all_converged:
             # fitness_score = fitness_weights[0]
             # achieved_target = None
@@ -136,13 +136,12 @@ class ParabolicOptimizer:
             fitness_score = -(base_penalty + progress_penalty + dist_penalty)  # Negative for maximization
             
             avg_jump_landing_cost = 0.0
-            
+            waypoint_cost = 0.0
         else:
             waypoint_cost = (MAX_JUMP - total_jump) * fitness_weights[5]
             cost_dist = (total_linear_dist/total_jump) * fitness_weights[4]
             energy_cost = np.log(total_consumed_energy + 1) * fitness_weights[1] # ha il log perche e' esponenziale
             terrain_cost = (total_landing_cost/total_jump) * fitness_weights[3]
-            
             fitness_score = -(waypoint_cost + energy_cost + cost_dist + terrain_cost)  # Negative for maximization
 
         print("xd value: " , xd)    

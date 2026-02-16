@@ -17,7 +17,7 @@ plot_str = os.environ.get("FOLDER_PLOT")
 if plot_str:
     FOLDER_MAIN = np.array(json.loads(plot_str))
 else:
-    FOLDER_MAIN = "result/common_test"
+    FOLDER_MAIN = "result/common_test_8"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -321,6 +321,8 @@ class PlotResultCemMjumps:
         if created:
             save_path = f'{FOLDER_MAIN}/plot_jumps_histogram.png'
             fig.savefig(save_path)
+            save_path_pdf = f'{FOLDER_MAIN}/plot_jumps_histogram.pdf'
+            fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
             print(f"Histogram saved to: {save_path}")
             plt.show()
    
@@ -397,6 +399,8 @@ class PlotResultCemMjumps:
         if created:
             save_path = f'{FOLDER_MAIN}/plot_fitness_colormap_redbest.png'
             fig.savefig(save_path)
+            save_path_pdf = f'{FOLDER_MAIN}/plot_fitness_colormap_redbest.pdf'
+            fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
             print(f"Fitness plot saved to: {save_path}")
             plt.show()
     
@@ -516,12 +520,17 @@ class PlotResultCemMjumps:
         ax.view_init(elev=30, azim=-60)
 
         if created:
+            
+            save_path = f'{FOLDER_MAIN}/plot_mesh_pc_traj.png'
+            fig.savefig(save_path)
+            save_path_pdf = f'{FOLDER_MAIN}/plot_mesh_pc_traj.pdf'
+            fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
+            print(f"Mesh and PC trajectory plot saved to: {save_path}")
+            
             plt.tight_layout()
             plt.show()
    
-    def plot_terrain_traj(self, ax=None, show_cost=True):
-        pass
-    
+
     def compute_edge_patches(self):
         """Compute patch contours using ConvexHull for 3D visualization."""
         self.edge_patches = []
@@ -530,7 +539,6 @@ class PlotResultCemMjumps:
             points_data = patch.get('points_in_patch', [])
             if len(points_data) < 3:
                 continue
-            
             coords = np.array([p['position'] for p in points_data])
             
             try:
@@ -740,6 +748,14 @@ class PlotResultCemMjumps:
             fig1.savefig(save_path1, dpi=150, bbox_inches='tight')
             fig2.savefig(save_path2, dpi=150, bbox_inches='tight')
             print(f"2D comparison saved to: {save_path1} and {save_path2}")
+            
+            
+            save_path_pdf_1 = f'{FOLDER_MAIN}/plot_2d_compare_first.pdf'
+            save_path_pdf_2 = f'{FOLDER_MAIN}/plot_2d_compare_last.pdf'
+            fig1.savefig(save_path_pdf_1, bbox_inches='tight', pad_inches=0.23)
+            fig2.savefig(save_path_pdf_2, bbox_inches='tight', pad_inches=0.23)
+            print(f"2D comparison plots saved to: {save_path_pdf_1} and {save_path_pdf_2}")
+            
             plt.show()
             return
         
@@ -1011,6 +1027,13 @@ class PlotResultCemMjumps:
             fig1.savefig(save_path1, dpi=150)
             fig2.savefig(save_path2, dpi=150)
             print(f"3D comparison saved to: {save_path1} and {save_path2}")
+            
+            save_path_pdf_1 = f'{FOLDER_MAIN}/plot_3d_compare_first.pdf'
+            save_path_pdf_2 = f'{FOLDER_MAIN}/plot_3d_compare_last.pdf'
+            fig1.savefig(save_path_pdf_1, bbox_inches='tight', pad_inches=0.23)
+            fig2.savefig(save_path_pdf_2, bbox_inches='tight', pad_inches=0.23)
+            print(f"3D comparison plots saved to: {save_path_pdf_1} and {save_path_pdf_2}")
+            
             plt.show()
             return
         
@@ -1166,6 +1189,10 @@ class PlotResultCemMjumps:
             save_path = f'{FOLDER_MAIN}/grid_best_iter_batch_{fig_idx}.png'
             fig.savefig(save_path, dpi=150)
             print(f"Salvataggio griglia con target: {save_path}")
+            
+            save_path_pdf = f'{FOLDER_MAIN}/grid_best_iter_batch_{fig_idx}.pdf'
+            fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
+            
             plt.show()
 
     def plot_convergence_histogram(self, ax=None):
@@ -1237,6 +1264,10 @@ class PlotResultCemMjumps:
                 plt.tight_layout()
                 save_path = f'{FOLDER_MAIN}/plot_convergence_histogram.png'
                 fig.savefig(save_path, dpi=150)
+                
+                save_path_pdf = f'{FOLDER_MAIN}/plot_convergence_histogram.pdf'
+                fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
+                
                 print(f"[PLOT] Istogramma convergenza salvato in: {save_path}")
                 plt.show()
 

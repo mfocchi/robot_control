@@ -14,10 +14,10 @@ for TERRAIN_TYPE in "${TERRAIN_TYPES[@]}"
 do
 
     if [ "$TERRAIN_TYPE" == "hemisphere" ]; then
-        START_POINT="[0.5, 6.5, -8.5]"
+        START_POINT="[0.5, 6.5, -8.5]" # Upward
         GOAL_POINT="[0.5, 3.5, -1.5]"
     else
-        START_POINT="[0.5, 1.5, -1.5]"
+        START_POINT="[0.5, 1.5, -1.5]" # Downward
         GOAL_POINT="[0.5, 6.5, -8.5]"
     fi
     echo ""
