@@ -27,8 +27,10 @@ class BilevelOpt:
         # State tracking
         jump_log_points = []
         jump_log_traj = []
+        converg_log = []
         total_consumed_energy = 0.0
         total_landing_cost = 0.0
+        total_traj_length = 0.0 
         all_converged = True  # Flag to monitor overall convergence
         achieved_target = None
         
@@ -71,7 +73,8 @@ class BilevelOpt:
                 'n_jumps': 0,
                 'consumed_energy': 0.0,
                 'landing_cost': 0.0,
-                'all_converged': False
+                'all_converged': False,
+                'convergence_log': []
             }
         
         
@@ -115,23 +118,41 @@ class BilevelOpt:
                                             res, patch_id=patch_id, contact_abs_pos_yz=mat_vector2python(res['achieved_target'])[1:])
             
             # Update logs and metrics
-            jump_log_traj.append(mat_matrix2python(res['p']))
+            traj_matrix = mat_matrix2python(res['p'])
+            jump_log_traj.append(traj_matrix)
             jump_log_points.append(mat_vector2python(res['achieved_target']).copy())
+            converg_log.append(res['problem_solved'])
             total_consumed_energy += res['consumed_energy']
             total_landing_cost += jump_landing_cost # cost of each landing point
             
-            if np.isnan(mat_vector2python(res['achieved_target'])[0]):
-                print("a")
-                breakpoint()
-            vec = mat_vector2python(res['achieved_target'])
-            if (vec[1] < 0 or vec[1] > 10) or (vec[2] > 0 or vec[2] < -10):
-                print("b")
-                breakpoint()
+            if traj_matrix is not None and traj_matrix.size > 0 and traj_matrix.ndim == 2 and traj_matrix.shape[0] == 3:
+                diffs = np.diff(traj_matrix, axis=1)  # shape (3, N-1)
+                segment_lengths = np.sqrt(np.sum(diffs**2, axis=0))  # Euclidean distance per segment
+                total_traj_length += np.sum(segment_lengths)
+                
+            # if np.isnan(res['consumed_energy']):
+            #     print("consumed energy is nan")
+            #     all_converged = False
+            #     breakpoint()
+            #     break
             
-            vec = p0_adj
-            if (vec[1] < 0 or vec[1] > 10) or (vec[2] > 0 or vec[2] < -10):
-                print("c")
-                breakpoint()
+            # if np.isnan(mat_vector2python(res['achieved_target'])[0]):
+            #     print("achieved target is nan")
+            #     all_converged = False
+            #     breakpoint()
+            #     break
+            
+            # vec = mat_vector2python(res['achieved_target'])
+            # if (vec[1] < 0 or vec[1] > 10) or (vec[2] > 0 or vec[2] < -10):
+            #     print("b")
+            #     breakpoint()
+            
+            # vec = p0_adj
+            # if (vec[1] < 0 or vec[1] > 10) or (vec[2] > 0 or vec[2] < -10):
+            #     print("c")
+            #     breakpoint()
+            
+            
             # acutal target becomes next starting point
             p0_adj = mat_vector2python(res['achieved_target']) #pf_adj.copy()
             
@@ -140,19 +161,23 @@ class BilevelOpt:
             achieved_target = None
             avg_jump_landing_cost = 0.0
             avg_energy_cost = 0.0
+            waypoint_cost = 0.0
+            traj_length_cost = 0.0
         else:
-            # waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
+            waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
+            traj_length_cost = total_traj_length * self.fitness_weights[4]
+            
             avg_energy_cost = (total_consumed_energy) * self.fitness_weights[1] # / total_jump ??
             avg_jump_landing_cost = (total_landing_cost) * self.fitness_weights[3] # / total_jump ??
-            
-            fitness_score = -(avg_energy_cost + avg_jump_landing_cost)  # Negative for maximization
+              
+            fitness_score = -(avg_energy_cost + avg_jump_landing_cost) # + waypoint_cost + traj_length_cost)  # Negative for maximization
             achieved_target = mat_vector2python(res['achieved_target']) if res['achieved_target'] is not None else None
 
         print("xd value: ", xd)
         print(f"Computed Score (Fitness): {fitness_score:.4f}")
         status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
         print(f"--- Evaluation Results ---")
-        print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {avg_energy_cost:.2f}, avg_jump_landing_cost: {avg_jump_landing_cost:.4f} , Global Convergence: {status_msg}")
+        print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {avg_energy_cost:.2f}, avg_jump_landing_cost: {avg_jump_landing_cost:.4f}, waypoint_cost: {waypoint_cost:.4f} , traj_length_cost: {traj_length_cost:.4f}, Global Convergence: {status_msg}")
         print(f"--------------------------")
         
         return {
@@ -163,7 +188,8 @@ class BilevelOpt:
             'n_jumps': total_jump,
             'consumed_energy': avg_energy_cost,
             'landing_cost': avg_jump_landing_cost,
-            'all_converged': all_converged
+            'all_converged': all_converged,
+            'convergence_log': converg_log
         }
                
     def calc_terrain_cost(self, res, patch_id=None, contact_abs_pos_yz=None):
