@@ -27,30 +27,30 @@ p0_str = os.environ.get("P0_INIT_STR")
 if p0_str:
     P0_INIT = np.array(json.loads(p0_str))
 else:
-    P0_INIT = np.array([ 0.5,  2.5,  -7.5])
+    P0_INIT = np.array([0.5, 6.5, -7.5])
     
 pf_str = os.environ.get("PF_INIT_STR")
 if pf_str:
     PF_PATCH_INIT = np.array(json.loads(pf_str))
 else:
-    PF_PATCH_INIT = np.array([ 0.01,  1.5,  -5.5 ])
+    PF_PATCH_INIT = np.array([0.5, 2.5,-2.5])
 
 
 PF_INIT = PF_PATCH_INIT
-MAX_JUMP = 10
-THREADS = 5
-flag_thread = False
-patience = 10
+MAX_JUMP = 6
+THREADS = 10
+flag_thread = True
+patience = 3
 CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
-MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test")
+MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test_9")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
-fitness_weights = np.array([1e7, 10.,1., 100., 1.,0.]) # Optimizer
+fitness_weights = np.array([1e7, 1., 1., 1., 0.0,  0.0]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
-# filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, second derivative, weight_gauss_cost
-filter_weights = np.array([0., 10., 10.0,0.0])
+# filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, II dev v1, II dev v2, gaussian cost
+filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 
 # ================================================
 # INNER LOOP OPTIMIZER PARAMETERS
@@ -160,41 +160,46 @@ def initialize_terrain_data(warm_start_mode=False):
     # Filter with cost change and color based on height
     # point_clouds.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
     # point_clouds.visualize_cost_map()
-    # print("\n[INIT] === Smoothing Filter ===")
-    # kernel = [point_clouds.smoothing_kernel] 
-    # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[0], plot=False)
+    print("\n[INIT] === Smoothing Filter ===")
+    kernel = [point_clouds.smoothing_kernel] 
+    point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[0], plot=False)
     print("\n[INIT] === First Derivative (Gradient) ===")
     kernel = [point_clouds.sobel_y, point_clouds.sobel_z] 
     point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[1], plot=False)
-    # print("\n[INIT] === Second Derivative (Laplacian) ===")
+    print("\n[INIT] === Second Derivative (Laplacian) ===")
     kernel = [point_clouds.laplacian_kernel] 
     point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[2], plot=False)
     # point_clouds.visualize_cost_map()
-
+    # print("\n[INIT] === Laplacian of Gaussian (LoG) ===")
+    # # Usa log_kernel invece di laplacian_kernel
+    # kernel = [point_clouds.log_kernel] 
+    # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[3], plot=False)
+    print("\n[INIT] === Bump Detection (II derviative v2) ===")
+    point_clouds.compute_bump_detection(weight=filter_weights[3])
+    
     # === 2 PATCHES INITIALIZATION ===
     pc_t = point_clouds.points_t
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
 
+    patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[4])
+    
     patches.visualize_full_cost_map()
     
-    patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[3])
+    patches.print_patch_cost_matrix(2)
+    
     cost_grid, cost_y, cost_z  = patches.get_cost_meshgrid(grid_size=grid_size)
     
-    patches.plot_cost_meshgrid(grid_size=100, plot_type='surface')
-
-    # Visualizza solo mappa di contorno
-    patches.plot_cost_meshgrid(grid_size=100, plot_type='contour')
-
-    # Visualizza entrambi
-    patches.plot_cost_meshgrid(grid_size=100, plot_type='both')
     
-    patches.visualize_full_cost_map()
-    
+    patches.plot_cost_meshgrid(cost_grid, cost_y, cost_z, plot_type='surface')
+    # patches.plot_cost_meshgrid(cost_grid, cost_y, cost_z, plot_type='contour')
+    # patches.plot_cost_meshgrid(cost_grid, cost_y, cost_z, plot_type='both')
     patches.plot_map_with_cost_meshgrid_overlay(
-        grid_size=100,        # Risoluzione della griglia
-        x_offset=0.5,        # Offset in X per il cost mesh
-        alpha_mesh=0.7,      # Trasparenza del mesh (0-1)
-        alpha_points=0.2     # Trasparenza dei punti
+        Cost_grid=cost_grid,
+        Y_grid=cost_y,
+        Z_grid=cost_z,
+        x_offset=1.0,        
+        alpha_mesh=0.7,      
+        alpha_points=0.7     
     )
     
     # Update inner_opt_params with terrain data
@@ -240,11 +245,7 @@ def initialize_terrain_data(warm_start_mode=False):
     # Update init_probs accordingly
     if warm_start_mode:
         
-        patch_probs = get_warm_start_line_distance_only(
-            patches, 
-            P0_INIT, 
-            PF_PATCH_INIT, 
-            radius=CORRIDOR_RADIUS )
+        patch_probs = get_warm_start_line_distance_only( patches, P0_INIT, PF_PATCH_INIT, radius=CORRIDOR_RADIUS )
         
         # patch_probs = get_warm_start_base_cost(patches)
         # patch_probs = get_warm_start_line(
