@@ -1,3 +1,6 @@
+
+import matplotlib
+matplotlib.use('TkAgg')
 import os
 import sys
 import time
@@ -6,6 +9,7 @@ import numpy as np
 from termcolor import colored
 from datetime import datetime
 import matplotlib.pyplot as plt
+
 import matlab.engine
 import matplotlib.patches as mpatches 
 from base_controllers.components.terrain_manager import TerrainManager

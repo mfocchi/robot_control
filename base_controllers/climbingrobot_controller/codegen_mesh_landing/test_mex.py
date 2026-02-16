@@ -52,7 +52,7 @@ def plot_patch(landing_patch_center, params, wallSurfaceEval, axis):
             z = dz[j]
             axis.scatter(x, y, z, marker='.', s=40, color='blue')  # s approx = MarkerSize 20
 
-def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
+def generateCostMapGaussian(Lz, Ly, grid_size, gaussian_center, max_cost):
     """
     Python equivalent of the MATLAB function:
     [X, Y, Z] = generateCostMap(Lz, Ly, gridSize, gaussian_center, max_cost)
@@ -265,7 +265,50 @@ def eval_constraints(c, num_constr, constr_tolerance, debug=False):
         print('5) via point constraint violated')
         print(f"via point :\033[91m{via_block[0]:.6f}\033[0m" if via_block[0] > constr_tolerance else f"{via_block[0]:.6f}")
 
+def generateCostMap(terrain_manager, number_of_patches_width, number_of_patches_height):
+    from base_controllers.components.point_cloud_filter import PointCloudFilter
+    from base_controllers.components.patch_surface import PatchSurface
+    filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 
+    # === 1 POINT CLOUD INITIALIZATION ===
+    in_point_clouds = terrain_manager.point_cloud
+    point_clouds = PointCloudFilter(in_point_clouds)
+
+
+    # Filter with cost change and color based on height
+    # point_clouds.filter_height_profile(x0=0.0, scale=1.0,side_application="depth", profile="logln")
+    # point_clouds.visualize_cost_map()
+    print("\n[INIT] === Smoothing Filter ===")
+    kernel = [point_clouds.smoothing_kernel]
+    point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[0], plot=False)
+    print("\n[INIT] === First Derivative (Gradient) ===")
+    kernel = [point_clouds.sobel_y, point_clouds.sobel_z]
+    point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[1], plot=False)
+    print("\n[INIT] === Second Derivative (Laplacian) ===")
+    kernel = [point_clouds.laplacian_kernel]
+    point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[2], plot=False)
+    # point_clouds.visualize_cost_map()
+    # print("\n[INIT] === Laplacian of Gaussian (LoG) ===")
+    # # Usa log_kernel invece di laplacian_kernel
+    # kernel = [point_clouds.log_kernel]
+    # point_clouds.filter_process_points_pipeline(kernel, weight=filter_weights[3], plot=False)
+    print("\n[INIT] === Bump Detection (II derviative v2) ===")
+    point_clouds.compute_bump_detection(weight=filter_weights[3])
+
+    # === 2 PATCHES INITIALIZATION ===
+    pc_t = point_clouds.points_t
+    patches = PatchSurface(pc_t, number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
+
+    patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[4])
+
+    patches.visualize_full_cost_map()
+
+    patches.print_patch_cost_matrix(2)
+
+    patches.get_cost_meshgrid(grid_size=grid_size)
+
+    cost_grid, cost_y, cost_z = patches.get_cost_meshgrid(grid_size=grid_size)
+    return cost_grid, cost_y, cost_z
 
 #######################################
 status_map = {
@@ -280,12 +323,13 @@ wall_depth = 1  # how
 grid_size = 100
 max_ridge_depth = 0.5
 seed = 47
-terrainManager = TerrainManager(generate_terrain=False)
+
 
 
 #TERRAIN 1:Generate rock wall map
 # Lz = -10  # Height of wall in meters
 # Ly = 10  # Width (horizontal extent) of wall in meters
+#terrainManager = TerrainManager(generate_terrain=False)
 # mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.0)
 # ##jump params
 # p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
@@ -294,15 +338,21 @@ terrainManager = TerrainManager(generate_terrain=False)
 #TERRAIN 2
 Lz = -10.  # Height of wall in meters
 Ly = 10.  # Width (horizontal extent) of wall in meters
-mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.01)
+terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
+mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
+#mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.01)
 #jump params
 p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
 pf=  np.array([0.5, 8.5,-4])
 
+# p0 = np.array([-0.019, 3.058, -3.24]) #unit test ,  there is singularity for px = 0!
+# pf=  np.array([0.19, 0.5,-1.5])
+
 #cost map
 point_lowest_cost = pf + np.array([0, 0.5, 0.5])
 max_cost = 20.
-cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
+#cost_x, cost_y, cost_z = generateCostMapGaussian(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
+cost_x, cost_y, cost_z = generateCostMap(terrainManager, number_of_patches_width=10, number_of_patches_height=10)
 
 Fleg_max = 300. #100 not converges with hemispheric
 Fr_max = 190.

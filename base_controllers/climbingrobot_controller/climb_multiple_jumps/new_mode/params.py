@@ -15,7 +15,7 @@ from base_controllers.components.point_cloud_filter import PointCloudFilter
 from base_controllers.components.patch_surface import PatchSurface
 from base_controllers.components.terrain_manager import TerrainManager
 import matplotlib.pyplot as plt
-import seaborn as sns
+#import seaborn as sns
 import numpy as np
 import matplotlib.patches as mpatches
 
@@ -27,15 +27,14 @@ p0_str = os.environ.get("P0_INIT_STR")
 if p0_str:
     P0_INIT = np.array(json.loads(p0_str))
 else:
-    P0_INIT = np.array([0.5, 6.5, -7.5])
-    
+    P0_INIT = np.array([0.5, 5.5, -6])
+
 pf_str = os.environ.get("PF_INIT_STR")
 if pf_str:
     PF_PATCH_INIT = np.array(json.loads(pf_str))
 else:
-    PF_PATCH_INIT = np.array([0.5, 2.5,-2.5])
-
-
+    PF_PATCH_INIT = np.array([0.5, 8.5,-4])
+ 
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 6
 THREADS = 10
