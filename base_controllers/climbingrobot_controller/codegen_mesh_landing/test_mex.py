@@ -73,13 +73,11 @@ def generateCostMap(Lz, Ly, grid_size, gaussian_center, max_cost):
 
     return X, Y, Z
 
-def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
+def initOptim(p0, pf, Ly, patch_side_z, patch_side_y,   mesh_x, mesh_y, mesh_z):
     mass = 5.08
-    N_patches_z = 20
-    N_patches_y = 5
     params = {}
     params['m'] = mass
-    anchor_distance = 10.
+    anchor_distance = Ly
     params['num_params'] = 4.
     params['int_method'] = 'rk4'
     params['N_dyn'] = 30.
@@ -95,7 +93,7 @@ def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     params['T_th'] =  0.05
     params['obstacle_avoidance'] = 'mesh'
     params['jump_clearance'] = 0.5
-    params['debug'] = True #enables print of cost
+    params['debug'] = False #enables print of cost
 
     # Interpolator (note: z must be increasing — here from -10 to 0)
     p0[0] = terrainManager.wall_surface_eval(p0[2],p0[1],  mesh_x, mesh_y, mesh_z)
@@ -110,8 +108,8 @@ def initOptim(p0, pf, mesh_x, mesh_y, mesh_z):
     params['cost_x'] = cost_x
     params['cost_y'] = cost_y
     params['cost_z'] = cost_z
-    params['patch_side_z'] =  math.fabs(Lz)/N_patches_z
-    params['patch_side_y'] = math.fabs(Ly)/N_patches_y
+    params['patch_side_z'] =  patch_side_z
+    params['patch_side_y'] = patch_side_y
 
     params['contact_normal'] = matlab.double(normal)
     return p0, pf, params
@@ -286,35 +284,35 @@ terrainManager = TerrainManager(generate_terrain=False)
 
 
 #TERRAIN 1:Generate rock wall map
-# Lz = -20  # Height of wall in meters
-# Ly = 5  # Width (horizontal extent) of wall in meters
+# Lz = -10  # Height of wall in meters
+# Ly = 10  # Width (horizontal extent) of wall in meters
 # mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.0)
 # ##jump params
-# p0 = np.array([0.5, 3.5, -6]) #unit test ,  there is singularity for px = 0!
-# pf=  np.array([0.5, 3,-4])
+# p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
+# pf=  np.array([0.5, 8.5,-4])
 
 #TERRAIN 2
-Lz = -20  # Height of wall in meters
-Ly = 5  # Width (horizontal extent) of wall in meters
-mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 1.)
-# #jump params
-p0 = np.array([0.1,    4,  -12]) #unit test ,  there is singularity for px = 0!
-pf=  np.array([0.1,  3,   -5.5 ])
+Lz = -10.  # Height of wall in meters
+Ly = 10.  # Width (horizontal extent) of wall in meters
+mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.01)
+#jump params
+p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
+pf=  np.array([0.5, 8.5,-4])
 
 #cost map
-point_lowest_cost = pf + np.array([0, 0.5, -0.5])
-max_cost = 20
+point_lowest_cost = pf + np.array([0, 0.5, 0.5])
+max_cost = 20.
 cost_x, cost_y, cost_z = generateCostMap(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
 
 Fleg_max = 300. #100 not converges with hemispheric
 Fr_max = 190.
 Fr_min = 15.
 mu = 0.8
-p0_adj, pf_adj, params = initOptim(p0, pf, mesh_x, mesh_y, mesh_z)
+p0_adj, pf_adj, params = initOptim(p0, pf, Ly, patch_side_z=1., patch_side_y=1. , mesh_x=mesh_x,mesh_y=mesh_y, mesh_z=mesh_z)
 solution = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
 ref_com  = mat_matrix2python(solution['p'])
 achieved_target = mat_matrix2python(solution['achieved_target'])
-breakpoint()
+
 print("p0 ", p0_adj)
 print("target (rought integration) ", ref_com[:,-1] )
 print("achieved target (fine integration)", solution['achieved_target'])
@@ -326,7 +324,7 @@ print("consumed_energy", solution['consumed_energy'])
 status = status_map.get(solution['problem_solved'], "unknown status")
 print(f"problem converged?: {status}")
 
-if status not in [0,2]:
+if solution['problem_solved'] not in [0,2]:
     eval_constraints(solution['c'], solution['num_constr'], solution['constr_tolerance'], debug=False)
 
 plotStuff()
