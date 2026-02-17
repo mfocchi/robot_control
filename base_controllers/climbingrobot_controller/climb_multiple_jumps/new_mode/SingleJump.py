@@ -423,10 +423,10 @@ def main():
     
     
     status_map = {
-        1: "Problem converged!",
-        -2: "Problem didn-t converge!",
-        2: "semidefinite solution (should modify the cost)",
-        0: "Max number of feval exceeded (10000)"
+        0: "converged",
+        2: "semidef.converg",
+        1: "not converged",
+        -2: "max number of function evaluations"
     }
     print(f"Problem Solved: {status_map.get(int(result['problem_solved']), result['problem_solved'])}")
 
