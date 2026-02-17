@@ -54,7 +54,7 @@ if __name__ == '__main__':
     vf_decimation = (1 / p.dt) / (vf_frequency)
     step = 0
     isrec = True
-    use_joy = False
+    use_joy = True
     sim_push = False
 
     if use_joy:
@@ -76,6 +76,7 @@ if __name__ == '__main__':
         #p.setSimSpeed(max_update_rate=300)
         p.startupProcedure()
         if p.state_estimation=='pronto':
+            launchFileNode("mocap_qualisys", "qualisys.launch")
             launchFileNode("pronto_aliengo", "pronto_aliengo.launch", additional_args=['pronto_conf:='+p.pronto_config,
                                                                                        'use_sim_time:='+str(not p.real_robot)])
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
@@ -153,7 +154,7 @@ if __name__ == '__main__':
 
                 if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
                     isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.6, vf_additional_term = 0.0)
-                    #isrec = True #just record value functtion but dont use
+                    isrec = True #just record value functtion but dont use
                      #print(V_safe)
                 # '''elif step % decimation == 0:
                 #     if np.all(np.abs(lin_vel_b < 10e-2)) and np.all(np.abs(p.qd) < 10e-2):
@@ -184,7 +185,7 @@ if __name__ == '__main__':
 
             if p.time < (p.startPush+0.25):
                 p.ros_pub.add_arrow(p.basePoseW[:3], np.array([0, 50 * p.counter, 0]) / 300, "blue", scale=1.5)
-            p.visualizeContacts(delete_markers=True)
+            #p.visualizeContacts(delete_markers=True)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         if p.SAVE_BAG:
