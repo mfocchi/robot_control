@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 #import seaborn as sns
 import numpy as np
 import matplotlib.patches as mpatches
-
+        
 # ================================================
 # BASE DATA FOR MULTIPLE JUMPS CLIMBING CONTROLLER
 # ================================================
@@ -27,13 +27,13 @@ p0_str = os.environ.get("P0_INIT_STR")
 if p0_str:
     P0_INIT = np.array(json.loads(p0_str))
 else:
-    P0_INIT = np.array([0.5, 2.5, -7.5])
+    P0_INIT = np.array([0.5, 5.5, -8.5])
 
 pf_str = os.environ.get("PF_INIT_STR")
 if pf_str:
     PF_PATCH_INIT = np.array(json.loads(pf_str))
 else:
-    PF_PATCH_INIT = np.array([0.5, 6.5,-2.5])
+    PF_PATCH_INIT = np.array([0.5, 2.5, -1.5])
 
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 6
@@ -137,7 +137,7 @@ FILE_FOR_GAZEBO_SIM = f"{MAIN_DIRECTORY}/info_for_gazebo.json"
 result_dir = os.path.join(os.path.abspath(os.getcwd()), MAIN_DIRECTORY)
 os.makedirs(result_dir, exist_ok=True)
 
-terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere | rock | gaussian_bumps
+terrain_type = os.environ.get("TERRAIN_TYPE", "gaussian_bumps") #custom_gaussians | hemisphere | rock | gaussian_bumps
 # Terrain configuration values for rock terrain, otherwise stay in default
 wall_depth = 4           
 grid_size = 100
@@ -179,23 +179,16 @@ def initialize_terrain_data(warm_start_mode=False):
     pc_t = point_clouds.points_t
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[4])
-    patches.visualize_full_cost_map()
+    # patches.visualize_full_cost_map()
     patches.print_patch_cost_matrix(2)
     
     cost_grid, cost_y, cost_z  = patches.get_cost_meshgrid(grid_size=grid_size)
     
     
-    patches.plot_cost_meshgrid(cost_grid, cost_y, cost_z, plot_type='surface')
+    # patches.plot_cost_meshgrid(cost_grid, cost_y, cost_z, plot_type='surface')
     # patches.plot_cost_meshgrid(cost_grid, cost_y, cost_z, plot_type='contour')
     # patches.plot_cost_meshgrid(cost_grid, cost_y, cost_z, plot_type='both')
-    patches.plot_map_with_cost_meshgrid_overlay(
-        Cost_grid=cost_grid,
-        Y_grid=cost_y,
-        Z_grid=cost_z,
-        x_offset=1.0,        
-        alpha_mesh=0.7,      
-        alpha_points=0.7     
-    )
+    # patches.plot_map_with_cost_meshgrid_overlay( Cost_grid=cost_grid, Y_grid=cost_y, Z_grid=cost_z, x_offset=1.0, alpha_mesh=0.7, alpha_points=0.7 )   
     
     # Update inner_opt_params with terrain data
     inner_opt_params['mesh_x'] = terrain_manager.mesh_x
@@ -251,7 +244,7 @@ def initialize_terrain_data(warm_start_mode=False):
         #     radius=CORRIDOR_RADIUS,     
         #     sensitivity=5.0 )
     
-        plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
+        # plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
 
         # Create new init_probs with filtered probabilities
         new_init_probs = []
@@ -454,7 +447,6 @@ def save_gazebo_info(best_points, terrain_manager):
     print(colored(f"[SAVE] Gazebo simulation info saved to: {FILE_FOR_GAZEBO_SIM}", "cyan"))
     print(colored(f"       - Terrain type: {terrain_manager.terrain_type}", "cyan"))
     print(colored(f"       - Target points: {len(best_points) if best_points else 0}", "cyan"))
-
 
 # ================================================
 # MATLAB SETUP
