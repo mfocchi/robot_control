@@ -18,7 +18,7 @@ from gazebo_ros import gazebo_interface
 from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import Vector3, Twist
 from sensor_msgs.msg import Imu
 from ros_impedance_controller.msg import EffortPid
 from base_controllers.components.imu_utils import IMU_utils
@@ -70,7 +70,13 @@ class QuadrupedController(BaseController):
 
         if self.real_robot:
             self.sub_imu_lin_acc = ros.Subscriber("/" + self.robot_name + "/trunk_imu", Vector3,  callback=self._receive_imu_acc_real, queue_size=1, tcp_nodelay=True)
-            if self.state_estimation == 'pronto':#use pronto for state estimation
+            if self.state_estimation == 'mocap':  # use pronto for state estimation
+                from geometry_msgs.msg import PoseStamped
+                launchFileNode("mocap_qualisys", "qualisys.launch")
+                self.sub_pose = ros.Subscriber("/qualisys/robot/pose", PoseStamped, callback=self._receive_mocap, queue_size=1, tcp_nodelay=True)
+                self.pub_mocap_twist = ros.Publisher("/qualisys/robot/twist", Twist, queue_size=1, tcp_nodelay=True)
+
+            elif self.state_estimation == 'pronto':#use pronto for state estimation
                 #start stateest node
                 # self.u.putIntoGlobalParamServer("use_sim_time", str("false"))
                 # load_rosparams_from_package('pronto_aliengo', 'config/aliengo_state_estimator.yaml', target_namespace='/')
@@ -155,6 +161,38 @@ class QuadrupedController(BaseController):
         self.pronto_contacts[2] = msg.lh
         self.pronto_contacts[3] = msg.rh
 
+    def _receive_mocap(self, msg):
+        self.quaternion[0] = msg.pose.orientation.x
+        self.quaternion[1] = msg.pose.orientation.y
+        self.quaternion[2] = msg.pose.orientation.z
+        self.quaternion[3] = msg.pose.orientation.w
+        self.basePoseW[self.u.sp_crd["LX"]] = msg.pose.position.x
+        self.basePoseW[self.u.sp_crd["LY"]] = msg.pose.position.y
+        self.basePoseW[self.u.sp_crd["LZ"]] = msg.pose.position.z
+        self.euler = np.array(euler_from_quaternion(self.quaternion))
+        self.basePoseW[self.u.sp_crd["AX"]] = self.euler[0]
+        self.basePoseW[self.u.sp_crd["AY"]] = self.euler[1]
+        self.basePoseW[self.u.sp_crd["AZ"]] = self.euler[2]
+        # filter
+        self.basePoseW_f = self.beta * self.basePoseW + (1. - self.beta) * self.basePoseW_f
+
+        Jomega = self.math_utils.Tomega(self.u.angPart(self.basePoseW))
+        vel = self.u.linPart(self.basePoseW_f-self.basePoseW_f_old) / self.dt
+        omega = Jomega @ self.u.angPart(self.basePoseW_f-self.basePoseW_f_old) / self.dt
+        self.baseTwistW[:3] = vel
+        self.baseTwistW[3:]  = omega
+        self.basePoseW_f_old = self.basePoseW_f.copy()
+        msg=Twist()
+        msg.linear.x = self.baseTwistW[0]
+        msg.linear.y = self.baseTwistW[1]
+        msg.linear.z = self.baseTwistW[2]
+        msg.angular.x = self.baseTwistW[3]
+        msg.angular.y = self.baseTwistW[4]
+        msg.angular.z = self.baseTwistW[5]
+        self.pub_mocap_twist.publish(msg)
+        # compute orientation matrix
+        self.b_R_w = self.math_utils.rpyToRot(self.euler)
+
     # def _receive_contact_force_real(self, msg):
     #     #53.0, 82.0, 87.0, 78.0
     #     self.contact_state[0] = msg.data[0] > 73
@@ -213,6 +251,12 @@ class QuadrupedController(BaseController):
     def initVars(self):
         super().initVars()
         self.q_des = np.zeros_like(self.q)
+
+        # mocap filter coeff
+        ta = 0.15
+        self.beta = self.dt / (self.dt + ta)
+        self.basePoseW_f_old = np.zeros(6)
+        self.basePoseW_f = np.zeros(6)
 
         self.imu_utils = IMU_utils(dt=conf.robot_params[self.robot_name]['dt'])
         #pinocchio based
@@ -1672,14 +1716,14 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    p.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+    p.state_estimation = 'mocap' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = True
     generate_reference = False
     p.SAVE_BAG = False  #
 
     if rl_control == 'state_est_based':
-        if p.real_robot and p.state_estimation != 'pronto':
+        if p.real_robot and (p.state_estimation != 'pronto' and p.state_estimation != 'pronto'):
             print(colored("RL is state_est based need to start state estimation!","red"))
             sys.exit()
         rl_controller = RlVelocityController(p.robot_name, p.dt)
