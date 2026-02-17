@@ -27,14 +27,14 @@ p0_str = os.environ.get("P0_INIT_STR")
 if p0_str:
     P0_INIT = np.array(json.loads(p0_str))
 else:
-    P0_INIT = np.array([0.5, 5.5, -6])
+    P0_INIT = np.array([0.5, 6.5, -7.5])
 
 pf_str = os.environ.get("PF_INIT_STR")
 if pf_str:
     PF_PATCH_INIT = np.array(json.loads(pf_str))
 else:
-    PF_PATCH_INIT = np.array([0.5, 8.5,-4])
- 
+    PF_PATCH_INIT = np.array([0.5, 2.5,-2.5])
+
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 6
 THREADS = 10
@@ -43,7 +43,7 @@ patience = 3
 CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
-MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test_9")
+MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test_11")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
 fitness_weights = np.array([1e7, 1., 1., 1., 0.0,  0.0]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
@@ -56,7 +56,7 @@ filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
 Fleg_max = 300.
-Fr_max = 150.
+Fr_max = 190.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
