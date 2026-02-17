@@ -27,13 +27,13 @@ p0_str = os.environ.get("P0_INIT_STR")
 if p0_str:
     P0_INIT = np.array(json.loads(p0_str))
 else:
-    P0_INIT = np.array([0.5, 6.5, -7.5])
+    P0_INIT = np.array([0.5, 2.5, -7.5])
 
 pf_str = os.environ.get("PF_INIT_STR")
 if pf_str:
     PF_PATCH_INIT = np.array(json.loads(pf_str))
 else:
-    PF_PATCH_INIT = np.array([0.5, 2.5,-2.5])
+    PF_PATCH_INIT = np.array([0.5, 6.5,-2.5])
 
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 6
@@ -43,9 +43,9 @@ patience = 3
 CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
-MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test_11")
+MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test_17")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
-fitness_weights = np.array([1e7, 1., 1., 1., 0.0,  0.0]) # Optimizer
+fitness_weights = np.array([1e7, 1., 1., 10., 0.0,  0.0]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, II dev v1, II dev v2, gaussian cost
@@ -98,7 +98,7 @@ CEM_DISCRETE_DIM = MAX_JUMP + 1
 
 # Set up parameters OUTER LOOP
 cem_params = CemParams()
-cem_params.seed =int(time.time())
+cem_params.seed =42 #int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 50
@@ -114,7 +114,6 @@ number_of_patches = number_of_patches_width * number_of_patches_height
 cem_params.n_values = [MAX_JUMP] + [(number_of_patches) for _ in range(MAX_JUMP)]
 cem_params.init_probs = [[1.0 / cem_params.n_values[i] for _ in range(cem_params.n_values[i])] for i in range(cem_params.dim_discrete)]
 # cem_params.min_prob = 0.01  
-# cem_params.min_prob = float(os.environ.get("CEM_MIN_PROB", 1/100))
 # Continuous
 cem_params.dim_continuous = 2 * CEM_DISCRETE_DIM # x and y positions
 cem_params.max_value_continuous = np.full(cem_params.dim_continuous, 1.0)
@@ -140,7 +139,7 @@ os.makedirs(result_dir, exist_ok=True)
 
 terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere | rock | gaussian_bumps
 # Terrain configuration values for rock terrain, otherwise stay in default
-wall_depth = 1           
+wall_depth = 4           
 grid_size = 100
 max_ridge_depth = 0.5   
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
@@ -179,11 +178,8 @@ def initialize_terrain_data(warm_start_mode=False):
     # === 2 PATCHES INITIALIZATION ===
     pc_t = point_clouds.points_t
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
-
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[4])
-    
     patches.visualize_full_cost_map()
-    
     patches.print_patch_cost_matrix(2)
     
     cost_grid, cost_y, cost_z  = patches.get_cost_meshgrid(grid_size=grid_size)
@@ -239,7 +235,8 @@ def initialize_terrain_data(warm_start_mode=False):
     # Update cem_params.n_values with the new structure
     cem_params.n_values = [MAX_JUMP] + [valid_patches.copy() for _ in range(MAX_JUMP)]
     
-    cem_params.min_prob = 1/len(patches.patches) *0.1
+    var_min = float(os.environ.get("CEM_MIN_PROB", 0.1))
+    cem_params.min_prob = 1/len(patches.patches) * var_min
     
     # Update init_probs accordingly
     if warm_start_mode:
