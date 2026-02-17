@@ -22,6 +22,8 @@ from base_controllers.utils.joyManager import JoyManager
 robotName = "aliengo"  # needs to inherit BaseController
 from termcolor import colored
 from base_controllers.utils.rosbag_recorder import RosbagControlledRecorder
+from std_msgs.msg import Float32
+from geometry_msgs.msg import Vector3
 from base_controllers.utils.profiler import Profiler
 
 class SafeRLController(QuadrupedController):
@@ -33,7 +35,8 @@ class SafeRLController(QuadrupedController):
     def initVars(self):
         super().initVars()
         self.q_des_q0 = conf.robot_params[self.robot_name]['q_0']
-
+        self.pub_vf = ros.Publisher("/value_function", Float32, queue_size=1, tcp_nodelay=True)
+        self.pub_rl_ref_vel = ros.Publisher("/rl_ref_vel", Vector3, queue_size=1, tcp_nodelay=True)
         self.startPush = 0.
 
     def logData(self):
@@ -71,7 +74,8 @@ if __name__ == '__main__':
                                            'rviz:=true',
                                            *(['task_period:=0.002'] if p.real_robot else [])])  # change task period for real robot
         if p.SAVE_BAG:
-            p.recorder = RosbagControlledRecorder(bag_name="saferl.bag", record_from_startup_=False)
+            p.recorder = RosbagControlledRecorder(topics='/aliengo/joint_states /aliengo/imu  /state_estimator_pronto/pose /state_estimator_pronto/twist /state_estimator_pronto/vel_raw /state_estimator_pronto/stance /value_function /qualisys/robot/pose /rl_ref_vel /tf /tf_static',
+                                                  bag_name="saferl.bag", record_from_startup_=False)
             p.recorder.start_recording_srv()
         #p.setSimSpeed(max_update_rate=300)
         p.startupProcedure()
@@ -153,8 +157,18 @@ if __name__ == '__main__':
 
 
                 if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
-                    isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.6, vf_additional_term = 0.0)
-                    isrec = True #just record value functtion but dont use
+                    isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.96, vf_additional_term = 0.0)
+                    #publish value function
+                    msg = Float32()
+                    msg.data = V_safe
+                    p.pub_vf.publish(msg)
+                    #pub rl command
+                    msg_ref_vel = Vector3()
+                    msg_ref_vel.x = rl_controller.velocity_cmd[0]
+                    msg_ref_vel.y = rl_controller.velocity_cmd[1]
+                    msg_ref_vel.z = rl_controller.velocity_cmd[2]
+                    p.pub_rl_ref_vel.publish(msg_ref_vel)
+                    #isrec = True #just record value functtion but dont use
                      #print(V_safe)
                 # '''elif step % decimation == 0:
                 #     if np.all(np.abs(lin_vel_b < 10e-2)) and np.all(np.abs(p.qd) < 10e-2):
