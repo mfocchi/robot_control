@@ -62,7 +62,8 @@ class QuadrupedJumpController(QuadrupedController):
         else:
             self.state_estimation = 'ground_truth'
 
-        user = os.popen('whoami').read()
+        user = os.popen('whoami').read().strip()
+
 
         if user=='root':
             pid = os.getpid()

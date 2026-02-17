@@ -223,6 +223,11 @@ class GenericSimulator(BaseController):
         world_name = None #'ramps.world'
         additional_args = ['spawn_x:=' + str(p.p0[0]),'spawn_y:=' + str(p.p0[1]),'spawn_Y:=' + str(p.p0[2]),'sensors:='+self.SENSORS, 'odometry:='+self.ODOMETRY]
         launch_file = rospkg.RosPack().get_path('limo_description') + '/launch/start_robot.launch'
+        if self.real_robot:
+            user = os.popen('whoami').read().strip()
+            if user != 'root':
+                print(colored("HOSTCOMPUTER DOCKER USER SHOULD BE  ROOT to run on real robot","red"))
+                sys.exit()
         super().startSimulator(world_name=world_name, launch_file=launch_file, additional_args=additional_args)
 
     def loadModelAndPublishers(self):
@@ -634,7 +639,7 @@ class GenericSimulator(BaseController):
                                             queue_size=1, tcp_nodelay=True)
 
         if self.real_robot:
-            print(colored("IMPORTANT: Real robot ON,  be sure param use_sim_time = false","red"))
+            print(colored("IMPORTANT: Real robot ON,  be sure param use_sim_time = false and you are running as ROOT user","red"))
             # for limo the publisher in on limo0/odom not groundtruth
             self.p0[0], self.p0[1], self.p0[2] = getInitialStateFromOdom(self.robot_name)
             self.q_des = getInitialStateFromJoints(robot_name=self.robot_name, joint_names=self.joint_names)
