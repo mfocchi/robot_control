@@ -395,7 +395,7 @@ class QuadrupedController(BaseController):
         #safety layer
         self.gracefulCollapseFlag = False
         self.alphaCollapse = 1.0
-        self.collapseTime = 2.
+        self.collapseTime = 0.7
 
         self.pronto_contacts = np.zeros(4)
         self.controller_ready = False
@@ -804,7 +804,7 @@ class QuadrupedController(BaseController):
         super(QuadrupedController, self).updateKinematics()
 
         #publish contact forces in the topic for pronto
-        if self.state_estimation == 'pronto':
+        if not self.real_robot and self.state_estimation == 'pronto':
             from pronto_msgs.msg import QuadrupedForceTorqueSensors
             msg = QuadrupedForceTorqueSensors()
             msg.lf.force.z = self.u.getLegJointState(self.u.leg_map["LF"], self.grForcesW)[2] #z component
@@ -1674,7 +1674,7 @@ if __name__ == '__main__':
     use_gui = False
     p.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
-    use_joy = False
+    use_joy = True
     generate_reference = False
     p.SAVE_BAG = False  #
 
@@ -1693,7 +1693,7 @@ if __name__ == '__main__':
                           additional_args=['gui:='+str(use_gui),
                                            'go0_conf:=standDown',
                                            'rviz:=true',
-                                           *(['task_period:=0.002'] if p.real_robot else [])]) #change task period for real robot
+                                           *(['task_period:=0.002'] if p.real_robot else [])]) #change task period to 500Hz instead of 1000Hz for real robot
         if p.SAVE_BAG:
             p.recorder = RosbagControlledRecorder(bag_name="quadruped.bag", record_from_startup_=False)
             p.recorder.start_recording_srv()
@@ -1701,6 +1701,7 @@ if __name__ == '__main__':
             joy = JoyManager()
         p.startupProcedure()
         if p.state_estimation=='pronto':
+            launchFileNode("mocap_qualisys", "qualisys.launch")
             launchFileNode("pronto_aliengo", "pronto_aliengo.launch", additional_args=['pronto_conf:='+p.pronto_config,
                                                                                        'use_sim_time:='+str(not p.real_robot)])
         if rl_control != 'none':
@@ -1783,7 +1784,7 @@ if __name__ == '__main__':
                                                                                 p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.alphaCollapse*p.tau_ffwd, log_data_in_send_command=True)
 
-            p.visualizeContacts()
+            #p.visualizeContacts()
         
     except (ros.ROSInterruptException, ros.service.ServiceException):
         if p.SAVE_BAG:
