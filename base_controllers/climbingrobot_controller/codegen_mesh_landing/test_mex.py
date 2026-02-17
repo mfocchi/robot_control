@@ -342,8 +342,9 @@ terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max
 mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
 #mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.01)
 #jump params
-p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
-pf=  np.array([0.5, 8.5,-4])
+p0 = np.array([0.5, 4.306384528321335,-2.9831819570167184]) #unit test ,  there is singularity for px = 0!
+pf=  np.array([0.5, 1.5,-7.5])
+
 
 # p0 = np.array([-0.019, 3.058, -3.24]) #unit test ,  there is singularity for px = 0!
 # pf=  np.array([0.19, 0.5,-1.5])
@@ -351,8 +352,11 @@ pf=  np.array([0.5, 8.5,-4])
 #cost map
 point_lowest_cost = pf + np.array([0, 0.5, 0.5])
 max_cost = 20.
-#cost_x, cost_y, cost_z = generateCostMapGaussian(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
-cost_x, cost_y, cost_z = generateCostMap(terrainManager, number_of_patches_width=10, number_of_patches_height=10)
+cost_x, cost_y, cost_z = generateCostMapGaussian(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
+# cost_x, cost_y, cost_z = generateCostMap(terrainManager, number_of_patches_width=10, number_of_patches_height=10)
+print(f"[DEBUG] Any NaN in cost_x: {np.any(np.isnan(cost_x))}")
+print(f"[DEBUG] Any NaN in cost_y: {np.any(np.isnan(cost_y))}")
+print(f"[DEBUG] Any NaN in cost_z: {np.any(np.isnan(cost_z))}")
 
 Fleg_max = 300. #100 not converges with hemispheric
 Fr_max = 190.
