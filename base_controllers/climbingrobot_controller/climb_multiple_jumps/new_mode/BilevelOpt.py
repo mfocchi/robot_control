@@ -89,8 +89,8 @@ class BilevelOpt:
                 pf_adj = self.pf_patch.copy()
                 patch_id = self.patches.get_patch_id_from_point_2D(pf_adj[1], pf_adj[2]) 
                 # mettere patch side a 0.1
-                local_inner_opt_params['patch_side_y'] = 0.1
-                local_inner_opt_params['patch_side_z'] = 0.1
+                # local_inner_opt_params['patch_side_y'] = 0.1
+                # local_inner_opt_params['patch_side_z'] = 0.1
             
             # Projection on the surface the points considered for optimization
             for pt in [p0_adj, pf_adj]:   
@@ -130,11 +130,11 @@ class BilevelOpt:
                 segment_lengths = np.sqrt(np.sum(diffs**2, axis=0))  # Euclidean distance per segment
                 total_traj_length += np.sum(segment_lengths)
                 
-            # if np.isnan(res['consumed_energy']):
-            #     print("consumed energy is nan")
-            #     all_converged = False
-            #     breakpoint()
-            #     break
+            if np.isnan(res['consumed_energy']):
+                print("consumed energy is nan")
+                all_converged = False
+                # breakpoint()
+                break
             
             # if np.isnan(mat_vector2python(res['achieved_target'])[0]):
             #     print("achieved target is nan")
