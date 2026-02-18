@@ -55,8 +55,8 @@ filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
-Fleg_max = 200.
-Fr_max = 150.
+Fleg_max = 250.
+Fr_max = 190.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
@@ -82,7 +82,7 @@ inner_opt_params['w2'] = 0.  # hoist work
 inner_opt_params['w3'] = 1000.
 inner_opt_params['T_th'] = 0.05
 inner_opt_params['obstacle_avoidance'] = 'mesh'
-inner_opt_params['jump_clearance'] = 0.5
+inner_opt_params['jump_clearance'] = 1.
 inner_opt_params['mesh_x'] = None
 inner_opt_params['mesh_y'] = None
 inner_opt_params['mesh_z'] = None
