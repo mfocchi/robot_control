@@ -2,11 +2,11 @@
 
 # numb_ run the code
 NUM_RUNS=5
-name_folder="test_final_v2"
+name_folder="test_final_final"
 
+export PARAMS_FILES="params_i"
 TERRAIN_TYPES=( "hemisphere") #"gaussian_bumps" | hemisphere
-
-PERC_MIN_PROB=( 0.05 0.2 0.5 1.0 10.0)
+PERC_MIN_PROB=( 0.05 0.5 1.0 10.0)
 
 for TERRAIN_TYPE in "${TERRAIN_TYPES[@]}"
 do
@@ -40,7 +40,7 @@ do
 
         # EXPERIMENT_DIR="$DIR_NAME" CEM_MIN_PROB="$CURRENT_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" python3 Main_cemmulti_simple.py
         # EXPERIMENT_DIR="$DIR_NAME" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" TERRAIN_TYPE="$TERRAIN_TYPE" python3 Main_cemmulti_parabolic.py
-        EXPERIMENT_DIR="$DIR_NAME" CEM_MIN_PROB="$CURRENT_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" TERRAIN_TYPE="$TERRAIN_TYPE" python3 Main_cemmulti_patch.py
+        EXPERIMENT_DIR="$DIR_NAME" PARAMS_FILES="$PARAMS_FILES" CEM_MIN_PROB="$CURRENT_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" TERRAIN_TYPE="$TERRAIN_TYPE" python3 Main_cemmulti_patch.py
 
         echo "Run $i completed."
         echo ""

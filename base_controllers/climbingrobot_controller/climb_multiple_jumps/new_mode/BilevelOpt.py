@@ -2,7 +2,14 @@ import os
 import sys
 import numpy as np
 from termcolor import colored
-from params import *
+import importlib
+
+# from params import *
+params_module_name = os.environ.get("PARAMS_FILES", "params")
+params_module = importlib.import_module(params_module_name)
+globals().update({k: v for k, v in vars(params_module).items() if not k.startswith('_')})
+
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches 
 from base_controllers.utils.matlab_conversions import (
@@ -22,8 +29,7 @@ class BilevelOpt:
         self.patches = patches
         self.cost_grid = cost_grid
     
-    def eval_pop(self, input_data):
-        
+    def eval_pop(self, input_data):        
         # State tracking
         jump_log_points = []
         jump_log_traj = []
@@ -89,8 +95,8 @@ class BilevelOpt:
                 pf_adj = self.pf_patch.copy()
                 patch_id = self.patches.get_patch_id_from_point_2D(pf_adj[1], pf_adj[2]) 
                 # mettere patch side a 0.1
-                # local_inner_opt_params['patch_side_y'] = 0.1
-                # local_inner_opt_params['patch_side_z'] = 0.1
+                local_inner_opt_params['patch_side_y'] = 0.1
+                local_inner_opt_params['patch_side_z'] = 0.1
             
             # Projection on the surface the points considered for optimization
             for pt in [p0_adj, pf_adj]:   
