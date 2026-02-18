@@ -6,7 +6,7 @@ name_folder="test_final_final"
 
 export PARAMS_FILES="params_i"
 TERRAIN_TYPES=( "hemisphere") #"gaussian_bumps" | hemisphere
-PERC_MIN_PROB=( 0.05 0.5 1.0 10.0)
+PERC_MIN_PROB=( 0.4)
 
 for TERRAIN_TYPE in "${TERRAIN_TYPES[@]}"
 do

@@ -55,8 +55,8 @@ filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
-Fleg_max = 200.
-Fr_max = 150.
+Fleg_max = 250.
+Fr_max = 190.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
