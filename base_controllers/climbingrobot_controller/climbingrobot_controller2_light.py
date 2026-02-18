@@ -687,6 +687,15 @@ class ClimbingrobotController(BaseControllerFixed):
         if ( p.stateMachine == 'start_jump') and (p.time >= p.startJump):
             # first run optim and fill in jump variable
             p.pause_physics_client()
+
+            # PAPER
+            # p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[0])
+            # p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
+            # p.initOptim(p.desired_target[0], p.desired_target[1])
+            # p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
+            # p.initOptim(p.desired_target[1], p.desired_target[2])
+            # p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
+
             print(colored(f"Start trajectory optimization", "blue"))
             p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
             p.unpause_physics_client()
@@ -908,6 +917,8 @@ def talker(p):
     p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
     ######################
 
+
+
     #############Json
     # data = p.readJsonFile(terrain="gaussian") # hemi, gaussian
     # p0 = np.array(data["target_points"][0])
@@ -945,6 +956,10 @@ def talker(p):
 
     p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
+
+
+
+
     while not ros.is_shutdown():
         # update the kinematics
         p.updateKinematicsDynamics()
@@ -973,7 +988,7 @@ def talker(p):
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),4)  # to avoid issues of dt 0.0009999
         if (p.time > p.start_logging):
             p.logData()
-        # wait for synconization of the control loop
+        # wait for synchronization of the control loop
         rate.sleep()
 
         if stop:
