@@ -55,8 +55,8 @@ filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
-Fleg_max = 300.
-Fr_max = 190.
+Fleg_max = 200.
+Fr_max = 150.
 Fr_min = 15.
 number_of_patches_width = 10
 number_of_patches_height = 10
@@ -137,7 +137,7 @@ FILE_FOR_GAZEBO_SIM = f"{MAIN_DIRECTORY}/info_for_gazebo.json"
 result_dir = os.path.join(os.path.abspath(os.getcwd()), MAIN_DIRECTORY)
 os.makedirs(result_dir, exist_ok=True)
 
-terrain_type = os.environ.get("TERRAIN_TYPE", "gaussian_bumps") #custom_gaussians | hemisphere | rock | gaussian_bumps
+terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere | rock | gaussian_bumps
 # Terrain configuration values for rock terrain, otherwise stay in default
 wall_depth = 4           
 grid_size = 100
@@ -180,7 +180,7 @@ def initialize_terrain_data(warm_start_mode=False):
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[4])
     # patches.visualize_full_cost_map()
-    patches.print_patch_cost_matrix(2)
+    # patches.print_patch_cost_matrix(2)
     
     cost_grid, cost_y, cost_z  = patches.get_cost_meshgrid(grid_size=grid_size)
     
@@ -213,8 +213,6 @@ def initialize_terrain_data(warm_start_mode=False):
         'patches': patches,
         'cost_grid': cost_grid
     })
-    # save the terrain data 
-    save_terrain_data(terrain_manager,point_clouds, patches)
         
     patch_pf = patches.get_patch_id_from_point_2D(PF_PATCH_INIT[1], PF_PATCH_INIT[2])
     patch_p0 = patches.get_patch_id_from_point_2D(P0_INIT[1], P0_INIT[2])
@@ -267,6 +265,8 @@ def initialize_terrain_data(warm_start_mode=False):
         # Uniform distribution over valid patches
         cem_params.init_probs = [[1.0 / MAX_JUMP for _ in range(MAX_JUMP)]] + \
                                 [[1.0 / len(valid_patches) for _ in valid_patches] for _ in range(MAX_JUMP)]
+    # save the terrain data 
+    save_terrain_data(terrain_manager,point_clouds, patches)
     
     return point_clouds, patches, cost_grid
 
