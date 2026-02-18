@@ -2,11 +2,11 @@
 
 # numb_ run the code
 NUM_RUNS=5
-name_folder="test_final_v1"
+name_folder="test_final_v2"
 
 TERRAIN_TYPES=( "hemisphere") #"gaussian_bumps" | hemisphere
 
-PERC_MIN_PROB=( 0.01 0.05 0.1 0.2 0.4 0.6 0.8 10 50 100)
+PERC_MIN_PROB=( 0.05 0.2 0.5 1.0 10.0)
 
 for TERRAIN_TYPE in "${TERRAIN_TYPES[@]}"
 do
