@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import numpy as np
+import importlib
 from termcolor import colored
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -10,9 +11,13 @@ import threading
 import matplotlib.pyplot as plt
 from algo_patch import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
-
 from BilevelOpt import BilevelOpt, close_matlab_engines
-from params import *
+
+# from params import *
+params_module_name = os.environ.get("PARAMS_FILES", "params")
+params_module = importlib.import_module(params_module_name)
+globals().update({k: v for k, v in vars(params_module).items() if not k.startswith('_')})
+
 from Plot_result import PlotResultCemMjumps
 from collections import Counter
 

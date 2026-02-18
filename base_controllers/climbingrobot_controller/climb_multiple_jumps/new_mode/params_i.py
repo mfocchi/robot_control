@@ -38,7 +38,7 @@ else:
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 6
 THREADS = 15
-flag_thread = False
+flag_thread = True
 patience = 7
 CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
