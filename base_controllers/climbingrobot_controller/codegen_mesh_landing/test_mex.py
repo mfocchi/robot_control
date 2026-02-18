@@ -210,7 +210,7 @@ def eval_constraints(c, num_constr, constr_tolerance, debug=False):
             if i == r0:
                 print('retraction_force_constraints')
             if i == f0:
-                print('force_constraints')
+                print('leg force_constraints')
             if i == final0:
                 print('final_point_constraints')
             if i == via0:
@@ -233,11 +233,13 @@ def eval_constraints(c, num_constr, constr_tolerance, debug=False):
 
     # 3) force constraints (unilateral, actuation, friction, ...)
     f_block = c[f0 : f0 + int(num_constr['force_constraints'])]
+
     if f_block.size > 0 and np.any(f_block > constr_tolerance):
         print('3) leg force constraints violated')
         # show first few entries (match MATLAB: +1, +2, +3)
         if f_block.size >= 1:
             print(f"3.1 unilateral (Fun > fmin): \033[91m{f_block[0]:.6f}\033[0m" if f_block[0] > constr_tolerance else f"{f_block[0]:.6f}")
+
         if f_block.size >= 2:
             print(f"3.2 actuation (Fun < fun_max): \033[91m{f_block[1]:.6f}\033[0m" if f_block[1] > constr_tolerance else f"{f_block[1]:.6f}")
         if f_block.size >= 3:
@@ -245,6 +247,7 @@ def eval_constraints(c, num_constr, constr_tolerance, debug=False):
 
     # 4) final point constraints (several subchecks)
     final_block = c[final0 : final0 + int(num_constr['final_constraints'])]
+
     if final_block.size > 0 and np.any(final_block > constr_tolerance):
         print('4) final point constraint violated')
         # Each check corresponds to offsets 0..4 in MATLAB
@@ -322,28 +325,28 @@ status_map = {
 wall_depth = 1  # how
 grid_size = 100
 max_ridge_depth = 0.5
-seed = 47
+seed = "default"
 
 
 
 #TERRAIN 1:Generate rock wall map
-# Lz = -10  # Height of wall in meters
-# Ly = 10  # Width (horizontal extent) of wall in meters
-#terrainManager = TerrainManager(generate_terrain=False)
-# mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=0.0)
-# ##jump params
-# p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
-# pf=  np.array([0.5, 8.5,-4])
-
-#TERRAIN 2
 Lz = -10.  # Height of wall in meters
 Ly = 10.  # Width (horizontal extent) of wall in meters
-terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
-mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
-#mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.01)
-#jump params
-p0 = np.array([0.5, 4.306384528321335,-2.9831819570167184]) #unit test ,  there is singularity for px = 0!
-pf=  np.array([0.5, 1.5,-7.5])
+terrainManager = TerrainManager(generate_terrain=False)
+mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed) #keep default offset
+##jump params
+p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
+pf=  np.array([0.5, 8.5,-4])
+
+#TERRAIN 2
+# Lz = -10.  # Height of wall in meters
+# Ly = 10.  # Width (horizontal extent) of wall in meters
+# terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
+# mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
+# #mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.01)
+# #jump params
+# p0 = np.array([0.5, 4.306384528321335,-2.9831819570167184]) #unit test ,  there is singularity for px = 0!
+# pf=  np.array([0.5, 1.5,-7.5])
 
 
 # p0 = np.array([-0.019, 3.058, -3.24]) #unit test ,  there is singularity for px = 0!

@@ -37,7 +37,7 @@ class TerrainManager:
                 # Generate the terrain automatically
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_rock_wall_map(
                     self.Lz, self.Ly, self.grid_size, self.wall_depth,
-                    self.max_ridge_depth, self.seed, x_offset=0.01
+                    self.max_ridge_depth, self.seed, x_offset=-0.5 #offset must be -0.5 othewise the robot starts behind the wall!
                 )
             if self.terrain_type=='hemisphere':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size, x_offset=0.01)
