@@ -37,13 +37,13 @@ else:
 
 PF_INIT = PF_PATCH_INIT
 MAX_JUMP = 6
-THREADS = 10
+THREADS = 15
 flag_thread = True
-patience = 3
+patience = 7
 CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
-MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_test_17")
+MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
 fitness_weights = np.array([1e7, 1., 1., 10., 0.0,  0.0]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
@@ -98,7 +98,7 @@ CEM_DISCRETE_DIM = MAX_JUMP + 1
 
 # Set up parameters OUTER LOOP
 cem_params = CemParams()
-cem_params.seed =42 #int(time.time())
+cem_params.seed =int(time.time())
 cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 50
@@ -226,7 +226,7 @@ def initialize_terrain_data(warm_start_mode=False):
     # Update cem_params.n_values with the new structure
     cem_params.n_values = [MAX_JUMP] + [valid_patches.copy() for _ in range(MAX_JUMP)]
     
-    var_min = float(os.environ.get("CEM_MIN_PROB", 0.1))
+    var_min = float(os.environ.get("CEM_MIN_PROB", 1))
     cem_params.min_prob = 1/len(patches.patches) * var_min
     
     # Update init_probs accordingly
