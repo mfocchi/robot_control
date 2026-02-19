@@ -92,7 +92,7 @@ def initOptim(p0, pf, Ly, patch_side_z, patch_side_y,   mesh_x, mesh_y, mesh_z):
     params['w3']= 1000. # landing patch cost
     params['T_th'] =  0.05
     params['obstacle_avoidance'] = 'mesh'
-    params['jump_clearance'] = 0.5
+    params['jump_clearance'] = 1.0
     params['debug'] = False #enables print of cost
 
     # Interpolator (note: z must be increasing — here from -10 to 0)
@@ -316,7 +316,7 @@ def generateCostMap(terrain_manager, number_of_patches_width, number_of_patches_
     if plot:
         patches.visualize_full_cost_map()
 
-    patches.print_patch_cost_matrix(2)
+    # patches.print_patch_cost_matrix(2)
 
     patches.get_cost_meshgrid(grid_size=grid_size)
 
@@ -372,7 +372,7 @@ print(f"[DEBUG] Any NaN in cost_x: {np.any(np.isnan(cost_x))}")
 print(f"[DEBUG] Any NaN in cost_y: {np.any(np.isnan(cost_y))}")
 print(f"[DEBUG] Any NaN in cost_z: {np.any(np.isnan(cost_z))}")
 
-Fleg_max = 300. #100 not converges with hemispheric
+Fleg_max = 250. #100 not converges with hemispheric
 Fr_max = 190.
 Fr_min = 15.
 mu = 0.8
@@ -394,6 +394,7 @@ print(f"problem converged?: {status}")
 
 if solution['problem_solved'] not in [0]:
     violations = eval_constraints(solution['c'], solution['num_constr'], solution['constr_tolerance'], debug=False)
+    breakpoint()  
 plotStuff()
 
 

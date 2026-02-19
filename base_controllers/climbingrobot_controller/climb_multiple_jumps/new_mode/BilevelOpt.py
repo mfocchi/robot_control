@@ -8,7 +8,7 @@ import importlib
 params_module_name = os.environ.get("PARAMS_FILES", "params")
 params_module = importlib.import_module(params_module_name)
 globals().update({k: v for k, v in vars(params_module).items() if not k.startswith('_')})
-
+# from params import *
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches 
@@ -28,6 +28,106 @@ class BilevelOpt:
         self.point_clouds = point_clouds
         self.patches = patches
         self.cost_grid = cost_grid
+    
+        
+    def eval_constraints(self, c, num_constr, constr_tolerance, debug=False, verbose = True):
+        """
+        Check constraint vector `c` against blocks described by `num_constr`.
+        - c: sequence or 1D numpy array of constraint values
+        - num_constr: object or dict with integer fields:
+            wall_constraints,
+            retraction_force_constraints,
+            force_constraints,
+            final_constraints,
+            via_point
+        - constr_tolerance: scalar
+        - debug: bool (print detailed per-constraint info)
+        """
+
+        # ensure numpy array (1D)
+        c = np.array(c).flatten()
+
+        # compute 0-based start indices for each block (Python indexing)
+        w0     = 0
+        r0     = w0 + int(num_constr['wall_constraints'])
+        f0     = r0 + int(num_constr['retraction_force_constraints'])
+        final0 = f0 + int(num_constr['force_constraints'])
+        via0   = final0 + int(num_constr['final_constraints'])
+
+        # optional debug listing
+        if debug:
+            for i, val in enumerate(c):
+                if i == w0:
+                    print('wall constraints')
+                if i == r0:
+                    print('retraction_force_constraints')
+                if i == f0:
+                    print('leg force_constraints')
+                if i == final0:
+                    print('final_point_constraints')
+                if i == via0:
+                    print('via_point constraints')
+                print(f"{i} {float(val):.6f}")
+        if verbose:
+            print(colored("Eval Constraints (positive number represents viol.)", "red"))
+
+        violations = []
+        # 1) wall constraints
+        w_block = c[w0 : w0 + int(num_constr['wall_constraints'])]
+        if w_block.size > 0 and np.any(w_block > constr_tolerance):
+            if verbose:
+                print('1) wall mesh constraints violated')
+                print(" ".join(f"\033[91m{v:.6f}\033[0m" if v > constr_tolerance else f"{v:.6f}" for v in w_block))
+            violations.append(f"1: {w_block > constr_tolerance}")
+        # 2) retraction force constraints
+        r_block = c[r0 : r0 + int(num_constr['retraction_force_constraints'])]
+        if r_block.size > 0 and np.any(r_block > constr_tolerance):
+            if verbose:
+                print('2) rope force constraints violated')
+                print(" ".join(f"\033[91m{v:.6f}\033[0m" if v > constr_tolerance else f"{v:.6f}" for v in r_block))
+            violations.append(f"2: {r_block > constr_tolerance}")
+        # 3) force constraints (unilateral, actuation, friction, ...)
+        f_block = c[f0 : f0 + int(num_constr['force_constraints'])]
+        if f_block.size > 0 and np.any(f_block > constr_tolerance):
+            if verbose:
+                print('3) leg force constraints violated')
+                # show first few entries (match MATLAB: +1, +2, +3)
+                if f_block.size >= 1:
+                    print(f"3.1 unilateral (Fun > fmin):",   f"\033[91m{f_block[0]:.6f}\033[0m" if f_block[0] > constr_tolerance else f"{f_block[0]:.6f}")
+
+                if f_block.size >= 2:
+                    print(f"3.2 actuation (Fun < fun_max):", f"\033[91m{f_block[1]:.6f}\033[0m" if f_block[1] > constr_tolerance else f"{f_block[1]:.6f}")
+                if f_block.size >= 3:
+                    print(f"3.3 friction (|Fut| < mu*Fun):", f"\033[91m{f_block[2]:.6f}\033[0m" if f_block[2] > constr_tolerance else f"{f_block[2]:.6f}")
+            violations.append(f"3: {f_block > constr_tolerance}")
+        # 4) final point constraints (several subchecks)
+        final_block = c[final0 : final0 + int(num_constr['final_constraints'])]
+
+        if final_block.size > 0 and np.any(final_block > constr_tolerance):
+            if verbose:
+                print('4) final point constraint violated')
+                # Each check corresponds to offsets 0..4 in MATLAB
+                if final_block.size >= 1 and final_block[0] > constr_tolerance:
+                    print(f"4.1 p_f(y) < ymax_patch:", f"\033[91m{final_block[0]:.6f}\033[0m" if final_block[0] > constr_tolerance else f"{final_block[0]:.6f}")
+                if final_block.size >= 2 and final_block[1] > constr_tolerance:
+                    print(f"4.2 p_f(y) > ymin_patch:", f"\033[91m{final_block[1]:.6f}\033[0m" if final_block[1] > constr_tolerance else f"{final_block[1]:.6f}")
+                if final_block.size >= 3 and final_block[2] > constr_tolerance:
+                    print(f"4.3 p_f(z) < zmax_patch:", f"\033[91m{final_block[2]:.6f}\033[0m" if final_block[2] > constr_tolerance else f"{final_block[2]:.6f}")
+                if final_block.size >= 4 and final_block[3] > constr_tolerance:
+                    print(f"4.4 p_f(z) > zmin_patch:", f"\033[91m{final_block[3]:.6f}\033[0m" if final_block[3] > constr_tolerance else f"{final_block[3]:.6f}")
+                if final_block.size >= 5 and final_block[4] > constr_tolerance:
+                    print(f"4.5 ||pf(x) - wall_x|| < fixed_slack:", f"\033[91m{final_block[4]:.6f}\033[0m" if final_block[4] > constr_tolerance else f"{final_block[4]:.6f}")
+            violations.append(f"4: {final_block > constr_tolerance}")
+
+        # 5) via point constraints
+        via_block = c[via0 : via0 + int(num_constr['via_point'])]
+        if via_block.size > 0 and np.any(via_block > constr_tolerance):
+            if verbose:
+                print('5) via point constraint violated')
+                print(f"via point:", f"\033[91m{via_block[0]:.6f}\033[0m" if via_block[0] > constr_tolerance else f"{via_block[0]:.6f}")
+            violations.append(f"4: {final_block > constr_tolerance}")
+        return violations
+    
     
     def eval_pop(self, input_data):        
         # State tracking
@@ -95,8 +195,8 @@ class BilevelOpt:
                 pf_adj = self.pf_patch.copy()
                 patch_id = self.patches.get_patch_id_from_point_2D(pf_adj[1], pf_adj[2]) 
                 # mettere patch side a 0.1
-                local_inner_opt_params['patch_side_y'] = 0.1
-                local_inner_opt_params['patch_side_z'] = 0.1
+                # local_inner_opt_params['patch_side_y'] = 0.1
+                # local_inner_opt_params['patch_side_z'] = 0.1
             
             # Projection on the surface the points considered for optimization
             for pt in [p0_adj, pf_adj]:   
@@ -115,6 +215,13 @@ class BilevelOpt:
                 matlab.double(p0_adj), matlab.double(pf_adj), 
                 Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
             
+            
+
+            if res['problem_solved'] not in [0]:
+                violations = self.eval_constraints(res['c'], res['num_constr'], res['constr_tolerance'], debug=False)
+                if violations:  
+                    all_converged = False
+                    break
             # Convergence Check (1=Converged, 2=Semidefinite(other possible solutions))
             if int(res['problem_solved']) not in [1, 2]:
                 all_converged = False
