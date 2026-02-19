@@ -337,36 +337,37 @@ grid_size = 100
 max_ridge_depth = 0.5
 seed = "default"
 
-
-
 #TERRAIN 1:Generate rock wall map
-Lz = -10.  # Height of wall in meters
-Ly = 10.  # Width (horizontal extent) of wall in meters
-terrainManager = TerrainManager(generate_terrain=False)
-mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed) #keep default offset
-##jump params
-p0 = np.array([0.5, 5.5, -6]) #unit test ,  there is singularity for px = 0!
-pf=  np.array([0.5, 8.5,-4])
-
-#TERRAIN 2
 # Lz = -10.  # Height of wall in meters
 # Ly = 10.  # Width (horizontal extent) of wall in meters
-# terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
-# mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
-# #mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.01)
-# #jump params
+# terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="rock")#keep default offset to -0.05
+# mesh_x, mesh_y, mesh_z = terrainManager.get_mesh()
+# ##jump params dor 20 x10
+# # p0 = np.array([0.28, 2.5, -6.10104])
+# # pf=  np.array([0.28, 2.8,-12])
+# ##jump params dor 10 x10
+# p0 = np.array([0.28, 5, -4])
+# pf=  np.array([0.28, 8,-8])
+
+#TERRAIN 2
+Lz = -10.  # Height of wall in meters
+Ly = 10.  # Width (horizontal extent) of wall in meters
+terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
+mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
+#jump params
 # p0 = np.array([0.5, 4.306384528321335,-2.9831819570167184]) #unit test ,  there is singularity for px = 0!
 # pf=  np.array([0.5, 1.5,-7.5])
-
+p0 = np.array([0.0,2.5,-7.5])
+pf=  np.array([0.0,5.5,-3.5])
 
 # p0 = np.array([-0.019, 3.058, -3.24]) #unit test ,  there is singularity for px = 0!
 # pf=  np.array([0.19, 0.5,-1.5])
 
 #cost map
-point_lowest_cost = pf + np.array([0, 0.5, 0.5])
-max_cost = 20.
-cost_x, cost_y, cost_z = generateCostMapGaussian(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
-# cost_x, cost_y, cost_z = generateCostMap(terrainManager, number_of_patches_width=10, number_of_patches_height=10)
+# max_cost = 20.
+# point_lowest_cost = pf + np.array([0, 0.5, 0.5])
+#cost_x, cost_y, cost_z = generateCostMapGaussian(Lz, Ly, grid_size=grid_size, gaussian_center=point_lowest_cost, max_cost = max_cost)
+cost_x, cost_y, cost_z = generateCostMap(terrainManager, number_of_patches_width=int(math.fabs(Ly)), number_of_patches_height=int(math.fabs(Lz)))
 print(f"[DEBUG] Any NaN in cost_x: {np.any(np.isnan(cost_x))}")
 print(f"[DEBUG] Any NaN in cost_y: {np.any(np.isnan(cost_y))}")
 print(f"[DEBUG] Any NaN in cost_z: {np.any(np.isnan(cost_z))}")
