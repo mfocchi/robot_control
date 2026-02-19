@@ -697,13 +697,15 @@ class ClimbingrobotController(BaseControllerFixed):
             #     #first optim
             #     p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[0])
             #     p.total_ref_com = p.ref_com.copy()
+            #     p.targetPos1 = p.ref_com[:, -1]
             #     # second optim:second jump we assume it starts from last position
-            #     p.initOptim(p.ref_com[:,-1], p.desired_target[1])
+            #     p.initOptim(p.targetPos1, p.desired_target[1])
             #     p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
+            #     p.targetPos2 = p.ref_com[:, -1]
             #     #third optim:third jump we assume it starts from last position
-            #     p.initOptim(p.ref_com[:,-1], p.desired_target[2])
+            #     p.initOptim(p.targetPos2, p.desired_target[2])
             #     p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
-
+            #     p.targetPos3 = p.ref_com[:, -1]
 
             print(colored(f"Start trajectory optimization", "blue"))
             p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
@@ -975,17 +977,17 @@ def talker(p):
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=2.5)
 
         #plot target position (whenever is available)
-        try:
-            p.ros_pub.add_marker(p.mat2Gazebo + p.jump_data["targetPos"], color="red", radius=0.3, alpha=1.)
-            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
-        except:
-            pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
         p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.obj", position=p.mat2Gazebo, color=None, alpha=1.0)
         if hasattr(p, "ref_com") and not hasattr(p, "total_ref_com"):
             p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com, color="red")
+            p.ros_pub.add_marker(p.mat2Gazebo + p.jump_data["targetPos"], color="red", radius=0.3, alpha=1.)
+            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
         if hasattr(p, "total_ref_com"):
             p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.total_ref_com, color="white")
+            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPos1, color="green", radius=0.5, alpha=0.5)
+            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPos2, color="green", radius=0.5, alpha=0.5)
+            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPos3, color="green", radius=0.5, alpha=0.5)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
