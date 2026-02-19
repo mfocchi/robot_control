@@ -345,6 +345,8 @@ class PlotResultCemMjumps:
         
         # Tolleranza per il confronto di numeri float
         tolerance = 1e-8
+        # Threshold per filtrare valori troppo alti
+        fitness_threshold = -1e5
 
         all_fitness_values_for_norm = [] # Serve per calcolare min/max globali
 
