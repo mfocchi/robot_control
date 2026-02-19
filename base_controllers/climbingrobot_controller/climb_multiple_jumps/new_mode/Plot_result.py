@@ -1,4 +1,6 @@
 import json
+import matplotlib
+matplotlib.use('TkAgg')
 from typing import Any, List, Optional
 from attr import dataclass
 import matplotlib.pyplot as plt
@@ -17,7 +19,7 @@ plot_str = os.environ.get("FOLDER_PLOT")
 if plot_str:
     FOLDER_MAIN = np.array(json.loads(plot_str))
 else:
-    FOLDER_MAIN = "result/test_final_v1_5_gaussian_bumps"
+    FOLDER_MAIN = "result/test_final_final_1_hemisphere"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -326,6 +328,7 @@ class PlotResultCemMjumps:
             print(f"Histogram saved to: {save_path}")
             plt.show()
    
+
     def plot_fitness_by_iteration(self, ax=None):
         if not self.all_elites:
             print("WARNING: No data available for plotting fitness.")
@@ -342,19 +345,23 @@ class PlotResultCemMjumps:
         # 2. Separazione dei dati in due gruppi: "Normali" e "Best Ever"
         x_normal, y_normal = [], []
         x_best, y_best = [], []
-        
+
         # Tolleranza per il confronto di numeri float
         tolerance = 1e-8
         # Threshold per filtrare valori troppo alti
         fitness_threshold = -1e5
 
-        all_fitness_values_for_norm = [] # Serve per calcolare min/max globali
+        all_fitness_values_for_norm = []  # Serve per calcolare min/max globali
 
         for i, iteration_list in enumerate(self.all_elites):
             current_iter = i + 1
             for elite in iteration_list:
+                # Filtra valori sopra la soglia
+                if elite.fitness < fitness_threshold:
+                    continue
+
                 all_fitness_values_for_norm.append(elite.fitness)
-                
+
                 # Se la fitness è "uguale" alla migliore di sempre
                 if np.isclose(elite.fitness, self.best_fit_ever, atol=tolerance):
                     x_best.append(current_iter)
@@ -364,15 +371,15 @@ class PlotResultCemMjumps:
                     y_normal.append(elite.fitness)
 
         if not all_fitness_values_for_norm:
-             print("WARNING: No fitness values found.")
-             return
+            print("WARNING: No fitness values found below threshold.")
+            return
 
         # 3. Configurazione della Colormap (solo per i punti "normali")
         # Usiamo min/max totali per avere una scala coerente
         vmin = min(all_fitness_values_for_norm)
         vmax = max(all_fitness_values_for_norm)
         norm = Normalize(vmin=vmin, vmax=vmax)
-        colors_cmap = ['green', 'orange'] 
+        colors_cmap = ['green', 'orange']
         cmap_name = 'green_to_orange_gradient'
         custom_cmap = LinearSegmentedColormap.from_list(cmap_name, colors_cmap, N=256)
         sc = ax.scatter(x_normal, y_normal, c=y_normal, cmap=custom_cmap, norm=norm,
@@ -386,13 +393,13 @@ class PlotResultCemMjumps:
         ax.set_xlabel('Iteration', fontsize=12)
         ax.set_ylabel('Fitness Value', fontsize=12)
         ax.axhline(y=self.best_fit_ever, color='red', linestyle='--', linewidth=1, alpha=0.5, zorder=2)
-        
+
         ax.grid(True, linestyle=':', alpha=0.5, zorder=0)
-        
+
         ax.legend(loc='upper right', frameon=True, fancybox=True, framealpha=0.9)
         max_iter = len(self.all_elites)
         if max_iter <= 25:
-             ax.set_xticks(range(1, max_iter + 1))
+            ax.set_xticks(range(1, max_iter + 1))
         else:
             ax.xaxis.get_major_locator().set_params(integer=True)
 

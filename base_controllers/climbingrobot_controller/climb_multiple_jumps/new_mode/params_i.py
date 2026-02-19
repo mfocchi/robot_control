@@ -45,7 +45,7 @@ CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 
 MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
-fitness_weights = np.array([1e7, 1., 1., 10., 0.0,  0.0]) # Optimizer
+fitness_weights = np.array([1e5, 1., 1., 10., 0.0,  0.0]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0,10., 0.5, 10.0,0.0]) # Linear or parabolic
 # weights for point cloud filtering
 # filter_weights = np.array([100., 1000., 0,10.0]) #smoothing, first derivative, II dev v1, II dev v2, gaussian cost
@@ -55,7 +55,7 @@ filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 # INNER LOOP OPTIMIZER PARAMETERS
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
-Fleg_max = 250.
+Fleg_max = 300.
 Fr_max = 190.
 Fr_min = 15.
 number_of_patches_width = 10
@@ -103,7 +103,7 @@ cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 50
 cem_params.pop_size = 500
-cem_params.n_elites = int(cem_params.pop_size * 0.5)
+cem_params.n_elites = int(cem_params.pop_size * 0.1)
 cem_params.decrease_pop_factor = 0.0 
 cem_params.fraction_elites_reused = 0.0 
 cem_params.alpha = 0.5
@@ -139,7 +139,7 @@ os.makedirs(result_dir, exist_ok=True)
 
 terrain_type = os.environ.get("TERRAIN_TYPE", "hemisphere") #custom_gaussians | hemisphere | rock | gaussian_bumps
 # Terrain configuration values for rock terrain, otherwise stay in default
-wall_depth = 4           
+wall_depth = 1
 grid_size = 100
 max_ridge_depth = 0.5   
 # terrain_manager = TerrainManager(wall_depth=wall_depth, grid_size=grid_size, max_ridge_depth=max_ridge_depth, Lz=Lz, Ly=Ly, terrain_type='rock')
