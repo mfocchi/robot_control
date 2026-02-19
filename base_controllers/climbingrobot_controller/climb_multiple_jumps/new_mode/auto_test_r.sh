@@ -1,16 +1,15 @@
 #!/bin/bash
 
 # numb_ run the code
-NUM_RUNS=5
-name_folder="test_final_final"
+name_folder="test_r"
 
 export PARAMS_FILES="params"
 TERRAIN_TYPES=( "hemisphere") #"gaussian_bumps" | hemisphere
-PERC_MIN_PROB=( 0.4)
+PERC_MIN_PROB=( 0.8 )
 
 for TERRAIN_TYPE in "${TERRAIN_TYPES[@]}"
 do
-
+    # put X.Y numbers otherwise json complains!!!!
     if [ "$TERRAIN_TYPE" == "hemisphere" ]; then
         START_POINT="[0.5, 2.5, -7.5]" # Upward
         GOAL_POINT="[0.5, 6.5,-2.5]"
@@ -23,7 +22,7 @@ do
     echo "Starting experiments for terrain type: $TERRAIN_TYPE"
     echo "=================================================="
         
-    for ((i=1; i<=NUM_RUNS; i++))
+    for ((i=1; i<=${#PERC_MIN_PROB[@]}; i++))
     do
         #file name folder
         DIR_NAME="result/${name_folder}_${i}_${TERRAIN_TYPE}"
@@ -58,27 +57,27 @@ echo "=================================================="
 echo "Starting visualization of results..."
 echo "=================================================="
 
-for TERRAIN_TYPE in "${TERRAIN_TYPES[@]}"
-do
-    echo ""
-    echo "=================================================="
-    echo "Plotting results for terrain type: $TERRAIN_TYPE"
-    echo "=================================================="
-        
-    for ((i=1; i<=NUM_RUNS; i++))
-    do
-        DIR_NAME="result/${name_folder}_${i}_${TERRAIN_TYPE}"
-        
-        echo ""
-        echo "=================================================="
-        echo "PLOTTING RUN $i: $DIR_NAME"
-        echo "=================================================="
-        
-        FOLDER_PLOT="\"$DIR_NAME\"" python3 Plot_result.py
-        
-        echo "Plotting for Run $i completed."
-        sleep 2
-    done
-done
+#for TERRAIN_TYPE in "${TERRAIN_TYPES[@]}"
+#do
+#    echo ""
+#    echo "=================================================="
+#    echo "Plotting results for terrain type: $TERRAIN_TYPE"
+#    echo "=================================================="
+#
+#    for ((i=1; i<=${#PERC_MIN_PROB[@]}; i++))
+#    do
+#        DIR_NAME="result/${name_folder}_${i}_${TERRAIN_TYPE}"
+#
+#        echo ""
+#        echo "=================================================="
+#        echo "PLOTTING RUN $i: $DIR_NAME"
+#        echo "=================================================="
+#
+#        FOLDER_PLOT="\"$DIR_NAME\"" python3 Plot_result.py
+#
+#        echo "Plotting for Run $i completed."
+#        sleep 2
+#    done
+#done
 echo ""
 echo "All visualizations have completed."
