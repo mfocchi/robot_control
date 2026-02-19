@@ -509,11 +509,15 @@ class ClimbingrobotController(BaseControllerFixed):
             self.optim_params['w5'] = 0.
             self.optim_params['w6'] = 0.
             self.optim_params['T_th'] = 0.05
-
+        #matlab.double() doesn’t accept arbitrary non-contiguous numpy arrays. Even if the shape is right, the memory layout matters,
+        #so we force them to be contiguous
+        p0 = np.ascontiguousarray(p0, dtype=float)  # handles lists, arrays, views
+        pf = np.ascontiguousarray(pf, dtype=float)  # handles lists, arrays, views
         try:
             self.matvars = self.eng.optimize_cpp_mex(matlab.double(p0), matlab.double(pf), self.Fleg_max, self.Fr_max,  self.Fr_min, self.mu, self.optim_params)
         except:
-            print(colored("Regenerate matlab code issues in calling optimize_cpp_mex","red"))
+            print(colored("there are issues in calling optimize_cpp_mex, maybe regenerate matlab code","red"))
+            sys.exit()
         # extract variables
         self.ref_com  = mat_matrix2python(self.matvars['p'])
         self.ref_psi = mat_vector2python(self.matvars['psi'])
@@ -528,7 +532,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.targetPos = self.ref_com[:,-1] #output of optumization
         self.targetPosIdeal = self.ref_com[:, -1]
         print(colored(f"offline optimization accomplished, p0:{p0}, target(rough integr):{self.targetPos}", "blue"))
-        print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
+        #print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
         self.jump_data = {"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
                     "targetPos": self.targetPos,  "Fleg":self.Fleg,
                     "Fr_r": self.Fr_r0, "Fr_l": self.Fr_l0,  "Tf": self.matvars['Tf'] }
@@ -674,10 +678,10 @@ class ClimbingrobotController(BaseControllerFixed):
             #return False # stay there forever
             return True # exit loop
 
-    def plotReferenceTraj(self,ref_com):
+    def plotReferenceTraj(self,ref_com, color="white"):
         # plot intermediate positions (for iterates on rows so I need to transpose)
         for blob  in ref_com.T:
-            self.ros_pub.add_marker(blob, color="white", radius=0.2, alpha = 0.5)
+            self.ros_pub.add_marker(blob, color=color, radius=0.2, alpha = 0.5)
 
 
 
@@ -689,12 +693,17 @@ class ClimbingrobotController(BaseControllerFixed):
             p.pause_physics_client()
 
             # PAPER
-            # p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[0])
-            # p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
-            # p.initOptim(p.desired_target[0], p.desired_target[1])
-            # p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
-            # p.initOptim(p.desired_target[1], p.desired_target[2])
-            # p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
+            # if p.jumpNumber == 0:
+            #     #first optim
+            #     p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[0])
+            #     p.total_ref_com = p.ref_com.copy()
+            #     # second optim:second jump we assume it starts from last position
+            #     p.initOptim(p.ref_com[:,-1], p.desired_target[1])
+            #     p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
+            #     #third optim:third jump we assume it starts from last position
+            #     p.initOptim(p.ref_com[:,-1], p.desired_target[2])
+            #     p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
+
 
             print(colored(f"Start trajectory optimization", "blue"))
             p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
@@ -917,8 +926,6 @@ def talker(p):
     p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
     ######################
 
-
-
     #############Json
     # data = p.readJsonFile(terrain="gaussian") # hemi, gaussian
     # p0 = np.array(data["target_points"][0])
@@ -956,10 +963,6 @@ def talker(p):
 
     p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
-
-
-
-
     while not ros.is_shutdown():
         # update the kinematics
         p.updateKinematicsDynamics()
@@ -979,8 +982,10 @@ def talker(p):
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
         p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.obj", position=p.mat2Gazebo, color=None, alpha=1.0)
-        if hasattr(p, "ref_com"):
-            p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com)
+        if hasattr(p, "ref_com") and not hasattr(p, "total_ref_com"):
+            p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com, color="red")
+        if hasattr(p, "total_ref_com"):
+            p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.total_ref_com, color="white")
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
