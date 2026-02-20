@@ -393,7 +393,7 @@ status = status_map.get(solution['problem_solved'], "unknown status")
 print(f"problem converged?: {status}")
 
 if solution['problem_solved'] not in [0]:
-    violations = eval_constraints(solution['c'], solution['num_constr'], solution['constr_tolerance'], debug=False)
+    violations = eval_constraints(solution['c'], solution['num_constr'], solution['constr_tolerance'], verbose=True)
     breakpoint()  
 plotStuff()
 

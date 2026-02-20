@@ -408,7 +408,7 @@ def main():
     status = status_map.get(result['problem_solved'], "unknown status")
     
     if status not in [0,2]:
-        eval_constraints(result['c'], result['num_constr'], result['constr_tolerance'], debug=False)
+        eval_constraints(result['c'], result['num_constr'], result['constr_tolerance'], verbose=True)
 
     
     elapsed_time = time.time() - start_time
