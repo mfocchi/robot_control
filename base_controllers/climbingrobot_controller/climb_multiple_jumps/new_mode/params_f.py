@@ -103,7 +103,7 @@ cem_params.n_threads = THREADS
 # General CEM-MD Parameters
 cem_params.cem_iters = 50
 cem_params.pop_size = 500
-cem_params.n_elites = int(cem_params.pop_size * 0.1)
+cem_params.n_elites = int(cem_params.pop_size * 0.2)
 cem_params.decrease_pop_factor = 0.0 
 cem_params.fraction_elites_reused = 0.0 
 cem_params.alpha = 0.5
