@@ -218,7 +218,7 @@ class BilevelOpt:
             
 
             if res['problem_solved'] not in [0]:
-                violations = self.eval_constraints(res['c'], res['num_constr'], res['constr_tolerance'], debug=False)
+                violations = self.eval_constraints(res['c'], res['num_constr'], res['constr_tolerance'], verbose=False)
                 if violations:  
                     all_converged = False
                     break
