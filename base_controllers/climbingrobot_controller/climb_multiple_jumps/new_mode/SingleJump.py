@@ -398,16 +398,19 @@ def main():
     start_time = time.time()
     
     fitness, p0_adj, pf_adj, trajectory, result = jump_optimizer.execute_jump()
-    
+
     status_map = {
-        0: "converged",
+        1: "converged",
+        -2: "not converged",
         2: "semidef.converg",
-        1: "not converged",
-        -2: "max number of function evaluations"
+        0: "max number of function evaluations"
     }
+
     status = status_map.get(result['problem_solved'], "unknown status")
-    
-    if status not in [0,2]:
+
+    # only if it converged we are sure there are no constraint violations
+    # but there can be cases in semidef conv for which there are also not violations
+    if status not in [1]:
         eval_constraints(result['c'], result['num_constr'], result['constr_tolerance'], verbose=True)
 
     
@@ -421,13 +424,7 @@ def main():
     print(f"Adjusted Goal:  {pf_adj}")
     print(f"achived target: {result['achieved_target']}")
     
-    
-    status_map = {
-        0: "converged",
-        2: "semidef.converg",
-        1: "not converged",
-        -2: "max number of function evaluations"
-    }
+
     print(f"Problem Solved: {status_map.get(int(result['problem_solved']), result['problem_solved'])}")
 
     print(f"Consumed Energy: {result['consumed_energy']:.2f}")

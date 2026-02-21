@@ -214,19 +214,26 @@ class BilevelOpt:
             res = eng.optimize_cpp_mex(
                 matlab.double(p0_adj), matlab.double(pf_adj), 
                 Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
-            
-            
 
-            if res['problem_solved'] not in [0]:
+            # status_map = {
+            #     1: "converged",
+            #     -2: "not converged",
+            #     2: "semidef.converg",
+            #     0: "max number of function evaluations"
+            # }
+            # only if it converged we are sure there are no constraint violations
+            # but there can be cases in semidef conv for which there are also not violations
+            if res['problem_solved']!=1:
+                # not convergence
+                if res['problem_solved'] == -2:
+                    all_converged = False
+                    break
+                # but there can be cases (eg  semidef conv , fmax eval) for which there are also not violations
                 violations = self.eval_constraints(res['c'], res['num_constr'], res['constr_tolerance'], verbose=False)
                 if violations:  
                     all_converged = False
                     break
-            # Convergence Check (1=Converged, 2=Semidefinite(other possible solutions))
-            if int(res['problem_solved']) not in [1, 2]:
-                all_converged = False
-                break
-            
+
             jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
                                             res, patch_id=patch_id, contact_abs_pos_yz=mat_vector2python(res['achieved_target'])[1:])
             

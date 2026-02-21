@@ -325,11 +325,12 @@ def generateCostMap(terrain_manager, number_of_patches_width, number_of_patches_
 
 #######################################
 status_map = {
-    0: "converged",
+    1: "converged",
+    -2: "not converged",
     2: "semidef.converg",
-    1: "not converged",
-    -2: "max number of function evaluations"
+    0: "max number of function evaluations"
 }
+
 #terrain
 # Parameters (direct translation from MATLAB)
 wall_depth = 1  # how
@@ -394,7 +395,6 @@ print(f"problem converged?: {status}")
 
 if solution['problem_solved'] not in [0]:
     violations = eval_constraints(solution['c'], solution['num_constr'], solution['constr_tolerance'], verbose=True)
-    breakpoint()  
 plotStuff()
 
 
