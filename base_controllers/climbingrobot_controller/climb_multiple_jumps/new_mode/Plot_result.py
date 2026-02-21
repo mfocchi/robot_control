@@ -19,7 +19,7 @@ plot_str = os.environ.get("FOLDER_PLOT")
 if plot_str:
     FOLDER_MAIN = np.array(json.loads(plot_str))
 else:
-    FOLDER_MAIN = "result/test_final_final_1_hemisphere"
+    FOLDER_MAIN = "result/common"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -349,7 +349,7 @@ class PlotResultCemMjumps:
         # Tolleranza per il confronto di numeri float
         tolerance = 1e-8
         # Threshold per filtrare valori troppo alti
-        fitness_threshold = -1e5
+        fitness_threshold = -1e4
 
         all_fitness_values_for_norm = []  # Serve per calcolare min/max globali
 

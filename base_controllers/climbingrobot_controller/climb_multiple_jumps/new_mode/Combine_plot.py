@@ -36,11 +36,9 @@ if plot_str:
 else:
     # ── Default: edit this list to add / remove folders ──
     FOLDERS = [
-        "result/test_final_v1_1_gaussian_bumps",
-        "result/test_final_v1_2_gaussian_bumps",
-        "result/test_final_v1_3_gaussian_bumps",
-        "result/test_final_v1_4_gaussian_bumps",
-        
+        "result/common_1",
+        "result/common_2",
+        "result/common_3"
     ]
 
 # Where combined plots are saved
@@ -163,6 +161,41 @@ class SingleResult:
         self.p0 = self._project(self.p0)
         self.pf = self._project(self.pf)
 
+        # Lazy-loaded convergence data
+        self.all_comb_data: List[dict] = []
+
+    def load_all_comb_history(self):
+        """Load all_comb_in_iter_X_report.json files from the iteration_reports folder."""
+        if self.all_comb_data:
+            return  # already loaded
+
+        iter_folder = f"{self.folder}/iteration_reports"
+        if not os.path.exists(iter_folder):
+            print(f"[WARNING] Iter folder not found: {iter_folder}")
+            return
+
+        files = [f for f in os.listdir(iter_folder)
+                 if f.startswith("all_comb_in_iter_") and f.endswith(".json")]
+        if not files:
+            print(f"[WARNING] No all_comb_in_iter_*.json files in {iter_folder}")
+            return
+
+        def _extract_num(fname):
+            try:
+                return int(fname.split("all_comb_in_iter_")[1].split("_report")[0])
+            except Exception:
+                return -1
+
+        files.sort(key=_extract_num)
+
+        for fname in files:
+            fpath = os.path.join(iter_folder, fname)
+            try:
+                with open(fpath, "r") as f:
+                    self.all_comb_data.append(json.load(f))
+            except Exception as e:
+                print(f"[WARNING] Could not load {fpath}: {e}")
+
     def _project(self, point):
         ty, tz = point[1], point[2]
         tol_y, tol_z = 0.1, 0.1
@@ -249,73 +282,188 @@ class CombinePlot:
             print(f"[SAVE] {sp}")
             plt.show()
 
+
     # ──────────────────────────────
-    # 2. FITNESS BY ITERATION (curve, ignoring >= 1e6)
+    # 2. FITNESS BY ITERATION
     # ──────────────────────────────
     def plot_fitness_by_iteration(self, ax=None):
         """
-        One curve per folder showing the best fitness found up to each
-        iteration.  Values >= 1e6 are excluded (treated as infeasible).
+        Scatter plot of elite fitness values across iterations for every folder.
+        Only elites with fitness > -1e5 are shown.
+        Each folder uses its own colour; best-ever points are highlighted in red
+        and a dashed horizontal line marks each folder's best fitness.
         """
+        from matplotlib.colors import Normalize, LinearSegmentedColormap
+
+        fitness_threshold = -1e4
+        tolerance = 1e-8
+
+        # Check at least one folder has data
+        if not any(r.all_elites for r in self.results):
+            print("[WARNING] No elite data available for plot_fitness_by_iteration.")
+            return
+
         created = False
         if ax is None:
-            fig, ax = plt.subplots(figsize=(12, 7))
+            fig, ax = plt.subplots(figsize=(14, 7))
             created = True
         else:
             fig = ax.get_figure()
 
-        FITNESS_CUTOFF = 1e6
+        legend_elements = []
 
         for k, r in enumerate(self.results):
-            color_k = self.cmap(k % 20)
-
-            # Build the "running-best" curve, filtering out values >= 1e6
-            running_best = []
-            current_best = None
-            for i, iter_elites in enumerate(r.all_elites):
-                # Best fitness in this iteration (excluding infeasible)
-                valid = [e.fitness for e in iter_elites if e.fitness < FITNESS_CUTOFF]
-                if valid:
-                    iter_best = min(valid)
-                    if current_best is None or iter_best < current_best:
-                        current_best = iter_best
-                running_best.append(current_best)
-
-            if not running_best or current_best is None:
-                print(f"[WARNING] No feasible fitness (<{FITNESS_CUTOFF}) in {r.label}")
+            if not r.all_elites:
                 continue
 
-            iters = np.arange(1, len(running_best) + 1)
-            ax.plot(iters, running_best, color=color_k, linewidth=2.2,
-                    marker="o", markersize=4, markeredgecolor="black",
-                    markeredgewidth=0.4, label=f"{r.label}  (best={current_best:.4f})")
+            color_k = self.cmap(k % 20)
 
-            # Light scatter of all valid elite fitness values per iteration
-            for i, iter_elites in enumerate(r.all_elites):
-                vals = [e.fitness for e in iter_elites if e.fitness < FITNESS_CUTOFF]
-                if vals:
-                    ax.scatter([i + 1] * len(vals), vals,
-                               c=[color_k], s=12, alpha=0.25, edgecolors="none", zorder=2)
+            x_normal, y_normal = [], []
+            x_best,   y_best   = [], []
 
-        ax.set_title("Best-So-Far Fitness Convergence (values < 1e6)", fontsize=14, fontweight="bold")
-        ax.set_xlabel("Iteration", fontsize=12)
-        ax.set_ylabel("Fitness", fontsize=12)
-        ax.grid(True, linestyle=":", alpha=0.5)
-        ax.legend(fontsize=10, frameon=True, fancybox=True, framealpha=0.9)
+            for i, iteration_list in enumerate(r.all_elites):
+                current_iter = i + 1
+                for elite in iteration_list:
+                    if elite.fitness < fitness_threshold:
+                        continue
+                    if np.isclose(elite.fitness, r.best_fit_ever, atol=tolerance):
+                        x_best.append(current_iter)
+                        y_best.append(elite.fitness)
+                    else:
+                        x_normal.append(current_iter)
+                        y_normal.append(elite.fitness)
 
-        # Integer x-ticks when few iterations
-        max_iter = max(len(r.all_elites) for r in self.results)
+            if not x_normal and not x_best:
+                continue
+
+            # Normal elites: semi-transparent scatter with folder colour
+            ax.scatter(x_normal, y_normal,
+                       color=color_k, s=30,
+                       edgecolors='black', linewidths=0.3,
+                       alpha=0.6, zorder=3)
+
+            # Best-ever elites: same colour but fully opaque + red edge
+            if x_best:
+                ax.scatter(x_best, y_best,
+                           color=color_k, s=60,
+                           edgecolors='red', linewidths=1.2,
+                           alpha=1.0, zorder=4, marker='*')
+
+            # Horizontal dashed line at best_fit_ever
+            if r.best_fit_ever is not None:
+                ax.axhline(y=r.best_fit_ever,
+                           color=color_k, linestyle='--',
+                           linewidth=1.2, alpha=0.7, zorder=2)
+
+            fit_str = f"{r.best_fit_ever:.4f}" if r.best_fit_ever is not None else "N/A"
+            legend_elements.append(
+                Patch(facecolor=color_k, edgecolor='black', alpha=0.85,
+                      label=f"{r.label}  (best={fit_str})")
+            )
+
+        # x-ticks: show every integer up to 25, then auto
+        max_iter = max((len(r.all_elites) for r in self.results if r.all_elites), default=0)
         if max_iter <= 25:
             ax.set_xticks(range(1, max_iter + 1))
         else:
             ax.xaxis.get_major_locator().set_params(integer=True)
 
+        ax.set_title('Elite Fitness by Iteration – Combined', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Iteration', fontsize=12)
+        ax.set_ylabel('Fitness Value', fontsize=12)
+        ax.grid(True, linestyle=':', alpha=0.5, zorder=0)
+        ax.legend(handles=legend_elements, fontsize=9,
+                  frameon=True, fancybox=True, framealpha=0.9,
+                  loc='lower right')
+
         fig.tight_layout()
 
         if created:
-            sp = os.path.join(COMBINED_OUTPUT, "combined_fitness_convergence.png")
+            sp = os.path.join(COMBINED_OUTPUT, "combined_fitness_by_iteration.png")
             fig.savefig(sp, dpi=150, bbox_inches="tight")
-            sp_pdf = os.path.join(COMBINED_OUTPUT, "combined_fitness_convergence.pdf")
+            sp_pdf = os.path.join(COMBINED_OUTPUT, "combined_fitness_by_iteration.pdf")
+            fig.savefig(sp_pdf, bbox_inches="tight", pad_inches=0.23)
+            print(f"[SAVE] {sp}")
+            plt.show()
+
+    # ──────────────────────────────
+    # 2b. BEST FITNESS LINE PER ITERATION
+    # ──────────────────────────────
+    def plot_best_fitness_line(self, ax=None):
+        """
+        For each folder, plot a line that connects the best (maximum) fitness
+        value found among the elites at each iteration.
+        Only elites with fitness > -1e5 are considered.
+        One line per folder, colour-coded.
+        """
+        fitness_threshold = -1e5
+
+        if not any(r.all_elites for r in self.results):
+            print("[WARNING] No elite data available for plot_best_fitness_line.")
+            return
+
+        created = False
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(14, 7))
+            created = True
+        else:
+            fig = ax.get_figure()
+
+        legend_elements = []
+
+        for k, r in enumerate(self.results):
+            if not r.all_elites:
+                continue
+
+            color_k = self.cmap(k % 20)
+
+            iters, best_per_iter = [], []
+            for i, iteration_list in enumerate(r.all_elites):
+                values = [
+                    elite.fitness
+                    for elite in iteration_list
+                    if elite.fitness > fitness_threshold
+                ]
+                if not values:
+                    continue
+                iters.append(i + 1)
+                best_per_iter.append(max(values))
+
+            if not iters:
+                continue
+
+            ax.plot(iters, best_per_iter,
+                    color=color_k, linewidth=2.2,
+                    marker='o', markersize=5,
+                    markeredgecolor='black', markeredgewidth=0.5,
+                    zorder=3)
+
+            fit_str = f"{r.best_fit_ever:.4f}" if r.best_fit_ever is not None else "N/A"
+            legend_elements.append(
+                Patch(facecolor=color_k, edgecolor='black', alpha=0.85,
+                      label=f"{r.label}  (best={fit_str})")
+            )
+
+        max_iter = max((len(r.all_elites) for r in self.results if r.all_elites), default=0)
+        if max_iter <= 25:
+            ax.set_xticks(range(1, max_iter + 1))
+        else:
+            ax.xaxis.get_major_locator().set_params(integer=True)
+
+        ax.set_title('Best Elite Fitness per Iteration – Combined', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Iteration', fontsize=12)
+        ax.set_ylabel('Best Fitness Value', fontsize=12)
+        ax.grid(True, linestyle=':', alpha=0.5, zorder=0)
+        ax.legend(handles=legend_elements, fontsize=9,
+                  frameon=True, fancybox=True, framealpha=0.9,
+                  loc='lower right')
+
+        fig.tight_layout()
+
+        if created:
+            sp = os.path.join(COMBINED_OUTPUT, "combined_best_fitness_line.png")
+            fig.savefig(sp, dpi=150, bbox_inches="tight")
+            sp_pdf = os.path.join(COMBINED_OUTPUT, "combined_best_fitness_line.pdf")
             fig.savefig(sp_pdf, bbox_inches="tight", pad_inches=0.23)
             print(f"[SAVE] {sp}")
             plt.show()
@@ -487,6 +635,129 @@ class CombinePlot:
             print(f"[SAVE] {sp}")
             plt.show()
 
+    # ──────────────────────────────
+    # 4. CONVERGENCE HISTOGRAM
+    # ──────────────────────────────
+    def plot_convergence_histogram(self):
+        """
+        Grouped stacked bar chart – all folders side by side for each iteration
+        (same style as count_jump_histogram), plus a convergence-rate line plot.
+
+        Layout:
+          - Top panel : grouped stacked bars (Converged / Failed) per iteration,
+                        one group-slot per folder (colour-coded, same as other plots)
+          - Bottom panel: convergence-rate (%) per iteration, one line per folder
+        """
+        # Load comb data for every folder
+        for r in self.results:
+            r.load_all_comb_history()
+
+        # Keep only folders that actually have data
+        valid = [r for r in self.results if r.all_comb_data]
+        if not valid:
+            print("[WARNING] No all_comb_in_iter data found in any folder – skipping plot.")
+            return
+
+        n_valid = len(valid)
+
+        # ── Build per-folder dicts: iteration -> (n_conv, n_fail) ──
+        all_iter_sets = []
+        folder_data = []  # list of dicts {iter: (conv, fail)}
+        for r in valid:
+            d = {}
+            for entry in r.all_comb_data:
+                it = entry["iteration"]
+                steps = entry.get("steps", [])
+                n_conv = sum(1 for s in steps if s.get("converged", False) is True)
+                n_fail = len(steps) - n_conv
+                d[it] = (n_conv, n_fail)
+            folder_data.append(d)
+            all_iter_sets.append(set(d.keys()))
+
+        # Global sorted iteration list (union of all folders)
+        all_iters = sorted(set().union(*all_iter_sets))
+        x_base = np.arange(len(all_iters))
+        bar_width = 0.8 / n_valid
+
+        fig, (ax_bars, ax_rate) = plt.subplots(2, 1, figsize=(max(12, len(all_iters) * 1.2), 12))
+
+        # ── Top: grouped stacked bars ──
+        for k, (r, d) in enumerate(zip(valid, folder_data)):
+            color_k = self.cmap(k % 20)
+            offset = (k - n_valid / 2 + 0.5) * bar_width
+
+            convs = [d.get(it, (0, 0))[0] for it in all_iters]
+            fails = [d.get(it, (0, 0))[1] for it in all_iters]
+            xs = x_base + offset
+
+            ax_bars.bar(xs, convs, bar_width,
+                        color=color_k, edgecolor="black", alpha=0.85,
+                        label=r.label, hatch="")
+            ax_bars.bar(xs, fails, bar_width, bottom=convs,
+                        color=color_k, edgecolor="black", alpha=0.35,
+                        hatch="///")
+
+            # Convergence % label above each bar
+            for x, conv, fail in zip(xs, convs, fails):
+                total = conv + fail
+                if total > 0:
+                    perc = (conv / total) * 100
+                    ax_bars.text(x, total + total * 0.015, f"{perc:.0f}%",
+                                 ha="center", va="bottom", fontsize=6,
+                                 fontweight="bold", color=color_k)
+
+        # Legend: solid patch = converged, hatched = failed
+        from matplotlib.patches import Patch as _Patch
+        legend_handles = [r2.label and _Patch(facecolor=self.cmap(k2 % 20),
+                                              edgecolor="black", alpha=0.85,
+                                              label=valid[k2].label)
+                          for k2, r2 in enumerate(valid)]
+        legend_handles = [_Patch(facecolor=self.cmap(k2 % 20), edgecolor="black",
+                                 alpha=0.85, label=valid[k2].label)
+                          for k2 in range(n_valid)]
+        legend_handles += [
+            _Patch(facecolor="white", edgecolor="black", alpha=0.35,
+                   hatch="///", label="Hatched = Failed"),
+        ]
+        ax_bars.set_title("Convergence per Iteration – Combined (Grouped)",
+                          fontsize=13, fontweight="bold")
+        ax_bars.set_xlabel("Iteration", fontsize=11)
+        ax_bars.set_ylabel("Population Count", fontsize=11)
+        ax_bars.set_xticks(x_base)
+        ax_bars.set_xticklabels(all_iters)
+        ax_bars.legend(handles=legend_handles, fontsize=9,
+                       framealpha=0.9, loc="upper right")
+        ax_bars.grid(axis="y", linestyle="--", alpha=0.5)
+
+        # ── Bottom: convergence-rate line plot ──
+        for k, (r, d) in enumerate(zip(valid, folder_data)):
+            color_k = self.cmap(k % 20)
+            iters = sorted(d.keys())
+            rates = [100.0 * d[it][0] / max(d[it][0] + d[it][1], 1) for it in iters]
+            ax_rate.plot(iters, rates, marker="o", linewidth=2, markersize=5,
+                         markeredgecolor="black", markeredgewidth=0.4,
+                         color=color_k, label=r.label)
+
+        ax_rate.set_title("Convergence Rate (%) – All Folders",
+                          fontsize=13, fontweight="bold")
+        ax_rate.set_xlabel("Iteration", fontsize=11)
+        ax_rate.set_ylabel("Convergence Rate (%)", fontsize=11)
+        ax_rate.set_ylim(0, 110)
+        ax_rate.grid(True, linestyle=":", alpha=0.5)
+        ax_rate.legend(fontsize=9, frameon=True, fancybox=True, framealpha=0.9)
+        if len(all_iters) <= 25:
+            ax_rate.set_xticks(all_iters)
+
+        fig.suptitle("Combined Convergence Histogram", fontsize=15, fontweight="bold")
+        fig.tight_layout()
+
+        sp = os.path.join(COMBINED_OUTPUT, "combined_convergence_histogram.png")
+        fig.savefig(sp, dpi=150, bbox_inches="tight")
+        sp_pdf = os.path.join(COMBINED_OUTPUT, "combined_convergence_histogram.pdf")
+        fig.savefig(sp_pdf, bbox_inches="tight", pad_inches=0.23)
+        print(f"[SAVE] {sp}")
+        plt.show()
+
 
 # ──────────────────────────────────────────────
 #  MAIN
@@ -496,7 +767,9 @@ def main():
 
     cp.count_jump_histogram(use_last_iter_only=False)
     cp.plot_fitness_by_iteration()
+    cp.plot_best_fitness_line()
     cp.plot_mesh_pc_traj_interactive(show_cost=True)
+    cp.plot_convergence_histogram()
 
     print("[INFO] All combined plots completed!")
 
