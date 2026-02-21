@@ -19,7 +19,7 @@ from base_controllers.utils.matlab_conversions import (
 
 class BilevelOpt:
     
-    def __init__(self, terrain_manager, p0, pf_patch, fitness_weights, point_clouds, patches, cost_grid):
+    def __init__(self, terrain_manager, p0, pf_patch, fitness_weights, point_clouds, patches, cost_grid, verbose=True):
         
         self.terrain_manager = terrain_manager
         self.p0 = p0
@@ -28,6 +28,7 @@ class BilevelOpt:
         self.point_clouds = point_clouds
         self.patches = patches
         self.cost_grid = cost_grid
+        self.verbose = verbose
     
         
     def eval_constraints(self, c, num_constr, constr_tolerance, debug=False, verbose = True):
@@ -134,6 +135,7 @@ class BilevelOpt:
         jump_log_points = []
         jump_log_traj = []
         converg_log = []
+        violations_log = []
         total_consumed_energy = 0.0
         total_landing_cost = 0.0
         total_traj_length = 0.0 
@@ -141,7 +143,7 @@ class BilevelOpt:
         achieved_target = None
         
         # Initialization parameters for matlab engine
-        eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager)
+        eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager, verbose=self.verbose)
         local_inner_opt_params = create_inner_opt_params_copy()
         
         # Extract discrete parameters (first array is the possible jumps) and the rest are the patch IDs
@@ -161,15 +163,17 @@ class BilevelOpt:
         # fitness about "duplicate" jumps inside xd
         used_patches = [(xd[1 + i]) for i in range(n_jumps)]
         if len(used_patches) != len(set(used_patches)):
-            print("DOPPIONE PISELLONE!")
+            if self.verbose:
+                print("DOPPIONE PISELLONE!")
             all_converged = False
             fitness_score = -self.fitness_weights[0]  # Negative for maximization
             
-            print("xd value: " , xd)    
-            print(f"Computed Score (Fitness): {fitness_score:.4f}")
-            print(f"--- Evaluation Results ---")
-            print(f"Status: FAILED (DUPLICATE), Waypoints Used: 0/{MAX_JUMP}, Total Energy: 0.00, Terrain Cost: 0.00")
-            print(f"--------------------------")
+            if self.verbose:
+                print("xd value: " , xd)    
+                print(f"Computed Score (Fitness): {fitness_score:.4f}")
+                print(f"--- Evaluation Results ---")
+                print(f"Status: FAILED (DUPLICATE), Waypoints Used: 0/{MAX_JUMP}, Total Energy: 0.00, Terrain Cost: 0.00")
+                print(f"--------------------------")
             
             return {
                 'fitness': fitness_score,
@@ -180,7 +184,8 @@ class BilevelOpt:
                 'consumed_energy': 0.0,
                 'landing_cost': 0.0,
                 'all_converged': False,
-                'convergence_log': []
+                'convergence_log': [],
+                'violations_log': []
             }
         
         
@@ -230,10 +235,11 @@ class BilevelOpt:
                     break
                 # but there can be cases (eg  semidef conv , fmax eval) for which there are also not violations
                 violations = self.eval_constraints(res['c'], res['num_constr'], res['constr_tolerance'], verbose=False)
+                violations_log.append(violations)
                 if violations:  
                     all_converged = False
+                    # breakpoint()
                     break
-
             jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
                                             res, patch_id=patch_id, contact_abs_pos_yz=mat_vector2python(res['achieved_target'])[1:])
             
@@ -251,7 +257,8 @@ class BilevelOpt:
                 total_traj_length += np.sum(segment_lengths)
                 
             if np.isnan(res['consumed_energy']):
-                print("consumed energy is nan")
+                if self.verbose:
+                    print("consumed energy is nan")
                 all_converged = False
                 # breakpoint()
                 break
@@ -283,6 +290,7 @@ class BilevelOpt:
             avg_energy_cost = 0.0
             waypoint_cost = 0.0
             traj_length_cost = 0.0
+            violations_log.append([])
         else:
             waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
             traj_length_cost = total_traj_length * self.fitness_weights[4]
@@ -293,12 +301,13 @@ class BilevelOpt:
             fitness_score = -(avg_energy_cost + avg_jump_landing_cost) # + waypoint_cost + traj_length_cost)  # Negative for maximization
             achieved_target = mat_vector2python(res['achieved_target']) if res['achieved_target'] is not None else None
 
-        print("xd value: ", xd)
-        print(f"Computed Score (Fitness): {fitness_score:.4f}")
-        status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
-        print(f"--- Evaluation Results ---")
-        print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {avg_energy_cost:.2f}, avg_jump_landing_cost: {avg_jump_landing_cost:.4f}, waypoint_cost: {waypoint_cost:.4f} , traj_length_cost: {traj_length_cost:.4f}, Global Convergence: {status_msg}")
-        print(f"--------------------------")
+        if self.verbose:
+            print("xd value: ", xd)
+            print(f"Computed Score (Fitness): {fitness_score:.4f}")
+            status_msg = "CONVERGED" if all_converged else "FAILED (in One or more jumps)"
+            print(f"--- Evaluation Results ---")
+            print(f"Total Jumps: {total_jump}/{MAX_JUMP}, Total Fitness: {fitness_score:.4f}, Energy Consumed: {avg_energy_cost:.2f}, avg_jump_landing_cost: {avg_jump_landing_cost:.4f}, waypoint_cost: {waypoint_cost:.4f} , traj_length_cost: {traj_length_cost:.4f}, Global Convergence: {status_msg}")
+            print(f"--------------------------")
         
         return {
             'fitness': fitness_score,  # This is now a FITNESS (maximize this value, 0 is best)
@@ -309,7 +318,8 @@ class BilevelOpt:
             'consumed_energy': avg_energy_cost,
             'landing_cost': avg_jump_landing_cost,
             'all_converged': all_converged,
-            'convergence_log': converg_log
+            'convergence_log': converg_log,
+            'violations_log': violations_log
         }
                
     def calc_terrain_cost(self, res, patch_id=None, contact_abs_pos_yz=None):
