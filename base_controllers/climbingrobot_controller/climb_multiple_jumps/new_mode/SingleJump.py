@@ -291,7 +291,7 @@ class SingleJump:
         plt.show()
 
 
-def eval_constraints(c, num_constr, constr_tolerance, debug=False):
+def eval_constraints(c, num_constr, constr_tolerance, debug=False, verbose = True):
     """
     Check constraint vector `c` against blocks described by `num_constr`.
     - c: sequence or 1D numpy array of constraint values
@@ -323,62 +323,74 @@ def eval_constraints(c, num_constr, constr_tolerance, debug=False):
             if i == r0:
                 print('retraction_force_constraints')
             if i == f0:
-                print('force_constraints')
+                print('leg force_constraints')
             if i == final0:
                 print('final_point_constraints')
             if i == via0:
                 print('via_point constraints')
             print(f"{i} {float(val):.6f}")
+    if verbose:
+        print(colored("Eval Constraints (positive number represents viol.)", "red"))
 
-    print(colored("Eval Constraints (positive number represents viol.)", "red"))
-
+    violations = []
     # 1) wall constraints
     w_block = c[w0 : w0 + int(num_constr['wall_constraints'])]
     if w_block.size > 0 and np.any(w_block > constr_tolerance):
-        print('1) wall mesh constraints violated')
-        print(" ".join(f"\033[91m{v:.6f}\033[0m" if v > constr_tolerance else f"{v:.6f}" for v in w_block))
-
+        if verbose:
+            print('1) wall mesh constraints violated')
+            print(" ".join(f"\033[91m{v:.6f}\033[0m" if v > constr_tolerance else f"{v:.6f}" for v in w_block))
+        violations.append(f"1: {w_block > constr_tolerance}")
     # 2) retraction force constraints
     r_block = c[r0 : r0 + int(num_constr['retraction_force_constraints'])]
     if r_block.size > 0 and np.any(r_block > constr_tolerance):
-        print('2) rope force constraints violated')
-        print(" ".join(f"\033[91m{v:.6f}\033[0m" if v > constr_tolerance else f"{v:.6f}" for v in r_block))
-
+        if verbose:
+            print('2) rope force constraints violated')
+            print(" ".join(f"\033[91m{v:.6f}\033[0m" if v > constr_tolerance else f"{v:.6f}" for v in r_block))
+        violations.append(f"2: {r_block > constr_tolerance}")
     # 3) force constraints (unilateral, actuation, friction, ...)
     f_block = c[f0 : f0 + int(num_constr['force_constraints'])]
     if f_block.size > 0 and np.any(f_block > constr_tolerance):
-        print('3) leg force constraints violated')
-        # show first few entries (match MATLAB: +1, +2, +3)
-        if f_block.size >= 1:
-            print(f"3.1 unilateral (Fun > fmin): \033[91m{f_block[0]:.6f}\033[0m" if f_block[0] > constr_tolerance else f"{f_block[0]:.6f}")
-        if f_block.size >= 2:
-            print(f"3.2 actuation (Fun < fun_max): \033[91m{f_block[1]:.6f}\033[0m" if f_block[1] > constr_tolerance else f"{f_block[1]:.6f}")
-        if f_block.size >= 3:
-            print(f"3.3 friction (|Fut| < mu*Fun): \033[91m{f_block[2]:.6f}\033[0m" if f_block[2] > constr_tolerance else f"{f_block[2]:.6f}")
+        if verbose:
+            print('3) leg force constraints violated')
+            # show first few entries (match MATLAB: +1, +2, +3)
+            if f_block.size >= 1:
+                print(f"3.1 unilateral (Fun > fmin):",   f"\033[91m{f_block[0]:.6f}\033[0m" if f_block[0] > constr_tolerance else f"{f_block[0]:.6f}")
 
+            if f_block.size >= 2:
+                print(f"3.2 actuation (Fun < fun_max):", f"\033[91m{f_block[1]:.6f}\033[0m" if f_block[1] > constr_tolerance else f"{f_block[1]:.6f}")
+            if f_block.size >= 3:
+                print(f"3.3 friction (|Fut| < mu*Fun):", f"\033[91m{f_block[2]:.6f}\033[0m" if f_block[2] > constr_tolerance else f"{f_block[2]:.6f}")
+        violations.append(f"3: {f_block > constr_tolerance}")
     # 4) final point constraints (several subchecks)
     final_block = c[final0 : final0 + int(num_constr['final_constraints'])]
+
     if final_block.size > 0 and np.any(final_block > constr_tolerance):
-        print('4) final point constraint violated')
-        # Each check corresponds to offsets 0..4 in MATLAB
-        if final_block.size >= 1 and final_block[0] > constr_tolerance:
-            print(f"4.1 p_f(y) < ymax_patch : \033[91m{final_block[0]:.6f}\033[0m" if final_block[0] > constr_tolerance else f"{final_block[0]:.6f}")
-        if final_block.size >= 2 and final_block[1] > constr_tolerance:
-            print(f"4.2 p_f(y) > ymin_patch : \033[91m{final_block[1]:.6f}\033[0m" if final_block[1] > constr_tolerance else f"{final_block[1]:.6f}")
-        if final_block.size >= 3 and final_block[2] > constr_tolerance:
-            print(f"4.3 p_f(z) < zmax_patch : \033[91m{final_block[2]:.6f}\033[0m" if final_block[2] > constr_tolerance else f"{final_block[2]:.6f}")
-        if final_block.size >= 4 and final_block[3] > constr_tolerance:
-            print(f"4.4 p_f(z) > zmin_patch : \033[91m{final_block[3]:.6f}\033[0m" if final_block[3] > constr_tolerance else f"{final_block[3]:.6f}")
-        if final_block.size >= 5 and final_block[4] > constr_tolerance:
-            print(f"4.5 ||pf(x) - wall_x|| < fixed_slack :\033[91m{final_block[4]:.6f}\033[0m" if final_block[4] > constr_tolerance else f"{final_block[4]:.6f}")
+        if verbose:
+            print('4) final point constraint violated')
+            # Each check corresponds to offsets 0..4 in MATLAB
+            if final_block.size >= 1 and final_block[0] > constr_tolerance:
+                print(f"4.1 p_f(y) < ymax_patch:", f"\033[91m{final_block[0]:.6f}\033[0m" if final_block[0] > constr_tolerance else f"{final_block[0]:.6f}")
+            if final_block.size >= 2 and final_block[1] > constr_tolerance:
+                print(f"4.2 p_f(y) > ymin_patch:", f"\033[91m{final_block[1]:.6f}\033[0m" if final_block[1] > constr_tolerance else f"{final_block[1]:.6f}")
+            if final_block.size >= 3 and final_block[2] > constr_tolerance:
+                print(f"4.3 p_f(z) < zmax_patch:", f"\033[91m{final_block[2]:.6f}\033[0m" if final_block[2] > constr_tolerance else f"{final_block[2]:.6f}")
+            if final_block.size >= 4 and final_block[3] > constr_tolerance:
+                print(f"4.4 p_f(z) > zmin_patch:", f"\033[91m{final_block[3]:.6f}\033[0m" if final_block[3] > constr_tolerance else f"{final_block[3]:.6f}")
+            if final_block.size >= 5 and final_block[4] > constr_tolerance:
+                print(f"4.5 ||pf(x) - wall_x|| < fixed_slack:", f"\033[91m{final_block[4]:.6f}\033[0m" if final_block[4] > constr_tolerance else f"{final_block[4]:.6f}")
+        violations.append(f"4: {final_block > constr_tolerance}")
 
     # 5) via point constraints
     via_block = c[via0 : via0 + int(num_constr['via_point'])]
     if via_block.size > 0 and np.any(via_block > constr_tolerance):
-        print('5) via point constraint violated')
-        print(f"via point :\033[91m{via_block[0]:.6f}\033[0m" if via_block[0] > constr_tolerance else f"{via_block[0]:.6f}")
+        if verbose:
+            print('5) via point constraint violated')
+            print(f"via point:", f"\033[91m{via_block[0]:.6f}\033[0m" if via_block[0] > constr_tolerance else f"{via_block[0]:.6f}")
+        violations.append(f"4: {final_block > constr_tolerance}")
+    if verbose and not violations:
+        print(colored(f"None","red"))
+    return violations
 
-   
 def main():
     print(colored("=== Single Jump Optimizer ===", "cyan", attrs=['bold']))
     
@@ -419,6 +431,7 @@ def main():
     
     # Display results
     print(colored("\n=== Results ===", "cyan", attrs=['bold']))
+    print(colored(f"\nConverged?:{status}", "red"))
     print(f"Final Fitness: {fitness:.2f}")
     print(f"Adjusted Start: {p0_adj}")
     print(f"Adjusted Goal:  {pf_adj}")
