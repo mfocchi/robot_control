@@ -276,6 +276,10 @@ def eval_constraints(c, num_constr, constr_tolerance, debug=False, verbose = Tru
             print('5) via point constraint violated')
             print(f"via point:", f"\033[91m{via_block[0]:.6f}\033[0m" if via_block[0] > constr_tolerance else f"{via_block[0]:.6f}")
         violations.append(f"4: {final_block > constr_tolerance}")
+
+    if verbose and not violations:
+        print(colored(f"None","red"))
+
     return violations
 
 def generateCostMap(terrain_manager, number_of_patches_width, number_of_patches_height, plot=False):
