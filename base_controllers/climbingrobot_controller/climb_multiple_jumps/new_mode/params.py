@@ -226,7 +226,7 @@ def initialize_terrain_data(warm_start_mode=False):
     # Update cem_params.n_values with the new structure
     cem_params.n_values = [MAX_JUMP] + [valid_patches.copy() for _ in range(MAX_JUMP)]
     
-    var_min = float(os.environ.get("CEM_MIN_PROB", 1))
+    var_min = float(os.environ.get("CEM_MIN_PROB", 0.8))
     cem_params.min_prob = 1/len(patches.patches) * var_min
     
     # Update init_probs accordingly
@@ -453,13 +453,14 @@ def save_gazebo_info(best_points, terrain_manager):
 # ================================================
 thread_local = threading.local()
 
-def get_matlab_engine(point_clouds=None, cost_grid=None, terrain_manager=None):
+def get_matlab_engine(point_clouds=None, cost_grid=None, terrain_manager=None, verbose=True):
     if not hasattr(thread_local, 'engine'):
         eng = matlab.engine.start_matlab()
         eng.addpath('../../codegen_mesh_landing', nargout=0)
         
         thread_local.engine = eng
-        print(f"Created Engine and uploaded Mesh for thread {threading.current_thread().name}")
+        if verbose:
+            print(f"Created Engine and uploaded Mesh for thread {threading.current_thread().name}")
     return thread_local.engine
 
 def close_matlab_engines():

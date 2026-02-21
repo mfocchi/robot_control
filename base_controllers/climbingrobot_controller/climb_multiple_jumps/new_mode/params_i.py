@@ -453,13 +453,14 @@ def save_gazebo_info(best_points, terrain_manager):
 # ================================================
 thread_local = threading.local()
 
-def get_matlab_engine(point_clouds=None, cost_grid=None, terrain_manager=None):
+def get_matlab_engine(point_clouds=None, cost_grid=None, terrain_manager=None, verbose=True):
     if not hasattr(thread_local, 'engine'):
         eng = matlab.engine.start_matlab()
         eng.addpath('../../codegen_mesh_landing', nargout=0)
         
         thread_local.engine = eng
-        print(f"Created Engine and uploaded Mesh for thread {threading.current_thread().name}")
+        if verbose:
+            print(f"Created Engine and uploaded Mesh for thread {threading.current_thread().name}")
     return thread_local.engine
 
 def close_matlab_engines():

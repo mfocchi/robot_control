@@ -17,7 +17,7 @@ from BilevelOpt import BilevelOpt, close_matlab_engines
 params_module_name = os.environ.get("PARAMS_FILES", "params")
 params_module = importlib.import_module(params_module_name)
 globals().update({k: v for k, v in vars(params_module).items() if not k.startswith('_')})
-
+# from params import *
 from Plot_result import PlotResultCemMjumps
 from collections import Counter
 
@@ -34,7 +34,8 @@ def main():
         "COMPUTATION_MODE": True, 
         "PLOT_MODE": False,
         "WARM_START_MODE": True,
-        "EARLY_STOP": True
+        "EARLY_STOP": True,
+        "VERBOSE": False
     }
     
     if setting["COMPUTATION_MODE"]:
@@ -47,7 +48,8 @@ def main():
             fitness_weights=fitness_weights,
             point_clouds=point_clouds,
             patches=patches,
-            cost_grid=cost_grid
+            cost_grid=cost_grid,
+            verbose=setting["VERBOSE"]
         )
         
         patch_pf = patches.get_patch_id_from_point_2D(PF_PATCH_INIT[1], PF_PATCH_INIT[2])
@@ -91,6 +93,7 @@ def main():
             n_workers = cem_params.n_threads
             all_converged = [False] * cem_params.pop_size
             all_converg_log = [None] * cem_params.pop_size
+            all_violations_log = [None] * cem_params.pop_size
             individual_times = [0.0] * cem_params.pop_size
             
             
@@ -134,7 +137,8 @@ def main():
                         all_n_jumps[idx] = log_result['n_jumps']
                         all_achieved_target[idx] = log_result['achieved_target']
                         all_converged[idx] = log_result['all_converged']
-                        all_converg_log[idx] = log_result['convergence_log']                        
+                        all_converg_log[idx] = log_result['convergence_log']
+                        all_violations_log[idx] = log_result['violations_log']                        
                         
                         with best_lock:
                             if log_result['fitness'] > best_fitness:  # Changed from < to > for maximization
@@ -147,7 +151,9 @@ def main():
                                 best_achieved_target = log_result['achieved_target']
                                 best_all_converged = log_result['all_converged']
                                 print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
+                        
                         print(colored(f"complete individual {idx}, Iteration {k+1} ({elapsed:.2f}s)", "yellow"))
+                
                 print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
             # ============================
             # flag_thread == FALSE: sequential evaluation
@@ -161,8 +167,7 @@ def main():
                     ind_start = time.time()
                     log_result = optimizer.eval_pop(population_inputs)
                     ind_elapsed = time.time() - ind_start
-                    individual_times[i] = ind_elapsed
-                    
+                    individual_times[i] = ind_elapsed                    
                     print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}, time = {ind_elapsed:.2f}s\n", "cyan", attrs=['bold']))
                     
                     fitness[i] = log_result['fitness']
@@ -174,6 +179,7 @@ def main():
                     all_achieved_target[i] = log_result['achieved_target']
                     all_converged[i] = log_result['all_converged']
                     all_converg_log[i] = log_result['convergence_log']
+                    all_violations_log[i] = log_result['violations_log']
                     
                     if log_result['fitness'] > best_fitness:  # Changed from < to > for maximization
                         best_fitness = log_result['fitness']
@@ -184,6 +190,7 @@ def main():
                         best_jump = log_result['n_jumps']
                         best_achieved_target = log_result['achieved_target']
                         best_all_converged = log_result['all_converged']
+                        
                         print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f}","green", attrs=['bold']))
         
 
@@ -239,7 +246,8 @@ def main():
                     'iteration': k + 1,
                     'patch_ids': xd[1:, idx].tolist(),   
                     'achieved_target': all_achieved_target[idx].tolist() if all_achieved_target[idx] is not None else None,                    
-                    'convergence_log': all_converg_log[idx]
+                    'convergence_log': all_converg_log[idx],
+                    'violations_log': all_violations_log[idx]
                 }
                 current_iteration_elites.append(elite_sol)
             
@@ -278,7 +286,8 @@ def main():
                     "landing_cost": float(all_landing_cost[i]),
                     "traj": current_traj,
                     "points": current_points,
-                    "convergence_log": all_converg_log[i]
+                    "convergence_log": all_converg_log[i],
+                    "violations_log": all_violations_log[i]
                 }
                 all_steps_data.append(step_info)
             

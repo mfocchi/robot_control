@@ -95,7 +95,7 @@ def evaluate_fitness(population: np.ndarray, max_waypoints: int) -> np.ndarray:
             waypoint_cost = (max_waypoints - n_intermediate) * MISSING_WAYPOINT_PENALTY
             cost_dist = total_linear_dist * LINEAR_DIST_WEIGHT
             energy_cost = np.log(total_energy + 1) * ENERGY_LOG_WEIGHT
-            scores[i] = -(waypoint_cost + energy_cost + cost_dist)
+            scores[i] = -(energy_cost + cost_dist)
             
     return scores
 
@@ -189,7 +189,7 @@ def run_cem_trajectory():
     # CEM parameters - adjusted for better exploration
     params = CemParams(
         seed=0,
-        pop_size=2500,
+        pop_size=1000,
         n_elites=30,
         cem_iters=50,
         dim_discrete=len(n_values),
