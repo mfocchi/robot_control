@@ -13,7 +13,7 @@ plot_str = os.environ.get("FOLDER_PLOT")
 if plot_str:
     FOLDER_MAIN = np.array(json.loads(plot_str))
 else:
-    FOLDER_MAIN = "result/test_final_v1_5_gaussian_bumps"
+    FOLDER_MAIN = "result/test_r_0_hemisphere"
 
 TIMING_FILE = os.path.join(FOLDER_MAIN, "timing_report.json")
 
