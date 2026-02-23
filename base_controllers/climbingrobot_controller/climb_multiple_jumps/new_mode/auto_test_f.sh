@@ -1,14 +1,16 @@
 #!/bin/bash
 
-name_folder="test_f_A"
+name_folder="test_f_B"
 
 NUM_RUNS=5
 export PARAMS_FILES="params_f"
 TERRAIN_TYPE="rock" #"gaussian_bumps" | hemisphere | rock
 PERC_MIN_PROB=0.8
 
+
+
 START_POINT="[0.28, 2.5, -6.10104]"
-GOAL_POINT="[0.28, 2.8,-12]"
+GOAL_POINT="[0.28, 4.5,-17]"
 
 
 echo ""
