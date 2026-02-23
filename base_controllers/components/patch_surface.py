@@ -1,5 +1,5 @@
-from .terrain_manager import TerrainManager
-from .point_cloud_filter import PointCloudFilter
+from terrain_manager import TerrainManager
+from point_cloud_filter import PointCloudFilter
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -867,7 +867,78 @@ class PatchSurface:
         plt.tight_layout()
         plt.show()
         return fig, ax
-    
+    def plot_patches_2(self, point_size=20, alpha=0.85, figsize=(10, 8), elev=15, azim=-30):
+        print("[patch_surface] Plotting patches...")
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection='3d')
+
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
+        # ax.set_title('Patches 3D', fontsize=20, pad=-100)
+
+        total_points = sum(len(patch.get('points_in_patch', [])) for patch in self.patches)
+        num_patches = len(self.patches)
+
+        use_fast_mode = total_points > 1000001
+
+        all_x, all_y, all_z = [], [], []
+
+        if use_fast_mode:
+            print(f"[patch_surface] Using fast mode: {total_points} total points, {num_patches} patches")
+            centroids = []
+            colors = []
+            for patch in self.patches:
+                centroid = patch.get('centroid')
+                if centroid is not None:
+                    centroids.append(centroid)
+                    colors.append(patch.get('color_patch', [0.5, 0.5, 0.5]))
+
+            if centroids:
+                centroids = np.array(centroids)
+                ax.scatter(centroids[:, 0], centroids[:, 1], centroids[:, 2],
+                        s=point_size, c=colors, alpha=alpha, marker='s', depthshade=True)
+                all_x = centroids[:, 0]
+                all_y = centroids[:, 1]
+                all_z = centroids[:, 2]
+        else:
+            for patch in self.patches:
+                pts = patch.get('points_in_patch') or patch.get('points') or []
+                if not pts:
+                    continue
+
+                P = np.vstack([p['position'] for p in pts])
+                all_x.extend(P[:, 0])
+                all_y.extend(P[:, 1])
+                all_z.extend(P[:, 2])
+
+                color = patch.get('color_patch')
+                ax.scatter(P[:, 0], P[:, 1], P[:, 2],
+                        s=point_size, alpha=alpha, color=color, depthshade=True)
+
+        # Equal axis scaling
+        if len(all_x) > 0:
+            all_x, all_y, all_z = np.array(all_x), np.array(all_y), np.array(all_z)
+            max_range = np.array([
+                all_x.max() - all_x.min(),
+                all_y.max() - all_y.min(),
+                all_z.max() - all_z.min()
+            ]).max() / 2.0
+
+            mid_x = (all_x.max() + all_x.min()) * 0.5
+            mid_y = (all_y.max() + all_y.min()) * 0.5
+            mid_z = (all_z.max() + all_z.min()) * 0.5
+
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        ax.view_init(elev=elev, azim=azim)
+        plt.tight_layout()
+        plt.show()
+        return fig, ax
+
     def plot_patches_by_id(self, target_ids):
         if isinstance(target_ids, int):
             target_ids = [target_ids]
@@ -1670,6 +1741,7 @@ def main():
     
     patch_surface.random_color()
     patch_surface.plot_patches()
+    patch_surface.plot_patches_2()
     # Apply cost-based coloring
     patch_surface.cost_color()
     

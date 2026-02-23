@@ -1,4 +1,4 @@
-from .terrain_manager import TerrainManager  
+from terrain_manager import TerrainManager  
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
@@ -286,6 +286,7 @@ class PointCloudFilter:
         # 4. Plot
         if plot:
             self.visualize_filter_operation(self.surface, source_points, self.grid_y, self.grid_z)
+            self.plot_filter_response_pointcloud_3d(source_points)
         # 5. if you want an incremental convolution commit this: 
         self.surface = None
         return gradient_at_points
@@ -452,7 +453,7 @@ class PointCloudFilter:
         ax2.set_xlabel('X (m)')
         ax2.set_ylabel('Y (m)')
         ax2.set_zlabel('Z (m)')
-        ax2.set_title('Point Cloud - Colored by Filter Response')
+        ax2.set_title('Point Cloud')
         
         # Subplot 3: Filter response as 3D surface (bottom-left)
         ax3 = fig.add_subplot(223, projection='3d')
@@ -744,7 +745,174 @@ class PointCloudFilter:
         # print(f"Colored {len(source_points)} points based on cost values")
         # print(f"Cost range: {cost_min:.3f} to {cost_max:.3f}")
     
+    def plot_cost_map_3d(self, source_points=None, point_size=20, alpha=0.85, elev=15, azim=-30):
+        '''
+        Plot only the 3D cost map with equal axis scaling.
+        point_size: size of each point in the scatter plot (increase for thicker cloud)
+        alpha: transparency of the points
+        '''
+        if source_points is None:
+            source_points = self.points_t
+
+        x_points = np.array([point['position'][0] for point in source_points])
+        y_points = np.array([point['position'][1] for point in source_points])
+        z_points = np.array([point['position'][2] for point in source_points])
+        point_colors = np.array([point['color'] for point in source_points])
+
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+
+        ax.scatter(
+            x_points, y_points, z_points,
+            c=point_colors,
+            s=point_size,
+            alpha=alpha,
+            depthshade=True
+        )
+
+        # Equal axis scaling
+        all_pts = np.column_stack([x_points, y_points, z_points])
+        max_range = np.ptp(all_pts, axis=0).max() / 2.0
+        mid = np.mean(all_pts, axis=0)
+        ax.set_xlim(mid[0] - max_range, mid[0] + max_range)
+        ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
+        ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
+
+        ax.set_xlabel('X (m) - Height', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        
+        # --- CODICE AGGIORNATO QUI ---
+        ax.tick_params(axis='both', which='major', labelsize=15)  # x and y
+        ax.tick_params(axis='z', which='major', labelsize=15)     # z axis
+        # -----------------------------
+
+        # ax.set_title('3D Cost Map', fontsize=13)
+        ax.view_init(elev=elev, azim=azim)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_filter_response_heatmap(self, surface, grid_y, grid_z, point_size=20, alpha=0.85, figsize=(10, 8)):
+        '''
+        Plot only the 2D heatmap of the filter response (from ax1 of visualize_filter_operation).
+        The colormap is remapped to stop at yellow instead of white.
+        point_size: not used here but kept for consistency
+        alpha: transparency of the heatmap
+        figsize: tuple (width, height) of the figure
+        '''
+        # Custom colormap: black -> red -> yellow (stops before white)
+        cmap_hot_yellow = LinearSegmentedColormap.from_list(
+            "hot_yellow",
+            ["black", "red", "yellow"],
+            N=256
+        )
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        im = ax.imshow(
+            surface,
+            extent=[np.min(grid_y), np.max(grid_y), np.min(grid_z), np.max(grid_z)],
+            origin='lower',
+            cmap=cmap_hot_yellow,
+            aspect='auto',
+            alpha=alpha,
+            vmin=np.min(surface),
+            vmax=np.max(surface)
+        )
+
+        cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label('Filter Response Intensity', fontsize=12)
+        cbar.ax.tick_params(labelsize=10)
+
+        ax.set_xlabel('Y (m)', fontsize=12, labelpad=8)
+        ax.set_ylabel('Z (m)', fontsize=12, labelpad=8)
+        ax.set_title('Filter Response Heatmap', fontsize=13)
+        ax.tick_params(axis='both', labelsize=10)
+        ax.grid(True, alpha=0.2, linestyle='--')
+
+        plt.tight_layout()
+        plt.show()
     
+    def plot_filter_response_pointcloud_3d(self, source_points=None, point_size=20, alpha=0.85, figsize=(10, 8), elev=15, azim=-30):
+        '''
+        Plot the 3D point cloud colored by filter response (ax2 of visualize_filter_operation).
+        Colormap stops at yellow instead of white.
+        point_size: size of each point
+        alpha: transparency
+        figsize: tuple (width, height)
+        '''
+        if source_points is None:
+            source_points = self.points_t
+
+        x_points = np.array([point['position'][0] for point in source_points])
+        y_points = np.array([point['position'][1] for point in source_points])
+        z_points = np.array([point['position'][2] for point in source_points])
+
+        # Remap filter response colors using hot_yellow colormap
+        # Re-interpolate surface values at point positions to get scalar response
+        if self.grid_Y is None or self.grid_Z is None or self.surface is None:
+            raise RuntimeError("Surface not computed. Call interpolation_to_surface() and convolution_process() first.")
+
+        # Custom colormap: black -> red -> yellow
+        cmap_hot_yellow = LinearSegmentedColormap.from_list(
+            "hot_yellow",
+            ["black", "red", "yellow"],
+            N=256
+        )
+
+        # Get filter response value at each point
+        response_at_points = griddata(
+            (self.grid_Y.flatten(), self.grid_Z.flatten()),
+            self.surface.flatten(),
+            (y_points, z_points),
+            method="linear",
+            fill_value=0.0,
+        )
+
+        # Normalize [0, 1] for colormap
+        r_min, r_max = np.min(response_at_points), np.max(response_at_points)
+        if r_max > r_min:
+            normalized = (response_at_points - r_min) / (r_max - r_min)
+        else:
+            normalized = np.zeros_like(response_at_points)
+
+        point_colors = cmap_hot_yellow(normalized)[:, :3]
+
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection='3d')
+
+        ax.scatter(
+            x_points, y_points, z_points,
+            c=point_colors,
+            s=point_size,
+            alpha=alpha,
+            depthshade=True
+        )
+
+        # Equal axis scaling
+        all_pts = np.column_stack([x_points, y_points, z_points])
+        max_range = np.ptp(all_pts, axis=0).max() / 2.0
+        mid = np.mean(all_pts, axis=0)
+        ax.set_xlim(mid[0] - max_range, mid[0] + max_range)
+        ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
+        ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
+
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
+        # ax.set_title('Height Map',fontsize=20, pad=-100)
+        ax.view_init(elev=elev, azim=azim)
+        # Add colorbar via ScalarMappable
+        sm = plt.cm.ScalarMappable(cmap=cmap_hot_yellow, norm=plt.Normalize(vmin=r_min, vmax=r_max))
+        sm.set_array([])
+        # cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.1)
+        # cbar.set_label('Filter Response Intensity', fontsize=11)
+        # cbar.ax.tick_params(labelsize=10)
+
+        plt.tight_layout()
+        plt.show()
+
     
 def main():
     
@@ -757,7 +925,7 @@ def main():
     # Ly = 10                   
     # terrain  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type="custom_gaussians")
     # terrain = TerrainManager()
-    terrain  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type="hemisphere")
+    terrain  = TerrainManager(grid_size=100,wall_depth =3,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type="rock")
 
     pc = terrain.point_cloud
     # Point cloud filter test
@@ -792,7 +960,14 @@ def main():
     # print("\n[TEST] === Laplacian of Gaussian (LoG) ===")
     # kernel = [pc_filter.log_kernel] 
     # pc_filter.filter_process_points_pipeline(kernel, plot=True)
-    
+    # Default point size
+    pc_filter.plot_cost_map_3d()
+
+    # Con punti più grandi
+    pc_filter.plot_cost_map_3d(point_size=50)
+
+    # Con punti molto grandi e più trasparenti
+    pc_filter.plot_cost_map_3d(point_size=80, alpha=0.6)
 
 if __name__ == "__main__":
     main()
