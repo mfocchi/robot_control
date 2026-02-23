@@ -176,7 +176,7 @@ class TerrainManager:
 
         # 2) Ridges / dihedrals with directional high gradients
         # Create vertical ridge
-        ridge_start = int(grid_size * 0.3)
+        ridge_start = int(grid_size * 0.6)
         ridge_end = min(ridge_start + 15, grid_size)
         X[ridge_start:ridge_end, :] = X[ridge_start:ridge_end, :] + max_ridge_depth
 
