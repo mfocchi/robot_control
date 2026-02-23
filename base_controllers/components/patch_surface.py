@@ -1,5 +1,5 @@
-from terrain_manager import TerrainManager
-from point_cloud_filter import PointCloudFilter
+from .terrain_manager import TerrainManager
+from .point_cloud_filter import PointCloudFilter
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm

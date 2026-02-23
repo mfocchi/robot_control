@@ -1,4 +1,4 @@
-from terrain_manager import TerrainManager  
+from .terrain_manager import TerrainManager  
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
