@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import importlib
 import numpy as np
 from termcolor import colored
 from datetime import datetime
@@ -11,7 +12,12 @@ import matplotlib.pyplot as plt
 from algo_patch import CrossEntropyMethodMixed
 from base_controllers.components.terrain_manager import TerrainManager
 from ParabolicOpt import ParabolicOptimizer
-from params import *
+
+# from params import *
+params_module_name = os.environ.get("PARAMS_FILES", "params")
+params_module = importlib.import_module(params_module_name)
+globals().update({k: v for k, v in vars(params_module).items() if not k.startswith('_')})
+# from params import *
 from Plot_result import PlotResultCemMjumps
 from collections import Counter
 
