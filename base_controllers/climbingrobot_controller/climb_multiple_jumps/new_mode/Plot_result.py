@@ -1,25 +1,21 @@
 import json
 import matplotlib
-matplotlib.use('TkAgg')
+matplotlib.use('Qt5Agg')
 from typing import Any, List, Optional
 from attr import dataclass
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from matplotlib import colors
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 import numpy as np
 import os
-from scipy.interpolate import griddata
-from scipy.spatial import ConvexHull 
+from scipy.spatial import ConvexHull
 from params import *
-import matplotlib
-matplotlib.use('Qt5Agg')
 
 plot_str = os.environ.get("FOLDER_PLOT") 
 if plot_str:
     FOLDER_MAIN = np.array(json.loads(plot_str))
 else:
-    FOLDER_MAIN = "result/common"
+    FOLDER_MAIN = "result/common_parabolic"
 
 FILE_TERRAIN_POINTS = f"{FOLDER_MAIN}/actual_point_terrain.json"
 FILE_TERRAIN_PATCHES = f"{FOLDER_MAIN}/actual_patch_terrain.json"
@@ -173,48 +169,40 @@ class PlotResultCemMjumps:
         return data_terrain_patches
     
     def load_all_comb_history(self):
-        """
-        Carica i report completi 'all_comb_in_iter_X_report.json'.
-        Controlla se la cartella e i file esistono.
-        """
+        """Load all combination reports 'all_comb_in_iter_X_report.json'."""
         self.all_comb_data = []
-        
+
         if not os.path.exists(ITERATIONS_FOLDER):
-            print(f"[WARNING] La cartella {ITERATIONS_FOLDER} non esiste.")
+            print(f"[WARNING] Folder {ITERATIONS_FOLDER} does not exist.")
             return
 
-        # Trova tutti i file che corrispondono al pattern
-        files = [f for f in os.listdir(ITERATIONS_FOLDER) 
+        # Find all files matching the expected pattern
+        files = [f for f in os.listdir(ITERATIONS_FOLDER)
                  if f.startswith("all_comb_in_iter_") and f.endswith(".json")]
-        
+
         if not files:
-            print(f"[WARNING] Nessun file 'all_comb' trovato in {ITERATIONS_FOLDER}.")
+            print(f"[WARNING] No 'all_comb' files found in {ITERATIONS_FOLDER}.")
             return
 
-        # Ordina i file in base al numero dell'iterazione
-        # Formato atteso: all_comb_in_iter_{k}_report.json
+        # Sort by iteration number; expected format: all_comb_in_iter_{k}_report.json
         def extract_iter_num(filename):
             try:
-                # Split: ['all', 'comb', 'in', 'iter', 'NUM', 'report.json']
-                parts = filename.split('_')
-                return int(parts[4])
+                return int(filename.split('_')[4])
             except (IndexError, ValueError):
                 return 0
-        
-        files.sort(key=extract_iter_num)
 
-        print(f"[INFO] Trovati {len(files)} file di report combinazioni. Caricamento in corso...")
+        files.sort(key=extract_iter_num)
+        print(f"[INFO] Found {len(files)} combination report files. Loading...")
 
         for f_name in files:
             full_path = os.path.join(ITERATIONS_FOLDER, f_name)
             try:
                 with open(full_path, 'r') as f:
-                    data = json.load(f)
-                    self.all_comb_data.append(data)
+                    self.all_comb_data.append(json.load(f))
             except Exception as e:
-                print(f"[ERROR] Errore nel caricamento di {f_name}: {e}")
-                
-        print(f"[INFO] Caricamento completato.")
+                print(f"[ERROR] Failed to load {f_name}: {e}")
+
+        print("[INFO] Loading completed.")
     
     def project_point_to_surface(self, point):
         target_y, target_z = point[1], point[2]
@@ -312,9 +300,9 @@ class PlotResultCemMjumps:
                 alpha=0.7, rwidth=0.8)
         
         # 4. Formattazione
-        ax.set_title(f'Jump Count Distribution {title_suffix}', fontsize=14)
-        ax.set_xlabel('Number of Jumps', fontsize=12)
-        ax.set_ylabel('Frequency (Elites)', fontsize=12)
+        ax.set_title(f'Jump Count Distribution {title_suffix}', fontsize=20, fontweight='bold')
+        ax.set_xlabel('Number of Jumps', fontsize=20)
+        ax.set_ylabel('Frequency (Elites)', fontsize=20)
         ax.set_xticks(range(int(min_j), int(max_j) + 1))
         ax.grid(axis='y', linestyle='--', alpha=0.5)
         
@@ -334,7 +322,7 @@ class PlotResultCemMjumps:
             print("WARNING: No data available for plotting fitness.")
             return
 
-        # 1. Preparazione dell'asse
+        # 1. Prepare axis
         created = False
         if ax is None:
             fig, ax = plt.subplots(figsize=(12, 7))
@@ -342,7 +330,7 @@ class PlotResultCemMjumps:
         else:
             fig = ax.get_figure()
 
-        # 2. Separazione dei dati in due gruppi: "Normali" e "Best Ever"
+        # 2. Split data into two groups: normal elites and best-ever
         x_normal, y_normal = [], []
         x_best, y_best = [], []
 
@@ -374,8 +362,7 @@ class PlotResultCemMjumps:
             print("WARNING: No fitness values found below threshold.")
             return
 
-        # 3. Configurazione della Colormap (solo per i punti "normali")
-        # Usiamo min/max totali per avere una scala coerente
+        # 3. Colormap configuration (normal points only; min/max from full data for consistent scale)
         vmin = min(all_fitness_values_for_norm)
         vmax = max(all_fitness_values_for_norm)
         norm = Normalize(vmin=vmin, vmax=vmax)
@@ -389,9 +376,9 @@ class PlotResultCemMjumps:
             ax.scatter(x_best, y_best, c='red',
                        s=50, edgecolors='black', linewidths=0.5, alpha=1.0, zorder=4,
                        label='Best Ever Reached')
-        ax.set_title('Elite Fitness Distribution', fontsize=14)
-        ax.set_xlabel('Iteration', fontsize=12)
-        ax.set_ylabel('Fitness Value', fontsize=12)
+        ax.set_title('Elite Fitness Distribution', fontsize=20, fontweight='bold')
+        ax.set_xlabel('Iteration', fontsize=20)
+        ax.set_ylabel('Fitness Value', fontsize=20)
         ax.axhline(y=self.best_fit_ever, color='red', linestyle='--', linewidth=1, alpha=0.5, zorder=2)
 
         ax.grid(True, linestyle=':', alpha=0.5, zorder=0)
@@ -413,18 +400,18 @@ class PlotResultCemMjumps:
             print(f"Fitness plot saved to: {save_path}")
             plt.show()
     
-    def plot_mesh_pc_traj(self, ax=None, show_cost=True):
+    def plot_mesh_pc_traj(self, ax=None, show_cost=True, elev=30, azim=-60):
         """
-        Visualizza la migliore traiettoria assoluta (best_ever) sul terreno 3D.
-        Flag show_cost: se True, colora i punti del terreno in base al loro costo.
+        Display the best-ever trajectory on the 3D terrain.
+        Use elev/azim to set the initial 3D viewing angle (interactive rotation is available).
         """
         
-        # 1. Controllo disponibilità dati
+        # 1. Check data availability
         if not self.best_traj_ever:
-            print("WARNING: Nessuna traiettoria 'best_ever' trovata.")
+            print("WARNING: No 'best_ever' trajectory found.")
             return
 
-        # Setup dell'asse 3D
+        # Setup 3D axis
         if ax is None:
             fig = plt.figure(figsize=(14, 9))
             ax = fig.add_subplot(111, projection='3d')
@@ -433,25 +420,19 @@ class PlotResultCemMjumps:
             fig = ax.get_figure()
             created = False
 
-        # 2. Render del Terreno
+        # 2. Render terrain
         px = np.array([p['position'][0] for p in self.points_t_data])
         py = np.array([p['position'][1] for p in self.points_t_data])
         pz = np.array([p['position'][2] for p in self.points_t_data])
         
         if show_cost:
-            # Estraiamo i costi per ogni punto
             costs = np.array([p['cost'] for p in self.points_t_data])
-            # Creiamo lo scatter con colormap
-            sc_terrain = ax.scatter(px, py, pz, c=costs,cmap='RdYlGn_r', s=1, alpha=1, 
-                                   label='Terrain', zorder=1)
-            # Aggiungiamo una colorbar dedicata al costo del terreno
-            cbar = fig.colorbar(sc_terrain, ax=ax, pad=0.1, shrink=0.6)
-            cbar.set_label('Terrain Point Cost', rotation=270, labelpad=15)
+            ax.scatter(px, py, pz, c=costs, cmap='RdYlGn_r', s=1, alpha=1,
+                       label='Terrain', zorder=1)
         else:
-            # Grigio uniforme come prima
             ax.scatter(px, py, pz, c='gray', s=1, alpha=0.3, label='Terrain', zorder=1)
 
-        # 3. Disegno dei Segmenti della Traiettoria
+        # 3. Draw trajectory segments
         all_x, all_y, all_z = [px], [py], [pz] 
         landing_points = []
         blue_label_added = False
@@ -515,18 +496,18 @@ class PlotResultCemMjumps:
         ax.set_ylim(mid_y - max_range, mid_y + max_range)
         ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
-        # 6. Titolo e Legenda
+        # 6. Title and legend
         cost_status = "with Cost Map" if show_cost else ""
         title_str = f"Best Trajectory {cost_status}\n(Fitness: {self.best_fit_ever:.4f})"
         if self.best_achieved_target_ever:
             distance = np.linalg.norm(np.array(self.pf) - np.array(self.best_achieved_target_ever).flatten())
             title_str += f"\nGoal Error: {distance:.4f}m"
-        ax.set_title(title_str, fontsize=13, fontweight='bold')
-        ax.set_xlabel("X (m)")
-        ax.set_ylabel("Y (m)")
-        ax.set_zlabel("Z (m)")
-        ax.legend(loc='upper left', fontsize='small')
-        ax.view_init(elev=30, azim=-60)
+        ax.set_title(title_str, fontsize=20, fontweight='bold')
+        ax.set_xlabel('X (m)', fontsize=20)
+        ax.set_ylabel('Y (m)', fontsize=20)
+        ax.set_zlabel('Z (m)', fontsize=20)
+        ax.legend(loc='upper left', fontsize=11)
+        ax.view_init(elev=elev, azim=azim)
 
         if created:
             
@@ -689,10 +670,10 @@ class PlotResultCemMjumps:
                        label='Best Contact Points')
         
         # 6. Formatting
-        ax.set_xlabel('Y (Width)', fontsize=12)
-        ax.set_ylabel('Z (Height)', fontsize=12)
+        ax.set_xlabel('Y (Width)', fontsize=20)
+        ax.set_ylabel('Z (Height)', fontsize=20)
         ax.grid(True, linestyle='--', alpha=0.4)
-        
+
         if compare and not animated:
             # Compare mode: show first and last iteration in separate windows
             if len(iteration_data) < 2:
@@ -742,10 +723,10 @@ class PlotResultCemMjumps:
                           alpha=0.8, edgecolors='white', linewidths=0.5, zorder=5,
                           label=f'Iteration {data["iter_num"]}')
                 
-                current_ax.set_title(f'2D Contact Points - {iter_name} Iteration ({data["iter_num"]})', 
-                            fontsize=14, fontweight='bold')
-                current_ax.set_xlabel('Y (Width)', fontsize=12)
-                current_ax.set_ylabel('Z (Height)', fontsize=12)
+                current_ax.set_title(f'2D Contact Points - {iter_name} Iteration ({data["iter_num"]})',
+                            fontsize=20, fontweight='bold')
+                current_ax.set_xlabel('Y (Width)', fontsize=20)
+                current_ax.set_ylabel('Z (Height)', fontsize=20)
                 current_ax.grid(True, linestyle='--', alpha=0.4)
                 current_ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
             
@@ -774,8 +755,8 @@ class PlotResultCemMjumps:
                 ax.scatter(data['y'], data['z'], c=[data['color']], s=40, 
                           alpha=0.6, edgecolors='white', linewidths=0.5, zorder=5)
             
-            ax.set_title('2D Contact Points Layout - All Iterations', 
-                        fontsize=14, fontweight='bold')
+            ax.set_title('2D Contact Points Layout - All Iterations',
+                        fontsize=20, fontweight='bold')
             ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
             
             if created:
@@ -819,8 +800,8 @@ class PlotResultCemMjumps:
                 title_text.set_text(f'Iteration: {iteration_data[frame]["iter_num"]}')
                 return scatter_objects + [title_text]
             
-            ax.set_title('2D Contact Points Evolution (Animated)', 
-                        fontsize=14, fontweight='bold')
+            ax.set_title('2D Contact Points Evolution (Animated)',
+                        fontsize=20, fontweight='bold')
             ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
             
             anim = FuncAnimation(fig, update, init_func=init,
@@ -833,8 +814,9 @@ class PlotResultCemMjumps:
                 fig.tight_layout()
                 plt.show()
     
-    def plot_3d_iterations_layout(self, ax=None, animated=False, compare=False):
-        """3D visualization of contact points with terrain, patch contours, and optional animation."""
+    def plot_3d_iterations_layout(self, ax=None, animated=False, compare=False, elev=25, azim=-50):
+        """3D visualization of contact points with terrain, patch contours, and optional animation.
+        Use elev/azim to set the initial viewing angle (interactive rotation is available)."""
         
         # 1. Setup 3D axis
         created = False
@@ -965,10 +947,10 @@ class PlotResultCemMjumps:
         ax.set_zlim(mid_z - max_range, mid_z + max_range)
         
         # 9. Labels
-        ax.set_xlabel('X (m)', fontsize=11)
-        ax.set_ylabel('Y (m)', fontsize=11)
-        ax.set_zlabel('Z (m)', fontsize=11)
-        ax.view_init(elev=25, azim=-50)
+        ax.set_xlabel('X (m)', fontsize=20)
+        ax.set_ylabel('Y (m)', fontsize=20)
+        ax.set_zlabel('Z (m)', fontsize=20)
+        ax.view_init(elev=elev, azim=azim)
         
         if compare and not animated:
             # Compare mode: show first and last iteration in separate windows
@@ -1020,12 +1002,12 @@ class PlotResultCemMjumps:
                 current_ax.set_ylim(mid_y - max_range, mid_y + max_range)
                 current_ax.set_zlim(mid_z - max_range, mid_z + max_range)
                 
-                current_ax.set_title(f'3D Contact Points - {iter_name} Iteration ({data["iter_num"]})', 
-                            fontsize=14, fontweight='bold')
-                current_ax.set_xlabel('X (m)', fontsize=11)
-                current_ax.set_ylabel('Y (m)', fontsize=11)
-                current_ax.set_zlabel('Z (m)', fontsize=11)
-                current_ax.view_init(elev=25, azim=-50)
+                current_ax.set_title(f'3D Contact Points - {iter_name} Iteration ({data["iter_num"]})',
+                            fontsize=20, fontweight='bold')
+                current_ax.set_xlabel('X (m)', fontsize=20)
+                current_ax.set_ylabel('Y (m)', fontsize=20)
+                current_ax.set_zlabel('Z (m)', fontsize=20)
+                current_ax.view_init(elev=elev, azim=azim)
                 current_ax.legend(loc='upper left', fontsize=9)
             
             fig1.tight_layout()
@@ -1053,9 +1035,9 @@ class PlotResultCemMjumps:
                           c=[data['color']], s=50, alpha=0.7,
                           edgecolors='white', linewidths=0.5, zorder=5)
             
-            ax.set_title('3D Contact Points Layout - All Iterations', 
-                        fontsize=14, fontweight='bold')
-            ax.legend(loc='upper left', fontsize=9)
+            ax.set_title('3D Contact Points Layout - All Iterations',
+                        fontsize=20, fontweight='bold')
+            ax.legend(loc='upper left', fontsize=11)
             
             if created:
                 plt.tight_layout()
@@ -1103,9 +1085,9 @@ class PlotResultCemMjumps:
                 
                 return scatter_objects + [title_text]
             
-            ax.set_title('3D Contact Points Evolution (Animated)', 
-                        fontsize=14, fontweight='bold')
-            ax.legend(loc='upper left', fontsize=9)
+            ax.set_title('3D Contact Points Evolution (Animated)',
+                        fontsize=20, fontweight='bold')
+            ax.legend(loc='upper left', fontsize=11)
             
             anim = FuncAnimation(fig, update, init_func=init,
                                frames=len(iteration_data),
@@ -1118,14 +1100,14 @@ class PlotResultCemMjumps:
                 plt.tight_layout()
                 plt.show()
                     
-    def plot_best_per_iteration_grid(self, show_cost=True, plots_per_figure=5):
-        """
-        Visualizza il miglior risultato per ogni iterazione in una griglia di subplot.
-        Include il rombo (Achieved Target) e la linea di errore rispetto al goal.
+    def plot_best_per_iteration_grid(self, show_cost=True, plots_per_figure=5, elev=30, azim=-60):
+        """Display the best result for each iteration in a grid of subplots.
+        Includes achieved target marker and goal error line.
+        Use elev/azim to set the initial 3D viewing angle.
         """
         num_iters = len(self.all_elites)
         if num_iters == 0:
-            print("WARNING: Nessuna iterazione trovata.")
+            print("WARNING: No iteration data found.")
             return
 
         num_figures = int(np.ceil(num_iters / plots_per_figure))
@@ -1147,16 +1129,17 @@ class PlotResultCemMjumps:
                 iter_idx = start_iter + i
                 ax = fig.add_subplot(1, plots_per_figure, i + 1, projection='3d')
                 
-                # Selezione miglior elite dell'iterazione
+                # Select best elite of the iteration
                 elites_this_iter = self.all_elites[iter_idx]
-                if not elites_this_iter: continue
+                if not elites_this_iter:
+                    continue
                 best_elite = min(elites_this_iter, key=lambda e: e.fitness)
-                
-                # 1. Plot Terreno
-                ax.scatter(px, py, pz, c=costs if show_cost else 'gray', 
+
+                # 1. Plot terrain
+                ax.scatter(px, py, pz, c=costs if show_cost else 'gray',
                            cmap='RdYlGn_r', s=0.5, alpha=0.3)
-                
-                # 2. Plot Traiettoria
+
+                # 2. Plot trajectory segments
                 for segment in best_elite.traj:
                     seg_np = np.array(segment)
                     if seg_np.shape[0] == 3 and seg_np.shape[1] != 3:
@@ -1165,39 +1148,36 @@ class PlotResultCemMjumps:
                         xs, ys, zs = seg_np[:, 0], seg_np[:, 1], seg_np[:, 2]
                     ax.plot(xs, ys, zs, color='blue', linewidth=1.5, alpha=0.8)
 
-                # 3. Marker Start e Desired Goal (p0, pf)
+                # 3. Start and desired goal markers
                 ax.scatter(self.p0[0], self.p0[1], self.p0[2], c='lime', s=60, marker='^', edgecolors='black')
                 ax.scatter(self.pf[0], self.pf[1], self.pf[2], c='red', s=60, marker='X', edgecolors='black')
-                
-                # 4. Plot Achieved Target (Il rombo come richiesto)
+
+                # 4. Achieved target marker and goal error line
                 if best_elite.achieved_target:
                     achieved = np.array(best_elite.achieved_target).flatten()
-                    # Rombo arancione
-                    ax.scatter(achieved[0], achieved[1], achieved[2], c='orange', s=70, 
+                    ax.scatter(achieved[0], achieved[1], achieved[2], c='orange', s=70,
                                marker='D', edgecolors='black', linewidths=1, zorder=16)
-                    
-                    # Linea tratteggiata rossa di discrepanza dal goal desiderato
                     ax.plot([self.pf[0], achieved[0]], [self.pf[1], achieved[1]], [self.pf[2], achieved[2]],
                             'r--', linewidth=1.5, alpha=0.7, zorder=14)
-                
-                # 5. Titolo e Formattazione
+
+                # 5. Title and formatting
                 ax.set_title(f"Iter: {iter_idx+1}\nFit: {best_elite.fitness:.4f}", fontsize=10, fontweight='bold')
-                
-                # Scaling 1:1:1
+
+                # Equal 1:1:1 scaling
                 all_pts = np.array([p['position'] for p in self.points_t_data])
                 mid_x, mid_y, mid_z = all_pts.mean(axis=0)
                 max_range = (all_pts.max(axis=0) - all_pts.min(axis=0)).max() / 2.0
                 ax.set_xlim(mid_x - max_range, mid_x + max_range)
                 ax.set_ylim(mid_y - max_range, mid_y + max_range)
                 ax.set_zlim(mid_z - max_range, mid_z + max_range)
-                
+
                 ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
-                ax.view_init(elev=30, azim=-60)
+                ax.view_init(elev=elev, azim=azim)
 
             plt.tight_layout()
             save_path = f'{FOLDER_MAIN}/grid_best_iter_batch_{fig_idx}.png'
             fig.savefig(save_path, dpi=150)
-            print(f"Salvataggio griglia con target: {save_path}")
+            print(f"[PLOT] Grid with target saved to: {save_path}")
             
             save_path_pdf = f'{FOLDER_MAIN}/grid_best_iter_batch_{fig_idx}.pdf'
             fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
@@ -1205,80 +1185,55 @@ class PlotResultCemMjumps:
             plt.show()
 
     def plot_convergence_histogram(self, ax=None):
-            """
-            Plotta un istogramma stacked bar chart.
-            Asse X: Iterazioni
-            Asse Y: Dimensione Popolazione
-            Colori: Verde (Conversi), Rosso (Non Conversi)
-            """
-            # Assicuriamoci che i dati siano caricati
-            if not hasattr(self, 'all_comb_data') or not self.all_comb_data:
-                self.load_all_comb_history()
-                if not self.all_comb_data:
-                    return
+        """Stacked bar chart: X=Iterations, Y=Population size, colors=Converged/Failed."""
+        if not hasattr(self, 'all_comb_data') or not self.all_comb_data:
+            self.load_all_comb_history()
+            if not self.all_comb_data:
+                return
 
-            # Preparazione dati per il plot
-            iterations = []
-            converged_counts = []
-            failed_counts = []
-            
-            for entry in self.all_comb_data:
-                iterations.append(entry['iteration'])
-                steps = entry.get('steps', [])
-                
-                # Conta quanti hanno 'converged' == True
-                n_conv = sum(1 for s in steps if s.get('converged', False) is True)
-                n_fail = len(steps) - n_conv
-                
-                converged_counts.append(n_conv)
-                failed_counts.append(n_fail)
+        # Collect data
+        iterations, converged_counts, failed_counts = [], [], []
+        for entry in self.all_comb_data:
+            iterations.append(entry['iteration'])
+            steps = entry.get('steps', [])
+            n_conv = sum(1 for s in steps if s.get('converged', False) is True)
+            converged_counts.append(n_conv)
+            failed_counts.append(len(steps) - n_conv)
 
-            # Creazione Plot
-            created = False
-            if ax is None:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                created = True
-            else:
-                fig = ax.get_figure()
+        created = False
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            created = True
+        else:
+            fig = ax.get_figure()
 
-            # Larghezza barre
-            width = 0.6
-            
-            # Barre "Conversi" (parte bassa)
-            p1 = ax.bar(iterations, converged_counts, width, label='Converged', color='limegreen', edgecolor='black', alpha=0.8)
-            
-            # Barre "Non Conversi" (parte alta, bottom=converged_counts)
-            p2 = ax.bar(iterations, failed_counts, width, bottom=converged_counts, label='Failed', color='tomato', edgecolor='black', alpha=0.8)
+        width = 0.6
+        ax.bar(iterations, converged_counts, width, label='Converged', color='limegreen', edgecolor='black', alpha=0.8)
+        ax.bar(iterations, failed_counts, width, bottom=converged_counts, label='Failed', color='tomato', edgecolor='black', alpha=0.8)
 
-            # Etichette e Titoli
-            ax.set_xlabel('Iteration', fontsize=12)
-            ax.set_ylabel('Population Size (Count)', fontsize=12)
-            ax.set_title('Convergence Rate per Iteration', fontsize=14, fontweight='bold')
-            ax.legend(loc='best')
-            ax.grid(axis='y', linestyle='--', alpha=0.5)
+        ax.set_xlabel('Iteration', fontsize=20)
+        ax.set_ylabel('Population Size (Count)', fontsize=20)
+        ax.set_title('Convergence Rate per Iteration', fontsize=20, fontweight='bold')
+        ax.legend(loc='best', fontsize=12)
+        ax.grid(axis='y', linestyle='--', alpha=0.5)
+        ax.set_xticks(iterations)
 
-            # Imposta i tick dell'asse X come interi
-            ax.set_xticks(iterations)
+        # Show convergence percentage above each bar
+        for i, (conv, fail) in enumerate(zip(converged_counts, failed_counts)):
+            total = conv + fail
+            if total > 0:
+                perc = (conv / total) * 100
+                ax.text(iterations[i], total + (total * 0.02), f"{perc:.1f}%",
+                        ha='center', va='bottom', fontsize=9, fontweight='bold', color='black')
 
-            # Aggiungi etichette numeriche sopra le barre (opzionale, utile per vedere i numeri esatti)
-            # Mostra la percentuale di convergenza
-            for i, (conv, fail) in enumerate(zip(converged_counts, failed_counts)):
-                total = conv + fail
-                if total > 0:
-                    perc = (conv / total) * 100
-                    ax.text(iterations[i], total + (total*0.02), f"{perc:.1f}%", 
-                            ha='center', va='bottom', fontsize=8, fontweight='bold', color='black')
-
-            if created:
-                plt.tight_layout()
-                save_path = f'{FOLDER_MAIN}/plot_convergence_histogram.png'
-                fig.savefig(save_path, dpi=150)
-                
-                save_path_pdf = f'{FOLDER_MAIN}/plot_convergence_histogram.pdf'
-                fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
-                
-                print(f"[PLOT] Istogramma convergenza salvato in: {save_path}")
-                plt.show()
+        if created:
+            plt.tight_layout()
+            save_path = f'{FOLDER_MAIN}/plot_convergence_histogram.png'
+            fig.savefig(save_path, dpi=150)
+            save_path_pdf = f'{FOLDER_MAIN}/plot_convergence_histogram.pdf'
+            fig.savefig(save_path_pdf, bbox_inches='tight', pad_inches=0.23)
+            print(f"[PLOT] Convergence histogram saved to: {save_path}")
+            plt.show()
 
 def main():
     """Main execution function."""
