@@ -1,15 +1,15 @@
 #!/bin/bash
 
-name_folder="test_i_A"
+name_folder="test_i_E"
 
-NUM_RUNS=5
-export PARAMS_FILES="params_i"
-TERRAIN_TYPE="hemisphere" #"gaussian_bumps" | hemisphere
+NUM_RUNS=10
+export PARAMS_FILES="params"
+TERRAIN_TYPE="gaussian_bumps" #"gaussian_bumps" | hemisphere
 PERC_MIN_PROB=0.8
 
-# Upward
-START_POINT="[0.5, 2.5, -7.5]"
-GOAL_POINT="[0.5, 6.5,-2.5]"
+START_POINT="[0.5, 6.55, -18.49]" # Downward
+GOAL_POINT="[0.5, 2.47, -6.3]"
+
 
 echo ""
 echo "=================================================="
@@ -36,7 +36,7 @@ do
 
     echo "Run $i completed."
     echo ""
-    sleep 2
+    sleep 10
 done
 
 echo "All experiments completed."

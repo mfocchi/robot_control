@@ -1,14 +1,14 @@
 #!/bin/bash
 
-name_folder="test_r_A"
+name_folder="test_r_E"
 
-NUM_RUNS=5
+NUM_RUNS=10
 export PARAMS_FILES="params"
 TERRAIN_TYPE="gaussian_bumps" #"gaussian_bumps" | hemisphere
 PERC_MIN_PROB=0.8
 
-START_POINT="[0.5, 5.5, -8.5]" # Downward
-GOAL_POINT="[0.5, 2.5, -1.5]"
+START_POINT="[0.5, 6.55, -18.49]" # Downward
+GOAL_POINT="[0.5, 2.47, -6.3]"
 
 
 echo ""
@@ -32,11 +32,11 @@ do
 
     # EXPERIMENT_DIR="$DIR_NAME" CEM_MIN_PROB="$CURRENT_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" python3 Main_cemmulti_simple.py
     # EXPERIMENT_DIR="$DIR_NAME" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" TERRAIN_TYPE="$TERRAIN_TYPE" python3 Main_cemmulti_parabolic.py
-    EXPERIMENT_DIR="$DIR_NAME" PARAMS_FILES="$PARAMS_FILES" CEM_MIN_PROB="$PERC_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" TERRAIN_TYPE="$TERRAIN_TYPE" python3 Main_cemmulti_patch.py
+    EXPERIMENT_DIR="$DIR_NAME" PARAMS_FILES="$PARAMS_FILES" CEM_MIN_PROB="$PERC_MIN_PROB" P0_INIT_STR="$START_POINT" PF_INIT_STR="$GOAL_POINT" TERRAIN_TYPE="$TERRAIN_TYPE" python3 Main_cemmulti_patch_process.py
 
     echo "Run $i completed."
     echo ""
-    sleep 2
+    sleep 10
 done
 
 echo "All experiments completed."

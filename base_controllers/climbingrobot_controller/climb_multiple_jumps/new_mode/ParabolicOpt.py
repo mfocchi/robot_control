@@ -134,14 +134,16 @@ class ParabolicOptimizer:
             dist_penalty = dist_to_goal * 1000.0
             
             fitness_score = -(base_penalty + progress_penalty + dist_penalty)  # Negative for maximization
-            
+            energy_cost = 0.0
             avg_jump_landing_cost = 0.0
             waypoint_cost = 0.0
+            cost_dist = 0.0
+            terrain_cost = 0.0
         else:
             waypoint_cost = (MAX_JUMP - total_jump) * fitness_weights[5]
             cost_dist = (total_linear_dist/total_jump) * fitness_weights[4]
-            energy_cost = np.log(total_consumed_energy + 1) * fitness_weights[1] # ha il log perche e' esponenziale
-            terrain_cost = (total_landing_cost/total_jump) * fitness_weights[3]
+            energy_cost = (np.log(total_consumed_energy + 1)/total_jump) * fitness_weights[1] # ha il log perche e' esponenziale
+            terrain_cost = (total_landing_cost) * fitness_weights[3]
             fitness_score = -(waypoint_cost + energy_cost + cost_dist + terrain_cost)  # Negative for maximization
 
         print("xd value: " , xd)    
@@ -149,9 +151,9 @@ class ParabolicOptimizer:
         
         status_msg = "CONVERGED" if all_converged else "FAILED"
         print(f"--- Evaluation Results ---")
-        print(f"Status: {status_msg}, Waypoints Used: {total_jump}/{MAX_JUMP}, Total Energy: {total_consumed_energy:.2f}, Terrain Cost: {total_landing_cost:.2f}")
+        print(f"Status: {status_msg}, Waypoints Used: {total_jump}/{MAX_JUMP}, energy_cost: {energy_cost:.2f}, terrain_cost: {terrain_cost:.2f}, waypoint_cost: {waypoint_cost:.2f}, cost_dist: {cost_dist:.2f}")
         print(f"--------------------------")
-        
+        # breakpoint()
         return {
             'fitness':  fitness_score,  # This is now a FITNESS (maximize this value, 0 is best)
             'points': jump_log_points,

@@ -845,75 +845,108 @@ class PointCloudFilter:
             source_points = self.points_t
 
         x_points = np.array([point['position'][0] for point in source_points])
-        y_points = np.array([point['position'][1] for point in source_points])
-        z_points = np.array([point['position'][2] for point in source_points])
+        y = np.array([p['position'][1] for p in self.points_t_data])
+        z = np.array([p['position'][2] for p in self.points_t_data])
+        costs = np.array([p['cost'] for p in self.points_t_data])
 
-        # Remap filter response colors using hot_yellow colormap
-        # Re-interpolate surface values at point positions to get scalar response
-        if self.grid_Y is None or self.grid_Z is None or self.surface is None:
-            raise RuntimeError("Surface not computed. Call interpolation_to_surface() and convolution_process() first.")
-
-        # Custom colormap: black -> red -> yellow
+        # 3. Create Custom Colormap (Black -> Red -> Yellow)
         cmap_hot_yellow = LinearSegmentedColormap.from_list(
-            "hot_yellow",
-            ["black", "red", "yellow"],
-            N=256
+            "hot_yellow", ["black", "red", "yellow"], N=256
         )
 
-        # Get filter response value at each point
-        response_at_points = griddata(
-            (self.grid_Y.flatten(), self.grid_Z.flatten()),
-            self.surface.flatten(),
-            (y_points, z_points),
-            method="linear",
-            fill_value=0.0,
-        )
+        # Triangulation on Y-Z plane
+        triang = mtri.Triangulation(y, z)
+        
+        # Colorazione basata sul costo (normalizzazione inversa se il costo alto è "cattivo")
+        # Se vuoi che il giallo sia il costo minore (migliore), usa costs.min/max normalmente
+        norm = Normalize(vmin=costs.min(), vmax=costs.max())
+        cost_triangles = costs[triang.triangles].mean(axis=1)
+        colors = cmap_hot_yellow(norm(cost_triangles))
 
-        # Normalize [0, 1] for colormap
-        r_min, r_max = np.min(response_at_points), np.max(response_at_points)
-        if r_max > r_min:
-            normalized = (response_at_points - r_min) / (r_max - r_min)
-        else:
-            normalized = np.zeros_like(response_at_points)
+        # Build and add the mesh
+        vertices = np.column_stack((x, y, z))
+        triangles_3d = vertices[triang.triangles]
+        
+        mesh = Poly3DCollection(triangles_3d, facecolors=colors, alpha=alpha_mesh, 
+                                edgecolors='none', antialiased=True, zorder=1)
+        ax.add_collection3d(mesh)
 
-        point_colors = cmap_hot_yellow(normalized)[:, :3]
+        # 4. Trajectories
+        all_coords = [vertices]
+        landing_points = []
+        
+        labels_added = {"active": False, "stationary": False}
 
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection='3d')
+        for segment in self.best_traj_ever:
+            s_np = np.array(segment)
+            # Fix shape if needed (3, N) -> (N, 3)
+            if s_np.shape[0] == 3 and s_np.shape[1] != 3:
+                s_np = s_np.T
+            
+            x_s, y_s, z_s = s_np[:, 0], s_np[:, 1], s_np[:, 2]
+            dist = np.linalg.norm(s_np[0] - s_np[-1])
+            
+            if dist < 1e-3:
+                color, label = 'cyan', ("Stationary Jump" if not labels_added["stationary"] else "")
+                labels_added["stationary"] = True
+            else:
+                # Usiamo un blu elettrico o bianco per contrastare sul fondo scuro/rosso
+                color, label = '#00CCFF', ("Active Trajectory" if not labels_added["active"] else "")
+                labels_added["active"] = True
+                
+            ax.plot(x_s, y_s, z_s, color=color, linewidth=2.5, zorder=10, label=label)
+            landing_points.append(s_np[0])
+            landing_points.append(s_np[-1])
+            all_coords.append(s_np)
 
-        ax.scatter(
-            x_points, y_points, z_points,
-            c=point_colors,
-            s=point_size,
-            alpha=alpha,
-            depthshade=True
-        )
+        # 5. Markers con offset ridotto per pulizia
+        lp = np.array(landing_points)
+        offset = 0.12
 
-        # Equal axis scaling
-        all_pts = np.column_stack([x_points, y_points, z_points])
-        max_range = np.ptp(all_pts, axis=0).max() / 2.0
-        mid = np.mean(all_pts, axis=0)
+        # Contact Points
+        ax.scatter(lp[:, 0] + 0.02, lp[:, 1], lp[:, 2], c='white', s=20, edgecolors='black', zorder=11, label='Contact')
+
+        # Start/Goal Markers (Stile coerente, più piccoli)
+        ax.scatter(self.p0[0] + offset, self.p0[1], self.p0[2], 
+                c='magenta', s=180, marker='^', edgecolors='white', linewidths=1.5, zorder=20, label='Start')
+        
+        ax.scatter(self.pf[0] + offset, self.pf[1], self.pf[2], 
+                c='springgreen', s=180, marker='X', edgecolors='white', linewidths=1.5, zorder=20, label='Goal')
+        
+        if self.best_achieved_target_ever:
+            ach = np.array(self.best_achieved_target_ever).flatten()
+            ax.scatter(ach[0] + offset, ach[1], ach[2], 
+                    c='orange', s=150, marker='D', edgecolors='white', zorder=21, label='Achieved')
+
+        # 6. Scaling 1:1:1 (Stile Refined)
+        flat_all = np.concatenate(all_coords)
+        mid = np.mean(flat_all, axis=0)
+        max_range = np.ptp(flat_all, axis=0).max() / 2.0
         ax.set_xlim(mid[0] - max_range, mid[0] + max_range)
         ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
         ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
 
-        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
-        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
-        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
-        ax.tick_params(axis='both', labelsize=15)
-        # ax.set_title('Height Map',fontsize=20, pad=-100)
+        # 7. Formatting (Font size e Labelpad come nel secondo plot)
+        ax.set_xlabel('X (m)', fontsize=18, labelpad=12)
+        ax.set_ylabel('Y (m)', fontsize=18, labelpad=12)
+        ax.set_zlabel('Z (m)', fontsize=18, labelpad=12)
+        ax.tick_params(axis='both', labelsize=12)
+        
+        # Legenda rimpicciolita e pulita
+        leg = ax.legend(loc='upper left', fontsize=9, framealpha=0.5)
+        for handle in leg.legend_handles:
+            # Riduciamo la dimensione dei simboli nella legenda
+            if hasattr(handle, 'set_sizes'):
+                handle.set_sizes([40])
+            if hasattr(handle, 'set_linewidth'):
+                handle.set_linewidth(1.5)
+
         ax.view_init(elev=elev, azim=azim)
-        # Add colorbar via ScalarMappable
-        sm = plt.cm.ScalarMappable(cmap=cmap_hot_yellow, norm=plt.Normalize(vmin=r_min, vmax=r_max))
-        sm.set_array([])
-        # cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.1)
-        # cbar.set_label('Filter Response Intensity', fontsize=11)
-        # cbar.ax.tick_params(labelsize=10)
 
-        plt.tight_layout()
-        plt.show()
-
-    
+        if created:
+            plt.tight_layout()
+            plt.show()
+        
 def main():
     
     # Terrain configuration values
