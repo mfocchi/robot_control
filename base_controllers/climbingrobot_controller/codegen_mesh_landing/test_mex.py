@@ -92,7 +92,7 @@ def initOptim(p0, pf, Ly, patch_side_z, patch_side_y,   mesh_x, mesh_y, mesh_z):
     params['w3']= 1000. # landing patch cost
     params['T_th'] =  0.05
     params['obstacle_avoidance'] = 'mesh'
-    params['jump_clearance'] = 1.0
+    params['jump_clearance'] = 1.5
     params['debug'] = False #enables print of cost
 
     # Interpolator (note: z must be increasing — here from -10 to 0)
@@ -355,7 +355,7 @@ terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max
 mesh_x, mesh_y, mesh_z = terrainManager.get_mesh()
 ##jump params dor 20 x10
 p0 = np.array([0.28, 2.5, -6.10104])
-pf=  np.array([0.28, 4.5,-17])
+pf=  np.array([0.28, 3.5,-16.3])
 # ##jump params dor 10 x10
 # p0 = np.array([0.28, 5, -4])
 # pf=  np.array([0.28, 8,-8])
@@ -384,7 +384,7 @@ print(f"[DEBUG] Any NaN in cost_y: {np.any(np.isnan(cost_y))}")
 print(f"[DEBUG] Any NaN in cost_z: {np.any(np.isnan(cost_z))}")
 
 Fleg_max = 150. #100 not converges with hemispheric
-Fr_max = 60.
+Fr_max = 190.
 Fr_min = 15.
 mu = 0.8
 p0_adj, pf_adj, params = initOptim(p0, pf, Ly, patch_side_z=0.1, patch_side_y=0.1 , mesh_x=mesh_x,mesh_y=mesh_y, mesh_z=mesh_z)
