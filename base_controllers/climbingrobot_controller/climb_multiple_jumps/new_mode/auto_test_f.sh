@@ -1,6 +1,6 @@
 #!/bin/bash
 
-name_folder="test_f_B"
+name_folder="test_f_D"
 
 NUM_RUNS=5
 export PARAMS_FILES="params_f"
@@ -10,7 +10,7 @@ PERC_MIN_PROB=0.8
 
 
 START_POINT="[0.28, 2.5, -6.10104]"
-GOAL_POINT="[0.28, 4.5,-17]"
+GOAL_POINT="[0.28, 3.5,-16.3]"
 
 
 echo ""

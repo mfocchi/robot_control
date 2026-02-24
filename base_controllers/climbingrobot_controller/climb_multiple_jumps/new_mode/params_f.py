@@ -11,6 +11,7 @@ import json
 from termcolor import colored
 import threading
 import matlab.engine
+
 from base_controllers.components.point_cloud_filter import PointCloudFilter
 from base_controllers.components.patch_surface import PatchSurface
 from base_controllers.components.terrain_manager import TerrainManager
@@ -56,7 +57,7 @@ filter_weights = np.array([0., 10., 10.0, 0.0, 0.0])
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
 Fleg_max = 150.
-Fr_max = 60.
+Fr_max = 190.
 Fr_min = 15.
 number_of_patches_width = 5
 number_of_patches_height = 20
@@ -82,7 +83,7 @@ inner_opt_params['w2'] = 0.  # hoist work
 inner_opt_params['w3'] = 1000.
 inner_opt_params['T_th'] = 0.05
 inner_opt_params['obstacle_avoidance'] = 'mesh'
-inner_opt_params['jump_clearance'] = 0.5
+inner_opt_params['jump_clearance'] = 1.5
 inner_opt_params['mesh_x'] = None
 inner_opt_params['mesh_y'] = None
 inner_opt_params['mesh_z'] = None
