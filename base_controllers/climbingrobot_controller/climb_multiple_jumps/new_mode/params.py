@@ -43,7 +43,7 @@ patience = 5
 CORRIDOR_RADIUS = 6.0 # for linear corridor warm start
 # MAIN_DIRECTORY = "result/2_test"
 
-MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/common_5")
+MAIN_DIRECTORY = os.environ.get("EXPERIMENT_DIR", "result/canvcella")
 # [ fit_problem_converged | fit_consumed_energy | fit_average_costmap_patch | fit_landing_costmap | fit_linear_distance | way_point_cost ]
 fitness_weights = np.array([1e5, 1., 0., 100., 20.0,  0.0]) # Optimizer
 # fitness_weights = np.array([1e4, 30.0, 0., 100, 20.0,0.0]) # Linear or parabolic
@@ -179,8 +179,8 @@ def initialize_terrain_data(warm_start_mode=False):
     pc_t = point_clouds.points_t
     patches = PatchSurface(pc_t,number_of_patches_width=number_of_patches_width, number_of_patches_height=number_of_patches_height)
     patches.gaussian_cost_all_patch(weight_gauss_cost=filter_weights[4])
-    patches.visualize_full_cost_map()
-    patches.print_patch_cost_matrix(2)
+    # patches.visualize_full_cost_map()
+    # patches.print_patch_cost_matrix(2)
     
     cost_grid, cost_y, cost_z  = patches.get_cost_meshgrid(grid_size=grid_size)
     
@@ -242,7 +242,7 @@ def initialize_terrain_data(warm_start_mode=False):
         #     radius=CORRIDOR_RADIUS,     
         #     sensitivity=5.0 )
     
-        plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
+        # plot_probability_heatmap(patch_probs, patches, P0_INIT, PF_PATCH_INIT)
 
         # Create new init_probs with filtered probabilities
         new_init_probs = []

@@ -5,7 +5,7 @@ name_folder="test_i_E"
 NUM_RUNS=10
 export PARAMS_FILES="params_i"
 TERRAIN_TYPE="gaussian_bumps" #"gaussian_bumps" | hemisphere
-PERC_MIN_PROB=0.8
+PERC_MIN_PROB=0.1
 
 START_POINT="[0.5, 6.55, -18.49]" # Downward
 GOAL_POINT="[0.5, 2.47, -6.3]"
