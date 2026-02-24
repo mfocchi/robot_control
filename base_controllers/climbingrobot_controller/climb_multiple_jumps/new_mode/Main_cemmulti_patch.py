@@ -35,7 +35,7 @@ def main():
         "PLOT_MODE": False,
         "WARM_START_MODE": True,
         "EARLY_STOP": True,
-        "VERBOSE": False
+        "VERBOSE": True
     }
     
     if setting["COMPUTATION_MODE"]:

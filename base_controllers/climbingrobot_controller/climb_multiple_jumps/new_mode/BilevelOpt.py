@@ -141,7 +141,7 @@ class BilevelOpt:
         total_traj_length = 0.0 
         all_converged = True  # Flag to monitor overall convergence
         achieved_target = None
-        
+        failure_reason = None
         # Initialization parameters for matlab engine
         eng = get_matlab_engine(self.point_clouds, self.cost_grid, self.terrain_manager, verbose=self.verbose)
         local_inner_opt_params = create_inner_opt_params_copy()
@@ -166,7 +166,7 @@ class BilevelOpt:
             if self.verbose:
                 print("DOPPIONE PISELLONE!")
             all_converged = False
-            fitness_score = -self.fitness_weights[0]  # Negative for maximization
+            fitness_score = -self.fitness_weights[0]**2  # Negative for maximization
             
             if self.verbose:
                 print("xd value: " , xd)    
@@ -192,7 +192,7 @@ class BilevelOpt:
         for i in range(total_jump):
             if i < n_jumps: # jump btw patches
                 patch_id = int(xd[1 + i])
-                center_relative_patch_yz = [.5, .5]
+                center_relative_patch_yz = [0.5, 0.5]
                 pf_adj = self.patches.getAbsolutePoseOfPointInsidePatch(
                     patch_id, center_relative_patch_yz[0], 
                     center_relative_patch_yz[1], scale=1.0).copy()
@@ -215,7 +215,7 @@ class BilevelOpt:
                 , self.terrain_manager.mesh_y, self.terrain_manager.mesh_z)
             
             local_inner_opt_params['contact_normal'] = matlab.double(liftoff_normal)
-            
+            p0_adj_current = p0_adj.copy()
             res = eng.optimize_cpp_mex(
                 matlab.double(p0_adj), matlab.double(pf_adj), 
                 Fleg_max, Fr_max, Fr_min, mu, local_inner_opt_params)
@@ -232,12 +232,14 @@ class BilevelOpt:
                 # not convergence
                 if res['problem_solved'] == -2:
                     all_converged = False
+                    failure_reason = "solver_failed"
                     break
                 # but there can be cases (eg  semidef conv , fmax eval) for which there are also not violations
                 violations = self.eval_constraints(res['c'], res['num_constr'], res['constr_tolerance'], verbose=False)
                 violations_log.append(violations)
                 if violations:  
                     all_converged = False
+                    failure_reason = "violations"
                     # breakpoint()
                     break
             jump_landing_cost, jump_average_cost_patch = self.calc_terrain_cost(
@@ -260,6 +262,7 @@ class BilevelOpt:
                 if self.verbose:
                     print("consumed energy is nan")
                 all_converged = False
+                failure_reason = "nan"
                 # breakpoint()
                 break
             
@@ -281,10 +284,23 @@ class BilevelOpt:
             
             
             # acutal target becomes next starting point
+            
             p0_adj = mat_vector2python(res['achieved_target']) #pf_adj.copy()
             
         if not all_converged:
-            fitness_score = -self.fitness_weights[0]  # Negative for maximization
+            base_penality = self.fitness_weights[0]
+            
+            if failure_reason in ["violations", "solver_failed"]:
+                dist_to_final_goal = np.linalg.norm(self.pf_patch - p0_adj_current)
+                # Penalise also the number of jumps missed
+                # jumps_missed = total_jump - i
+                # La fitness become a gradient: 
+                fitness_score = -( (base_penality * 0.5) + (dist_to_final_goal * 100.0))# + (jumps_missed * 50.0) )
+            # elif failure_reason == "nan":
+            #     fitness_score = -base_penality**2
+            else: 
+                fitness_score = -base_penality**2  # Default penalty if no specific failure reason
+            # fitness_score = -base_penality
             achieved_target = None
             avg_jump_landing_cost = 0.0
             avg_energy_cost = 0.0
@@ -293,12 +309,12 @@ class BilevelOpt:
             violations_log.append([])
         else:
             waypoint_cost = (MAX_JUMP - total_jump) * self.fitness_weights[5]
-            traj_length_cost = total_traj_length * self.fitness_weights[4]
+            traj_length_cost = (total_traj_length/total_jump) * self.fitness_weights[4]
             
-            avg_energy_cost = (total_consumed_energy) * self.fitness_weights[1] # / total_jump ??
+            avg_energy_cost = (total_consumed_energy/total_jump) * self.fitness_weights[1] # / total_jump ??
             avg_jump_landing_cost = (total_landing_cost) * self.fitness_weights[3] # / total_jump ??
               
-            fitness_score = -(avg_energy_cost + avg_jump_landing_cost) # + waypoint_cost + traj_length_cost)  # Negative for maximization
+            fitness_score = -(avg_energy_cost + avg_jump_landing_cost + waypoint_cost + traj_length_cost)  # Negative for maximization
             achieved_target = mat_vector2python(res['achieved_target']) if res['achieved_target'] is not None else None
 
         if self.verbose:

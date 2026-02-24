@@ -36,9 +36,11 @@ if plot_str:
 else:
     # ── Default: edit this list to add / remove folders ──
     FOLDERS = [
-        "result/common_1",
-        "result/common_2",
-        "result/common_3"
+        # "result/common",
+        # "result/common_2",
+        # "result/common_3",
+        "result/common_4",
+        "result/common_5",
     ]
 
 # Where combined plots are saved
