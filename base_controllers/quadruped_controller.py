@@ -1716,11 +1716,11 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    p.state_estimation = 'mocap' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
+    p.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     use_joy = True
     generate_reference = False
-    p.SAVE_BAG = False  #
+    p.SAVE_BAG = True  #
 
     if rl_control == 'state_est_based':
         if p.real_robot and (p.state_estimation != 'pronto' and p.state_estimation != 'pronto'):
@@ -1739,8 +1739,17 @@ if __name__ == '__main__':
                                            'rviz:=true',
                                            *(['task_period:=0.002'] if p.real_robot else [])]) #change task period to 500Hz instead of 1000Hz for real robot
         if p.SAVE_BAG:
-            p.recorder = RosbagControlledRecorder(bag_name="quadruped.bag", record_from_startup_=False)
-            p.recorder.start_recording_srv()
+            from datetime import datetime, timezone
+
+            now = datetime.now()
+            format_date = now.strftime("%Y-%m-%d-%H-%M-%S")
+            p.recorder = RosbagControlledRecorder(
+                topics='/aliengo/joint_states /aliengo/imu /aliengo/feet_forces /state_estimator_pronto/pose '
+                       '/state_estimator_pronto/twist /state_estimator_pronto/vel_raw  '
+                       '/state_estimator_pronto/stance /value_function /qualisys/robot/pose /rl_ref_vel /tf /tf_static',
+                        bag_name="saferl_" + format_date + ".bag", record_from_startup_=False)
+
+        p.recorder.start_recording_srv()
         if use_joy:
             joy = JoyManager()
         p.startupProcedure()
