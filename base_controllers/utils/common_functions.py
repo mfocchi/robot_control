@@ -197,7 +197,7 @@ def checkRosControllerRunning(controller = '', robot_name=''):
     else:
         return True
 
-def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), texture_path=None):
+def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), store_location_mesh="/tmp/", texture_path=None):
     try:
         import meshio
     except ImportError:
@@ -260,19 +260,23 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), texture_path=N
     # plt.show()
 
     # Always write STL (collision + fallback visual)
-    tmp_stl_path = "/tmp/runtime_mesh.stl"
+    stl_path = store_location_mesh+"runtime_mesh.stl"
+
+    print(f"AAAAAAAAAAAAAAAAAAAAA------------------------- {store_location_mesh}")
+    print(f"AAAAAAAAAAAAAAAAAAAAA------------------------- {stl_path}")
     mesh = meshio.Mesh(points=points, cells=[("triangle", triangles)])
-    mesh.write(tmp_stl_path)
+    mesh.write(stl_path)
 
     # Optionally write textured DAE for RViz
     if texture_path is not None:
-        tmp_obj_path = "/tmp/runtime_mesh.obj"
-        write_textured_obj(points, triangles, tmp_obj_path, texture_path)
+        obj_path =  store_location_mesh+"runtime_mesh.obj"
+        print(f"AAAAAAAAAAAAAAAAAAAAA------------------------- {obj_path}")
+        write_textured_obj(points, triangles, obj_path, texture_path)
         # Use OBJ (textured) for VISUAL
-        visual_uri = f"file://{tmp_obj_path}"
+        visual_uri = f"file://{obj_path}"
         material_block = ""  # DO NOT override texture
     else:
-        visual_uri = f"file://{tmp_stl_path}"
+        visual_uri = f"file://{stl_path}"
         #use standard reddish material
         material_block = """
                 <material>
@@ -300,7 +304,7 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), texture_path=N
           <collision name="collision">
             <geometry>
               <mesh>
-                <uri>file://{tmp_stl_path}</uri>
+                <uri>file://{stl_path}</uri>
               </mesh>
             </geometry>
           </collision>
