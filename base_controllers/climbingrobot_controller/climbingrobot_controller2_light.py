@@ -40,7 +40,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.PLOT_MPC = False
         self.PROPELLERS = True
         self.USE_PROPELLERS_FOR_LEG_REORIENT = False # true use propeller to reorient the leg
-        self.SAVE_BAG = False # does not show rope vectors
+        self.SAVE_BAG = True # does not show rope vectors
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
         self.wheel_index = np.array([16, 18]) #'wheel_joint_l',  'wheel_joint_r'
@@ -50,6 +50,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.anchor_passive_joints = np.array([0,1, 6,7])
         self.OBSTACLE_AVOIDANCE = 'mesh' #'none', 'mesh'
         self.use_gui = False
+        self.PAPER = False
 
         if self.MPC_control:
             sys.path.insert(0, './codegen_mpc')
@@ -123,7 +124,10 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
-            self.recorder = RosbagControlledRecorder(bag_name = "climbing_robot_new.bag", record_from_startup_=False)
+            if p.PAPER:
+                self.recorder = RosbagControlledRecorder(bag_name = "climbing_robot_rocky_terrain_paper.bag", record_from_startup_=False)
+            else:
+                self.recorder = RosbagControlledRecorder(bag_name="climbing_robot_rocky_terrain_single_jumps.bag", record_from_startup_=False)
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -439,7 +443,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def initOptim(self, p0, pf):
         ##offline optim vars
-        self.Fleg_max = 300.
+        self.Fleg_max = 150.
         self.Fr_max = 190.  # had to increas because of slopes  it used tp be 90
         self.Fr_min = 15.  # had to increas because of downward jumps it used tp be 0
         # down ward jumps
@@ -466,7 +470,7 @@ class ClimbingrobotController(BaseControllerFixed):
             self.optim_params['w6'] = 0.
             self.optim_params['T_th'] = 0.05
             self.optim_params['obstacle_avoidance'] = 'mesh'
-            self.optim_params['jump_clearance'] = 0.8
+            self.optim_params['jump_clearance'] = 1.5
             # Interpolator (note: z must be increasing — here from -10 to 0)
             #correct initial and final positions
             #p0[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1],  self.mesh_x,  self.mesh_y,  self.mesh_z) do not correct initial position which is already ok
@@ -693,19 +697,20 @@ class ClimbingrobotController(BaseControllerFixed):
             p.pause_physics_client()
 
             # PAPER
-            # if p.jumpNumber == 0:
-            #     #first optim
-            #     p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[0])
-            #     p.total_ref_com = p.ref_com.copy()
-            #     p.targetPos1 = p.ref_com[:, -1]
-            #     # second optim:second jump we assume it starts from last position
-            #     p.initOptim(p.targetPos1, p.desired_target[1])
-            #     p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
-            #     p.targetPos2 = p.ref_com[:, -1]
-            #     #third optim:third jump we assume it starts from last position
-            #     p.initOptim(p.targetPos2, p.desired_target[2])
-            #     p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
-            #     p.targetPos3 = p.ref_com[:, -1]
+            if p.PAPER and p.jumpNumber == 0:
+                #first optim
+                print(colored(f"Performing optimization for the whole trajectory only for paper figure", "red"))
+                for i in range(len(p.desired_target)):
+                    print(colored(f"Optimization {i}", "red"))
+                    if i==0:
+                        p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[i])
+                        p.total_ref_com = p.ref_com.copy()
+                        p.targetPos_paper = [p.ref_com[:, -1]]
+                    else:
+                        # second optim:second jump we assume it starts from last position
+                        p.initOptim(p.targetPos_paper[i-1], p.desired_target[i])
+                        p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
+                        p.targetPos_paper.append(p.ref_com[:, -1])
 
             print(colored(f"Start trajectory optimization", "blue"))
             p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
@@ -780,7 +785,7 @@ class ClimbingrobotController(BaseControllerFixed):
                 if  p.landing:
                     p.stateMachine = 'flying_and_wait_for_touchdown'
                     #put leg straight for landing
-                    p.q_des[p.leg_index] = np.array([-1.57, 0.0, 0.1])
+                    p.q_des[p.leg_index] = np.array([-1.57, 0.0, 0.25])
                 else:
                     # retract leg
                     p.q_des[p.leg_index[2]] = 0.25
@@ -839,6 +844,8 @@ class ClimbingrobotController(BaseControllerFixed):
                     p.Fr_r = p.jump_data["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
                 else:
                     # start again pid gains and reset qdes
+                    # extend a bit the leg
+                    p.q_des[p.leg_index] = np.array([-1.57, 0.0, 0.1])
                     p.resetRope()
                     p.optimal_control_traj_finished = True
                 # check for early td and in case reset rope I comment otherwise is triggering to early
@@ -919,22 +926,22 @@ def talker(p):
     #############hard coded
     # jump params
     # jump starting position
-    p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
-    p.numberOfJumps = 3
-    # jump landing position
-    p.desired_target = [np.array([0.28, 4, -3.7]),
-                        np.array([0.28, 3.5, -6]),
-                        np.array([0.28, 4.2, -11])]
-    p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
-    ######################
+    # p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
+    # p.numberOfJumps = 3
+    # # jump landing position
+    # p.desired_target = [np.array([0.28, 4, -3.7]),
+    #                     np.array([0.28, 2.5, -6]),
+    #                     np.array([0.28, 3.6, -11])]
+    # p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
+    # ######################
 
     #############Json
-    # data = p.readJsonFile(terrain="gaussian") # hemi, gaussian
-    # p0 = np.array(data["target_points"][0])
-    # p.desired_target = [np.array(t) for t in data["target_points"][1:]]
-    # p.numberOfJumps = len(p.desired_target)
-    # p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
-    #                                   seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
+    data = p.readJsonFile(terrain="rock") # hemi, gaussian
+    p0 = np.array(data["target_points"][0])
+    p.desired_target = [np.array(t) for t in data["target_points"][1:]]
+    p.numberOfJumps = len(p.desired_target)
+    p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
+                                      seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
     ##############
 
     p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
@@ -949,7 +956,7 @@ def talker(p):
     # spawn mesh in gazebo (needs mat2Gazebo)
     if p.OBSTACLE_AVOIDANCE=='mesh':
         texture_path = rospkg.RosPack().get_path('climbingrobot_description') + '/media/materials/textures/rocks.jpg'
-        spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo, texture_path=texture_path)
+        spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo,store_location_mesh=os.environ['LOCOSIM_DIR']+'/robot_descriptions/climbingrobot_description/meshes/', texture_path=texture_path)
 
     p.startJump = np.linalg.norm(p0)/2
     p.orientTime = 1.0
@@ -978,16 +985,15 @@ def talker(p):
 
         #plot target position (whenever is available)
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.obj", position=p.mat2Gazebo, color=None, alpha=1.0)
-        if hasattr(p, "ref_com") and not hasattr(p, "total_ref_com"):
+        p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR']+'/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
+        if not p.PAPER and hasattr(p, "ref_com"):
             p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.ref_com, color="red")
             p.ros_pub.add_marker(p.mat2Gazebo + p.jump_data["targetPos"], color="red", radius=0.3, alpha=1.)
             p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
-        if hasattr(p, "total_ref_com"):
+        if p.PAPER and hasattr(p, "total_ref_com"):
             p.plotReferenceTraj(p.mat2Gazebo.reshape(3, 1) + p.total_ref_com, color="white")
-            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPos1, color="green", radius=0.5, alpha=0.5)
-            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPos2, color="green", radius=0.5, alpha=0.5)
-            p.ros_pub.add_marker(p.mat2Gazebo + p.targetPos3, color="green", radius=0.5, alpha=0.5)
+            for i in range(len(p.targetPos_paper)):
+                p.ros_pub.add_marker(p.mat2Gazebo + p.targetPos_paper[i], color="green", radius=0.5, alpha=0.5)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
