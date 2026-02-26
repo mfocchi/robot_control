@@ -261,16 +261,12 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), store_location
 
     # Always write STL (collision + fallback visual)
     stl_path = store_location_mesh+"runtime_mesh.stl"
-
-    print(f"AAAAAAAAAAAAAAAAAAAAA------------------------- {store_location_mesh}")
-    print(f"AAAAAAAAAAAAAAAAAAAAA------------------------- {stl_path}")
     mesh = meshio.Mesh(points=points, cells=[("triangle", triangles)])
     mesh.write(stl_path)
 
     # Optionally write textured DAE for RViz
     if texture_path is not None:
         obj_path =  store_location_mesh+"runtime_mesh.obj"
-        print(f"AAAAAAAAAAAAAAAAAAAAA------------------------- {obj_path}")
         write_textured_obj(points, triangles, obj_path, texture_path)
         # Use OBJ (textured) for VISUAL
         visual_uri = f"file://{obj_path}"
