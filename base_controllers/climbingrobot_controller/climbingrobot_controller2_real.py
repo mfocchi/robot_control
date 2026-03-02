@@ -50,8 +50,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.landing = True #do landing
         self.MPC_control = True
         self.PLOT_MPC = False
-        self.PROPELLERS = True
-        self.USE_PROPELLERS_FOR_LEG_REORIENT = False # true use propeller to reorient the leg
+
         self.SAVE_BAG = False # does not show rope vectors
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -89,26 +88,14 @@ class ClimbingrobotController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
-    def apply_propeller_moment(self, Mz):
-        # create force per to ropes plane
-        arm = np.linalg.norm(self.hoist_l_pos-self.base_pos)
-        force = self.w_R_b[:,0]*Mz/(2*arm)
-        self.ros_pub.add_arrow(self.hoist_l_pos, force/(10*self.force_scale), "green", scale=1.5)  #left should be positive
-        self.ros_pub.add_arrow(self.hoist_r_pos, -force/(10*self.force_scale), "green", scale=1.5) #right should be negative
-        wrench = Wrench()
-        wrench.force.x = 0.
-        wrench.force.y = 0.
-        wrench.force.z = 0.
-        wrench.torque.x = 0.
-        wrench.torque.y = 0.
-        wrench.torque.z = Mz
-        self.pub_prop_force.publish(wrench)
 
-    def apply_propeller_force(self, ext_force):
+    def apply_propeller_command(self, prop_force_x=0., prop_force_y=0., prop_moment_z=0.):
         msg =  PropellerCommand()
-        msg.propeller_force = ext_force
-        w_prop_force = self.w_R_b[0]*ext_force #TODO is along base_link axis, double check direction
-        self.pub_propeller_force.publish(msg)
+        msg.propeller_force_x = prop_force_x
+        msg.propeller_force_y = prop_force_y
+        msg.propeller_moment_z = prop_moment_z
+        w_prop_force = self.w_R_b*np.array([prop_force_x, prop_force_y,0.])
+        self.pub_propeller_command.publish(msg)
         self.ros_pub.add_arrow(self.base_pos, w_prop_force / self.force_scale, "blue", scale=1.5)
 
 
@@ -220,7 +207,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r_fbk = 0
         self.Fr_l = 0
         self.Fr_r = 0
-        self.prop_force = 0
+        self.prop_force_x = 0
+        self.prop_force_y = 0
+        self.prop_moment_z = 0
+        self.prop_moment_z = 0
         self.touch_down_detected_l = False
         self.touch_down_detected_r = False
         self.optimal_control_traj_finished = False
@@ -242,7 +232,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.l_2d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.psid_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.prop_force_x_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.prop_force_y_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.prop_moment_z_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
         self.contactForceW_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         w_R_wall = self.math_utils.eul2Rot(np.array([0,-conf.robot_params[p.robot_name]['wall_inclination'],0]))
@@ -268,8 +261,10 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.l_2d_log[self.log_counter] =  self.l_2d
                 self.psid_log[self.log_counter] = self.psi_d
                 self.base_vel_log[:,self.log_counter] = self.w_base_vel
-                if self.PROPELLERS:
-                    self.prop_force_log[self.log_counter] = self.prop_force
+                self.prop_force_x_log[self.log_counter] = self.prop_force_x
+                self.prop_force_y_log[self.log_counter] = self.prop_force_y
+                self.prop_moment_z_log[self.log_counter] = self.prop_moment_z
+
                 #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
 
             super().logData()
@@ -555,17 +550,12 @@ class ClimbingrobotController(BaseControllerFixed):
             actual_state = matlab.double([ self.psi, self.l_1, self.l_2, self.psi_d, self.l_1d, self.l_2d]).reshape(6,1)
 
             #perform optimization
-            if p.PROPELLERS:
-                x = mat_vector2python(self.eng.optimize_cpp_mpc_propellers_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
-                # extract optim vars
-                self.deltaFr_l = x[:self.mpc_N]
-                self.deltaFr_r = x[self.mpc_N:2*self.mpc_N]
-                self.propeller_force = x[2*self.mpc_N:3*self.mpc_N]
-            else:
-                x = mat_vector2python(self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0,self.Fr_max_mpc, self.mpc_N,self.optim_params_mpc))
-                 # extract optim vars
-                self.deltaFr_l = x[:self.mpc_N]
-                self.deltaFr_r = x[self.mpc_N:]
+            x = mat_vector2python(self.eng.optimize_cpp_mpc_propellers_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+            # extract optim vars
+            self.deltaFr_l = x[:self.mpc_N]
+            self.deltaFr_r = x[self.mpc_N:2*self.mpc_N]
+            self.propeller_force = x[2*self.mpc_N:3*self.mpc_N]
+
 
             # store tracking error for RMSE computation
             tracking_error = self.ref_com[:, self.mpc_index] - (self.base_pos - p.anchor_pos)
@@ -662,12 +652,8 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.MPC_control:
             self.eng.addpath('./codegen_mpc', nargout=0)
 
-        if self.PROPELLERS:
-            self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
             self.recorder = RosbagControlledRecorder(record_from_startup_=False)
-
-
 
         self.sub_rope_telemetry_l = ros.Subscriber("/winch/left/telemetry", RopeTelemetry,  callback=self._receive_rope_telemetry_l, queue_size=1,  tcp_nodelay=True)
         self.sub_rope_telemetry_r = ros.Subscriber("/winch/right/telemetry", RopeTelemetry, callback=self._receive_rope_telemetry_r, queue_size=1,  tcp_nodelay=True)
@@ -681,8 +667,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
         #communication to alpine
         self.sub_alpine_telemetry = ros.Subscriber("/alpine_body/telemetry", AlpineBodyTelemetry, callback=self._receive_alpine_telemetry, queue_size=1, tcp_nodelay=True)
-        self.pub_propeller_force = ros.Publisher("/alpine_body/propeller_command", PropellerCommand,   queue_size=1,  tcp_nodelay=True)
-        self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand)
+        self.pub_propeller_command = ros.Publisher("/alpine_body/propeller_command", PropellerCommand,   queue_size=1,  tcp_nodelay=True)
+        self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand) #TODO
 
     def _receive_rope_telemetry_l(self, msg):
         self.Fr_l_meas = msg.rope_force
@@ -706,6 +692,7 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored("received target {self.target}", "red"))
 
     def _receive_alpine_telemetry(self, msg):
+        #rope
         self.rope_l_imu_orientation = np.array([
             msg.rope_imu_orientation.x,
             msg.rope_imu_orientation.y,
@@ -715,6 +702,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.rope_l_imu_angular_velocity = np.array([ msg.rope_imu_angular_velocity.x, msg.rope_imu_angular_velocity.y,msg.rope_imu_angular_velocity.z])
         self.rope_l_imu_rpy = np.array([msg.rope_imu_rpy.x, msg.rope_imu_rpy.y, msg.rope_imu_rpy.z])
         self.rope_l_imu_rpy_d = np.array([msg.rope_imu_rpy_d.x, msg.rope_imu_rpy_d.y, msg.rope_imu_rpy_d.z])
+        #body
         self.body_imu_orientation =  np.array([
                                         msg.body_imu_orientation.x,
                                         msg.body_imu_orientation.y,
@@ -776,8 +764,9 @@ def talker(p):
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     p.q_des[:12] = p.computeJointVariables(p0)
-
     p.setRopeControlMode('close_loop_position')
+    #the robot should go to the setpoint of the ropes
+
     #  wait for a target
     while True:
         if p.targetReceived:
@@ -818,20 +807,20 @@ def talker(p):
 
         if (p.stateMachine == 'thrusting'):
 
-            # send thrust force
+            # service call to send thrust force and contact normal to ALPINE this will initiate the jump
             # Fill the request
             req = AlpineBodyCommandRequest()
             req.leg_force = np.linalg.norm(p.w_Fleg)
             req.contact_normal = geometry_msgs.msg.Vector3(x=p.wall_normal[0], y=p.wall_normal[1], z=p.wall_normal[2])
+            # plot Fleg
+            p.ros_pub.add_arrow(p.x_ee, np.linalg.norm(p.w_Fleg)*p.wall_normal / p.force_scale, "red", scale=2.5)
+
             # apply leg inpulse for thust duration
             try:
                 resp = p.alpine_command_service(req)
                 ros.loginfo("Service response: ack = %s", resp.ack)
             except ros.ServiceException as e:
                 ros.logerr("Service call failed: %s" % e)
-
-            # plot Fleg
-            p.ros_pub.add_arrow(p.x_ee, np.linalg.norm(p.w_Fleg)*p.wall_normal / p.force_scale, "red", scale=2.5)
 
             # start also applying forces to ropes
             delta_t = p.time - p.end_thrusting
@@ -859,9 +848,10 @@ def talker(p):
             # applying forces to ropes
             delta_t = p.time - p.end_thrusting
             if p.MPC_control:
-                deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
-                if p.PROPELLERS:
-                    p.apply_propeller_force(p.prop_force)
+                # compute orientation control TODO
+                #p.prop_force_x, p.prop_force_y, p.prop_moment_z = computeOrientationControl()
+                deltaFr_l0, deltaFr_r0, p.prop_force_x = p.computeMPC(delta_t)
+                p.apply_propeller_command(p.prop_force_x, p.prop_force_y, p.prop_moment_z)
 
             else:
                 deltaFr_l0 = 0.
@@ -882,6 +872,7 @@ def talker(p):
                 print(colored("Stop Flying", "blue"))
                 # reset the qdes
                 # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
+                # this will start again the position loop
                 p.resetRope()
                 energy = p.computeJumpEnergyConsumption()
                 p.jumpNumber += 1
@@ -900,12 +891,12 @@ def talker(p):
         if (p.stateMachine == 'flying_and_wait_for_touchdown'):
             # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
             delta_t = p.time - p.end_thrusting
+
             if p.MPC_control:
-                deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
-                if p.PROPELLERS:
-                    #if p.ADD_NOISE:
-                        #prop_force += 0.1*np.sin(2*np.pi*3000/60)
-                    p.apply_propeller_force(p.prop_force)
+                # compute orientation control TODO
+                #p.prop_force_x, p.prop_force_y, p.prop_moment_z = computeOrientationControl()
+                deltaFr_l0, deltaFr_r0, p.prop_force_x = p.computeMPC(delta_t)
+                p.apply_propeller_command(p.prop_force_x, p.prop_force_y, p.prop_moment_z)
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
@@ -971,7 +962,7 @@ def talker(p):
         except:
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.stl", position=p.mat2Gazebo, color="red", alpha=1.0)
+        p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
