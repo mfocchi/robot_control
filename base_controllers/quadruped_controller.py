@@ -1728,7 +1728,7 @@ if __name__ == '__main__':
         if p.real_robot and (p.state_estimation != 'pronto' and p.state_estimation != 'pronto'):
             print(colored("RL is state_est based need to start state estimation!","red"))
             sys.exit()
-        rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se)
+        rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se, debug=True)
     if rl_control == 'sensor_based':
         rl_controller = LocomotionPolicyWrapper(use_state_est=True, dt = p.dt)
 
@@ -1815,9 +1815,12 @@ if __name__ == '__main__':
                 if rl_control == 'state_est_based':
                     # Compute observations for the policy
                     # Disable the lin_vel_b and use lin_acc_b observation if using NN SE
-                    if rl_controller.use_nn_se:
+                    if rl_controller.use_nn_se and not rl_controller.debug:
                         lin_acc_b = p.baseLinAccB
                         lin_vel_b = None
+                    elif rl_controller.use_nn_se and rl_controller.debug:
+                        lin_acc_b = p.baseLinAccB
+                        lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                     else:
                         lin_acc_b = None
                         lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])

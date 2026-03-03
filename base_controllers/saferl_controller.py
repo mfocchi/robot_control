@@ -53,7 +53,7 @@ if __name__ == '__main__':
     p.state_estimation = 'ground_truth'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
     # NOTE: in the RL controller, SE NN is used only if state estimation is not pronto
     rl_use_nn_se = p.state_estimation != 'pronto'
-    rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se)
+    rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se, debug=True)
     p.SAVE_BAG = True  #
     vf_frequency = 100  # Hz
     vf_decimation = (1 / p.dt) / (vf_frequency)
@@ -136,9 +136,12 @@ if __name__ == '__main__':
 
                 # Compute observations for the policy
                 # Disable the lin_vel_b and use lin_acc_b observation if using NN SE
-                if rl_controller.use_nn_se:
+                if rl_controller.use_nn_se and not rl_controller.debug:
                     lin_acc_b = p.baseLinAccB
                     lin_vel_b = None
+                elif rl_controller.use_nn_se and rl_controller.debug:
+                    lin_acc_b = p.baseLinAccB
+                    lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
                 else:
                     lin_acc_b = None
                     lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])

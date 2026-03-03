@@ -7,12 +7,13 @@ import rospy
 from geometry_msgs.msg import Vector3
 
 class RlVelocityController():
-    def __init__(self, robot_name: str, dt: float, use_nn_se: bool = True, freq: int = 50):
-        
+    def __init__(self, robot_name: str, dt: float, use_nn_se: bool = True, freq: int = 50, debug=False):
+        self.debug = debug
         self.robot_name = robot_name
         # Create a ros publisher for publishing the se_nn base linear velocity
         self.pub_se_nn_base_lin_vel = rospy.Publisher("/" + self.robot_name + "/se_nn_base_lin_vel", Vector3, queue_size=10)
-        # self.pub_gt_base_lin_vel = rospy.Publisher("/" + self.robot_name + "/gt_base_lin_vel", Vector3, queue_size=10)
+        if self.debug:
+            self.pub_gt_base_lin_vel = rospy.Publisher("/" + self.robot_name + "/gt_base_lin_vel", Vector3, queue_size=10)
 
         base_model_path = os.path.join(os.environ.get('LOCOSIM_DIR'),
                                        'robot_control',
@@ -105,12 +106,13 @@ class RlVelocityController():
                 se_nn_base_lin_vel_msg.z = nn_base_lin_vel[2]
                 self.pub_se_nn_base_lin_vel.publish(se_nn_base_lin_vel_msg)
 
-                # # Publish the gt base linear velocity for debug
-                # gt_base_lin_vel_msg = Vector3()
-                # gt_base_lin_vel_msg.x = base_lin_vel[0]
-                # gt_base_lin_vel_msg.y = base_lin_vel[1]
-                # gt_base_lin_vel_msg.z = base_lin_vel[2]
-                # self.pub_gt_base_lin_vel.publish(gt_base_lin_vel_msg)
+                if self.debug:
+                    # Publish the gt base linear velocity for debug
+                    gt_base_lin_vel_msg = Vector3()
+                    gt_base_lin_vel_msg.x = base_lin_vel[0]
+                    gt_base_lin_vel_msg.y = base_lin_vel[1]
+                    gt_base_lin_vel_msg.z = base_lin_vel[2]
+                    self.pub_gt_base_lin_vel.publish(gt_base_lin_vel_msg)
 
             else:
 
