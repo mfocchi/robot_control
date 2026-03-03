@@ -50,14 +50,16 @@ if __name__ == '__main__':
     p = SafeRLController('aliengo')
     world_name = 'fast.world'
     use_gui=False#True
-    p.state_estimation = 'pronto'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
-    rl_controller = RlVelocityController(p.robot_name, p.dt)
+    p.state_estimation = 'ground_truth'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+    # NOTE: in the RL controller, SE NN is used only if state estimation is not pronto
+    rl_use_nn_se = p.state_estimation != 'pronto'
+    rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se)
     p.SAVE_BAG = True  #
     vf_frequency = 100  # Hz
     vf_decimation = (1 / p.dt) / (vf_frequency)
     step = 0
     isrec = True
-    use_joy = True
+    use_joy = False
     sim_push = False
 
     if use_joy:
@@ -131,11 +133,21 @@ if __name__ == '__main__':
 
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
-                lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
+
+                # Compute observations for the policy
+                # Disable the lin_vel_b and use lin_acc_b observation if using NN SE
+                if rl_controller.use_nn_se:
+                    lin_acc_b = p.baseLinAccB
+                    lin_vel_b = None
+                else:
+                    lin_acc_b = None
+                    lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
+
                 ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
                 proj_gravity_b = p.b_R_w.dot(np.array([0, 0, -1]))
+
                 # pushes of increasing entity
-                if not p.real_robot and p.time % 2. == 0 and isrec and sim_push:
+                if not p.real_robot and  (p.time > (p.startTime + 5.)) and p.time % 2. == 0 and isrec and sim_push:
                      p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
                      p.startPush = p.time
 
@@ -144,12 +156,12 @@ if __name__ == '__main__':
                 if isrec:
                      # nominal policy
                      #rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                     p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
+                     p.rl_q_des = rl_controller.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
                 else:
                     # backup policy
                     #print(colored("I am executing backup policy!","red"))
                     rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                    p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="safe")
+                    p.rl_q_des = rl_controller.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="safe")
                 #check this
                 #print('ang_vel_b A',ang_vel_b)
                 #print('proj_gravity A',proj_gravity)

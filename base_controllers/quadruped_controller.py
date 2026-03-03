@@ -1716,9 +1716,11 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    p.state_estimation = 'pronto' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
+    p.state_estimation = 'ground_truth' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
     rl_control = 'state_est_based' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
-    use_joy = True
+    # NOTE: in the RL controller, SE NN is used only if state estimation is not pronto
+    rl_use_nn_se = p.state_estimation != 'pronto'
+    use_joy = False
     generate_reference = False
     p.SAVE_BAG = True  #
 
@@ -1726,7 +1728,7 @@ if __name__ == '__main__':
         if p.real_robot and (p.state_estimation != 'pronto' and p.state_estimation != 'pronto'):
             print(colored("RL is state_est based need to start state estimation!","red"))
             sys.exit()
-        rl_controller = RlVelocityController(p.robot_name, p.dt)
+        rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se)
     if rl_control == 'sensor_based':
         rl_controller = LocomotionPolicyWrapper(use_state_est=True, dt = p.dt)
 
@@ -1803,15 +1805,27 @@ if __name__ == '__main__':
                 if use_joy:
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
+                    # send random vel every 3 sec btwn -0.4 and 0.4 m/s for x and y, and -0.4 and 0.4 rad/s for rotation
+                    if p.time > (p.startTime + 3.0) and p.time % 3.0 == 0:
+                        rl_controller.velocity_cmd = np.random.uniform(low=-0.4, high=0.4, size=(3,))
+                        
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
 
                 if rl_control == 'state_est_based':
-                    lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
+                    # Compute observations for the policy
+                    # Disable the lin_vel_b and use lin_acc_b observation if using NN SE
+                    if rl_controller.use_nn_se:
+                        lin_acc_b = p.baseLinAccB
+                        lin_vel_b = None
+                    else:
+                        lin_acc_b = None
+                        lin_vel_b = p.b_R_w.dot(p.baseTwistW[:3])
+
                     ang_vel_b = p.b_R_w.dot(p.baseTwistW[3:6])
                     proj_gravity = p.b_R_w.dot(np.array([0,0,-1]))
-                    p.rl_q_des = rl_controller.action(lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
+
+                    p.rl_q_des = rl_controller.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity, p.q, p.qd, policy_type="default")
 
                 if rl_control == 'sensor_based':
                     h_R_b = p.math_utils.eul2Rot(np.array([p.euler[0],p.euler[1],0.]))

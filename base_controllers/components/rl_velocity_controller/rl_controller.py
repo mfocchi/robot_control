@@ -3,12 +3,17 @@ import onnxruntime as ort
 import os
 import json
 from termcolor import colored
+import rospy
+from geometry_msgs.msg import Vector3
 
 class RlVelocityController():
-    def __init__(self, robot_name: str, dt: float, freq: int = 50):
+    def __init__(self, robot_name: str, dt: float, use_nn_se: bool = True, freq: int = 50):
         
         self.robot_name = robot_name
-        
+        # Create a ros publisher for publishing the se_nn base linear velocity
+        self.pub_se_nn_base_lin_vel = rospy.Publisher("/" + self.robot_name + "/se_nn_base_lin_vel", Vector3, queue_size=10)
+        # self.pub_gt_base_lin_vel = rospy.Publisher("/" + self.robot_name + "/gt_base_lin_vel", Vector3, queue_size=10)
+
         base_model_path = os.path.join(os.environ.get('LOCOSIM_DIR'),
                                        'robot_control',
                                        'base_controllers',
@@ -32,6 +37,14 @@ class RlVelocityController():
         self.model_safe = ort.InferenceSession(self.model_path_safe)
         print(f'Policy for {robot_name}_safe loaded')
 
+        self.model_path_se = os.path.join(base_model_path, f'{robot_name}_se.onnx')
+        self.model_se = ort.InferenceSession(self.model_path_se)
+        print(f'Policy for {robot_name}_se loaded')
+
+        self.model_path_se_safe = os.path.join(base_model_path, f'{robot_name}_se_safe.onnx')
+        self.model_se_safe = ort.InferenceSession(self.model_path_se_safe)
+        print(f'Policy for {robot_name}_se_safe loaded')
+
         self.q_def = self.cfg["q_def"]
         self.q_des = self.q_def
         self.action_scale = self.cfg["action_scale"]
@@ -41,22 +54,70 @@ class RlVelocityController():
         self.kp = np.full(12, self.cfg["kp"])
         self.kd = np.full(12, self.cfg["kd"])
 
-    
+        self.use_nn_se = use_nn_se
+
         self.prev_action = np.zeros(12)
         self.velocity_cmd = np.zeros(3)
         
         self.decimation = (1/dt)*(1/freq)
         self.decimation_counter = 0
+        self.history_buffer = np.zeros((1, 3, 48))
         
-    def action(self, base_lin_vel, base_ang_vel, pj_gravity, q, qd, policy_type='default'):
+    def action(self, base_lin_acc, base_lin_vel, base_ang_vel, pj_gravity, q, qd, policy_type='default'):
         
         if (self.decimation_counter % self.decimation) == 0 :
 
             joint_pos_rel = q - self.q_def
 
+            if self.use_nn_se:
+
+                obs = np.concatenate([
+                    base_lin_acc,
+                    base_ang_vel,
+                    pj_gravity,
+                    self.velocity_cmd,
+                    joint_pos_rel,
+                    qd,
+                    self.prev_action
+                ]).astype(np.float32)[None]
+                
+                # update history buffer
+                buf = self.history_buffer
+                buf = np.concatenate([buf[:, 1:, :], obs[None]], axis=1)
+                self.history_buffer = buf
+
+                # run the se nn to get the se_nn base linear velocity
+                se_nn_obs = self.history_buffer.flatten()[None].astype(np.float32)
+
+                if policy_type=='default':
+                    nn_base_lin_vel = self.model_se.run(None, {'obs': se_nn_obs})[0][0]
+                elif policy_type=='safe':
+                    nn_base_lin_vel = self.model_se_safe.run(None, {'obs': se_nn_obs})[0][0]
+
+                # print("gt:", base_lin_vel, " nn:", nn_base_lin_vel, " err:", np.linalg.norm(base_lin_vel-nn_base_lin_vel))
+
+                policy_base_lin_vel = nn_base_lin_vel
+
+                # Publish the se_nn base linear velocity
+                se_nn_base_lin_vel_msg = Vector3()
+                se_nn_base_lin_vel_msg.x = nn_base_lin_vel[0]
+                se_nn_base_lin_vel_msg.y = nn_base_lin_vel[1]
+                se_nn_base_lin_vel_msg.z = nn_base_lin_vel[2]
+                self.pub_se_nn_base_lin_vel.publish(se_nn_base_lin_vel_msg)
+
+                # # Publish the gt base linear velocity for debug
+                # gt_base_lin_vel_msg = Vector3()
+                # gt_base_lin_vel_msg.x = base_lin_vel[0]
+                # gt_base_lin_vel_msg.y = base_lin_vel[1]
+                # gt_base_lin_vel_msg.z = base_lin_vel[2]
+                # self.pub_gt_base_lin_vel.publish(gt_base_lin_vel_msg)
+
+            else:
+
+                policy_base_lin_vel = base_lin_vel
             
             obs = np.concatenate([
-                base_lin_vel,
+                policy_base_lin_vel,
                 base_ang_vel,
                 pj_gravity,
                 self.velocity_cmd,
@@ -76,6 +137,7 @@ class RlVelocityController():
             
             final_action = self.q_def + ( self.action_scale * action)
             self.q_des = final_action
+
         self.decimation_counter += 1
         
         return self.q_des
