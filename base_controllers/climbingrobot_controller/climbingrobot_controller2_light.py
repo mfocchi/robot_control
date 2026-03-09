@@ -30,7 +30,8 @@ robotName = "climbingrobot2"
 from base_controllers.utils.common_functions import SafeTFBroadcaster
 import json
 from base_controllers.components.terrain_manager import TerrainManager
-
+import pandas as pd
+from base_controllers.utils.halton_walker import get_halton_samples
 
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
@@ -40,7 +41,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.PLOT_MPC = False
         self.PROPELLERS = True
         self.USE_PROPELLERS_FOR_LEG_REORIENT = False # true use propeller to reorient the leg
-        self.SAVE_BAG = True # does not show rope vectors
+        self.SAVE_BAG = False # does not show rope vectors
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
         self.wheel_index = np.array([16, 18]) #'wheel_joint_l',  'wheel_joint_r'
@@ -51,6 +52,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.OBSTACLE_AVOIDANCE = 'mesh' #'none', 'mesh'
         self.use_gui = False
         self.PAPER = False
+        self.SAMPLE_FOR_VALUE_FUNCTION = False
 
         if self.MPC_control:
             sys.path.insert(0, './codegen_mpc')
@@ -898,6 +900,23 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored(f" the energy consumption is  {p.computeJumpEnergyConsumption()}", "green"))
         print(colored(f" the leg impulse  is  {self.Fleg}", "green"))
         print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "green"))
+
+        if self.SAMPLE_FOR_VALUE_FUNCTION:
+            jump_length = np.linalg.norm(self.desired_target[self.jumpNumber][1:] - self.ref_com[1:, 0])
+            dict = {'test':self.jumpNumber,
+                    'p0_x':self.ref_com[0,0],
+                    'p0_y':self.ref_com[1,0],
+                    'p0_z':self.ref_com[2,0],
+                    'pf_x': self.desired_target[self.jumpNumber][0],
+                    'pf_y': self.desired_target[self.jumpNumber][1],
+                    'pf_z': self.desired_target[self.jumpNumber][2],
+                    'avg_tracking_cost': np.sum(self.MPC_tracking_error) / jump_length,
+                    'tracking_cost':self.MPC_tracking_error}
+            print(colored(f"Start: {self.ref_com[:, 0]}, Target: {self.desired_target[self.jumpNumber]}, Track.err: {np.sum(self.MPC_tracking_error)/jump_length}", "yellow"))
+            df_dict = pd.DataFrame([dict])
+            p.df = pd.concat([p.df, df_dict], ignore_index=True)
+            p.df.to_csv(f'value_function_dataset.csv', index=None)
+
         return self.targetPos - landing_location
 
     def readJsonFile(self, terrain="hemi"):
@@ -923,26 +942,56 @@ def talker(p):
     p.loadModelAndPublishers()
 
 
-    #############hard coded
-    # jump params
-    # jump starting position
-    # p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
-    # p.numberOfJumps = 3
-    # # jump landing position
-    # p.desired_target = [np.array([0.28, 4, -3.7]),
-    #                     np.array([0.28, 2.5, -6]),
-    #                     np.array([0.28, 3.6, -11])]
-    # p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
-    # ######################
+    if p.SAMPLE_FOR_VALUE_FUNCTION:
+        print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
+        columns = ['test', 'p0_x', 'p0_y', 'p0_z', 'pf_x', 'pf_y', 'pf_z', 'avg_tracking_cost', 'tracking_cost']
+        p.df = pd.DataFrame(columns=columns)
+        np.random.seed(0)
+        # get random walk samples
+        p0 = np.array([0.28, 2.5, -6.10104])
+        results = get_halton_samples(
+            domain_min=(0,  -conf.robot_params[p.robot_name]['spawn_2z']), #Y, Z
+            domain_max=(conf.robot_params[p.robot_name]['spawn_2y'],0.),
+            start_point=(p0[1], p0[2]),
+            R_values=3.,
+            margin = (0.5, 1.5),
+            n_proposals=3000,
+            cover_tol=1.5,
+            polygon=None,
+            optimizer_max_waypoints=500,
+            optimizer_max_iters=300,
+            optimizer_tol=1e-4,
+            hilbert_grid_res_power=10,
+            grid_res_cov=160,
+            show_plots=True
+        )
+        p.desired_target = []
+        samples = results['samples'][1:] # skip first which is p0
+        for sample in samples:
+            p.desired_target.append(np.array([0.28, sample[0], sample[1]]))
+        p.numberOfJumps = len(p.desired_target)
+        p.terrainManager = TerrainManager(grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='rock')
+    else:
+        #############hard coded
+        # jump params
+        # jump starting position
+        # p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
+        # p.numberOfJumps = 3
+        # # jump landing position
+        # p.desired_target = [np.array([0.28, 4, -3.7]),
+        #                     np.array([0.28, 2.5, -6]),
+        #                     np.array([0.28, 3.6, -11])]
+        # p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
+        # ######################
 
-    #############Json
-    data = p.readJsonFile(terrain="rock") # hemi, gaussian
-    p0 = np.array(data["target_points"][0])
-    p.desired_target = [np.array(t) for t in data["target_points"][1:]]
-    p.numberOfJumps = len(p.desired_target)
-    p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
-                                      seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
-    ##############
+        #############Json
+        data = p.readJsonFile(terrain="rock") # hemi, gaussian
+        p0 = np.array(data["target_points"][0])
+        p.desired_target = [np.array(t) for t in data["target_points"][1:]]
+        p.numberOfJumps = len(p.desired_target)
+        p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
+                                          seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
+        ##############
 
     p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
     p.startupProcedure()
