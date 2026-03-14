@@ -121,7 +121,10 @@ def startNode(package, executable, args=''):
     process = launch.launch(node)
 
 
-def loadXacro(package_name, model_name):
+def loadXacro(package_name, model_name, param_name = None):
+    if param_name is None:
+        param_name = '/'+model_name+'/robot_description'
+
     print(colored(f"Loading xacro for  {model_name} inside {package_name}", "blue"))
     # first generate robot description
     xacro_path = rospkg.RosPack().get_path(package_name) + '/robots/' + model_name + '.urdf.xacro'
@@ -135,12 +138,12 @@ def loadXacro(package_name, model_name):
         ros.logfatal('Failed to run xacro command with error: \n%s', process_error.output)
         sys.exit(1)
 
-    # put on param server
-    ros.set_param('/'+model_name, robot_description_param)
+    # set param robot_description on param server
+    ros.set_param(param_name, robot_description_param)
 
 def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spawn_orient = np.array([0.,0.,0.]) ):
     #loads the xacro of model in the parameter server
-    loadXacro(package_name, model_name)
+    loadXacro(package_name, model_name, param_name=model_name)
     print(colored(f"Spawning {model_name}", "blue"))
     package = 'gazebo_ros'
     executable = 'spawn_model'
@@ -381,12 +384,12 @@ def getRobotModelFloating(robot_name="hyq"):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n'
     path = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
     if rosgraph.is_master_online():
-        try:
-            urdf = ros.get_param('/robot_description', None) or ros.get_param('/' + robot_name + '/robot_description', None)
-        except:
+        urdf = ros.get_param('/robot_description', None) or ros.get_param('/' + robot_name + '/robot_description', None)
+        if urdf == None:
             print('Failed to retrieve robot_description: issues in URDF generation for Pinocchio, did not succeed')
-            loadXacro(package_name=robot_name+"_description",model_name=robot_name)
-            #urdf = ros.get_param('/robot_description')
+            loadXacro(package_name=robot_name+"_description",model_name=robot_name, param_name='/' + robot_name +'/robot_description')
+            urdf = ros.get_param('/' + robot_name +'/robot_description')
+            print(urdf)
         print("URDF generated_commons")
         os.makedirs(path + "/robot_urdf/generated_urdf/", exist_ok=True)
         urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
