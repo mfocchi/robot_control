@@ -32,6 +32,7 @@ import json
 from base_controllers.components.terrain_manager import TerrainManager
 import pandas as pd
 from base_controllers.utils.halton_walker import get_halton_samples
+from orientation_controller import OrientationController
 
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
@@ -97,6 +98,23 @@ class ClimbingrobotController(BaseControllerFixed):
         wrench.torque.z = 0.
         self.pub_prop_force.publish(wrench)
 
+    def apply_propeller_orient(self, w_wrench, prop_thrusts):
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[0],
+                               self.orientControl.b_propeller_axes[0] * prop_thrusts[0]/self.force_scale , "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[1],
+                               self.orientControl.b_propeller_axes[1] * prop_thrusts[1] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[2],
+                               self.orientControl.b_propeller_axes[2] * prop_thrusts[2] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[3],
+                               self.orientControl.b_propeller_axes[3] * prop_thrusts[3] / self.force_scale, "blue", scale=1.5)
+        wrench = Wrench()
+        wrench.force.x =  w_wrench[0]
+        wrench.force.y =  w_wrench[1]
+        wrench.force.z =  w_wrench[2]
+        wrench.torque.x = w_wrench[3]
+        wrench.torque.y = w_wrench[4]
+        wrench.torque.z = w_wrench[5]
+        self.pub_prop_force.publish(wrench)
 
     def loadModelAndPublishers(self, xacro_path=None):
         xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
@@ -237,6 +255,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_l = 0
         self.Fr_r = 0
         self.prop_force = 0
+        self.prop_thrusts = [0]*4
         self.MPC_tracking_error = []
 
         w_R_wall = self.math_utils.eul2Rot(np.array([0, -conf.robot_params[p.robot_name]['wall_inclination'], 0]))
@@ -267,9 +286,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.psid_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.prop_thrusts_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
-
-
+        propeller_orient = np.array([0.25 * np.pi, 0.75 * np.pi, np.pi + 0.25 * np.pi, np.pi + 0.75 * np.pi])
+        self.orientControl = OrientationController(base_line_x = 0.1, base_line_y = 0.2, propeller_orient=propeller_orient)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -287,6 +307,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.base_vel_log[:,self.log_counter] = self.base_vel
                 if self.PROPELLERS:
                     self.prop_force_log[self.log_counter] = self.prop_force
+                    self.prop_thrusts_log[:, self.log_counter] = self.prop_thrusts
+
                 #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
 
             super().logData()
@@ -313,6 +335,7 @@ class ClimbingrobotController(BaseControllerFixed):
         plot3D('matlab states', 3, ['psi', 'l1', 'l2'], p.time_log, p.simp_model_state_log, p.ref_time + (p.startJump+p.orientTime), np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
 
 
+
         # plot rope forces
         plt.figure()
         plt.subplot(2, 1, 1)
@@ -326,6 +349,24 @@ class ClimbingrobotController(BaseControllerFixed):
         plt.plot(p.time_log, p.Fr_r_log, label="ref+MPC", color='blue')
         plt.legend()
         plt.grid()
+
+        # plot rope forces
+        plt.figure()
+        plt.ylabel("prop_thrusts")
+        plt.subplot(4, 1, 1)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[0,:], label="prop1", color='blue')
+        plt.subplot(4, 1, 2)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[1,:], label="prop2", color='blue')
+        plt.subplot(4, 1, 3)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[2,:], label="prop3", color='blue')
+        plt.subplot(4, 1, 4)
+        plt.plot(p.time_log, p.prop_thrusts_log[3,:], label="prop4", color='blue')
+        plt.legend()
+        plt.grid()
+        plotFrameLinear('position', time_log=p.time_log, Pose_log=p.base_rpy_log)
 
         #save data
         time_jump = p.time_log - (p.startJump + p.orientTime)
@@ -905,9 +946,16 @@ class ClimbingrobotController(BaseControllerFixed):
             if p.MPC_control:
                 deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
                 if p.PROPELLERS:
-                    #if p.ADD_NOISE:
-                        #prop_force += 0.1*np.sin(2*np.pi*3000/60)
-                    p.apply_propeller_force(p.prop_force)
+                    # old
+                    # p.apply_propeller_force(p.prop_force)
+                    prop_forceW = p.n_bar * p.prop_force
+                    # compute thrust for orientation
+                    p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=np.array([0, 0, 0.7]),
+                                                             act_orient=p.base_rpy,
+                                                             w_omega_b=p.omega_b,
+                                                             Ko=conf.robot_params[p.robot_name]['Ko'],
+                                                             Do=conf.robot_params[p.robot_name]['Do'], w_additional_force=prop_forceW)
+                    p.apply_propeller_orient(w_wrench, p.prop_thrusts)
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
@@ -1091,7 +1139,7 @@ def talker(p):
     p0_adj[0] = p.terrainManager.wall_surface_eval(p0[2], p0[1], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2 # account for leg
     p.q_des[:12] = p.computeJointVariables(p0_adj)
 
-    p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+    p.setSimSpeed(dt_sim=0.001, max_update_rate=1000, iters=1500)
 
     # from base_controllers.utils.feasibility_graph import make_uniform_grid_yz, build_directed_jump_graph, nearest_node_index, build_single_continuous_path_cover_edges, save_path_to_csv
     # pts = make_uniform_grid_yz(
