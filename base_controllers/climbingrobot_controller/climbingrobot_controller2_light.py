@@ -565,6 +565,74 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if self.PLOT_MPC:
             self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1)
+        status_map = {
+            1: "converged",
+            -2: "not converged",
+            2: "semidef.converg",
+            0: "max number of function evaluations"
+        }
+        status = status_map.get(self.matvars['problem_solved'], "unknown status")
+        print(f"problem converged?: {status}")
+
+        if self.matvars['problem_solved'] != 1:
+            # not convergence
+            if self.matvars['problem_solved'] == -2:
+                return False
+            # but there can be cases (eg  semidef conv , fmax eval) for which there are also not violations
+            violations = self.eval_constraints(self.matvars['c'], self.matvars['num_constr'], self.matvars['constr_tolerance'], verbose=False)
+            # if there is at least one violation
+            if violations:
+                return False
+            else:
+                return True
+        else:
+            return True
+
+    def eval_constraints(self, c, num_constr, constr_tolerance, debug=False, verbose=True):
+        """
+        Check constraint vector `c` against blocks described by `num_constr`.
+        - c: sequence or 1D numpy array of constraint values
+        - num_constr: object or dict with integer fields:
+            wall_constraints,
+            retraction_force_constraints,
+            force_constraints,
+            initial_final_constraints,
+            via_point
+        - constr_tolerance: scalar
+        - debug: bool (print detailed per-constraint info)
+        """
+        # ensure numpy array (1D)
+        c = np.array(c).flatten()
+        # compute 0-based start indices for each block (Python indexing)
+        w0 = 0
+        r0 = w0 + int(num_constr['wall_constraints'])
+        f0 = r0 + int(num_constr['retraction_force_constraints'])
+        final0 = f0 + int(num_constr['force_constraints'])
+        via0 = final0 + int(num_constr['initial_final_constraints'])
+        violations = []
+        # 1) wall constraints
+        w_block = c[w0: w0 + int(num_constr['wall_constraints'])]
+        if w_block.size > 0 and np.any(w_block > constr_tolerance):
+            violations.append(f"1: {w_block > constr_tolerance}")
+        # 2) retraction force constraints
+        r_block = c[r0: r0 + int(num_constr['retraction_force_constraints'])]
+        if r_block.size > 0 and np.any(r_block > constr_tolerance):
+            violations.append(f"2: {r_block > constr_tolerance}")
+        # 3) force constraints (unilateral, actuation, friction, ...)
+        f_block = c[f0: f0 + int(num_constr['force_constraints'])]
+        if f_block.size > 0 and np.any(f_block > constr_tolerance):
+            violations.append(f"3: {f_block > constr_tolerance}")
+        # 4) final point constraints (several subchecks)
+        final_block = c[final0: final0 + int(num_constr['initial_final_constraints'])]
+        if final_block.size > 0 and np.any(final_block > constr_tolerance):
+            violations.append(f"4: {final_block > constr_tolerance}")
+        # 5) via point constraints
+        via_block = c[via0: via0 + int(num_constr['via_point'])]
+        if via_block.size > 0 and np.any(via_block > constr_tolerance):
+            violations.append(f"4: {final_block > constr_tolerance}")
+        if verbose and not violations:
+            print(colored(f"None", "red"))
+        return violations
 
     def computeMPC(self, delta_t):
         # after the thrust we start MPC,  it will start from time 0.05 so the index will start from  2
@@ -714,8 +782,12 @@ class ClimbingrobotController(BaseControllerFixed):
                         p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
                         p.targetPos_paper.append(p.ref_com[:, -1])
 
-            print(colored(f"Start trajectory optimization", "blue"))
-            p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
+            print(colored(f"-------------------- Start trajectory optimization", "blue"))
+            if p.SAMPLE_FOR_VALUE_FUNCTION:
+                while not (p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])):
+                    p.desired_target[p.jumpNumber]+= 0.1*np.random.rand(3) #perturb
+            else:
+                p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
             p.unpause_physics_client()
 
 
@@ -1020,6 +1092,27 @@ def talker(p):
     p.q_des[:12] = p.computeJointVariables(p0_adj)
 
     p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+
+    # from base_controllers.utils.feasibility_graph import make_uniform_grid_yz, build_directed_jump_graph, nearest_node_index, build_single_continuous_path_cover_edges, save_path_to_csv
+    # pts = make_uniform_grid_yz(
+    #     y_min=0.5, y_max=4.5,
+    #     z_min=-19.0, z_max=1.,
+    #     ny=5, nz=20)
+    # print("Number of grid points:", pts.shape[0])
+    # edges = build_directed_jump_graph(pts, is_feasible=p.initOptim)
+    # print("Directed feasible jumps:", edges.shape[0])
+    # print("Edges array shape:", edges.shape)
+    # start_node = nearest_node_index(pts, p0)
+    # print("Start node index:", start_node)
+    # print("Start node coordinate (grid):", pts[start_node])
+    # print("Start node error:", np.linalg.norm(pts[start_node] - p0))
+    # path_edges, unused_mask = build_single_continuous_path_cover_edges(
+    #     pts=pts,        edges=edges,        start_node=start_node,        pick_rule="first"   )
+    # print("Path length (jumps):", path_edges.shape[0])
+    # print("Uncovered feasible edges:", int(np.sum(unused_mask)))
+    # save_path_to_csv("single_path_pairs.csv", pts, path_edges)
+    # print("Saved single_path_pairs.csv")
+    # sys.exit()
 
     while not ros.is_shutdown():
         # update the kinematics
