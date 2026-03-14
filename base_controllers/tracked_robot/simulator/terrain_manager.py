@@ -130,7 +130,7 @@ class TerrainManager:
 
         return intersection_points
 
-    def project_on_mesh(self, point, direction, debug=False):
+    def project_on_mesh(self, point, direction, base_yaw = None, debug=False):
         # SUGGESTED BY https://github.com/matteodv99tn
         point = np.append(point, self.baseline)
         # use open3d ray casting to compute distance from point to surface
@@ -148,19 +148,29 @@ class TerrainManager:
         eval_point = point + z_coord
         normal = ans['primitive_normals'][0].cpu().numpy()
 
-        #first compute yaw to solve ambiguity, because we are reasoning in the world frame, we consider yaw the angle between the projection
-        #of the normal vector onto the XY plane n_xy =(nx, ny, 0) and the base X axis (rx,ry,0)
-        yaw = math.atan2(normal[1], normal[0])
+        # old  way (wrong)
+        # #first compute yaw to solve ambiguity, because we are reasoning in the world frame, we consider yaw the angle between the projection
+        # #of the normal vector onto the XY plane n_xy =(nx, ny, 0) and the base X axis (rx,ry,0)
+        # yaw = math.atan2(normal[1], normal[0])
+        #
+        # #then I rotate n to undo the yaw and get n_ = [sin(pitch)*cos(roll); -sint(roll), cos(pitch)*cos(roll)])
+        # Rz = np.array([[math.cos(yaw), -math.sin(yaw), 0],[math.sin(yaw), math.cos(yaw), 0],[0, 0, 1] ])
+        # n_ =Rz.T.dot(normal)
+        #
+        # #compute roll/pitch
+        # pitch = math.atan2(n_[0], n_[2])
+        # roll = math.atan2(-n_[1]*np.sin(pitch), n_[0])
+        # #as an alternative
+        # #roll = math.asin(-n_[1])
 
-        #then I rotate n to undo the yaw and get n_ = [sin(pitch)*cos(roll); -sint(roll), cos(pitch)*cos(roll)])
-        Rz = np.array([[math.cos(yaw), -math.sin(yaw), 0],[math.sin(yaw), math.cos(yaw), 0],[0, 0, 1] ])
-        n_ =Rz.T.dot(normal)
-
-        #compute roll/pitch
+        # First remove robot yaw from the normal (assume ZYX euler)
+        Rz = np.array([[math.cos(base_yaw), -math.sin(base_yaw), 0], [math.sin(base_yaw), math.cos(base_yaw), 0], [0, 0, 1]])
+        n_ = Rz.T.dot(normal)
+        # now n_ will be Ry(pitch)Rx(roll)*e_z which leads to n_ = [sin(pitch)cos(roll), - sin(roll), cos(pitch)cos(roll)]
+        # then we compute
         pitch = math.atan2(n_[0], n_[2])
-        roll = math.atan2(-n_[1]*np.sin(pitch), n_[0])
-        #as an alternative
-        #roll = math.asin(-n_[1])
+        roll = math.atan2(-n_[1], math.sqrt(n_[0] * n_[0] + n_[2] * n_[2]))
+
         #to have it in the range between  -pi/2 and pi/2
         if roll > np.pi/2:
             roll-=np.pi

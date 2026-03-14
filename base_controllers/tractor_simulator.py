@@ -486,13 +486,13 @@ class GenericSimulator(BaseController):
             if self.SIMULATOR=='distributed3d':
                 self.terrain_consistent_pose_init=np.array([self.p0[0], self.p0[1], 0, 0, 0, 0])
                 if self.TERRAIN: #ramp and mesh
-                    start_position, start_roll, start_pitch, start_yaw = p.terrainManager.project_on_mesh(point=self.terrain_consistent_pose_init[:2], direction=np.array([0., 0., 1.]))
+                    start_position, start_roll, start_pitch = p.terrainManager.project_on_mesh(point=self.terrain_consistent_pose_init[:2], direction=np.array([0., 0., 1.]), base_yaw=self.p0[2])
                     self.terrain_consistent_pose_init[:3] = start_position.copy()
                     self.terrain_consistent_pose_init[3] = start_roll
                     self.terrain_consistent_pose_init[4] = start_pitch
-                    self.terrain_consistent_pose_init[5] = start_yaw
+                    self.terrain_consistent_pose_init[5] = self.p0[2]
                     # init com self.vehicle_param.height above ground
-                    w_R_terr = p.math_utils.eul2Rot(np.array([start_roll, start_pitch, start_yaw]))
+                    w_R_terr = p.math_utils.eul2Rot(self.terrain_consistent_pose_init[3:])
                     self.terrain_consistent_pose_init[:3] += self.tracked_vehicle_simulator.consider_robot_height * (w_R_terr[:, 2] * self.tracked_vehicle_simulator.vehicle_param.height)
                 else:
                     self.terrain_consistent_pose_init[:3] += self.tracked_vehicle_simulator.consider_robot_height * (np.array([0.,0.,1.])* self.tracked_vehicle_simulator.vehicle_param.height)
@@ -950,8 +950,10 @@ class GenericSimulator(BaseController):
 
             if self.SIMULATOR=='distributed3d':
                 if self.TERRAIN:
-                    pg, terrain_roll, terrain_pitch, terrain_yaw = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0., 0., 1.]))
-                    pose_des, terrain_roll_des, terrain_pitch_des, terrain_yaw_des = self.terrainManager.project_on_mesh(point=np.array([self.des_x, self.des_y]), direction=np.array([0., 0., 1.]))
+                    pg, terrain_roll, terrain_pitch = self.terrainManager.project_on_mesh(point=self.basePoseW[:2], direction=np.array([0., 0., 1.]), base_yaw=self.basePoseW[5])
+                    pose_des, terrain_roll_des, terrain_pitch_des = self.terrainManager.project_on_mesh(point=np.array([self.des_x, self.des_y]), direction=np.array([0., 0., 1.]), base_yaw=self.basePoseW[5])
+                    # terrain yaw is determined by the robot orientation!
+                    terrain_yaw = self.basePoseW[5]
                     w_R_terr = self.math_utils.eul2Rot(np.array([terrain_roll, terrain_pitch, terrain_yaw]))
                     w_normal = w_R_terr.dot(np.array([0, 0, 1]))
 
@@ -1130,7 +1132,7 @@ def main_loop(p):
     p.initVars()
     p.q_old = np.zeros(2)
     p.initSubscribers()
-    p.startupProcedure()
+
     #init joints
     p.q_des = np.copy(p.q_des_q0)
     p.q_old = np.zeros(2)
@@ -1182,7 +1184,8 @@ def main_loop(p):
             #
             p.traj = Trajectory(None, des_x_vec, des_y_vec,des_theta_vec, None, DT=plan_dt, v=v_ol, omega=omega_ol)
             traj_length = len(v_ol)
-
+        p.startupProcedure()
+        p.traj.set_initial_time(start_time=p.time)
         while not ros.is_shutdown():
             if p.IDENT_TYPE == 'WHEELS':
                 if counter>=traj_length:
@@ -1229,6 +1232,7 @@ def main_loop(p):
     else:
 
         # CLOSE loop control
+        p.startupProcedure()
         # generate reference trajectory
         vel_gen = VelocityGenerator(simulation_time=20.,    DT=conf.robot_params[p.robot_name]['dt'])
         if p.PLANNING == 'none':
