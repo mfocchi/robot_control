@@ -28,7 +28,6 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress
 from base_controllers.utils.common_functions import checkRosMaster
 import  base_controllers.params as conf
 robotName = "climbingrobot2"
-
 # real robot msgs
 import std_msgs, geometry_msgs
 from climbingrobot_description.msg import RopeCommand
@@ -38,11 +37,11 @@ from climbingrobot_description.msg import AlpineBodyTelemetry
 # real robot services
 from climbingrobot_description.srv import AlpineBodyCommand, AlpineBodyCommandRequest
 from climbingrobot_description.srv import RopeControlMode, RopeControlModeRequest
-
 from base_controllers.utils.common_functions import startNode, checkRosMaster
 from base_controllers.utils.math_tools import quaternion_matrix
-
 from base_controllers.utils.ros_publish import RosPub
+from orientation_controller import OrientationController
+
 
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
@@ -89,15 +88,21 @@ class ClimbingrobotController(BaseControllerFixed):
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
 
-    def apply_propeller_command(self, prop_force_x=0., prop_force_y=0., prop_moment_z=0.):
+    def apply_propeller_command(self, prop_thrusts=[0.,0.,0.,0.]):
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[0],
+                               self.orientControl.b_propeller_axes[0] * prop_thrusts[0]/self.force_scale , "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[1],
+                               self.orientControl.b_propeller_axes[1] * prop_thrusts[1] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[2],
+                               self.orientControl.b_propeller_axes[2] * prop_thrusts[2] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[3],
+                               self.orientControl.b_propeller_axes[3] * prop_thrusts[3] / self.force_scale, "blue", scale=1.5)
         msg =  PropellerCommand()
-        msg.propeller_force_x = prop_force_x
-        msg.propeller_force_y = prop_force_y
-        msg.propeller_moment_z = prop_moment_z
-        w_prop_force = self.w_R_b*np.array([prop_force_x, prop_force_y,0.])
+        msg.propeller_thrust_0 = prop_thrusts[0]
+        msg.propeller_thrust_1 = prop_thrusts[1]
+        msg.propeller_thrust_2 = prop_thrusts[2]
+        msg.propeller_thrust_3 = prop_thrusts[3]
         self.pub_propeller_command.publish(msg)
-        self.ros_pub.add_arrow(self.base_pos, w_prop_force / self.force_scale, "blue", scale=1.5)
-
 
     def getRobotMass(self):
         total_robot_mass = 5.0 #todo hardcode this
@@ -108,7 +113,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.w_R_rope = (quaternion_matrix(self.rope_l_imu_orientation))[:3,:3]
 
         self.w_R_b = quaternion_matrix(self.body_imu_orientation)[:3, :3]
-        self.w_omega_b = self.body_imu_angular_velocity
+        self.w_omega_b = self.body_imu_angular_velocity #TODO double check
 
         #rope gravity terms TO BE RECOMPUTED TODO
         #self.g #
@@ -146,6 +151,11 @@ class ClimbingrobotController(BaseControllerFixed):
         # to get the derivative I need also the
         extr_roll =  math.atan2(-self.w_R_rope[1,2], self.w_R_rope[2,2])
         self.psi_d = np.cos(extr_roll) * self.w_omega_b[1] -np.sin(extr_roll) * self.w_omega_b[2]
+
+        # use geometric intuition for psid
+        n_par = (self.anchor_pos - self.anchor_pos2) / np.linalg.norm(self.anchor_pos - self.anchor_pos2)
+        rope2_axis = (self.base_pos - self.anchor_pos2) / np.linalg.norm(self.base_pos - self.anchor_pos2)
+        self.n_bar = np.cross(n_par, rope2_axis) / np.linalg.norm(np.cross(n_par, rope2_axis))
 
         # the mountain is always wrt to world
         mountain_pos = np.array([-self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
@@ -208,9 +218,6 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_l = 0
         self.Fr_r = 0
         self.prop_force_x = 0
-        self.prop_force_y = 0
-        self.prop_moment_z = 0
-        self.prop_moment_z = 0
         self.touch_down_detected_l = False
         self.touch_down_detected_r = False
         self.optimal_control_traj_finished = False
@@ -233,8 +240,6 @@ class ClimbingrobotController(BaseControllerFixed):
         self.psid_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.prop_force_x_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.prop_force_y_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.prop_moment_z_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         self.contactForceW_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
@@ -246,6 +251,12 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mpc_index_ffwd = 0 # updated only when we stop recomputing mpc
 
         self.targetReceived = True # in sim just give hardcoded target
+
+        self.prop_thrusts = [0]*4
+        self.prop_thrusts_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
+        propeller_orient = np.array([0.25 * np.pi, 0.75 * np.pi, np.pi + 0.25 * np.pi, np.pi + 0.75 * np.pi])
+        self.orientControl = OrientationController(base_line_x = 0.1, base_line_y = 0.2, propeller_orient=propeller_orient)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -261,9 +272,9 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.l_2d_log[self.log_counter] =  self.l_2d
                 self.psid_log[self.log_counter] = self.psi_d
                 self.base_vel_log[:,self.log_counter] = self.w_base_vel
+
                 self.prop_force_x_log[self.log_counter] = self.prop_force_x
-                self.prop_force_y_log[self.log_counter] = self.prop_force_y
-                self.prop_moment_z_log[self.log_counter] = self.prop_moment_z
+                self.prop_thrusts_log[:, self.log_counter] = self.prop_thrusts
 
                 #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
 
@@ -301,6 +312,24 @@ class ClimbingrobotController(BaseControllerFixed):
         # plt.plot(p.ref_time, p.Fr_r0, color='red')
         # plt.plot(time_gazebo, p.Fr_r_log, color='blue')
         # plt.grid()
+
+        # plot propeller thrusts
+        plt.figure()
+        plt.ylabel("prop_thrusts")
+        plt.subplot(4, 1, 1)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[0,:], label="prop1", color='blue')
+        plt.subplot(4, 1, 2)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[1,:], label="prop2", color='blue')
+        plt.subplot(4, 1, 3)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[2,:], label="prop3", color='blue')
+        plt.subplot(4, 1, 4)
+        plt.plot(p.time_log, p.prop_thrusts_log[3,:], label="prop4", color='blue')
+        plt.legend()
+        plt.grid()
+        plotFrameLinear('position', time_log=p.time_log, Pose_log=p.base_rpy_log)
 
         #save data
         filename = f'test_gazebo_MPC_{p.MPC_control}.mat'
@@ -736,6 +765,7 @@ class ClimbingrobotController(BaseControllerFixed):
             ros.logerr("Service call failed: %s" % e)
             return False
 
+
 def talker(p):
     p.start()
     p.startRealRobot()
@@ -893,10 +923,17 @@ def talker(p):
             delta_t = p.time - p.end_thrusting
 
             if p.MPC_control:
-                # compute orientation control TODO
-                #p.prop_force_x, p.prop_force_y, p.prop_moment_z = computeOrientationControl()
                 deltaFr_l0, deltaFr_r0, p.prop_force_x = p.computeMPC(delta_t)
-                p.apply_propeller_command(p.prop_force_x, p.prop_force_y, p.prop_moment_z)
+
+                # compute orientation control TODO
+                prop_forceW = p.n_bar * p.prop_force_x
+                # compute thrust for orientation
+                p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=np.array([0, 0, 0.7]),
+                                                                         act_orient=p.base_rpy,
+                                                                         w_omega_b=p.w_omega_b,
+                                                                         Ko=conf.robot_params[p.robot_name]['Ko'],
+                                                                         Do=conf.robot_params[p.robot_name]['Do'], w_additional_force=prop_forceW)
+                p.apply_propeller_command(p.prop_thrusts)
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.

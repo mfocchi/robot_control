@@ -179,7 +179,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_rpy = self.math_utils.rot2eul(self.w_R_b)
         self.Jb = self.robot.frameJacobian(self.q, self.robot.model.getFrameId('base_link'), True,  pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
         self.base_vel = self.Jb[:3, :].dot(self.qd)
-        self.omega_b =  self.Jb[3:, :].dot(self.qd)
+        self.omega_b =  self.Jb[3:, :].dot(self.qd) #in WF
 
         # compute com in base frame
         robotComB = pin.centerOfMass(self.robot.model, self.robot.data, self.q)
@@ -350,7 +350,7 @@ class ClimbingrobotController(BaseControllerFixed):
         plt.legend()
         plt.grid()
 
-        # plot rope forces
+        # plot propeller thrusts
         plt.figure()
         plt.ylabel("prop_thrusts")
         plt.subplot(4, 1, 1)
