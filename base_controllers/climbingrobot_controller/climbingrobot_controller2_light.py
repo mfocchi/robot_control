@@ -406,9 +406,6 @@ class ClimbingrobotController(BaseControllerFixed):
     def computeJointVariables(self, p):
         # mountain_wire_pitch_l = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_x'], -p[2])
         # mountain_wire_pitch_r = math.atan2(p[0]-conf.robot_params[self.robot_name]['spawn_2x'], -p[2])
-        if conf.robot_params[self.robot_name]['wall_inclination']>0.: #TODO missing normal in matlab wall_constraint!
-            p[0] = (-p[2]) * math.tan(conf.robot_params[self.robot_name]['wall_inclination'])  #spawn_x is for the anchor point which is shifted wrt the wall
-            print(f"adjusting initial position to be consistent with wall: {p}")
 
         mountain_wire_pitch_l = math.atan2(p[0] , -p[2])
         mountain_wire_pitch_r = math.atan2(p[0] , -p[2])
