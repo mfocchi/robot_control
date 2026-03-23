@@ -54,6 +54,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.use_gui = False
         self.PAPER = False
         self.SAMPLE_FOR_VALUE_FUNCTION = False
+        self.USE_ORIENTATION_CONTROL = False
 
         if self.MPC_control:
             sys.path.insert(0, './codegen_mpc')
@@ -288,8 +289,9 @@ class ClimbingrobotController(BaseControllerFixed):
         self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.prop_thrusts_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
-        propeller_orient = np.array([0.25 * np.pi, 0.75 * np.pi, np.pi + 0.25 * np.pi, np.pi + 0.75 * np.pi])
-        self.orientControl = OrientationController(base_line_x = 0.1, base_line_y = 0.2, propeller_orient=propeller_orient)
+        if self.USE_ORIENTATION_CONTROL:
+            propeller_orient = np.array([0.25 * np.pi, 0.75 * np.pi, np.pi + 0.25 * np.pi, np.pi + 0.75 * np.pi])
+            self.orientControl = OrientationController(base_line_x = 0.1, base_line_y = 0.2, propeller_orient=propeller_orient)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -350,23 +352,24 @@ class ClimbingrobotController(BaseControllerFixed):
         plt.legend()
         plt.grid()
 
-        # plot propeller thrusts
-        plt.figure()
-        plt.ylabel("prop_thrusts")
-        plt.subplot(4, 1, 1)
-        plt.grid()
-        plt.plot(p.time_log, p.prop_thrusts_log[0,:], label="prop1", color='blue')
-        plt.subplot(4, 1, 2)
-        plt.grid()
-        plt.plot(p.time_log, p.prop_thrusts_log[1,:], label="prop2", color='blue')
-        plt.subplot(4, 1, 3)
-        plt.grid()
-        plt.plot(p.time_log, p.prop_thrusts_log[2,:], label="prop3", color='blue')
-        plt.subplot(4, 1, 4)
-        plt.plot(p.time_log, p.prop_thrusts_log[3,:], label="prop4", color='blue')
-        plt.legend()
-        plt.grid()
-        plotFrameLinear('position', time_log=p.time_log, Pose_log=p.base_rpy_log)
+        if p.USE_ORIENTATION_CONTROL:
+            # plot propeller thrusts
+            plt.figure()
+            plt.ylabel("prop_thrusts")
+            plt.subplot(4, 1, 1)
+            plt.grid()
+            plt.plot(p.time_log, p.prop_thrusts_log[0,:], label="prop1", color='blue')
+            plt.subplot(4, 1, 2)
+            plt.grid()
+            plt.plot(p.time_log, p.prop_thrusts_log[1,:], label="prop2", color='blue')
+            plt.subplot(4, 1, 3)
+            plt.grid()
+            plt.plot(p.time_log, p.prop_thrusts_log[2,:], label="prop3", color='blue')
+            plt.subplot(4, 1, 4)
+            plt.plot(p.time_log, p.prop_thrusts_log[3,:], label="prop4", color='blue')
+            plt.legend()
+            plt.grid()
+            plotFrameLinear('position', time_log=p.time_log, Pose_log=p.base_rpy_log)
 
         #save data
         time_jump = p.time_log - (p.startJump + p.orientTime)
@@ -947,15 +950,18 @@ class ClimbingrobotController(BaseControllerFixed):
                 deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
                 if p.PROPELLERS:
                     # old
-                    # p.apply_propeller_force(p.prop_force)
-                    prop_forceW = p.n_bar * p.prop_force
-                    # compute thrust for orientation
-                    p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=np.array([0, 0, 0.7]),
-                                                             act_orient=p.base_rpy,
-                                                             w_omega_b=p.omega_b,
-                                                             Ko=conf.robot_params[p.robot_name]['Ko'],
-                                                             Do=conf.robot_params[p.robot_name]['Do'], w_additional_force=prop_forceW)
-                    p.apply_propeller_orient(w_wrench, p.prop_thrusts)
+                    if not self.USE_ORIENTATION_CONTROL:
+                        p.apply_propeller_force(p.prop_force)
+                    else:
+                        prop_forceW = p.n_bar * p.prop_force
+                        # compute thrust for orientation
+                        p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=p.base_rpy,
+                                                                 act_orient=p.base_rpy,
+                                                                 w_omega_b=p.omega_b,
+                                                                 Ko=conf.robot_params[p.robot_name]['Ko'],
+                                                                 Do=conf.robot_params[p.robot_name]['Do'],
+                                                                 w_additional_force=prop_forceW)
+                        p.apply_propeller_orient(w_wrench, p.prop_thrusts)
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
