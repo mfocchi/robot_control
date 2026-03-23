@@ -445,6 +445,72 @@ class ClimbingrobotController(BaseControllerFixed):
         else:
             return False
 
+    def resetRobot(self, p0 = None):
+        from gazebo_msgs.srv import SetModelState
+        from gazebo_msgs.srv import SetModelStateRequest
+        from gazebo_msgs.msg import ModelState
+        p0_adj = p0.copy()
+        self.updateKinematicsDynamics()
+        p0_adj[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1], self.mesh_x, self.mesh_y, self.mesh_z) + 0.2  # account for leg
+        # # create the message (THIS DOES NOT WORK WITH KINEMATIC LOOPS)
+        # from gazebo_msgs.srv import SetModelConfiguration
+        # from gazebo_msgs.srv import SetModelConfigurationRequest
+        # self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
+        # req_reset_joints = SetModelConfigurationRequest()
+        # req_reset_joints.model_name = self.robot_name
+        # req_reset_joints.urdf_param_name = 'robot_description'
+        # req_reset_joints.joint_names = self.joint_names
+        # req_reset_joints.joint_positions = self.q_des.tolist()
+        # # send request and get response (in this case none)
+        # self.reset_joints(req_reset_joints)
+        self.reset_base = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
+        reset_base_req = SetModelStateRequest()
+        quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.base_rpy))
+
+        # create model state
+        model_state = ModelState()
+        model_state.model_name = self.robot_name
+        new_base_pos = p0_adj + self.mat2Gazebo
+        print(colored(f"---------Resetting Robot to {p0}, wait for convergence!", "red"))
+        model_state.pose.position.x = new_base_pos[0]
+        model_state.pose.position.y = new_base_pos[1]
+        model_state.pose.position.z = new_base_pos[2]
+        model_state.pose.orientation.x = quaternion.x
+        model_state.pose.orientation.y = quaternion.y
+        model_state.pose.orientation.z = quaternion.z
+        model_state.pose.orientation.w = quaternion.w
+        model_state.twist.linear.x = 0.
+        model_state.twist.linear.y = 0.
+        model_state.twist.linear.z = 0.
+        model_state.twist.angular.x = 0.
+        model_state.twist.angular.y = 0.
+        model_state.twist.angular.z = 0.
+        reset_base_req.model_state = model_state
+        # send request and get response (in this case none)
+        self.reset_base(reset_base_req)
+
+        self.q_des[:12] = self.computeJointVariables(p0_adj)
+        #print(colored(f"---------Computing Consistent Joints:", "red"))
+        # for joint, name in zip(self.q_des, self.joint_names):
+        #     print(colored(f"{name}: {joint}", "red"))
+        self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
+
+        self.start_reset = self.time
+        while self.time < (self.start_reset + 4.):
+            self.updateKinematicsDynamics()
+            self.ros_pub.add_arrow(self.anchor_pos, (self.hoist_l_pos - self.anchor_pos), "green", scale=2.5)  # arope, already in gazebo
+            self.ros_pub.add_arrow(self.anchor_pos2, (self.hoist_r_pos - self.anchor_pos2), "green", scale=2.5)  # arope, already in gazebo
+            # plot contact force on retractable leg
+            self.ros_pub.add_arrow(self.x_ee, self.contactForceW / p.force_scale, "blue", scale=2.5)
+            # plot target position (whenever is available)
+            self.ros_pub.add_marker(p.x_ee, radius=0.05)
+            self.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
+            self.ros_pub.publishVisual(delete_markers=False)
+            # send commands to gazebo
+            self.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+            self.time = np.round(self.time + np.array([conf.robot_params[self.robot_name]['dt']]), 4)  # to avoid issues of dt 0.0009999
+            self.logData()
+            self.rate.sleep()
 
     def resetRope(self):
         print(colored(f"RESTORING ROPE PD", "red"))
@@ -784,8 +850,11 @@ class ClimbingrobotController(BaseControllerFixed):
             self.mpc_index = 0
             self.mpc_index_old = 0
             self.mpc_index_ffwd = 0  # updated only when we stop recomputing mpc
-            p.startJump = p.time
-            p.touch_down_detected_prismleg = False
+
+            #abrupt reset next state here, if needed
+            #self.resetRobot(np.array([0.28, 1.5, -13.10104]))
+            self.startJump = self.time
+            self.touch_down_detected_prismleg = False
             return False
         else:
             p.stateMachine = 'idle'
@@ -806,7 +875,6 @@ class ClimbingrobotController(BaseControllerFixed):
         if ( p.stateMachine == 'start_jump') and (p.time >= p.startJump):
             # first run optim and fill in jump variable
             p.pause_physics_client()
-
             # PAPER
             if p.PAPER and p.jumpNumber == 0:
                 #first optim
@@ -823,6 +891,8 @@ class ClimbingrobotController(BaseControllerFixed):
                         p.total_ref_com = np.concatenate((p.total_ref_com, p.ref_com), axis=1)
                         p.targetPos_paper.append(p.ref_com[:, -1])
 
+
+            #normal usage
             print(colored(f"-------------------- Start trajectory optimization", "blue"))
             if p.SAMPLE_FOR_VALUE_FUNCTION:
                 while not (p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])):
@@ -1121,8 +1191,9 @@ def talker(p):
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
 
+
     #loop frequency
-    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
+    p.rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
     p.updateKinematicsDynamics()
 
     # spawn mesh in gazebo (needs mat2Gazebo)
@@ -1142,7 +1213,8 @@ def talker(p):
     p0_adj[0] = p.terrainManager.wall_surface_eval(p0[2], p0[1], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2 # account for leg
     p.q_des[:12] = p.computeJointVariables(p0_adj)
 
-    p.setSimSpeed(dt_sim=0.001, max_update_rate=1000, iters=1500)
+
+    p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
     # from base_controllers.utils.feasibility_graph import make_uniform_grid_yz, build_directed_jump_graph, nearest_node_index, build_single_continuous_path_cover_edges, save_path_to_csv
     # pts = make_uniform_grid_yz(
@@ -1195,7 +1267,7 @@ def talker(p):
         if (p.time > p.start_logging):
             p.logData()
         # wait for synchronization of the control loop
-        rate.sleep()
+        p.rate.sleep()
 
         if stop:
             break
