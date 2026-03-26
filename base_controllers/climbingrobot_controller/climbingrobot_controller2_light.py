@@ -1097,7 +1097,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if self.SAMPLE_FOR_VALUE_FUNCTION:
             jump_length = np.linalg.norm(self.desired_target[self.jumpNumber][1:] - self.ref_com[1:, 0])
-            dict = {'test':self.jumpNumber,
+            row = {'test':self.jumpNumber,
                     'p0_x':self.ref_com[0,0],
                     'p0_y':self.ref_com[1,0],
                     'p0_z':self.ref_com[2,0],
@@ -1107,9 +1107,9 @@ class ClimbingrobotController(BaseControllerFixed):
                     'avg_tracking_cost': np.sum(self.MPC_tracking_error) / jump_length,
                     'tracking_cost':self.MPC_tracking_error}
             print(colored(f"Start: {self.ref_com[:, 0]}, Target: {self.desired_target[self.jumpNumber]}, Track.err: {np.sum(self.MPC_tracking_error)/jump_length}", "yellow"))
-            df_dict = pd.DataFrame([dict])
-            p.results = pd.concat([p.results, df_dict], ignore_index=True)
-            p.results.to_csv(f'value_function_dataset.csv', index=None)
+            df_row = pd.DataFrame([row])
+            p.results = pd.concat([p.results, df_row], ignore_index=True)
+            p.results.to_csv(p.result_csv_path, index=False)
 
         return self.targetPos - landing_location
 
@@ -1139,6 +1139,7 @@ def talker(p):
     if p.SAMPLE_FOR_VALUE_FUNCTION:
         p.terrainManager = TerrainManager(grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='rock')
         p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
+        #Read list of feasible jumps
         #get terrain consistent  targets and initial pos
         feas_jumps = pd.read_csv("feasible_jumps.csv")
         p.desired_target = []
@@ -1149,10 +1150,30 @@ def talker(p):
             p.initial_position.append(np.array([x0, row["y0"], row["z0"]]))
             p.desired_target.append(np.array([xf, row["yf"], row["zf"]]))
         p.numberOfJumps = len(p.desired_target)
-        print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
+
+        # prepare store of tracking results for feasible jumps
+        p.result_csv_path = "value_function_dataset.csv"
         columns = ['test', 'p0_x', 'p0_y', 'p0_z', 'pf_x', 'pf_y', 'pf_z', 'avg_tracking_cost', 'tracking_cost']
         p.results = pd.DataFrame(columns=columns)
 
+        # Resume from existing CSV if exists
+        if os.path.exists(p.result_csv_path) and os.path.getsize(p.result_csv_path) > 0:
+            try:
+                p.results = pd.read_csv(p.result_csv_path)
+                print(colored(f"CSV {p.result_csv_path} exists... continuing from where you left", "blue"))
+                if len(p.results) > 0:
+                    #get the last test done (iloc allows to get the roe number)
+                    p.jumpNumber = int(p.results.iloc[-1]["test"]) + 1
+                else:
+                    p.jumpNumber = 0
+            except Exception as e:
+                print(colored(f"Could not read CSV, starting fresh. Error: {e}", "red"))
+                p.results = pd.DataFrame(columns=columns)
+                p.jumpNumber = 0
+        else:
+            print(colored(f"CREATING NEW CSV TO STORE TESTS: {p.result_csv_path}", "blue"))
+            p.results = pd.DataFrame(columns=columns)
+            p.jumpNumber = 0
     else:
         #############hard coded
         # jump params
@@ -1174,6 +1195,7 @@ def talker(p):
         p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
                                           seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
         p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
+        p.jumpNumber = 0
         ##############
 
 
@@ -1194,7 +1216,7 @@ def talker(p):
 
     p.orientTime = 1.0
     p.stateMachine = 'start_jump'
-    p.jumpNumber  = 0
+
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     if p.SAMPLE_FOR_VALUE_FUNCTION:
