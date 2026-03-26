@@ -118,14 +118,14 @@ class ClimbingrobotController(BaseControllerFixed):
         self.pub_prop_force.publish(wrench)
 
     def loadModelAndPublishers(self, xacro_path=None):
-        xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + p.robot_name + '.xacro'
+        xacro_path = rospkg.RosPack().get_path('climbingrobot_description') + '/urdf/' + self.robot_name + '.xacro'
         additional_urdf_args = ' anchorX:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
         additional_urdf_args += ' anchorY:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
         additional_urdf_args += ' anchorZ:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
         additional_urdf_args += ' anchor2X:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
         additional_urdf_args += ' anchor2Y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
         additional_urdf_args += ' anchor2Z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
-        super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args,  markers_time_to_live=conf.robot_params[p.robot_name]['dt'])
+        super().loadModelAndPublishers(xacro_path=xacro_path, additional_urdf_args=additional_urdf_args,  markers_time_to_live=conf.robot_params[self.robot_name]['dt'])
 
         self.broadcaster = SafeTFBroadcaster()
         self.sub_contact= ros.Subscriber("/" + self.robot_name + "/foot_bumper", ContactsState,
@@ -145,7 +145,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.PROPELLERS:
             self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
-            if p.PAPER:
+            if self.PAPER:
                 self.recorder = RosbagControlledRecorder(bag_name = "climbing_robot_rocky_terrain_paper.bag", record_from_startup_=False)
             else:
                 self.recorder = RosbagControlledRecorder(bag_name="climbing_robot_rocky_terrain_single_jumps.bag", record_from_startup_=False)
@@ -196,8 +196,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.hoist_r_pos = self.base_pos + self.w_R_b.dot(np.array([0.0, 0.05, 0.05]))
         # print("sanitycheck", self.hoist_r_pos - self.robot.framePlacement(self.q, self.robot.model.getFrameId('fake_link')).translation)
 
-        self.rope_direction = (p.hoist_l_pos - p.anchor_pos) / np.linalg.norm(p.hoist_l_pos  - p.anchor_pos)
-        self.rope_direction2 = (p.hoist_r_pos - p.anchor_pos2) / np.linalg.norm(p.hoist_r_pos - p.anchor_pos2)
+        self.rope_direction = (self.hoist_l_pos - self.anchor_pos) / np.linalg.norm(self.hoist_l_pos  - self.anchor_pos)
+        self.rope_direction2 = (self.hoist_r_pos - self.anchor_pos2) / np.linalg.norm(self.hoist_r_pos - self.anchor_pos2)
 
         # feet variable
         # compute jacobian of the end effector in the world frame (take only the linear part and the actuated joints part)
@@ -219,8 +219,8 @@ class ClimbingrobotController(BaseControllerFixed):
         # when the rope is 2.5 m half of anchor distance (startup at the point in the middle of the anchors)
         #print("sanitycheck", self.l_1 - np.linalg.norm((self.hoist_l_pos - self.anchor_pos)))
         # print("sanitycheck", self.l_2 - np.linalg.norm((self.hoist_r_pos - self.anchor_pos2)))
-        self.l_1 = self.q[p.rope_index[1]] - hoist_distance/2 + self.anchor_distance_y/2
-        self.l_2 = self.q[p.rope_index[0]] - hoist_distance/2 + self.anchor_distance_y/2
+        self.l_1 = self.q[self.rope_index[1]] - hoist_distance/2 + self.anchor_distance_y/2
+        self.l_2 = self.q[self.rope_index[0]] - hoist_distance/2 + self.anchor_distance_y/2
 
         # use geometric intuition for psid
         n_par = (self.anchor_pos - self.anchor_pos2) / np.linalg.norm(self.anchor_pos - self.anchor_pos2)
@@ -229,12 +229,13 @@ class ClimbingrobotController(BaseControllerFixed):
 
         #compute matlab state derivatives
         self.psid = (self.n_bar.dot(self.base_vel)) / np.linalg.norm(np.cross(n_par, self.base_pos - self.anchor_pos2))
-        self.l_1d = self.qd[p.rope_index[1]]
-        self.l_2d = self.qd[p.rope_index[0]]
+        self.l_1d = self.qd[self.rope_index[1]]
+        self.l_2d = self.qd[self.rope_index[0]]
 
         # the mountain is always wrt to world
         mountain_pos = np.array([-self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
-        self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
+        if hasattr(self, "broadcaster"):
+            self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
 
     def _receive_contact(self, msg):
         self.contactForceW = np.zeros(3)
@@ -259,7 +260,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.prop_thrusts = [0]*4
         self.MPC_tracking_error = []
 
-        w_R_wall = self.math_utils.eul2Rot(np.array([0, -conf.robot_params[p.robot_name]['wall_inclination'], 0]))
+        w_R_wall = self.math_utils.eul2Rot(np.array([0, -conf.robot_params[self.robot_name]['wall_inclination'], 0]))
         self.wall_normal = w_R_wall[:, 0].copy()  # take X axis, I need to use copy otherwise matlab complains is not contiguous
 
         self.touch_down_detected_prismleg = False
@@ -496,7 +497,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
 
         self.start_reset = self.time
-        while self.time < (self.start_reset + 4.):
+        while self.time < (self.start_reset + 6.):
             self.updateKinematicsDynamics()
             self.ros_pub.add_arrow(self.anchor_pos, (self.hoist_l_pos - self.anchor_pos), "green", scale=2.5)  # arope, already in gazebo
             self.ros_pub.add_arrow(self.anchor_pos2, (self.hoist_r_pos - self.anchor_pos2), "green", scale=2.5)  # arope, already in gazebo
@@ -550,11 +551,13 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored(f"w6: {self.optim_params['w6']}", "red"))
         print(colored(f"T_th: {self.optim_params['T_th']}", "red"))
 
-    def initOptim(self, p0, pf):
-        ##offline optim vars
-        self.Fleg_max = 150.
-        self.Fr_max = 190.  # had to increas because of slopes  it used tp be 90
-        self.Fr_min = 15.  # had to increas because of downward jumps it used tp be 0
+    def initOptim(self, p0, pf, Fleg_max = None, Fr_max = None, Fr_min = None):
+        if Fleg_max is None:
+            self.Fleg_max = 150.
+        if Fr_max is None:
+            self.Fr_max = 190.  # had to increas because of slopes  it used tp be 90
+        if Fr_min is None:
+            self.Fr_min = 15.  # had to increas because of downward jumps it used tp be 0
         # down ward jumps
         #self.Fr_min = 15.  # had to increas because of slopes downward jumps it used tp be 0
         self.mu = 0.8
@@ -582,7 +585,8 @@ class ClimbingrobotController(BaseControllerFixed):
             self.optim_params['jump_clearance'] = 1.5
             # Interpolator (note: z must be increasing — here from -10 to 0)
             #correct initial and final positions
-            #p0[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1],  self.mesh_x,  self.mesh_y,  self.mesh_z) do not correct initial position which is already ok
+            # in theory you should not correct initial position which is already ok
+            #p0[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1],  self.mesh_x,  self.mesh_y,  self.mesh_z)
             pf[0] =  self.terrainManager.wall_surface_eval(pf[2], pf[1],  self.mesh_x,  self.mesh_y,  self.mesh_z) + 0.2 # shift the point to account for leg length!
             #does not work non matching with test_mex TODO
             # p0= np.array([0.99103, 2.5, -6.])
@@ -643,8 +647,8 @@ class ClimbingrobotController(BaseControllerFixed):
         #this is computed integrating the dynamics with dt and can be different from the reference, we should use the reference at the end of the horizon
         #self.targetPos = mat_vector2python(self.matvars['achieved_target'])
         self.targetPos = self.ref_com[:,-1] #output of optumization
-        self.targetPosIdeal = self.ref_com[:, -1]
-        print(colored(f"offline optimization accomplished, p0:{p0}, target(rough integr):{self.targetPos}", "blue"))
+        self.targetPosIdeal = pf
+        print(colored(f"offline optimization accomplished, p0:{p0}, pf(ideal):{self.targetPosIdeal}, real tg(r.int.):{self.targetPos}", "blue"))
         #print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
         self.jump_data = {"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
                     "targetPos": self.targetPos,  "Fleg":self.Fleg,
@@ -852,7 +856,8 @@ class ClimbingrobotController(BaseControllerFixed):
             self.mpc_index_ffwd = 0  # updated only when we stop recomputing mpc
 
             #abrupt reset next state here, if needed
-            #self.resetRobot(np.array([0.28, 1.5, -13.10104]))
+            if self.SAMPLE_FOR_VALUE_FUNCTION:
+                self.resetRobot(self.initial_position[self.jumpNumber])
             self.startJump = self.time
             self.touch_down_detected_prismleg = False
             return False
@@ -894,11 +899,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
             #normal usage
             print(colored(f"-------------------- Start trajectory optimization", "blue"))
-            if p.SAMPLE_FOR_VALUE_FUNCTION:
-                while not (p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])):
-                    p.desired_target[p.jumpNumber]+= 0.1*np.random.rand(3) #perturb
-            else:
-                p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
+            p.initOptim(p.base_pos - p.mat2Gazebo, p.desired_target[p.jumpNumber])
             p.unpause_physics_client()
 
 
@@ -1107,8 +1108,8 @@ class ClimbingrobotController(BaseControllerFixed):
                     'tracking_cost':self.MPC_tracking_error}
             print(colored(f"Start: {self.ref_com[:, 0]}, Target: {self.desired_target[self.jumpNumber]}, Track.err: {np.sum(self.MPC_tracking_error)/jump_length}", "yellow"))
             df_dict = pd.DataFrame([dict])
-            p.df = pd.concat([p.df, df_dict], ignore_index=True)
-            p.df.to_csv(f'value_function_dataset.csv', index=None)
+            p.results = pd.concat([p.results, df_dict], ignore_index=True)
+            p.results.to_csv(f'value_function_dataset.csv', index=None)
 
         return self.targetPos - landing_location
 
@@ -1136,34 +1137,22 @@ def talker(p):
 
 
     if p.SAMPLE_FOR_VALUE_FUNCTION:
+        p.terrainManager = TerrainManager(grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='rock')
+        p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
+        #get terrain consistent  targets and initial pos
+        feas_jumps = pd.read_csv("feasible_jumps.csv")
+        p.desired_target = []
+        p.initial_position = []
+        for _, row in feas_jumps.iterrows():
+            x0 = p.terrainManager.wall_surface_eval(row["z0"], row["y0"], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2  # shift the point to account for leg length!
+            xf = p.terrainManager.wall_surface_eval(row["zf"], row["yf"], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2  # shift the point to account for leg length!
+            p.initial_position.append(np.array([x0, row["y0"], row["z0"]]))
+            p.desired_target.append(np.array([xf, row["yf"], row["zf"]]))
+        p.numberOfJumps = len(p.desired_target)
         print(colored('CREATING NEW CSV TO STORE  TESTS', 'blue'))
         columns = ['test', 'p0_x', 'p0_y', 'p0_z', 'pf_x', 'pf_y', 'pf_z', 'avg_tracking_cost', 'tracking_cost']
-        p.df = pd.DataFrame(columns=columns)
-        np.random.seed(0)
-        # get random walk samples
-        p0 = np.array([0.28, 2.5, -6.10104])
-        results = get_halton_samples(
-            domain_min=(0,  -conf.robot_params[p.robot_name]['spawn_2z']), #Y, Z
-            domain_max=(conf.robot_params[p.robot_name]['spawn_2y'],0.),
-            start_point=(p0[1], p0[2]),
-            R_values=3.,
-            margin = (0.5, 1.5),
-            n_proposals=3000,
-            cover_tol=1.5,
-            polygon=None,
-            optimizer_max_waypoints=500,
-            optimizer_max_iters=300,
-            optimizer_tol=1e-4,
-            hilbert_grid_res_power=10,
-            grid_res_cov=160,
-            show_plots=True
-        )
-        p.desired_target = []
-        samples = results['samples'][1:] # skip first which is p0
-        for sample in samples:
-            p.desired_target.append(np.array([0.28, sample[0], sample[1]]))
-        p.numberOfJumps = len(p.desired_target)
-        p.terrainManager = TerrainManager(grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='rock')
+        p.results = pd.DataFrame(columns=columns)
+
     else:
         #############hard coded
         # jump params
@@ -1184,9 +1173,10 @@ def talker(p):
         p.numberOfJumps = len(p.desired_target)
         p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
                                           seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
+        p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
         ##############
 
-    p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
+
     p.startupProcedure()
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
@@ -1201,41 +1191,24 @@ def talker(p):
         texture_path = rospkg.RosPack().get_path('climbingrobot_description') + '/media/materials/textures/rocks.jpg'
         spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo,store_location_mesh=os.environ['LOCOSIM_DIR']+'/robot_descriptions/climbingrobot_description/meshes/', texture_path=texture_path)
 
-    p.startJump = np.linalg.norm(p0)/2
+
     p.orientTime = 1.0
     p.stateMachine = 'start_jump'
     p.jumpNumber  = 0
 
-    p.start_logging =p.startJump
-
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
-    p0_adj = p0.copy()
-    p0_adj[0] = p.terrainManager.wall_surface_eval(p0[2], p0[1], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2 # account for leg
-    p.q_des[:12] = p.computeJointVariables(p0_adj)
+    if p.SAMPLE_FOR_VALUE_FUNCTION:
+        p.startJump = np.linalg.norm(p.initial_position[0]) / 2
+        p.resetRobot(p.initial_position[p.jumpNumber])
+    else:
+        p.startJump = np.linalg.norm(p0) / 2
+        p0_adj = p0.copy()
+        p0_adj[0] = p.terrainManager.wall_surface_eval(p0[2], p0[1], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2 # account for leg
+        p.q_des[:12] = p.computeJointVariables(p0_adj)
 
-
+    p.start_logging = p.startJump
     p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
 
-    # from base_controllers.utils.feasibility_graph import make_uniform_grid_yz, build_directed_jump_graph, nearest_node_index, build_single_continuous_path_cover_edges, save_path_to_csv
-    # pts = make_uniform_grid_yz(
-    #     y_min=0.5, y_max=4.5,
-    #     z_min=-19.0, z_max=1.,
-    #     ny=5, nz=20)
-    # print("Number of grid points:", pts.shape[0])
-    # edges = build_directed_jump_graph(pts, is_feasible=p.initOptim)
-    # print("Directed feasible jumps:", edges.shape[0])
-    # print("Edges array shape:", edges.shape)
-    # start_node = nearest_node_index(pts, p0)
-    # print("Start node index:", start_node)
-    # print("Start node coordinate (grid):", pts[start_node])
-    # print("Start node error:", np.linalg.norm(pts[start_node] - p0))
-    # path_edges, unused_mask = build_single_continuous_path_cover_edges(
-    #     pts=pts,        edges=edges,        start_node=start_node,        pick_rule="first"   )
-    # print("Path length (jumps):", path_edges.shape[0])
-    # print("Uncovered feasible edges:", int(np.sum(unused_mask)))
-    # save_path_to_csv("single_path_pairs.csv", pts, path_edges)
-    # print("Saved single_path_pairs.csv")
-    # sys.exit()
 
     while not ros.is_shutdown():
         # update the kinematics
