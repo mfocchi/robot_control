@@ -16,6 +16,7 @@ def initOptimWithRealTerrain(p0, pf):
     converged = p.initOptim(p0,pf)
     if converged:
         return True
+    # TODO export also jumps where there is no convergence but the landing point is close
     elif np.linalg.norm(self.targetPosIdeal-self.targetPos) < 0.5:
         return True
     else:
@@ -47,7 +48,8 @@ if __name__ == '__main__':
     pts = make_uniform_grid_yz(y_min=0.5, y_max=4.5, z_min=-19.0, z_max=1., ny=5, nz=20)
     print("Number of grid points:", pts.shape[0])
     #possibility to resume if you kill
-    edges = build_directed_jump_graph(pts, is_feasible=initOptimWithRealTerrain, csv_path="loose_feasible_jumps.csv")
+    #TODO export also jumps where there is no convergence but the landing point is close
+    edges = build_directed_jump_graph(pts, is_feasible=initOptimWithRealTerrain, csv_path="feasible_jumps2.csv")
 
     #old save only at the end
     #save_edges_to_csv("feasible_jumps.csv", pts, edges)

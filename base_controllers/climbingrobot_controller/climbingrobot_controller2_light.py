@@ -333,7 +333,7 @@ class ClimbingrobotController(BaseControllerFixed):
         # plotFrameLinear('com position', 1, p.time_log, None, p.com_log)
         # plotFrameLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
         actual_com= p.base_pos_log - p.mat2Gazebo.reshape(3, 1) # mat2Gazebo is WF in matlab
-        #plotJoint('position', p.time_log, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        plotJoint('position', p.time_log, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
         plot3D('basePos', 2,  ['X', 'Y', 'Z'], p.time_log, actual_com, p.ref_time + (p.startJump+p.orientTime), p.ref_com)
         plot3D('matlab states', 3, ['psi', 'l1', 'l2'], p.time_log, p.simp_model_state_log, p.ref_time + (p.startJump+p.orientTime), np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
 
@@ -488,13 +488,36 @@ class ClimbingrobotController(BaseControllerFixed):
         model_state.twist.angular.z = 0.
         reset_base_req.model_state = model_state
         # send request and get response (in this case none)
-        self.reset_base(reset_base_req)
 
+        self.pause_physics_client()
+        for i in range(10):
+            self.reset_base(reset_base_req)
+        self.unpause_physics_client()
+        #
+        print(colored(f"---------Computing Consistent Joints:", "red"))
+        self.q_des = np.copy(p.q_des_q0)
         self.q_des[:12] = self.computeJointVariables(p0_adj)
-        #print(colored(f"---------Computing Consistent Joints:", "red"))
-        # for joint, name in zip(self.q_des, self.joint_names):
-        #     print(colored(f"{name}: {joint}", "red"))
-        self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
+
+        for joint, name in zip(self.q_des, self.joint_names):
+            print(colored(f"{name}: {joint}", "red"))
+
+        kp = np.array([0, 0, #mountain_wire_passive_joints
+                       100, #wire_base_prismatic_r
+                       100, 100, 100, #wire_base_poassive_joints
+                        0, 0, #mountain_wire_passive_joints
+                       100, #wire_base_prismatic_l
+                       100, 100, 100,#mountain_wire_passive_joints
+                        150, 130, 120])
+        kd=np.array([0, 0,
+                     20,
+                     20, 20, 20,
+                      0, 0,
+                     20,
+                     20, 20, 20,
+                        10, 10, 10])
+        self.pid.setPDjoints(kp, kd, np.zeros(self.robot.na))
+        #not ok sets only rope PDs
+        #self.pid.setPDjoint(p.rope_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'], 0.)
 
         self.start_reset = self.time
         while self.time < (self.start_reset + 6.):
@@ -933,6 +956,7 @@ class ClimbingrobotController(BaseControllerFixed):
                 print(colored(f"Start trusting", "blue"))
                 p.tau_ffwd = np.zeros(p.robot.na)
                 p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
+                p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
                 p.pid.setPDjoint(p.base_passive_joints, 0., 0., 0.)
                 p.pid.setPDjoint(p.leg_index, 0., 0., 0.)
                 print(colored(f"ZERO LEG AND ROPE PD", "red"))
@@ -960,10 +984,11 @@ class ClimbingrobotController(BaseControllerFixed):
             if (p.time > p.end_thrusting):
                 print(colored(f"Stop Trhusting  {p.time}", "blue"))
                 print(colored(f"RESTORING LEG PD", "red"))
-                # reenable  the PDs of default values for landing and reset the torque on the leg (stop applyng inpulse)
+                # reenable  the PDs for base passive joints otherwise it keeps rotating like crazy
                 p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
                 # reenable leg pd
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
+                #reset the torque on the leg (stop applyng inpulse)
                 p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
                 p.stateMachine = 'flying'
 
@@ -1134,7 +1159,6 @@ def talker(p):
     p.startSimulator(world_name=world_name, additional_args=additional_args, launch_file=launch_file)
 
     p.loadModelAndPublishers()
-
 
     if p.SAMPLE_FOR_VALUE_FUNCTION:
         p.terrainManager = TerrainManager(grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default", Lz=-20, Ly=5, generate_terrain=True, terrain_type='rock')
