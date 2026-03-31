@@ -33,6 +33,10 @@ from base_controllers.components.terrain_manager import TerrainManager
 import pandas as pd
 from base_controllers.utils.halton_walker import get_halton_samples
 from orientation_controller import OrientationController
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.srv import SetModelStateRequest
+from gazebo_msgs.msg import ModelState
+import subprocess
 
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
@@ -149,6 +153,8 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.recorder = RosbagControlledRecorder(bag_name = "climbing_robot_rocky_terrain_paper.bag", record_from_startup_=False)
             else:
                 self.recorder = RosbagControlledRecorder(bag_name="climbing_robot_rocky_terrain_single_jumps.bag", record_from_startup_=False)
+
+        self.reset_base = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
     def getRobotMass(self):
         robot_link_masses = []
@@ -447,35 +453,34 @@ class ClimbingrobotController(BaseControllerFixed):
             return False
 
     def resetRobot(self, p0 = None):
-        from gazebo_msgs.srv import SetModelState
-        from gazebo_msgs.srv import SetModelStateRequest
-        from gazebo_msgs.msg import ModelState
+
         p0_adj = p0.copy()
         self.updateKinematicsDynamics()
         p0_adj[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1], self.mesh_x, self.mesh_y, self.mesh_z) + 0.2  # account for leg
-        # # create the message (THIS DOES NOT WORK WITH KINEMATIC LOOPS)
-        # from gazebo_msgs.srv import SetModelConfiguration
-        # from gazebo_msgs.srv import SetModelConfigurationRequest
-        # self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
-        # req_reset_joints = SetModelConfigurationRequest()
-        # req_reset_joints.model_name = self.robot_name
-        # req_reset_joints.urdf_param_name = 'robot_description'
-        # req_reset_joints.joint_names = self.joint_names
-        # req_reset_joints.joint_positions = self.q_des.tolist()
-        # # send request and get response (in this case none)
-        # self.reset_joints(req_reset_joints)
-        self.reset_base = ros.ServiceProxy('/gazebo/set_model_state', SetModelState)
-        reset_base_req = SetModelStateRequest()
-        quaternion = pin.Quaternion(pin.rpy.rpyToMatrix(self.base_rpy))
+
+        print(colored(f"---------Computing Consistent Joints:", "red"))
+        # self.q_des = np.copy(self.q_des_q0)
+        # self.q_des[:12] = self.computeJointVariables(p0_adj)
+        from closed_loop_inverse_kinematics import ClosedLoopKinSolver
+        solver = ClosedLoopKinSolver(robot_name=self.robot_name)
+        self.q_des = solver.computeJointVariables(p0_adj + self.mat2Gazebo, np.eye(3), self.q_des_q0, debug=False)
+        for joint, name in zip(self.q_des, self.joint_names):
+            print(colored(f"{name}: {joint}", "red"))
+
+
+
 
         # create model state
+        reset_base_req = SetModelStateRequest()
+        quaternion = pin.Quaternion(np.eye(3))
         model_state = ModelState()
         model_state.model_name = self.robot_name
-        new_base_pos = p0_adj + self.mat2Gazebo
-        print(colored(f"---------Resetting Robot to {p0}, wait for convergence!", "red"))
+        new_base_pos =    + np.array([4,0,-5]) #use this to spawn the robot out of the wall, there is a bug, so it is a relative offset not an absolute one
+        print(colored(f"---------Resetting Robot to {p0_adj}, wait for convergence!", "red"))
         model_state.pose.position.x = new_base_pos[0]
         model_state.pose.position.y = new_base_pos[1]
         model_state.pose.position.z = new_base_pos[2]
+        model_state.reference_frame = "world"
         model_state.pose.orientation.x = quaternion.x
         model_state.pose.orientation.y = quaternion.y
         model_state.pose.orientation.z = quaternion.z
@@ -487,33 +492,36 @@ class ClimbingrobotController(BaseControllerFixed):
         model_state.twist.angular.y = 0.
         model_state.twist.angular.z = 0.
         reset_base_req.model_state = model_state
-        # send request and get response (in this case none)
+        #send request and get response (in this case none)
+        self.reset_base(reset_base_req)
 
-        self.pause_physics_client()
-        for i in range(10):
-            self.reset_base(reset_base_req)
-        self.unpause_physics_client()
-        #
-        print(colored(f"---------Computing Consistent Joints:", "red"))
-        self.q_des = np.copy(p.q_des_q0)
-        self.q_des[:12] = self.computeJointVariables(p0_adj)
+        # # create the message (THIS DOES NOT WORK WITH KINEMATIC LOOPS)
+        # from gazebo_msgs.srv import SetModelConfiguration
+        # from gazebo_msgs.srv import SetModelConfigurationRequest
+        # self.reset_joints = ros.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
+        # req_reset_joints = SetModelConfigurationRequest()
+        # req_reset_joints.model_name = self.robot_name
+        # req_reset_joints.urdf_param_name = 'robot_description'
+        # req_reset_joints.joint_names = self.joint_names
+        # req_reset_joints.joint_positions = self.q_des.tolist()
+        # # send request and get response (in this case none)
+        # resp = self.reset_joints(req_reset_joints)
 
-        for joint, name in zip(self.q_des, self.joint_names):
-            print(colored(f"{name}: {joint}", "red"))
 
-        kp = np.array([0, 0, #mountain_wire_passive_joints
-                       100, #wire_base_prismatic_r
+
+        kp = np.array([500, 500, #mountain_wire_passive_joints
+                       1000, #wire_base_prismatic_r
                        100, 100, 100, #wire_base_poassive_joints
-                        0, 0, #mountain_wire_passive_joints
-                       100, #wire_base_prismatic_l
-                       100, 100, 100,#mountain_wire_passive_joints
+                        500, 500, #mountain_wire_passive_joints
+                       1000, #wire_base_prismatic_l
+                       300, 300, 300,#mountain_wire_passive_joints
                         150, 130, 120])
-        kd=np.array([0, 0,
-                     20,
-                     20, 20, 20,
-                      0, 0,
-                     20,
-                     20, 20, 20,
+        kd=np.array([300, 300,
+                     400,
+                     80, 80, 80,
+                      300, 300,
+                     400,
+                     80, 80, 80,
                         10, 10, 10])
         self.pid.setPDjoints(kp, kd, np.zeros(self.robot.na))
         #not ok sets only rope PDs
@@ -521,6 +529,11 @@ class ClimbingrobotController(BaseControllerFixed):
 
         self.start_reset = self.time
         while self.time < (self.start_reset + 6.):
+
+            if np.linalg.norm(self.contactForceW) > 100.:
+                self.startupProcedure()
+                break
+
             self.updateKinematicsDynamics()
             self.ros_pub.add_arrow(self.anchor_pos, (self.hoist_l_pos - self.anchor_pos), "green", scale=2.5)  # arope, already in gazebo
             self.ros_pub.add_arrow(self.anchor_pos2, (self.hoist_r_pos - self.anchor_pos2), "green", scale=2.5)  # arope, already in gazebo
@@ -1165,19 +1178,21 @@ def talker(p):
         p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
         #Read list of feasible jumps
         #get terrain consistent  targets and initial pos
-        feas_jumps = pd.read_csv("feasible_jumps.csv")
+        feas_jumps = pd.read_csv("feasible_jumps2.csv")
         p.desired_target = []
         p.initial_position = []
+        p.test_indexes = []
         for _, row in feas_jumps.iterrows():
             x0 = p.terrainManager.wall_surface_eval(row["z0"], row["y0"], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2  # shift the point to account for leg length!
             xf = p.terrainManager.wall_surface_eval(row["zf"], row["yf"], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2  # shift the point to account for leg length!
             p.initial_position.append(np.array([x0, row["y0"], row["z0"]]))
             p.desired_target.append(np.array([xf, row["yf"], row["zf"]]))
+            p.test_indexes.append(np.array([row["i0"], row["if"]]))
         p.numberOfJumps = len(p.desired_target)
 
         # prepare store of tracking results for feasible jumps
         p.result_csv_path = "value_function_dataset.csv"
-        columns = ['test', 'p0_x', 'p0_y', 'p0_z', 'pf_x', 'pf_y', 'pf_z', 'avg_tracking_cost', 'tracking_cost']
+        columns = ['test', 'i0', 'if', 'p0_x', 'p0_y', 'p0_z', 'pf_x', 'pf_y', 'pf_z', 'avg_tracking_cost', 'tracking_cost']
         p.results = pd.DataFrame(columns=columns)
 
         # Resume from existing CSV if exists
@@ -1244,7 +1259,7 @@ def talker(p):
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     if p.SAMPLE_FOR_VALUE_FUNCTION:
-        p.startJump = np.linalg.norm(p.initial_position[0]) / 2
+        p.startJump = 0.
         p.resetRobot(p.initial_position[p.jumpNumber])
     else:
         p.startJump = np.linalg.norm(p0) / 2
