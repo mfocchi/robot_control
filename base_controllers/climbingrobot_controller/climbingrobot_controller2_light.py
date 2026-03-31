@@ -464,18 +464,16 @@ class ClimbingrobotController(BaseControllerFixed):
         from closed_loop_inverse_kinematics import ClosedLoopKinSolver
         solver = ClosedLoopKinSolver(robot_name=self.robot_name)
         self.q_des = solver.computeJointVariables(p0_adj + self.mat2Gazebo, np.eye(3), self.q_des_q0, debug=False)
-        for joint, name in zip(self.q_des, self.joint_names):
-            print(colored(f"{name}: {joint}", "red"))
-
-
-
+        # for joint, name in zip(self.q_des, self.joint_names):
+        #     print(colored(f"{name}: {joint}", "red"))
 
         # create model state
         reset_base_req = SetModelStateRequest()
         quaternion = pin.Quaternion(np.eye(3))
         model_state = ModelState()
         model_state.model_name = self.robot_name
-        new_base_pos =    + np.array([4,0,-5]) #use this to spawn the robot out of the wall, there is a bug, so it is a relative offset not an absolute one
+        new_base_pos = p0_adj + self.mat2Gazebo -self.base_pos
+        #new_base_pos =    + np.array([4,0,-5]) #use this to spawn the robot out of the wall, there is a bug, so it is a relative offset not an absolute one
         print(colored(f"---------Resetting Robot to {p0_adj}, wait for convergence!", "red"))
         model_state.pose.position.x = new_base_pos[0]
         model_state.pose.position.y = new_base_pos[1]
