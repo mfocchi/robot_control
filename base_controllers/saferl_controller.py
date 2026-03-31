@@ -95,6 +95,7 @@ if __name__ == '__main__':
         while not ros.is_shutdown():
             p.updateKinematics()
 
+            # MANAGE JOYSTICK
             if p.gracefulCollapseFlag:
                 if p.gracefulCollapse():
                     break
@@ -118,12 +119,16 @@ if __name__ == '__main__':
                     ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
+
+            #MANAGE CONTROLLER STARTING
             if p.state_estimation == 'pronto':
                 if np.all(p.pronto_contacts) and not p.controller_ready:
                     print(colored("ALL FEET ARE IN STANCE: It is possible to start RL controller", "red"))
                     p.controller_ready = True
             else:
                 p.controller_ready = True
+
+            # CONTROLLER
             if (p.time > (p.startTime + 4.)) and p.controller_ready:
                 #rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
                 if use_joy:
@@ -150,12 +155,13 @@ if __name__ == '__main__':
                 proj_gravity_b = p.b_R_w.dot(np.array([0, 0, -1]))
 
                 # pushes of increasing entity
-                if not p.real_robot and  (p.time > (p.startTime + 5.)) and p.time % 2. == 0 and isrec and sim_push:
+                if not p.real_robot and  (p.time > (p.startTime + 5.)) and p.time % 2. == 0 and sim_push:
                      p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
                      p.startPush = p.time
-
                      print(50*p.counter)
                      p.counter+=1
+                #try only backup
+                #isrec = False
                 if isrec:
                      # nominal policy
                      #rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
