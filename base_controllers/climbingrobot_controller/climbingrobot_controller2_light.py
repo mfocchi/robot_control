@@ -1062,7 +1062,7 @@ class ClimbingrobotController(BaseControllerFixed):
                     else:
                         prop_forceW = p.n_bar * p.prop_force
                         # compute thrust for orientation
-                        p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=p.base_rpy,
+                        p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=np.zeros(3),
                                                                  act_orient=p.base_rpy,
                                                                  w_omega_b=p.omega_b,
                                                                  Ko=conf.robot_params[p.robot_name]['Ko'],
