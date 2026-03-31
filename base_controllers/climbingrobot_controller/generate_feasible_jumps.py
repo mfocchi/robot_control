@@ -17,10 +17,10 @@ def initOptimWithRealTerrain(p0, pf):
     if converged:
         return True
     # TODO export also jumps where there is no convergence but the landing point is close
-    elif np.linalg.norm(self.targetPosIdeal-self.targetPos) < 0.5:
-        return True
-    else:
-        return False
+    # elif np.linalg.norm(p.targetPosIdeal-p.targetPos) < 0.5:
+    #     return True
+    # else:
+    #     return False
 
 if __name__ == '__main__':
     p = ClimbingrobotController(robotName)
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     print("Number of grid points:", pts.shape[0])
     #possibility to resume if you kill
     #TODO export also jumps where there is no convergence but the landing point is close
-    edges = build_directed_jump_graph(pts, is_feasible=initOptimWithRealTerrain, csv_path="feasible_jumps2.csv")
+    edges = build_directed_jump_graph(pts, is_feasible=initOptimWithRealTerrain, csv_path="feasible_jumps2.csv", R_max = 6.)
 
     #old save only at the end
     #save_edges_to_csv("feasible_jumps.csv", pts, edges)
