@@ -539,7 +539,28 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, ad
         urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"
         robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
     
-    return robot                    
+    return robot
+
+def getLinkState(model_name = None, link_name=None, debug=False):
+    from gazebo_msgs.srv import GetLinkState, GetLinkStateRequest
+    from tf.transformations import euler_from_quaternion
+    ros.wait_for_service('/gazebo/get_link_state')
+    get_link_state = ros.ServiceProxy('/gazebo/get_link_state', GetLinkState)
+
+    req = GetLinkStateRequest()
+    req.link_name = model_name+"::"+link_name  # IMPORTANT format
+    req.reference_frame = "world"  # or another link
+    resp = get_link_state(req)
+    pose = resp.link_state.pose
+    twist = resp.link_state.twist
+    if debug:
+        print("Position:", pose.position.x, pose.position.y, pose.position.z)
+        print("Orientation:", pose.orientation.x, pose.orientation.y,
+              pose.orientation.z, pose.orientation.w)
+    position = np.array([pose.position.x, pose.position.y, pose.position.z])
+    q = pose.orientation
+    rpy =  np.array(euler_from_quaternion([q.x, q.y, q.z, q.w]))
+    return position, rpy
 
 class SafeTFBroadcaster:
     ''' avoids the annoying TF_REPEATED issue when the message is published twice with the same timestamp '''
