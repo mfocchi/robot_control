@@ -999,7 +999,7 @@ class ClimbingrobotController(BaseControllerFixed):
                 print(colored(f"Stop Trhusting  {p.time}", "blue"))
                 print(colored(f"RESTORING LEG PD", "red"))
                 # reenable  the PDs for base passive joints otherwise it keeps rotating like crazy
-                p.pid.setPDjoint(p.base_passive_joints, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'] ,  0.)
+                p.pid.setPDjoint(p.base_passive_joints, np.zeros((15)), conf.robot_params[p.robot_name]['kd'] ,  0.)
                 # reenable leg pd
                 p.pid.setPDjoint(p.leg_index, conf.robot_params[p.robot_name]['kp'], conf.robot_params[p.robot_name]['kd'],  0.)
                 #reset the torque on the leg (stop applyng inpulse)
