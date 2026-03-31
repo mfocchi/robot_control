@@ -684,7 +684,8 @@ class ClimbingrobotController(BaseControllerFixed):
         #self.targetPos = mat_vector2python(self.matvars['achieved_target'])
         self.targetPos = self.ref_com[:,-1] #output of optumization
         self.targetPosIdeal = pf
-        print(colored(f"offline optimization accomplished, p0:{p0}, pf(ideal):{self.targetPosIdeal}, real tg(r.int.):{self.targetPos}", "blue"))
+        self.realStartingPosition = p0
+        print(colored(f"offline optimization accomplished, p0:{self.realStartingPosition}, pf(ideal):{self.targetPosIdeal}, real tg(r.int.):{self.targetPos}", "blue"))
         #print(colored(f"target to be compared with text_mex_x.py (fine integr. ) is:{self.matvars['achieved_target']}", "blue"))
         self.jump_data = {"time": self.ref_time, "thrustDuration" : self.matvars['T_th'], "p0": p0,
                     "targetPos": self.targetPos,  "Fleg":self.Fleg,
@@ -965,7 +966,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
             if  (p.time >= p.end_orienting):
                 print(colored(f"Stop orienting leg {p.time}", "blue"))
-                print(colored(f"---------Starting jump  number {p.jumpNumber+1} to optimized target: {p.jump_data['targetPos']} from actual p0 : {p.base_pos - p.mat2Gazebo}","red"))
+                print(colored(f"---------Starting jump  number {p.jumpNumber} to optimized target: {p.jump_data['targetPos']} from actual p0 : {p.base_pos - p.mat2Gazebo}","red"))
                 print(colored(f"Start trusting", "blue"))
                 p.tau_ffwd = np.zeros(p.robot.na)
                 p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
@@ -1136,9 +1137,11 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.SAMPLE_FOR_VALUE_FUNCTION:
             jump_length = np.linalg.norm(self.desired_target[self.jumpNumber][1:] - self.ref_com[1:, 0])
             row = {'test':self.jumpNumber,
-                    'p0_x':self.ref_com[0,0],
-                    'p0_y':self.ref_com[1,0],
-                    'p0_z':self.ref_com[2,0],
+                   'i0': int(self.test_indexes[self.jumpNumber][0]),
+                   'if': int(self.test_indexes[self.jumpNumber][1]),
+                    'p0_x':self.realStartingPosition[0], #ideal self.ref_com[1,0]
+                    'p0_y':self.realStartingPosition[1], #self.ref_com[1,0],
+                    'p0_z':self.realStartingPosition[2], #self.ref_com[2,0],
                     'pf_x': self.desired_target[self.jumpNumber][0],
                     'pf_y': self.desired_target[self.jumpNumber][1],
                     'pf_z': self.desired_target[self.jumpNumber][2],
