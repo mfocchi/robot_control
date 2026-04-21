@@ -49,7 +49,8 @@ if __name__ == '__main__':
     print("Number of grid points:", pts.shape[0])
     #possibility to resume if you kill
     #TODO export also jumps where there is no convergence but the landing point is close
-    edges = build_directed_jump_graph(pts, is_feasible=initOptimWithRealTerrain, csv_path="feasible_jumps2.csv", R_max = 6.)
+    # save also if you stop  and give possibility to resume
+    edges = build_directed_jump_graph(pts, is_feasible=initOptimWithRealTerrain, csv_path="feasible_jumps_Rmax_6.csv", R_max = 6.)
 
     #old save only at the end
     #save_edges_to_csv("feasible_jumps.csv", pts, edges)
