@@ -165,6 +165,24 @@ class ClimbingrobotController(BaseControllerFixed):
         total_robot_mass = sum(robot_link_masses[self.robot.model.getJointId('wire_base_yaw_l'):])
         return total_robot_mass
 
+    def estimateRobotVelFromStates(self, l1, l2, psi, l1d, l2d, psid):
+        # first estimate position
+        px = l1 * np.sin(psi) * np.sqrt(1 - (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) ** 2 / (4 * self.anchor_distance_y ** 2 * l1 ** 2))
+        py = (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) / (2 * self.anchor_distance_y)
+        pz = -l1 * np.cos(psi) * np.sqrt(1 - (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) ** 2 / (4 * self.anchor_distance_y ** 2 * l1 ** 2))
+
+        #temp vars to simplify equation
+        px_l1 = px / l1;
+        n_pz_l1 = -pz / l1;
+        px_l1_sinpsi = px / l1 /  math.sin(psi+0.00001) # to avoid division by zero
+        py2b = py * 2 * self.anchor_distance_y;
+
+        pdx = l1d * px_l1 + l1 * n_pz_l1 * psid + (py2b * math.sin(psi) * (l1d * pow(self.anchor_distance_y, 2) - l1d * pow(l1, 2) + 2 * l2d * l1 * l2 - l1d * pow(l2, 2))) / (4 * pow(self.anchor_distance_y, 2) * pow(l1, 2) * px_l1_sinpsi);
+        pdy = (l1 * l1d - l2 * l2d) / self.anchor_distance_y;
+        pdz = l1 * psid * px_l1 - l1d * n_pz_l1 - (py2b * math.cos(psi) * (l1d * pow(self.anchor_distance_y, 2) - l1d * pow(l1, 2) + 2 * l2d * l1 * l2 - l1d * pow(l2, 2))) / (4 * pow(self.anchor_distance_y, 2) * pow(l1, 2) * px_l1_sinpsi);
+
+        return np.array([pdx, pdy, pdz])
+
     def updateKinematicsDynamics(self):
         # q is continuously updated
         self.robot.computeAllTerms(self.q, self.qd )
@@ -237,6 +255,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.psid = (self.n_bar.dot(self.base_vel)) / np.linalg.norm(np.cross(n_par, self.base_pos - self.anchor_pos2))
         self.l_1d = self.qd[self.rope_index[1]]
         self.l_2d = self.qd[self.rope_index[0]]
+
+        #self.base_vel_from_states = self.estimateRobotVelFromStates(self.l_1, self.l_2, self.psi, self.l_1d, self.l_2d, self.psid)
+        # DEBUG: these two should be the same
+        #print("difference Pinocchio vel / Base Vel States: ", self.base_vel-self.base_vel_from_states)
 
         # the mountain is always wrt to world
         mountain_pos = np.array([-self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
@@ -405,7 +427,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def getImpulseAngle(self):
         angle_hip_roll =  math.atan2(self.jump_data["Fleg"][1], self.jump_data["Fleg"][0])
         angle_hip_pitch =  math.atan2(self.jump_data["Fleg"][2], self.jump_data["Fleg"][0])
-        print(colored(f"Start orienting leg to (pitch, roll)  {p.time}: {angle_hip_pitch, angle_hip_roll}", "blue"))
+        print(colored(f"Start orienting leg to (pitch, roll)  {self.time}: {angle_hip_pitch, angle_hip_roll}", "blue"))
         angle_hip_pitch +=-1.57
         return angle_hip_pitch, angle_hip_roll
 
@@ -454,16 +476,16 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def resetRobot(self, p0 = None):
 
-        p0_adj = p0.copy()
+        p0[0] += 0.2  # account for leg
+
         self.updateKinematicsDynamics()
-        p0_adj[0] = self.terrainManager.wall_surface_eval(p0[2], p0[1], self.mesh_x, self.mesh_y, self.mesh_z) + 0.2  # account for leg
 
         print(colored(f"---------Computing Consistent Joints:", "red"))
         # self.q_des = np.copy(self.q_des_q0)
         # self.q_des[:12] = self.computeJointVariables(p0_adj)
         from closed_loop_inverse_kinematics import ClosedLoopKinSolver
         solver = ClosedLoopKinSolver(robot_name=self.robot_name)
-        self.q_des = solver.computeJointVariables(p0_adj + self.mat2Gazebo, np.eye(3), self.q_des_q0, debug=False)
+        self.q_des = solver.computeJointVariables(p0 + self.mat2Gazebo, np.eye(3), self.q_des_q0, debug=False)
         # for joint, name in zip(self.q_des, self.joint_names):
         #     print(colored(f"{name}: {joint}", "red"))
 
@@ -472,9 +494,9 @@ class ClimbingrobotController(BaseControllerFixed):
         quaternion = pin.Quaternion(np.eye(3))
         model_state = ModelState()
         model_state.model_name = self.robot_name
-        new_base_pos = p0_adj + self.mat2Gazebo -self.base_pos
-        #new_base_pos =    + np.array([4,0,-5]) #use this to spawn the robot out of the wall, there is a bug, so it is a relative offset not an absolute one
-        print(colored(f"---------Resetting Robot to {p0_adj}, wait for convergence!", "red"))
+        new_base_pos = p0 + self.mat2Gazebo - self.base_pos
+        # new_base_pos =    + np.array([4,0,-5]) #use this to spawn the robot out of the wall, there is a bug, so it is a relative offset not an absolute one
+        print(colored(f"---------Resetting Robot to {p0}, wait for convergence!", "red"))
         model_state.pose.position.x = new_base_pos[0]
         model_state.pose.position.y = new_base_pos[1]
         model_state.pose.position.z = new_base_pos[2]
@@ -490,7 +512,7 @@ class ClimbingrobotController(BaseControllerFixed):
         model_state.twist.angular.y = 0.
         model_state.twist.angular.z = 0.
         reset_base_req.model_state = model_state
-        #send request and get response (in this case none)
+        # send request and get response (in this case none)
         self.reset_base(reset_base_req)
 
         # # create the message (THIS DOES NOT WORK WITH KINEMATIC LOOPS)
@@ -547,6 +569,8 @@ class ClimbingrobotController(BaseControllerFixed):
             self.logData()
             self.rate.sleep()
 
+
+
     def resetRope(self):
         print(colored(f"RESTORING ROPE PD", "red"))
         # enable PD for rope and reset the PD reference to the new estension
@@ -573,7 +597,7 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored(f"FRICTION_CONE: {self.optim_params['FRICTION_CONE']}", "red"))
         print(colored(f"int_steps: {self.optim_params['int_steps']}", "red"))
         print(colored(f"contact_normal: {self.optim_params['contact_normal']}", "red"))
-        print(colored(f"b: {self.optim_params['b']}", "red"))
+        print(colored(f"self.anchor_distance_y: {self.optim_params['b']}", "red"))
         print(colored(f"p_a1: {self.optim_params['p_a1']}", "red"))
         print(colored(f"p_a2: {self.optim_params['p_a2']}", "red"))
         print(colored(f"g: {self.optim_params['g'] }", "red"))
@@ -893,6 +917,8 @@ class ClimbingrobotController(BaseControllerFixed):
             #abrupt reset next state here, if needed
             if self.SAMPLE_FOR_VALUE_FUNCTION:
                 self.resetRobot(self.initial_position[self.jumpNumber])
+                #issue with 407
+            #self.ref_com = np.zeros((3, int(self.optim_params['N_dyn'])))
             self.startJump = self.time
             self.touch_down_detected_prismleg = False
             return False
@@ -941,8 +967,11 @@ class ClimbingrobotController(BaseControllerFixed):
             p.des_leg_orient = p.getImpulseAngle()
 
             #set the end of orienting
+
+
             p.end_orienting = p.startJump + p.orientTime
             p.end_thrusting = p.startJump + p.orientTime + p.jump_data["thrustDuration"]
+
             p.end_flying = p.startJump + p.orientTime + p.jump_data["Tf"]
 
             p.stateMachine = 'orienting_leg'  # this phase only waits is not doing anything
@@ -965,7 +994,7 @@ class ClimbingrobotController(BaseControllerFixed):
             if  (p.time >= p.end_orienting):
                 print(colored(f"Stop orienting leg {p.time}", "blue"))
                 print(colored(f"---------Starting jump  number {p.jumpNumber} to optimized target: {p.jump_data['targetPos']} from actual p0 : {p.base_pos - p.mat2Gazebo}","red"))
-                print(colored(f"Start trusting", "blue"))
+                print(colored(f"Start thrusting", "blue"))
                 p.tau_ffwd = np.zeros(p.robot.na)
                 p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
                 p.pid.setPDjoint(p.anchor_passive_joints, 0., 0., 0.)
@@ -977,10 +1006,18 @@ class ClimbingrobotController(BaseControllerFixed):
                 p.w_Fleg = p.jump_data["Fleg"]
 
         if (p.stateMachine == 'thrusting'):
-            # apply leg inpulse for thust duration
-            p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
-            # plot Fleg
-            p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / p.force_scale, "red", scale=2.5)
+            if p.SAMPLE_FOR_VALUE_FUNCTION:
+                wrench = Wrench()
+                wrench.force.x = p.w_Fleg[0]*0.05
+                wrench.force.y = p.w_Fleg[1]*0.05
+                wrench.force.z = p.w_Fleg[2]*0.05
+                p.pub_prop_force.publish(wrench)
+                p.ros_pub.add_arrow(p.base_pos, p.w_Fleg / p.force_scale, "red", scale=2.5)
+            else:
+                # apply leg inpulse for thust duration
+                p.tau_ffwd[p.leg_index] = -p.Jleg.T.dot(p.w_Fleg)
+                # plot Fleg
+                p.ros_pub.add_arrow(p.x_ee, p.w_Fleg / p.force_scale, "red", scale=2.5)
 
             # start also applying forces to ropes
             delta_t = p.time - p.end_orienting
@@ -1090,9 +1127,13 @@ class ClimbingrobotController(BaseControllerFixed):
                     p.start_landing = p.time
 
             else: # you are checking for delayed TD you have already reset rope and restored PD
-                if p.detectTouchDown():
+                timeout = ((p.time - p.startJump) > 6.)
+                if p.detectTouchDown() or timeout: #stop if touchdown is detected or time out
                     p.landing_error = p.printLandingInfo()
-                    print(colored("Delayed TD detected, Starting landing", "blue"))
+                    if timeout:
+                        print(colored("Timeout: TD not detected, Starting landing anyway", "blue"))
+                    else:
+                        print(colored("Delayed TD detected, Starting landing", "blue"))
                     p.stateMachine = 'landing'
                     p.start_landing = p.time
 
@@ -1144,7 +1185,11 @@ class ClimbingrobotController(BaseControllerFixed):
                     'pf_y': self.desired_target[self.jumpNumber][1],
                     'pf_z': self.desired_target[self.jumpNumber][2],
                     'avg_tracking_cost': np.sum(self.MPC_tracking_error) / jump_length,
-                    'tracking_cost':self.MPC_tracking_error}
+                    'tracking_cost':self.MPC_tracking_error,
+                   'energy_ideal': self.matvars['consumed_energy'],
+                    'energy_real': p.computeJumpEnergyConsumption(),
+                   'landing_error': np.linalg.norm(landing_location - self.targetPos)
+                    }
             print(colored(f"Start: {self.ref_com[:, 0]}, Target: {self.desired_target[self.jumpNumber]}, Track.err: {np.sum(self.MPC_tracking_error)/jump_length}", "yellow"))
             df_row = pd.DataFrame([row])
             p.results = pd.concat([p.results, df_row], ignore_index=True)
@@ -1179,13 +1224,13 @@ def talker(p):
         p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
         #Read list of feasible jumps
         #get terrain consistent  targets and initial pos
-        feas_jumps = pd.read_csv("feasible_jumps2.csv")
+        feas_jumps = pd.read_csv("feasible_jumps_Rmax_6.csv")
         p.desired_target = []
         p.initial_position = []
         p.test_indexes = []
         for _, row in feas_jumps.iterrows():
-            x0 = p.terrainManager.wall_surface_eval(row["z0"], row["y0"], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2  # shift the point to account for leg length!
-            xf = p.terrainManager.wall_surface_eval(row["zf"], row["yf"], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2  # shift the point to account for leg length!
+            x0 = p.terrainManager.wall_surface_eval(row["z0"], row["y0"], p.mesh_x, p.mesh_y, p.mesh_z)
+            xf = p.terrainManager.wall_surface_eval(row["zf"], row["yf"], p.mesh_x, p.mesh_y, p.mesh_z)
             p.initial_position.append(np.array([x0, row["y0"], row["z0"]]))
             p.desired_target.append(np.array([xf, row["yf"], row["zf"]]))
             p.test_indexes.append(np.array([row["i0"], row["if"]]))
@@ -1193,7 +1238,7 @@ def talker(p):
 
         # prepare store of tracking results for feasible jumps
         p.result_csv_path = "value_function_dataset.csv"
-        columns = ['test', 'i0', 'if', 'p0_x', 'p0_y', 'p0_z', 'pf_x', 'pf_y', 'pf_z', 'avg_tracking_cost', 'tracking_cost']
+        columns = ['test', 'i0', 'if', 'p0_x', 'p0_y', 'p0_z', 'pf_x', 'pf_y', 'pf_z', 'avg_tracking_cost', 'tracking_cost', 'energy_ideal', 'energy_real', 'landing_error']
         p.results = pd.DataFrame(columns=columns)
 
         # Resume from existing CSV if exists
@@ -1254,25 +1299,29 @@ def talker(p):
         spawnMesh(p.mesh_x, p.mesh_y, p.mesh_z, position=p.mat2Gazebo,store_location_mesh=os.environ['LOCOSIM_DIR']+'/robot_descriptions/climbingrobot_description/meshes/', texture_path=texture_path)
 
 
-    p.orientTime = 1.0
+
     p.stateMachine = 'start_jump'
+
 
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     if p.SAMPLE_FOR_VALUE_FUNCTION:
-        p.startJump = 0.
         p.resetRobot(p.initial_position[p.jumpNumber])
+        # update startjump with the time elapsed during reset
+        p.startJump = p.time
+        p.orientTime = 0.0
     else:
         p.startJump = np.linalg.norm(p0) / 2
+        p.orientTime = 1.0
         p0_adj = p0.copy()
         p0_adj[0] = p.terrainManager.wall_surface_eval(p0[2], p0[1], p.mesh_x, p.mesh_y, p.mesh_z) + 0.2 # account for leg
         p.q_des[:12] = p.computeJointVariables(p0_adj)
 
     p.start_logging = p.startJump
+
     p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
-
-
     while not ros.is_shutdown():
+
         # update the kinematics
         p.updateKinematicsDynamics()
         # jump state machine

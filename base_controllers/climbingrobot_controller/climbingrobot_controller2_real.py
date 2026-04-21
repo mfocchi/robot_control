@@ -108,6 +108,28 @@ class ClimbingrobotController(BaseControllerFixed):
         total_robot_mass = 5.0 #todo hardcode this
         return total_robot_mass
 
+    def estimateRobotVelFromStates(self, l1, l2, psi, l1d, l2d, psid):
+        if l1 != 0 and l2 != 0:
+            # first estimate position
+            px = l1 * np.sin(psi) * np.sqrt(1 - (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) ** 2 / (4 * self.anchor_distance_y ** 2 * l1 ** 2))
+            py = (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) / (2 * self.anchor_distance_y)
+            pz = -l1 * np.cos(psi) * np.sqrt(1 - (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) ** 2 / (4 * self.anchor_distance_y ** 2 * l1 ** 2))
+
+            #temp vars to simplify equation
+            px_l1 = px / l1
+            n_pz_l1 = -pz / l1
+            px_l1_sinpsi = px / l1 / math.sin(psi+0.00001) # to avoid division by zero
+            py2b = py * 2 * self.anchor_distance_y
+
+            pdx = l1d * px_l1 + l1 * n_pz_l1 * psid + (py2b * math.sin(psi) * (l1d * pow(self.anchor_distance_y, 2) - l1d * pow(l1, 2) + 2 * l2d * l1 * l2 - l1d * pow(l2, 2))) / (4 * pow(self.anchor_distance_y, 2) * pow(l1, 2) * px_l1_sinpsi)
+            pdy = (l1 * l1d - l2 * l2d) / self.anchor_distance_y
+            pdz = l1 * psid * px_l1 - l1d * n_pz_l1 - (py2b * math.cos(psi) * (l1d * pow(self.anchor_distance_y, 2) - l1d * pow(l1, 2) + 2 * l2d * l1 * l2 - l1d * pow(l2, 2))) / (4 * pow(self.anchor_distance_y, 2) * pow(l1, 2) * px_l1_sinpsi)
+            base_vel = np.array([pdx, pdy, pdz])
+        else:
+            base_vel = np.zeros(3)
+
+        return base_vel
+
     def updateKinematicsDynamics(self):
         # get measured quantities
         self.w_R_rope = (quaternion_matrix(self.rope_l_imu_orientation))[:3,:3]
@@ -131,6 +153,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_pos = x_rope_l_attach + self.w_R_b[1] *(base_width/2) + com_offset
         self.base_rpy = self.math_utils.rot2eul(self.w_R_b)
 
+
+
         #compute ee position  in the world frame
         self.x_ee = self.base_pos - self.w_R_b[0] * leg_length
 
@@ -144,13 +168,17 @@ class ClimbingrobotController(BaseControllerFixed):
         # offset between hoists
         hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
 
-        #compute missin state variable phi psi_d
+        #compute missin state variable phi / psi_d
+        # old way (wrong)
         #self.psi = math.atan2(self.base_pos_mat[0], -self.base_pos_mat[2])
         # the psi variable is the extrinsic pitch wrt the world Y axis obtained expanding w_R_rope with extrinsic formula = Rx Ry Rz
         self.psi = math.atan2(self.w_R_rope[0,2], np.sqrt(math.pow(self.w_R_rope[0,0],2) + math.pow(self.w_R_rope[0,1],2)))
         # to get the derivative I need also the
         extr_roll =  math.atan2(-self.w_R_rope[1,2], self.w_R_rope[2,2])
         self.psi_d = np.cos(extr_roll) * self.w_omega_b[1] -np.sin(extr_roll) * self.w_omega_b[2]
+
+        # now that we have also psid we can  estimate base velocity (in WF)
+        self.base_vel = self.estimateRobotVelFromStates(self.l_1, self.l_2, self.psi, self.l_1d, self.l_2d, self.psi_d)
 
         # use geometric intuition for psid
         n_par = (self.anchor_pos - self.anchor_pos2) / np.linalg.norm(self.anchor_pos - self.anchor_pos2)
@@ -764,6 +792,7 @@ class ClimbingrobotController(BaseControllerFixed):
         except ros.ServiceException as e:
             ros.logerr("Service call failed: %s" % e)
             return False
+
 
 
 def talker(p):
