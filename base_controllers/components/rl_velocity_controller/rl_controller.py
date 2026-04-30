@@ -133,7 +133,7 @@ class RlVelocityController():
             elif policy_type=='safe':
                 action = self.model_safe.run(None, {'obs': obs})[0][0]
             else:
-                colored("Wrong polocy type", "red")
+                colored("Wrong policy type", "red")
 
             self.prev_action = action
             

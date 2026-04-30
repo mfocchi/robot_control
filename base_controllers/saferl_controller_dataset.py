@@ -18,6 +18,7 @@ from gazebo_msgs.srv import GetModelState
 from gazebo_msgs.srv import SetModelStateRequest
 from gazebo_msgs.msg import ModelState
 import numpy as np
+import time
 robotName = "aliengo"  # needs to inherit BaseController
 
 class SafeRLControllerDataset(QuadrupedController):
@@ -32,6 +33,7 @@ class SafeRLControllerDataset(QuadrupedController):
         # this sets the position of the joints
         gazebo_interface.set_model_configuration_client(self.robot_name, '', self.joint_names, self.qj_0, '/gazebo')
         self.send_des_jstate(self.q_des, np.zeros(12), np.zeros(12))
+        #print('self.q_des',self.q_des)
         # this sets the position of the base without removing gravity
         self.freezeBase(False,  basePoseW=basePoseDes)
 
@@ -57,7 +59,8 @@ if __name__ == '__main__':
     world_name = 'fast.world'
     use_gui=False
     p.state_estimation = 'ground_truth'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
-    rl_controller = RlVelocityController(p.robot_name, p.dt)
+    rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=True)
+
     try:
         p.startController(world_name=world_name,
                           use_ground_truth_contacts=True,
@@ -65,7 +68,7 @@ if __name__ == '__main__':
 
         p.pid = PidManager(p.joint_names)
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
-        p.dm.run_batch_simulations(rl_controller, n_episodes=100, save_path="components/safe_rl/value_function/observation_datasets", noise_std=10.0, seed = 0)
+        p.dm.run_batch_simulations(rl_controller, n_episodes=500, save_path="components/safe_rl/value_function/observation_datasets", noise_std=10.0, seed = int(time.time()))
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")

@@ -27,7 +27,7 @@ os.environ["XLA_FLAGS"] = os.environ.get("XLA_FLAGS", "") + " --xla_gpu_triton_g
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "True"
 
-model_path = 'models/VF_new2b.pkl'
+model_path = 'models/VF_se_500_cp_termination.pkl'
 load_parameters = False
 
 # ====================================
@@ -166,7 +166,7 @@ def normalize_states(states):
 # ====================================
 #            Load Dataset
 # ====================================
-data_path = 'observation_datasets/observations_dataset_new2.npy'
+data_path = 'observation_datasets/observations_se_100_cp_termination.npy'
 data = np.load(data_path)
 print("Dataset loaded:", data.shape)
 input_dim = 30 # obst, obs_t+1, fallen, captured
@@ -232,7 +232,7 @@ state = TrainState.create(apply_fn=model.apply, params=params, tx=optimizer)
 # ====================================
 #           Training Loop
 # ====================================
-epochs = 1000
+epochs = 5000
 batch_size = 512
 rng = jax.random.PRNGKey(int(time.time()))
 losses, min_losses, max_losses = [], [], []

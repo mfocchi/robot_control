@@ -50,23 +50,26 @@ if __name__ == '__main__':
     p = SafeRLController('aliengo')
     world_name = 'fast.world'
     use_gui=False#True
-    p.state_estimation = 'ground_truth'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
+    p.state_estimation = 'imu'  # 'odometry','imu', 'pronto', 'ground_truth' (only sim)
     # NOTE: in the RL controller, SE NN is used only if state estimation is not pronto
     rl_use_nn_se = p.state_estimation != 'pronto'
-    rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se, debug=True)
-    p.SAVE_BAG = True  #
+    rl_controller = RlVelocityController(p.robot_name, p.dt, use_nn_se=rl_use_nn_se, debug=False)
+    p.SAVE_BAG = False  #
     vf_frequency = 100  # Hz
     vf_decimation = (1 / p.dt) / (vf_frequency)
     step = 0
     isrec = True
-    use_joy = False
+    use_joy = True
     sim_push = False
+    allow_push_not_rec = False
+
+
 
     if use_joy:
         joy = JoyManager()
 
     #load value function NN
-    vf = ValueFunctionManager()
+    # vf = ValueFunctionManager()
     try:
         # p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
@@ -81,18 +84,21 @@ if __name__ == '__main__':
             p.recorder.start_recording_srv()
         #p.setSimSpeed(max_update_rate=300)
         p.startupProcedure()
-        if p.state_estimation=='pronto':
-            launchFileNode("mocap_qualisys", "qualisys.launch")
-            launchFileNode("pronto_aliengo", "pronto_aliengo.launch", additional_args=['pronto_conf:='+p.pronto_config,
-                                                                                       'use_sim_time:='+str(not p.real_robot)])
+        # if p.state_estimation=='pronto':
+        #     launchFileNode("mocap_qualisys", "qualisys.launch")
+        #     launchFileNode("pronto_aliengo", "pronto_aliengo.launch", additional_args=['pronto_conf:='+p.pronto_config,
+        #                                                                                'use_sim_time:='+str(not p.real_robot)])
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
         p.counter = 0
-        p.startTime = p.time
-
+        p.startTime = 0
+        time_push = p.startTime
         #profiler = Profiler(function_name=vf.computeValueFnc)
         #to reduce simulation frequency
         #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
+
+
         while not ros.is_shutdown():
+            isrec_prev = isrec
             p.updateKinematics()
 
             # MANAGE JOYSTICK
@@ -102,7 +108,7 @@ if __name__ == '__main__':
             if use_joy:
                 axes, buttons = joy.get_commands()
                 # use a scaling to make the joy input less reactive
-                long_x = 0.3 * axes[0]
+                long_x = 0.5 * axes[0]
                 long_y = 0.3 * axes[1]
                 rot_z = 0.4 * axes[2]
                 # safety layer
@@ -121,12 +127,12 @@ if __name__ == '__main__':
                     break
 
             #MANAGE CONTROLLER STARTING
-            if p.state_estimation == 'pronto':
-                if np.all(p.pronto_contacts) and not p.controller_ready:
-                    print(colored("ALL FEET ARE IN STANCE: It is possible to start RL controller", "red"))
-                    p.controller_ready = True
-            else:
-                p.controller_ready = True
+            # if p.state_estimation == 'pronto':
+            #     if np.all(p.pronto_contacts) and not p.controller_ready:
+            #         print(colored("ALL FEET ARE IN STANCE: It is possible to start RL controller", "red"))
+            #         p.controller_ready = True
+            # else:
+            p.controller_ready = True
 
             # CONTROLLER
             if (p.time > (p.startTime + 4.)) and p.controller_ready:
@@ -134,7 +140,7 @@ if __name__ == '__main__':
                 if use_joy:
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.2, 0.0, 0.0])
+                    rl_controller.velocity_cmd = np.array([0.3, 0.0, 0.0])
 
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
@@ -155,50 +161,53 @@ if __name__ == '__main__':
                 proj_gravity_b = p.b_R_w.dot(np.array([0, 0, -1]))
 
                 # pushes of increasing entity
-                if not p.real_robot and  (p.time > (p.startTime + 5.)) and p.time % 2. == 0 and sim_push:
+                if not p.real_robot and  (p.time > (p.startTime + 5.)) and time_push % 2. == 0 and sim_push and (isrec or allow_push_not_rec):
                      p.applyForce(0, 50*p.counter, 0, 0, 0, 0, 0.25)
                      p.startPush = p.time
                      print(50*p.counter)
                      p.counter+=1
                 #try only backup
                 #isrec = False
-                if isrec:
+                # if isrec:
                      # nominal policy
                      #rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                     p.rl_q_des = rl_controller.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
-                else:
-                    # backup policy
-                    #print(colored("I am executing backup policy!","red"))
-                    rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                    p.rl_q_des = rl_controller.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="safe")
-                #check this
-                #print('ang_vel_b A',ang_vel_b)
-                #print('proj_gravity A',proj_gravity)
+                p.rl_q_des = rl_controller.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="default")
+                # else:
+                #     # backup policy
+                #     #print(colored("I am executing backup policy!","red"))
+                #     rl_controller.velocity_cmd = np.array([0.0, 0.0, 0.0])
+                #     p.rl_q_des = rl_controller.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity_b, p.q, p.qd, policy_type="safe")
+                # #check this
+                # #print('ang_vel_b A',ang_vel_b)
+                # #print('proj_gravity A',proj_gravity)
 
 
 
-                if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
-                    isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.96, vf_additional_term = 0.0)
-                    #publish value function
-                    msg = Float32()
-                    msg.data = V_safe
-                    p.pub_vf.publish(msg)
-                    #pub rl command
-                    msg_ref_vel = Vector3()
-                    msg_ref_vel.x = rl_controller.velocity_cmd[0]
-                    msg_ref_vel.y = rl_controller.velocity_cmd[1]
-                    msg_ref_vel.z = rl_controller.velocity_cmd[2]
-                    p.pub_rl_ref_vel.publish(msg_ref_vel)
-                    #isrec = True #just record value functtion but dont use
-                     #print(V_safe)
-                # '''elif step % decimation == 0:
-                #     if np.all(np.abs(lin_vel_b < 10e-2)) and np.all(np.abs(p.qd) < 10e-2):
-                #         #print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-                #         isrec = True
-                #         rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
-                #         vf.count = 0
-                #         vf.VF = True'''
-                step += 1
+                # if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
+                #     isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.8, vf_additional_term = 0.0)
+                #     isrec = True
+                #     #publish value function
+                #     msg = Float32()
+                #     msg.data = V_safe
+                #     p.pub_vf.publish(msg)
+                #     #pub rl command
+                #     msg_ref_vel = Vector3()
+                #     msg_ref_vel.x = rl_controller.velocity_cmd[0]
+                #     msg_ref_vel.y = rl_controller.velocity_cmd[1]
+                #     msg_ref_vel.z = rl_controller.velocity_cmd[2]
+                #     p.pub_rl_ref_vel.publish(msg_ref_vel)
+                #     #isrec = True #just record value functtion but dont use
+                #     #print(V_safe)
+                # # '''elif step % decimation == 0:
+                # #     if np.all(np.abs(lin_vel_b < 10e-2)) and np.all(np.abs(p.qd) < 10e-2):
+                # #         #print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+                # #         isrec = True
+                # #         rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
+                # #         vf.count = 0
+                # #         vf.VF = True'''
+                # if not isrec_prev and isrec:
+                #     time_push = 0
+                # step += 1
 
                 # time based switch
                 # if p.time > (p.startTime + 3.): #backup policy
@@ -220,6 +229,7 @@ if __name__ == '__main__':
 
             if p.time < (p.startPush+0.25):
                 p.ros_pub.add_arrow(p.basePoseW[:3], np.array([0, 50 * p.counter, 0]) / 300, "blue", scale=1.5)
+            time_push = np.round(time_push + p.dt, 4)
             #p.visualizeContacts(delete_markers=True)
 
     except (ros.ROSInterruptException, ros.service.ServiceException):

@@ -53,7 +53,7 @@ class DatasetManager():
 
         self.quadruped.ros_pub.add_marker(np.append(base_pos_xy, 0.), radius=0.1, color="blue")
         self.quadruped.ros_pub.add_marker(np.append(cp, 0.), radius=0.1, color="red")
-        return self.capture_flag or self.fallen_flag
+        return self.capture_flag #or self.fallen_flag
 
     def store_observations(self):
         # -------------------------------
@@ -95,9 +95,9 @@ class DatasetManager():
         #reset robot
         self.warmup_time = warmup_time
         actor_network.velocity_cmd = np.array([
-            np.random.uniform(-0.5, 1.0),  # vx
+            np.random.uniform(-0.3, 0.3),  # vx
             np.random.uniform(-0.3, 0.3),  # vy
-            np.random.uniform(-0.7, 0.7)  # yaw_rate
+            np.random.uniform(-0.4, 0.4)  # yaw_rate
         ])
         #debug
         #actor_network.velocity_cmd = np.array([0.5, 0.0, 0.0])
@@ -107,6 +107,20 @@ class DatasetManager():
         high = warmup_time
         n_steps = int((high - low) / self.quadruped.dt)
         push_instant = round(low + np.random.randint(0, n_steps + 1) * self.quadruped.dt,3)
+        #print('initial', self.quadruped.basePoseW)
+        #print('self.quadruped.qj_0.copy())',self.quadruped.qj_0.copy())
+        #print('initial', self.quadruped.baseTwistW,self.quadruped.basePoseW, self.quadruped.q)
+        while self.quadruped.basePoseW[2] < 0.35 or self.quadruped.basePoseW[2]>0.37:
+        #while np.linalg.norm(self.quadruped.basePoseW - np.array([0, 0, 0.36, 0., 0., 0.])) > 0.01:
+           self.quadruped.updateKinematics()
+
+        #print('initialB', self.quadruped.baseTwistW, self.quadruped.basePoseW, self.quadruped.q)
+        #while np.linalg.norm(self.quadruped.q - self.quadruped.qj_0.copy()) > 0.001:
+        #    self.quadruped.updateKinematics()
+
+        #while np.linalg.norm(self.quadruped.baseTwistW - np.array([0, 0, 0., 0., 0., 0.])) > 0.01:
+        #    self.quadruped.updateKinematics()
+        #print('initialC', self.quadruped.baseTwistW,self.quadruped.basePoseW, self.quadruped.q)
         for self.step in range(max_steps):
             self.quadruped.updateKinematics()
             terminate = self.check_termination()
@@ -121,6 +135,7 @@ class DatasetManager():
             # Observation and Action Computation
             # -------------------------------
             # Prepare observation
+            lin_acc_b = self.quadruped.baseLinAccB
             lin_vel_b = self.quadruped.b_R_w.dot(self.quadruped.baseTwistW[:3])
             ang_vel_b = self.quadruped.b_R_w.dot(self.quadruped.baseTwistW[3:6])
             proj_gravity = self.quadruped.b_R_w.dot(np.array([0, 0, -1]))
@@ -139,19 +154,20 @@ class DatasetManager():
                     # self.quadruped.applyForce(Fx,0,0,0,0,0,self.quadruped.dt)  # push in x
                     # self.quadruped.applyForce(0, Fy, 0, 0, 0, 0, self.quadruped.dt)  # push in y
                     #apply as a twisch change
-                    vx = np.random.uniform(-2.0, 3.0) #+ self.quadruped.baseTwistW[0]
+                    vx = np.random.uniform(-1.5, 1.5) #+ self.quadruped.baseTwistW[0]
                     vy = np.random.uniform(-1.5, 1.5) #+ self.quadruped.baseTwistW[1]
                     #debug makes it fall
                     # vx = -1.645
                     # vy = -1.239
                     print(f"Pushing robot at {push_instant} with twist  vx: {vx}, vy: {vy}")
                     self.quadruped.setBaseTwist(baseTwist=np.array([vx, vy, 0, 0, 0, 0]))
-                self.quadruped.q_des = actor_network.action(lin_vel_b, ang_vel_b, proj_gravity, self.quadruped.q, self.quadruped.qd, policy_type="default")
+                self.quadruped.q_des = actor_network.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity, self.quadruped.q, self.quadruped.qd, policy_type="default")
+
             else:#switch to backup policy
                 if np.mod(self.quadruped.time, 0.5) == 0:
                     print(colored(f"TIME: {self.quadruped.time}", "red"))
                 actor_network.velocity_cmd = np.array([0.0, 0.0, 0.0])
-                self.quadruped.q_des = actor_network.action(lin_vel_b, ang_vel_b, proj_gravity, self.quadruped.q, self.quadruped.qd, policy_type="safe")
+                self.quadruped.q_des = actor_network.action(lin_acc_b, lin_vel_b, ang_vel_b, proj_gravity, self.quadruped.q, self.quadruped.qd, policy_type="safe")
 
             #for log
             self.quadruped.baseTwistW_des[:3] = self.quadruped.b_R_w.T @ np.append(actor_network.velocity_cmd[:2], 0.0)
@@ -223,7 +239,7 @@ class DatasetManager():
 
         stats = np.array(stats, dtype=int)
 
-        np.save(os.path.join(save_path, "observations_dataset_newB.npy"), padded_obs)
+        np.save(os.path.join(save_path, "observations_se_500_cp_termination.npy"), padded_obs)
 
         print(f"Episodi completati: {n_episodes}")
         print(f"Caduti: {np.sum(stats[:, 0])}, CP raggiunto: {np.sum(stats[:, 1])}")
