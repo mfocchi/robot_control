@@ -121,13 +121,18 @@ def startNode(package, executable, args=''):
     process = launch.launch(node)
 
 
-def loadXacro(package_name, model_name, param_name = None):
+def loadXacro(package_name, model_name, param_name = None, xacro_model_custom_path=None):
     if param_name is None:
         param_name = '/'+model_name+'/robot_description'
 
-    print(colored(f"Loading xacro for  {model_name} inside {package_name}", "blue"))
-    # first generate robot description
-    xacro_path = rospkg.RosPack().get_path(package_name) + '/robots/' + model_name + '.urdf.xacro'
+    if xacro_model_custom_path is None:
+        print(colored(f"Loading xacro for  {model_name} inside {package_name}", "blue"))
+        xacro_path = rospkg.RosPack().get_path(package_name) + '/robots/' + model_name + '.urdf.xacro'
+    else:
+        print(colored(f"Loading xacro  {xacro_model_custom_path}", "blue"))
+        xacro_path = rospkg.RosPack().get_path(package_name) + '/'+xacro_model_custom_path
+
+    # generate robot description
     if not os.path.isfile(xacro_path):
         print(colored(f"Xacro file {model_name}.urdf.xacro does not exist!", "red"))
     command_string = "rosrun xacro xacro "+xacro_path
