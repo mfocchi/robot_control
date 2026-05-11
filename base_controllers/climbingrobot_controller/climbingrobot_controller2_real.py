@@ -704,7 +704,7 @@ class ClimbingrobotController(BaseControllerFixed):
         #start rviz
         startNode(package='rviz', executable='rviz', args='-d ' + rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf.rviz')
         #launch hw interface
-        launchFileNode(package='climbingrobot_hardware_interface', launch_file='alpine_low_level_bringup.launch')
+        #launchFileNode(package='climbingrobot_hardware_interface', launch_file='alpine_low_level_bringup.launch')
 
     def startRealRobotPublisherSubscribers(self):
 
@@ -1031,7 +1031,7 @@ def talker(p):
         # update the kinematics
         p.updateKinematicsDynamics()
 
-        print("AAA")
+        #TODO uncomment this
         # stop = p.stateMachineLoop()
         # if stop:
         #     break
