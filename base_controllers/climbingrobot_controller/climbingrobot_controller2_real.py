@@ -30,13 +30,13 @@ import  base_controllers.params as conf
 robotName = "climbingrobot2"
 # real robot msgs
 import std_msgs, geometry_msgs
-from climbingrobot_description.msg import RopeCommand
-from climbingrobot_description.msg import PropellerCommand
-from climbingrobot_description.msg import RopeTelemetry
-from climbingrobot_description.msg import AlpineBodyTelemetry
+from climbingrobot_hardware_interface.msg import RopeCommand
+from climbingrobot_hardware_interface.msg import PropellerCommand
+from climbingrobot_hardware_interface.msg import RopeTelemetry
+from climbingrobot_hardware_interface.msg import AlpineBodyTelemetry
 # real robot services
-from climbingrobot_description.srv import AlpineBodyCommand, AlpineBodyCommandRequest
-from climbingrobot_description.srv import RopeControlMode, RopeControlModeRequest
+from climbingrobot_hardware_interface.srv import AlpineBodyCommand, AlpineBodyCommandRequest
+from climbingrobot_hardware_interface.srv import RopeControlMode, RopeControlModeRequest
 from base_controllers.utils.common_functions import startNode, checkRosMaster, launchFileNode
 from base_controllers.utils.math_tools import quaternion_matrix
 from base_controllers.utils.ros_publish import RosPub
@@ -699,8 +699,12 @@ class ClimbingrobotController(BaseControllerFixed):
         checkRosMaster()
         #loads robot_description
         launchFileNode(package='climbingrobot_description',launch_file='upload.launch')
+        #launches robot state publisher
         startNode(package ='robot_state_publisher', executable='robot_state_publisher')
+        #start rviz
         startNode(package='rviz', executable='rviz', args='-d ' + rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf.rviz')
+        #launch hw interface
+        launchFileNode(package='climbingrobot_hardware_interface', launch_file='alpine_low_level_bringup.launch')
 
     def startRealRobotPublisherSubscribers(self):
 
@@ -792,7 +796,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def setRopeControlMode(self, mode='idle'):
         req = RopeControlModeRequest()
-        req.mode = mode
+        req.message = mode
         # Call the service
         try:
             resp = self.rope_control_mode_l(req)
