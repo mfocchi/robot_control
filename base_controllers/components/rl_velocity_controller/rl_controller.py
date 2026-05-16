@@ -15,12 +15,20 @@ class RlVelocityController():
         if self.debug:
             self.pub_gt_base_lin_vel = rospy.Publisher("/" + self.robot_name + "/gt_base_lin_vel", Vector3, queue_size=10)
 
-        base_model_path = os.path.join(os.environ.get('LOCOSIM_DIR'),
-                                       'robot_control',
-                                       'base_controllers',
-                                       'components',
-                                       'rl_velocity_controller',
-                                       'policies')
+        if use_nn_se:
+            base_model_path = os.path.join(os.environ.get('LOCOSIM_DIR'),
+                                           'robot_control',
+                                           'base_controllers',
+                                           'components',
+                                           'rl_velocity_controller',
+                                           'policies')
+        else:
+            base_model_path = os.path.join(os.environ.get('LOCOSIM_DIR'),
+                                           'robot_control',
+                                           'base_controllers',
+                                           'components',
+                                           'rl_velocity_controller',
+                                           'policies', 'previous')
 
         config_path = os.path.join(base_model_path, f"{robot_name}.json")
 
@@ -38,13 +46,14 @@ class RlVelocityController():
         self.model_safe = ort.InferenceSession(self.model_path_safe)
         print(f'Policy for {robot_name}_safe loaded')
 
-        self.model_path_se = os.path.join(base_model_path, f'{robot_name}_se.onnx')
-        self.model_se = ort.InferenceSession(self.model_path_se)
-        print(f'Policy for {robot_name}_se loaded')
+        if use_nn_se:
+            self.model_path_se = os.path.join(base_model_path, f'{robot_name}_se.onnx')
+            self.model_se = ort.InferenceSession(self.model_path_se)
+            print(f'Policy for {robot_name}_se loaded')
 
-        self.model_path_se_safe = os.path.join(base_model_path, f'{robot_name}_se_safe.onnx')
-        self.model_se_safe = ort.InferenceSession(self.model_path_se_safe)
-        print(f'Policy for {robot_name}_se_safe loaded')
+            self.model_path_se_safe = os.path.join(base_model_path, f'{robot_name}_se_safe.onnx')
+            self.model_se_safe = ort.InferenceSession(self.model_path_se_safe)
+            print(f'Policy for {robot_name}_se_safe loaded')
 
         self.q_def = self.cfg["q_def"]
         self.q_des = self.q_def

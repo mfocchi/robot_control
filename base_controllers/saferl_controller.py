@@ -59,8 +59,8 @@ if __name__ == '__main__':
     vf_decimation = (1 / p.dt) / (vf_frequency)
     step = 0
     isrec = True
-    use_joy = True
-    sim_push = False
+    use_joy = False
+    sim_push = True
     allow_push_not_rec = False
 
 
@@ -69,14 +69,14 @@ if __name__ == '__main__':
         joy = JoyManager()
 
     #load value function NN
-    # vf = ValueFunctionManager()
+    vf = ValueFunctionManager()
     try:
         # p.startController(world_name='slow.world')
         p.startController(world_name=world_name,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:=' + str(use_gui),
                                            'go0_conf:=standDown',
-                                           'rviz:=true',
+                                           'rviz:=false',
                                            *(['task_period:=0.002'] if p.real_robot else [])])  # change task period for real robot
         if p.SAVE_BAG:
             p.recorder = RosbagControlledRecorder(topics='/aliengo/joint_states /aliengo/imu  /state_estimator_pronto/pose /state_estimator_pronto/twist /state_estimator_pronto/vel_raw /state_estimator_pronto/stance /value_function /qualisys/robot/pose /rl_ref_vel /tf /tf_static',
@@ -140,7 +140,7 @@ if __name__ == '__main__':
                 if use_joy:
                     rl_controller.velocity_cmd = np.array([long_x, long_y, rot_z])
                 else:
-                    rl_controller.velocity_cmd = np.array([0.3, 0.0, 0.0])
+                    rl_controller.velocity_cmd = np.array([0.5, 0.0, 0.0])
 
                 p.baseTwistW_des[:3] = p.b_R_w.T @ np.append(rl_controller.velocity_cmd[:2], 0.0)
                 p.baseTwistW_des[5] = rl_controller.velocity_cmd[2]
@@ -183,8 +183,8 @@ if __name__ == '__main__':
 
 
 
-                # if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
-                #     isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.8, vf_additional_term = 0.0)
+                if step % vf_decimation == 0 and (p.time >(p.startTime + 5.)):# and isrec:
+                     isrec, V_safe = vf.computeValueFnc(body_ang_vel=ang_vel_b, proj_gravity=proj_gravity_b, joint_pos=p.q, joint_vel=p.qd, threshold=0.8, vf_additional_term = 0.0)
                 #     isrec = True
                 #     #publish value function
                 #     msg = Float32()
