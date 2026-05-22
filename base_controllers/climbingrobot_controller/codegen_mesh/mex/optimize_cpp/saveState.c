@@ -18,7 +18,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void saveState(g_struct_T *obj)
+void saveState(h_struct_T *obj)
 {
   ptrdiff_t incx_t;
   ptrdiff_t incy_t;

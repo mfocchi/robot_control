@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-real_T maxConstraintViolation(h_struct_T *obj, const emxArray_real_T *x);
+real_T maxConstraintViolation(i_struct_T *obj, const emxArray_real_T *x);
 
 /* End of code generation (maxConstraintViolation.h) */

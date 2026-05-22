@@ -45,7 +45,8 @@ build $builddir/tic.o : cc $root/tic.c
 build $builddir/timeKeeper.o : cc $root/timeKeeper.c
 build $builddir/fmincon.o : cc $root/fmincon.c
 build $builddir/computePositionVelocity.o : cc $root/computePositionVelocity.c
-build $builddir/interp2.o : cc $root/interp2.c
+build $builddir/wallSurfaceEval.o : cc $root/wallSurfaceEval.c
+build $builddir/all.o : cc $root/all.c
 build $builddir/factoryConstruct.o : cc $root/factoryConstruct.c
 build $builddir/factoryConstruct1.o : cc $root/factoryConstruct1.c
 build $builddir/factoryConstruct2.o : cc $root/factoryConstruct2.c
@@ -55,8 +56,7 @@ build $builddir/computeDualFeasError.o : cc $root/computeDualFeasError.c
 build $builddir/computeComplError.o : cc $root/computeComplError.c
 build $builddir/fillOutputStruct.o : cc $root/fillOutputStruct.c
 build $builddir/toc.o : cc $root/toc.c
-build $builddir/find.o : cc $root/find.c
-build $builddir/constraints.o : cc $root/constraints.c
+build $builddir/eval_solution.o : cc $root/eval_solution.c
 build $builddir/_coder_optimize_cpp_api.o : cc $root/interface/_coder_optimize_cpp_api.c
 build $builddir/_coder_optimize_cpp_mex.o : cc $root/interface/_coder_optimize_cpp_mex.c
 build $builddir/computeRollout.o : cc $root/computeRollout.c
@@ -105,7 +105,6 @@ build $builddir/computeGradLag.o : cc $root/computeGradLag.c
 build $builddir/feasibleratiotest.o : cc $root/feasibleratiotest.c
 build $builddir/partialColLDL3_.o : cc $root/partialColLDL3_.c
 build $builddir/fullColLDL2_.o : cc $root/fullColLDL2_.c
-build $builddir/eval_solution.o : cc $root/eval_solution.c
 build $builddir/cost.o : cc $root/cost.c
 build $builddir/optimize_cpp_emxutil.o : cc $root/optimize_cpp_emxutil.c
 build $builddir/optimize_cpp_mexutil.o : cc $root/optimize_cpp_mexutil.c
@@ -113,4 +112,4 @@ build $builddir/_coder_optimize_cpp_info.o : cc $root/interface/_coder_optimize_
 build $builddir/c_mexapi_version.o : cc $matlabdir/extern/version/c_mexapi_version.c
 
 # Link
-build $root/optimize_cpp_mex.mexa64 : link $builddir/optimize_cpp_data.o $builddir/rt_nonfinite.o $builddir/optimize_cpp_initialize.o $builddir/optimize_cpp_terminate.o $builddir/optimize_cpp.o $builddir/tic.o $builddir/timeKeeper.o $builddir/fmincon.o $builddir/computePositionVelocity.o $builddir/interp2.o $builddir/factoryConstruct.o $builddir/factoryConstruct1.o $builddir/factoryConstruct2.o $builddir/sum.o $builddir/diff.o $builddir/computeDualFeasError.o $builddir/computeComplError.o $builddir/fillOutputStruct.o $builddir/toc.o $builddir/find.o $builddir/constraints.o $builddir/_coder_optimize_cpp_api.o $builddir/_coder_optimize_cpp_mex.o $builddir/computeRollout.o $builddir/dynamics.o $builddir/sumMatrixIncludeNaN.o $builddir/xcopy.o $builddir/loadProblem.o $builddir/setProblemType.o $builddir/modifyOverheadPhaseOne_.o $builddir/driver.o $builddir/test_exit.o $builddir/xgeqp3.o $builddir/computeQ_.o $builddir/sortLambdaQP.o $builddir/saveState.o $builddir/step.o $builddir/driver1.o $builddir/PresolveWorkingSet.o $builddir/countsort.o $builddir/removeConstr.o $builddir/feasibleX0ForWorkingSet.o $builddir/xgeqrf.o $builddir/factorQR.o $builddir/maxConstraintViolation.o $builddir/computeFval.o $builddir/linearForm_.o $builddir/iterate.o $builddir/computeGrad_StoreHx.o $builddir/computeFval_ReuseHx.o $builddir/deleteColMoveEnd.o $builddir/compute_deltax.o $builddir/factor.o $builddir/solve.o $builddir/xgemm.o $builddir/compute_lambda.o $builddir/addAineqConstr.o $builddir/addBoundToActiveSetMatrix_.o $builddir/relaxed.o $builddir/BFGSUpdate.o $builddir/integrate_dynamics.o $builddir/computeFiniteDifferences.o $builddir/computeConstraints_.o $builddir/updateWorkingSetForNewQP.o $builddir/evalObjAndConstr.o $builddir/computeGradLag.o $builddir/feasibleratiotest.o $builddir/partialColLDL3_.o $builddir/fullColLDL2_.o $builddir/eval_solution.o $builddir/cost.o $builddir/optimize_cpp_emxutil.o $builddir/optimize_cpp_mexutil.o $builddir/_coder_optimize_cpp_info.o $builddir/c_mexapi_version.o 
+build $root/optimize_cpp_mex.mexa64 : link $builddir/optimize_cpp_data.o $builddir/rt_nonfinite.o $builddir/optimize_cpp_initialize.o $builddir/optimize_cpp_terminate.o $builddir/optimize_cpp.o $builddir/tic.o $builddir/timeKeeper.o $builddir/fmincon.o $builddir/computePositionVelocity.o $builddir/wallSurfaceEval.o $builddir/all.o $builddir/factoryConstruct.o $builddir/factoryConstruct1.o $builddir/factoryConstruct2.o $builddir/sum.o $builddir/diff.o $builddir/computeDualFeasError.o $builddir/computeComplError.o $builddir/fillOutputStruct.o $builddir/toc.o $builddir/eval_solution.o $builddir/_coder_optimize_cpp_api.o $builddir/_coder_optimize_cpp_mex.o $builddir/computeRollout.o $builddir/dynamics.o $builddir/sumMatrixIncludeNaN.o $builddir/xcopy.o $builddir/loadProblem.o $builddir/setProblemType.o $builddir/modifyOverheadPhaseOne_.o $builddir/driver.o $builddir/test_exit.o $builddir/xgeqp3.o $builddir/computeQ_.o $builddir/sortLambdaQP.o $builddir/saveState.o $builddir/step.o $builddir/driver1.o $builddir/PresolveWorkingSet.o $builddir/countsort.o $builddir/removeConstr.o $builddir/feasibleX0ForWorkingSet.o $builddir/xgeqrf.o $builddir/factorQR.o $builddir/maxConstraintViolation.o $builddir/computeFval.o $builddir/linearForm_.o $builddir/iterate.o $builddir/computeGrad_StoreHx.o $builddir/computeFval_ReuseHx.o $builddir/deleteColMoveEnd.o $builddir/compute_deltax.o $builddir/factor.o $builddir/solve.o $builddir/xgemm.o $builddir/compute_lambda.o $builddir/addAineqConstr.o $builddir/addBoundToActiveSetMatrix_.o $builddir/relaxed.o $builddir/BFGSUpdate.o $builddir/integrate_dynamics.o $builddir/computeFiniteDifferences.o $builddir/computeConstraints_.o $builddir/updateWorkingSetForNewQP.o $builddir/evalObjAndConstr.o $builddir/computeGradLag.o $builddir/feasibleratiotest.o $builddir/partialColLDL3_.o $builddir/fullColLDL2_.o $builddir/cost.o $builddir/optimize_cpp_emxutil.o $builddir/optimize_cpp_mexutil.o $builddir/_coder_optimize_cpp_info.o $builddir/c_mexapi_version.o 

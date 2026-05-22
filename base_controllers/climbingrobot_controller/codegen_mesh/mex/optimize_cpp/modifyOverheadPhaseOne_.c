@@ -16,7 +16,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void modifyOverheadPhaseOne_(h_struct_T *obj)
+void modifyOverheadPhaseOne_(i_struct_T *obj)
 {
   int32_T i;
   int32_T idx;

@@ -28,7 +28,7 @@ real_T evalObjAndConstr(int32_T c_obj_next_next_next_next_next_,
                         real_T f_obj_next_next_next_next_next_,
                         real_T g_obj_next_next_next_next_next_,
                         const param *h_obj_next_next_next_next_next_,
-                        const j_struct_T *i_obj_next_next_next_next_next_,
+                        const k_struct_T *i_obj_next_next_next_next_next_,
                         const emxArray_real_T *x,
                         emxArray_real_T *Cineq_workspace, int32_T ineq0,
                         int32_T *status);

@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-void factorQR(e_struct_T *obj, const emxArray_real_T *A, int32_T mrows,
+void factorQR(f_struct_T *obj, const emxArray_real_T *A, int32_T mrows,
               int32_T ncols, int32_T ldA);
 
 /* End of code generation (factorQR.h) */

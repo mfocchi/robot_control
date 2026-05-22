@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-void compute_lambda(emxArray_real_T *workspace, g_struct_T *solution,
-                    const c_struct_T *objective, const e_struct_T *qrmanager);
+void compute_lambda(emxArray_real_T *workspace, h_struct_T *solution,
+                    const d_struct_T *objective, const f_struct_T *qrmanager);
 
 /* End of code generation (compute_lambda.h) */

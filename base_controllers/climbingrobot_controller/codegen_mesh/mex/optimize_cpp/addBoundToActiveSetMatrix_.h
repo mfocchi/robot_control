@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-void addBoundToActiveSetMatrix_(h_struct_T *obj, int32_T TYPE,
+void addBoundToActiveSetMatrix_(i_struct_T *obj, int32_T TYPE,
                                 int32_T idx_local);
 
 /* End of code generation (addBoundToActiveSetMatrix_.h) */

@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void computeQ_(e_struct_T *obj, int32_T nrows);
+void computeQ_(f_struct_T *obj, int32_T nrows);
 
 /* End of code generation (computeQ_.h) */

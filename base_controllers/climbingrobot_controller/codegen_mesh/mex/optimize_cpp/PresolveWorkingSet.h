@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-void PresolveWorkingSet(g_struct_T *solution, d_struct_T *memspace,
-                        h_struct_T *workingset, e_struct_T *qrmanager);
+void PresolveWorkingSet(h_struct_T *solution, e_struct_T *memspace,
+                        i_struct_T *workingset, f_struct_T *qrmanager);
 
 /* End of code generation (PresolveWorkingSet.h) */

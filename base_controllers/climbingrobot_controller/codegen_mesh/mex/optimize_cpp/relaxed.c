@@ -25,17 +25,17 @@
 
 /* Function Definitions */
 void relaxed(const emxArray_real_T *Hessian, const emxArray_real_T *grad,
-             g_struct_T *TrialState, struct_T *MeritFunction,
-             d_struct_T *memspace, h_struct_T *WorkingSet,
-             e_struct_T *QRManager, f_struct_T *CholManager,
-             c_struct_T *QPObjective, l_struct_T *qpoptions)
+             h_struct_T *TrialState, struct_T *MeritFunction,
+             e_struct_T *memspace, i_struct_T *WorkingSet,
+             f_struct_T *QRManager, g_struct_T *CholManager,
+             d_struct_T *QPObjective, m_struct_T *qpoptions)
 {
   ptrdiff_t incx_t;
   ptrdiff_t incy_t;
   ptrdiff_t lda_t;
   ptrdiff_t m_t;
   ptrdiff_t n_t;
-  l_struct_T b_qpoptions;
+  m_struct_T b_qpoptions;
   const real_T *Hessian_data;
   const real_T *grad_data;
   real_T beta;

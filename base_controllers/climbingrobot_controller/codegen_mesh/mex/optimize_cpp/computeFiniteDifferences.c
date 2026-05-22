@@ -21,7 +21,7 @@
 
 /* Function Definitions */
 boolean_T computeFiniteDifferences(
-    k_struct_T *obj, real_T fCurrent, const emxArray_real_T *cIneqCurrent,
+    l_struct_T *obj, real_T fCurrent, const emxArray_real_T *cIneqCurrent,
     int32_T ineq0, emxArray_real_T *xk, emxArray_real_T *gradf,
     emxArray_real_T *JacCineqTrans, int32_T CineqColStart, int32_T ldJI,
     const emxArray_real_T *lb, const emxArray_real_T *ub)

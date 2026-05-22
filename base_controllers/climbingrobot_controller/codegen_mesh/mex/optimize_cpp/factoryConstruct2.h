@@ -23,6 +23,6 @@
 
 /* Function Declarations */
 void c_factoryConstruct(int32_T mIneqMax, int32_T nVar, int32_T nVarMax,
-                        int32_T mConstrMax, h_struct_T *obj);
+                        int32_T mConstrMax, i_struct_T *obj);
 
 /* End of code generation (factoryConstruct2.h) */

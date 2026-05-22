@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void removeConstr(h_struct_T *obj, int32_T idx_global);
+void removeConstr(i_struct_T *obj, int32_T idx_global);
 
 /* End of code generation (removeConstr.h) */

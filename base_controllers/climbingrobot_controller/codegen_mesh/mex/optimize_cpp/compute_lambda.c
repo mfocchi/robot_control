@@ -20,8 +20,8 @@
 #include <string.h>
 
 /* Function Definitions */
-void compute_lambda(emxArray_real_T *workspace, g_struct_T *solution,
-                    const c_struct_T *objective, const e_struct_T *qrmanager)
+void compute_lambda(emxArray_real_T *workspace, h_struct_T *solution,
+                    const d_struct_T *objective, const f_struct_T *qrmanager)
 {
   ptrdiff_t incx_t;
   ptrdiff_t incy_t;

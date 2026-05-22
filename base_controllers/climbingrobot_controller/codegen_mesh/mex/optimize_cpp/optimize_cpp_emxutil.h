@@ -36,19 +36,21 @@ void emxFreeStruct_struct0_T(struct0_T *pStruct);
 
 void emxFreeStruct_struct3_T(struct3_T *pStruct);
 
-void emxFreeStruct_struct_T(g_struct_T *pStruct);
+void emxFreeStruct_struct_T(c_struct_T *pStruct);
 
-void emxFreeStruct_struct_T1(k_struct_T *pStruct);
+void emxFreeStruct_struct_T1(h_struct_T *pStruct);
 
-void emxFreeStruct_struct_T2(c_struct_T *pStruct);
+void emxFreeStruct_struct_T2(l_struct_T *pStruct);
 
 void emxFreeStruct_struct_T3(d_struct_T *pStruct);
 
-void emxFreeStruct_struct_T4(h_struct_T *pStruct);
+void emxFreeStruct_struct_T4(e_struct_T *pStruct);
 
-void emxFreeStruct_struct_T5(e_struct_T *pStruct);
+void emxFreeStruct_struct_T5(i_struct_T *pStruct);
 
 void emxFreeStruct_struct_T6(f_struct_T *pStruct);
+
+void emxFreeStruct_struct_T7(g_struct_T *pStruct);
 
 void emxFree_boolean_T(emxArray_boolean_T **pEmxArray);
 
@@ -62,19 +64,21 @@ void emxInitStruct_struct0_T(struct0_T *pStruct);
 
 void emxInitStruct_struct3_T(struct3_T *pStruct);
 
-void emxInitStruct_struct_T(g_struct_T *pStruct);
+void emxInitStruct_struct_T(c_struct_T *pStruct);
 
-void emxInitStruct_struct_T1(k_struct_T *pStruct);
+void emxInitStruct_struct_T1(h_struct_T *pStruct);
 
-void emxInitStruct_struct_T2(c_struct_T *pStruct);
+void emxInitStruct_struct_T2(l_struct_T *pStruct);
 
 void emxInitStruct_struct_T3(d_struct_T *pStruct);
 
-void emxInitStruct_struct_T4(h_struct_T *pStruct);
+void emxInitStruct_struct_T4(e_struct_T *pStruct);
 
-void emxInitStruct_struct_T5(e_struct_T *pStruct);
+void emxInitStruct_struct_T5(i_struct_T *pStruct);
 
 void emxInitStruct_struct_T6(f_struct_T *pStruct);
+
+void emxInitStruct_struct_T7(g_struct_T *pStruct);
 
 void emxInit_boolean_T(emxArray_boolean_T **pEmxArray, int32_T numDimensions);
 
