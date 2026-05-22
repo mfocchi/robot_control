@@ -16,7 +16,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void removeConstr(h_struct_T *obj, int32_T idx_global)
+void removeConstr(i_struct_T *obj, int32_T idx_global)
 {
   int32_T TYPE_tmp;
   int32_T i;

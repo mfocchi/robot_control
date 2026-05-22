@@ -3,9 +3,9 @@
  * course requirements at degree granting institutions only.  Not for
  * government, commercial, or other organizational use.
  *
- * interp2.h
+ * wallSurfaceEval.h
  *
- * Code generation for function 'interp2'
+ * Code generation for function 'wallSurfaceEval'
  *
  */
 
@@ -21,8 +21,9 @@
 #include <string.h>
 
 /* Function Declarations */
-real_T interp2(const real_T varargin_1[10000], const real_T varargin_2[10000],
-               const real_T varargin_3[10000], real_T varargin_4,
-               real_T varargin_5);
+real_T wallSurfaceEval(real_T z_query, real_T y_query,
+                       const real_T params_mesh_x[10000],
+                       const real_T params_mesh_y[10000],
+                       const real_T params_mesh_z[10000]);
 
-/* End of code generation (interp2.h) */
+/* End of code generation (wallSurfaceEval.h) */

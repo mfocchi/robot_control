@@ -23,7 +23,7 @@ void b_factoryConstruct(
     const real_T nonlin_workspace_p0[3], const real_T nonlin_workspace_pf[3],
     real_T nonlin_workspace_Fleg_max, real_T nonlin_workspace_mu,
     const param *nonlin_workspace_params, int32_T nVar, int32_T mCineq,
-    const emxArray_real_T *lb, const emxArray_real_T *ub, k_struct_T *obj)
+    const emxArray_real_T *lb, const emxArray_real_T *ub, l_struct_T *obj)
 {
   const real_T *lb_data;
   const real_T *ub_data;

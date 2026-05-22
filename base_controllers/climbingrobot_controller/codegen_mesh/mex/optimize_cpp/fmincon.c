@@ -44,15 +44,15 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
                real_T *output_constrviolation, real_T *output_stepsize,
                real_T *output_lssteplength, real_T *output_firstorderopt)
 {
-  c_struct_T QPObjective;
-  d_struct_T memspace;
-  e_struct_T obj;
+  d_struct_T QPObjective;
+  e_struct_T memspace;
   emxArray_real_T *Hessian;
   emxArray_real_T *fscales_cineq_constraint;
   emxArray_real_T *r;
-  f_struct_T b_obj;
-  g_struct_T TrialState;
-  h_struct_T WorkingSet;
+  f_struct_T obj;
+  g_struct_T b_obj;
+  h_struct_T TrialState;
+  i_struct_T WorkingSet;
   struct_T MeritFunction;
   const real_T *lb_data;
   const real_T *ub_data;
@@ -98,7 +98,7 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
   for (loop_ub = 0; loop_ub <= nVar; loop_ub++) {
     Hessian_data[loop_ub + Hessian->size[0] * loop_ub] = 1.0;
   }
-  emxInitStruct_struct_T(&TrialState);
+  emxInitStruct_struct_T1(&TrialState);
   factoryConstruct(nVarMax, mConstrMax, r->size[1], x0, r->size[1],
                    &TrialState);
   xcopy(x0->size[1], x0, TrialState.xstarsqp);
@@ -129,13 +129,13 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
       nonlcon_workspace_mu;
   SD->f0.FcnEvaluator.next.next.next.next.next.next.next.value.workspace
       .params = *nonlcon_workspace_params;
-  emxInitStruct_struct_T1(&SD->f0.FiniteDifferences);
+  emxInitStruct_struct_T2(&SD->f0.FiniteDifferences);
   b_factoryConstruct(fun_workspace_p0, fun_workspace_params,
                      nonlcon_workspace_p0, nonlcon_workspace_pf,
                      nonlcon_workspace_Fleg_max, nonlcon_workspace_mu,
                      nonlcon_workspace_params, x0->size[1], r->size[1], lb, ub,
                      &SD->f0.FiniteDifferences);
-  emxInitStruct_struct_T2(&QPObjective);
+  emxInitStruct_struct_T3(&QPObjective);
   i = QPObjective.grad->size[0];
   QPObjective.grad->size[0] = nVarMax;
   emxEnsureCapacity_real_T(QPObjective.grad, i);
@@ -152,7 +152,7 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
   QPObjective.nvar = x0->size[1];
   QPObjective.hasLinear = true;
   QPObjective.objtype = 3;
-  emxInitStruct_struct_T3(&memspace);
+  emxInitStruct_struct_T4(&memspace);
   i = memspace.workspace_double->size[0] * memspace.workspace_double->size[1];
   memspace.workspace_double->size[0] = maxDims;
   memspace.workspace_double->size[1] = muIntScalarMax_sint32(nVarMax, 2);
@@ -171,7 +171,7 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
   for (i = 0; i < idxFillStart; i++) {
     Hessian_data[i] = 1.0;
   }
-  emxInitStruct_struct_T4(&WorkingSet);
+  emxInitStruct_struct_T5(&WorkingSet);
   c_factoryConstruct(r->size[1], x0->size[1], nVarMax, mConstrMax, &WorkingSet);
   mLB = -1;
   mUB = -1;
@@ -343,7 +343,7 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
   MeritFunction.nlpComplError = 0.0;
   MeritFunction.firstOrderOpt = 0.0;
   MeritFunction.hasObjective = true;
-  emxInitStruct_struct_T5(&obj);
+  emxInitStruct_struct_T6(&obj);
   obj.ldq = maxDims;
   i = obj.QR->size[0] * obj.QR->size[1];
   obj.QR->size[0] = maxDims;
@@ -370,7 +370,7 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
   emxEnsureCapacity_real_T(obj.tau, i);
   obj.minRowCol = 0;
   obj.usedPivoting = false;
-  emxInitStruct_struct_T6(&b_obj);
+  emxInitStruct_struct_T7(&b_obj);
   i = b_obj.FMat->size[0] * b_obj.FMat->size[1];
   b_obj.FMat->size[0] = maxDims;
   b_obj.FMat->size[1] = maxDims;
@@ -386,14 +386,14 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
   driver(Hessian, lb, ub, &TrialState, &MeritFunction, &SD->f0.FcnEvaluator,
          &SD->f0.FiniteDifferences, &memspace, &WorkingSet, &obj, &b_obj,
          &QPObjective, fscales_cineq_constraint);
-  emxFreeStruct_struct_T6(&b_obj);
-  emxFreeStruct_struct_T5(&obj);
+  emxFreeStruct_struct_T7(&b_obj);
+  emxFreeStruct_struct_T6(&obj);
   emxFree_real_T(&Hessian);
-  emxFreeStruct_struct_T4(&WorkingSet);
+  emxFreeStruct_struct_T5(&WorkingSet);
   emxFree_real_T(&fscales_cineq_constraint);
-  emxFreeStruct_struct_T3(&memspace);
-  emxFreeStruct_struct_T2(&QPObjective);
-  emxFreeStruct_struct_T1(&SD->f0.FiniteDifferences);
+  emxFreeStruct_struct_T4(&memspace);
+  emxFreeStruct_struct_T3(&QPObjective);
+  emxFreeStruct_struct_T2(&SD->f0.FiniteDifferences);
   i = x->size[0] * x->size[1];
   x->size[0] = 1;
   x->size[1] = TrialState.xstarsqp->size[1];
@@ -409,7 +409,7 @@ real_T fmincon(optimize_cppStackData *SD, const real_T fun_workspace_p0[3],
       MeritFunction.nlpPrimalFeasError, MeritFunction.firstOrderOpt,
       output_funcCount, output_algorithm, output_constrviolation,
       output_stepsize, output_lssteplength, output_firstorderopt);
-  emxFreeStruct_struct_T(&TrialState);
+  emxFreeStruct_struct_T1(&TrialState);
   fval = TrialState.sqpFval;
   *exitflag = TrialState.sqpExitFlag;
   emlrtHeapReferenceStackLeaveFcnR2012b(emlrtRootTLSGlobal);

@@ -24,9 +24,9 @@
 
 /* Function Declarations */
 void b_driver(const emxArray_real_T *H, const emxArray_real_T *f,
-              g_struct_T *solution, d_struct_T *memspace,
-              h_struct_T *workingset, e_struct_T *qrmanager,
-              f_struct_T *cholmanager, c_struct_T *objective,
-              l_struct_T *options, int32_T runTimeOptions_MaxIterations);
+              h_struct_T *solution, e_struct_T *memspace,
+              i_struct_T *workingset, f_struct_T *qrmanager,
+              g_struct_T *cholmanager, d_struct_T *objective,
+              m_struct_T *options, int32_T runTimeOptions_MaxIterations);
 
 /* End of code generation (driver1.h) */

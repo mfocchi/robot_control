@@ -19,7 +19,7 @@
 /* Function Definitions */
 void factoryConstruct(int32_T nVarMax, int32_T mConstrMax, int32_T mIneq,
                       const emxArray_real_T *x0, int32_T mNonlinIneq,
-                      g_struct_T *obj)
+                      h_struct_T *obj)
 {
   int32_T i;
   obj->nVarMax = nVarMax;

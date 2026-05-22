@@ -18,7 +18,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void partialColLDL3_(f_struct_T *obj, int32_T LD_offset, int32_T NColsRemain)
+void partialColLDL3_(g_struct_T *obj, int32_T LD_offset, int32_T NColsRemain)
 {
   int32_T LD_diagOffset;
   int32_T LDimSizeP1;

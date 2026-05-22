@@ -20,7 +20,7 @@
 #include <string.h>
 
 /* Variable Definitions */
-static emlrtMCInfo c_emlrtMCI = {
+static emlrtMCInfo d_emlrtMCI = {
     66,        /* lineNo */
     18,        /* colNo */
     "fprintf", /* fName */
@@ -81,7 +81,7 @@ void toc(void)
   m = emlrtCreateDoubleScalar((tnow.tv_sec - tstart_tv_sec) +
                               (tnow.tv_nsec - tstart_tv_nsec) / 1.0E+9);
   emlrtAssign(&d_y, m);
-  emlrt_marshallIn(feval(y, b_y, c_y, d_y, &c_emlrtMCI), "<output of feval>");
+  emlrt_marshallIn(feval(y, b_y, c_y, d_y, &d_emlrtMCI), "<output of feval>");
 }
 
 /* End of code generation (toc.c) */

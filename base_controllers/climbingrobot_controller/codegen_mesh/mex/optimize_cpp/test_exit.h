@@ -23,16 +23,16 @@
 #include <string.h>
 
 /* Function Declarations */
-void b_test_exit(b_struct_T *Flags, d_struct_T *memspace,
+void b_test_exit(b_struct_T *Flags, e_struct_T *memspace,
                  struct_T *MeritFunction,
                  const emxArray_real_T *fscales_cineq_constraint,
-                 h_struct_T *WorkingSet, g_struct_T *TrialState,
-                 e_struct_T *QRManager, const emxArray_real_T *lb,
+                 i_struct_T *WorkingSet, h_struct_T *TrialState,
+                 f_struct_T *QRManager, const emxArray_real_T *lb,
                  const emxArray_real_T *ub);
 
 boolean_T test_exit(struct_T *MeritFunction,
                     const emxArray_real_T *fscales_cineq_constraint,
-                    const h_struct_T *WorkingSet, g_struct_T *TrialState,
+                    const i_struct_T *WorkingSet, h_struct_T *TrialState,
                     const emxArray_real_T *lb, const emxArray_real_T *ub,
                     boolean_T *Flags_fevalOK, boolean_T *Flags_done,
                     boolean_T *Flags_stepAccepted,

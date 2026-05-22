@@ -3,16 +3,15 @@
  * course requirements at degree granting institutions only.  Not for
  * government, commercial, or other organizational use.
  *
- * find.h
+ * all.h
  *
- * Code generation for function 'find'
+ * Code generation for function 'all'
  *
  */
 
 #pragma once
 
 /* Include files */
-#include "optimize_cpp_types.h"
 #include "rtwtypes.h"
 #include "emlrt.h"
 #include "mex.h"
@@ -22,6 +21,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void eml_find(const emxArray_boolean_T *x, emxArray_int32_T *i);
+void all(const boolean_T x[10000], boolean_T y[100]);
 
-/* End of code generation (find.h) */
+/* End of code generation (all.h) */

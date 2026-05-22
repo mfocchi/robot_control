@@ -17,7 +17,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void setProblemType(h_struct_T *obj, int32_T PROBLEM_TYPE)
+void setProblemType(i_struct_T *obj, int32_T PROBLEM_TYPE)
 {
   int32_T i;
   int32_T idx_col;
