@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
         p.pid = PidManager(p.joint_names)
         p.pid.setPDjoints(rl_controller.kp, rl_controller.kd, np.full(12, 0))
-        p.dm.run_batch_simulations(rl_controller, n_episodes=100, save_path="components/safe_rl/value_function/observation_datasets", noise_std=10.0, seed = 0)#int(time.time()))
+        p.dm.run_batch_simulations(rl_controller, n_episodes=100, save_path="components/safe_rl/value_function/observation_datasets", noise_std=10.0, seed = int(time.time()))
 
     except (ros.ROSInterruptException, ros.service.ServiceException):
         ros.signal_shutdown("killed")

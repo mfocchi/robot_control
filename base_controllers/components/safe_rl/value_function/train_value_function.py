@@ -27,7 +27,7 @@ os.environ["XLA_FLAGS"] = os.environ.get("XLA_FLAGS", "") + " --xla_gpu_triton_g
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "True"
 
-model_path = 'models/VF_no_backup.pkl'
+model_path = 'models/VF_no_backup_4.pkl'
 load_parameters = False
 
 # ====================================
@@ -166,7 +166,7 @@ def normalize_states(states):
 # ====================================
 #            Load Dataset
 # ====================================
-data_path = 'observation_datasets/observations_dataset_no_backup.npy'
+data_path = 'observation_datasets/observations_dataset_no_backup_4.npy'
 data = np.load(data_path)
 print("Dataset loaded:", data.shape)
 input_dim = 30 # obst, obs_t+1, fallen, captured
@@ -174,6 +174,18 @@ states = data[:, :, :input_dim]
 next_states = data[:, :, input_dim:2 * input_dim]
 fallen = data[:, :, -2]
 capt_p = data[:, :, -1]
+
+f_count = 0
+cp_count = 0
+for i in fallen:
+    if np.any(i==1):
+        f_count += 1
+for i in capt_p:
+    if np.any(i==1):
+        cp_count += 1
+print(f_count,cp_count)
+
+#exit()
 
 states, next_states, fallen, capt_p = fill_padding_with_last_valid(states, next_states, fallen, capt_p)
 

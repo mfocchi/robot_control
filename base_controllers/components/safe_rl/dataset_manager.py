@@ -14,7 +14,7 @@ class DatasetManager():
         # -------------------------------
         self.INCLINATION_THRESHOLD = 30.0  # degrees - max allowed inclination before considering robot as fallen
         self.FALL_HEIGHT_THRESHOLD = 0.2  # meters - min allowed height before considering robot as fallen
-        self.CP_SAFE_RADIUS = 0.02  # meters - acceptable radius to consider CP successful
+        self.CP_SAFE_RADIUS = 0.05  # meters - acceptable radius to consider CP successful
         self.G = 9.81  # gravitational constant
         self.policy_frequency = 50  # Hz
         self.decimation = (1 / self.quadruped.dt) * (1 / self.policy_frequency)
@@ -86,7 +86,7 @@ class DatasetManager():
     # -------------------------------
     # Main Function: Single Simulation Episode
     # -------------------------------
-    def run_single_simulation(self, actor_network, max_steps=2000, noise_std=1.0, warmup_time=1.0):
+    def run_single_simulation(self, actor_network, max_steps=8000, noise_std=1.0, warmup_time=1.0):
         # init vars
         self.fallen_flag = 0
         self.capture_flag = 0
@@ -111,8 +111,8 @@ class DatasetManager():
         n_steps = int((high - low) / self.quadruped.dt)
         push_instant = round(low + np.random.randint(0, n_steps + 1) * self.quadruped.dt, 3)
 
-        while self.quadruped.basePoseW[2] < 0.35 or self.quadruped.basePoseW[2] > 0.37:
-            self.quadruped.updateKinematics()
+       # while self.quadruped.basePoseW[2] < 0.35 or self.quadruped.basePoseW[2] > 0.37:
+       #     self.quadruped.updateKinematics()
         for self.step in range(max_steps):
             self.quadruped.updateKinematics()
             terminate = self.check_termination()
@@ -146,8 +146,8 @@ class DatasetManager():
                     # self.quadruped.applyForce(Fx,0,0,0,0,0,self.quadruped.dt)  # push in x
                     # self.quadruped.applyForce(0, Fy, 0, 0, 0, 0, self.quadruped.dt)  # push in y
                     # apply as a twisch change
-                    vx = np.random.uniform(-2.0, 3.0)  # + self.quadruped.baseTwistW[0]
-                    vy = np.random.uniform(-1.5, 1.5)  # + self.quadruped.baseTwistW[1]
+                    vx = np.random.uniform(-3, 3)  # + self.quadruped.baseTwistW[0]
+                    vy = np.random.uniform(-3, 3)  # + self.quadruped.baseTwistW[1]
                     # debug makes it fall
                     # vx = -1.645
                     # vy = -1.239
@@ -233,7 +233,7 @@ class DatasetManager():
 
         stats = np.array(stats, dtype=int)
 
-        np.save(os.path.join(save_path, "observations_dataset_no_backup.npy"), padded_obs)
+        np.save(os.path.join(save_path, "observations_dataset_no_backup_7.npy"), padded_obs)
 
         print(f"Episodi completati: {n_episodes}")
         print(f"Caduti: {np.sum(stats[:, 0])}, CP raggiunto: {np.sum(stats[:, 1])}")
