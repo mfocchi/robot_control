@@ -43,6 +43,16 @@ from base_controllers.utils.ros_publish import RosPub
 from orientation_controller import OrientationController
 from sensor_msgs.msg import JointState
 
+# Find the ROS package path
+rospack = rospkg.RosPack()
+climbing_hw_path = rospack.get_path("climbingrobot_hardware_interface")
+# Add climbing_hardware_interface/scripts to Python import path
+install_prefix = os.path.abspath(os.path.join(climbing_hw_path, "..", ".."))
+scripts_path = os.path.join(install_prefix, "lib", "climbingrobot_hardware_interface")
+sys.path.insert(0, scripts_path)
+from homing_procedure import WinchStartupSequence
+
+
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
         self.EXTERNAL_FORCE = False
@@ -105,7 +115,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.pub_propeller_command.publish(msg)
 
     def getRobotMass(self):
-        total_robot_mass = 5.0 #todo hardcode this
+        total_robot_mass = 5.2 #todo hardcode this
         return total_robot_mass
 
     def estimateRobotVelFromStates(self, l1, l2, psi, l1d, l2d, psid):
@@ -146,24 +156,20 @@ class ClimbingrobotController(BaseControllerFixed):
         self.anchor_distance_y = conf.robot_params[self.robot_name]['spawn_2y'] -  conf.robot_params[self.robot_name]['spawn_y']
 
         #estimate base position in WF throungh odometry from (l_1, psi)
-        base_width = 0.1 #TODO
-        com_offset = self.w_R_b[2]*0.1 #TODO
-        leg_length = 0.3 #TODO
+        com_offset = self.w_R_b[2]*0.0 #TODO
+
         x_rope_l_attach = self.anchor_pos + self.w_R_rope[0]*self.l_1
-        self.base_pos = x_rope_l_attach + self.w_R_b[1] *(base_width/2) + com_offset
+        self.base_pos = x_rope_l_attach + self.w_R_b[1] *(self.base_width/2) + com_offset
 
         #debug
-        self.base_pos = np.array([1.5, 2.5, 16])
+        #self.base_pos = np.array([1.5, 2.5, 16])
 
         self.base_rpy = self.math_utils.rot2eul(self.w_R_b)
-
-
-
         #compute ee position  in the world frame
-        self.x_ee = self.base_pos - self.w_R_b[0] * leg_length
+        self.x_ee = self.base_pos - self.w_R_b[0] * self.leg_length
 
-        self.hoist_l_pos = self.base_pos +  self.w_R_b.dot(np.array([0.0, -base_width/2, 0.]))
-        self.hoist_r_pos = self.base_pos + self.w_R_b.dot(np.array([0.0, base_width/2, 0.0]))
+        self.hoist_l_pos = self.base_pos +  self.w_R_b.dot(np.array([0.0, -self.base_width/2, 0.]))
+        self.hoist_r_pos = self.base_pos + self.w_R_b.dot(np.array([0.0, self.base_width/2, 0.0]))
         self.rope_direction = (p.hoist_l_pos - p.anchor_pos) / np.linalg.norm(p.hoist_l_pos  - p.anchor_pos)
         self.rope_direction2 = (p.hoist_r_pos - p.anchor_pos2) / np.linalg.norm(p.hoist_r_pos - p.anchor_pos2)
 
@@ -173,8 +179,6 @@ class ClimbingrobotController(BaseControllerFixed):
         hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
 
         #compute missin state variable phi / psi_d
-        # old way (wrong)
-        #self.psi = math.atan2(self.base_pos_mat[0], -self.base_pos_mat[2])
         # the psi variable is the extrinsic pitch wrt the world Y axis obtained expanding w_R_rope with extrinsic formula = Rx Ry Rz
         self.psi = math.atan2(self.w_R_rope[0,2], np.sqrt(math.pow(self.w_R_rope[0,0],2) + math.pow(self.w_R_rope[0,1],2)))
         # to get the derivative I need also the
@@ -189,17 +193,16 @@ class ClimbingrobotController(BaseControllerFixed):
         rope2_axis = (self.base_pos - self.anchor_pos2) / np.linalg.norm(self.base_pos - self.anchor_pos2)
         self.n_bar = np.cross(n_par, rope2_axis) / np.linalg.norm(np.cross(n_par, rope2_axis))
 
-        # the mountain is always wrt to world
-        mountain_pos = np.array([-self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
-        self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
 
-        self.broadcaster.sendTransform(self.base_pos, self.body_imu_orientation, ros.Time.now(), '/base_link', '/world')
+
+        #I should not publihsh base_link tf cause is a fixed based robot I just need to publish joints and comoute TFS with robot state publisher
+        #self.broadcaster.sendTransform(self.base_pos, self.body_imu_orientation, ros.Time.now(), '/base_link', '/world')
 
         #rviz
         self.q_des = self.solver.computeJointVariables(self.base_pos, self.w_R_b, self.q_des_q0, debug=False)
         msg = JointState()
         msg.name = self.joint_names
-        msg.header.stamp = ros.Time.from_sec(self.time)
+        msg.header.stamp = ros.Time.now() #ros.Time.from_sec(self.time)
         msg.position = self.q_des
         self.pub_joints.publish(msg)
 
@@ -326,11 +329,11 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def deregister_node(self):
         super().deregister_node()
-        os.system(" rosnode kill -a")
-        os.system(" rosnode kill /gzserver /gzclient")
-        os.system(" pkill rosmaster")
-
-
+        # keep the master alive
+        #os.system(" rosnode kill -a")
+        #os.system(" pkill rosmaster")
+        os.system("rosnode kill /robot_state_publisher  ")
+        os.system("rosnode kill   /rviz")
 
     def plotStuff(self):
         print("PLOTTING")
@@ -340,9 +343,10 @@ class ClimbingrobotController(BaseControllerFixed):
         # plotFrameLinear('contact force', 2, p.time_log, None, p.contactForceW_log)
         actual_com= p.base_pos_log - p.mat2Gazebo.reshape(3, 1) # mat2Gazebo is WF in matlab
         time_gazebo = p.time_log - p.start_logging
-        plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
-        plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
-        plot3D('matlab states', 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
+        #plotJoint('position', time_gazebo, p.q_log, p.q_des_log, joint_names=conf.robot_params[p.robot_name]['joint_names'])
+        #plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
+        #plot3D('matlab states', 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
+        plot3D('matlab states', 3, ['psi', 'l1', 'l2'], p.time_log, p.simp_model_state_log)
 
         # plot rope forces
         # plt.figure()
@@ -358,33 +362,33 @@ class ClimbingrobotController(BaseControllerFixed):
         # plt.grid()
 
         # plot propeller thrusts
-        plt.figure()
-        plt.ylabel("prop_thrusts")
-        plt.subplot(4, 1, 1)
-        plt.grid()
-        plt.plot(p.time_log, p.prop_thrusts_log[0,:], label="prop1", color='blue')
-        plt.subplot(4, 1, 2)
-        plt.grid()
-        plt.plot(p.time_log, p.prop_thrusts_log[1,:], label="prop2", color='blue')
-        plt.subplot(4, 1, 3)
-        plt.grid()
-        plt.plot(p.time_log, p.prop_thrusts_log[2,:], label="prop3", color='blue')
-        plt.subplot(4, 1, 4)
-        plt.plot(p.time_log, p.prop_thrusts_log[3,:], label="prop4", color='blue')
-        plt.legend()
-        plt.grid()
-        plotFrameLinear('position', time_log=p.time_log, Pose_log=p.base_rpy_log)
+        # plt.figure()
+        # plt.ylabel("prop_thrusts")
+        # plt.subplot(4, 1, 1)
+        # plt.grid()
+        # plt.plot(p.time_log, p.prop_thrusts_log[0,:], label="prop1", color='blue')
+        # plt.subplot(4, 1, 2)
+        # plt.grid()
+        # plt.plot(p.time_log, p.prop_thrusts_log[1,:], label="prop2", color='blue')
+        # plt.subplot(4, 1, 3)
+        # plt.grid()
+        # plt.plot(p.time_log, p.prop_thrusts_log[2,:], label="prop3", color='blue')
+        # plt.subplot(4, 1, 4)
+        # plt.plot(p.time_log, p.prop_thrusts_log[3,:], label="prop4", color='blue')
+        # plt.legend()
+        # plt.grid()
+        # plotFrameLinear('position', time_log=p.time_log, Pose_log=p.base_rpy_log)
 
         #save data
-        filename = f'test_gazebo_MPC_{p.MPC_control}.mat'
-        mio.savemat(filename, {'ref_time': p.ref_time, 'ref_com': p.ref_com,
-                                'time_gazebo': time_gazebo, 'actual_com': actual_com,
-                                'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
-                                'psi': p.simp_model_state_log[0,:], 'l_1': p.simp_model_state_log[1,:], 'l_2': p.simp_model_state_log[2,:],
-                                'psid': p.psid_log, 'l_1d': p.l_1d_log,'l_2d': p.l_2d_log,
-                                'mu': p.mu , 'Fleg': p.Fleg,'Fr_max': p.Fr_max,
-                                'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_r0,
-                                'Fr_l': p.Fr_l_log, 'Fr_r': p.Fr_r_log })
+        # filename = f'test_gazebo_MPC_{p.MPC_control}.mat'
+        # mio.savemat(filename, {'ref_time': p.ref_time, 'ref_com': p.ref_com,
+        #                         'time_gazebo': time_gazebo, 'actual_com': actual_com,
+        #                         'ref_psi':p.ref_psi,'ref_l_1':p.ref_l_1, 'ref_l_2':p.ref_l_2,
+        #                         'psi': p.simp_model_state_log[0,:], 'l_1': p.simp_model_state_log[1,:], 'l_2': p.simp_model_state_log[2,:],
+        #                         'psid': p.psid_log, 'l_1d': p.l_1d_log,'l_2d': p.l_2d_log,
+        #                         'mu': p.mu , 'Fleg': p.Fleg,'Fr_max': p.Fr_max,
+        #                         'Fr_l0': p.Fr_l0, 'Fr_r0': p.Fr_r0,
+        #                         'Fr_l': p.Fr_l_log, 'Fr_r': p.Fr_r_log })
 
     def getIndex(self,t):
         try:
@@ -694,17 +698,44 @@ class ClimbingrobotController(BaseControllerFixed):
 
     # REAL ROBOT FUNCTIONS
     def startRealRobot(self):
-        os.system("killall rviz gzserver gzclient")
+        #os.system("killall rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
         checkRosMaster()
+
+        self.leg_length = 0.45
+        self.base_width = 0.4
+        # anchor 1 position
+        conf.robot_params[self.robot_name]['spawn_x'] = 0.2
+        conf.robot_params[self.robot_name]['spawn_y'] = 0.
+        conf.robot_params[self.robot_name]['spawn_z'] = 2.4
+        # anchor 2 position
+        conf.robot_params[self.robot_name]['spawn_2x'] = 0.2
+        conf.robot_params[self.robot_name]['spawn_2y'] = 2.2
+        conf.robot_params[self.robot_name]['spawn_2z'] = 2.4
+
         #loads robot_description
-        launchFileNode(package='climbingrobot_description',launch_file='upload.launch')
+        additional_urdf_args = ' spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
+        additional_urdf_args += ' spawn_y:=' + str(conf.robot_params[self.robot_name]['spawn_y'])
+        additional_urdf_args += ' spawn_z:=' + str(conf.robot_params[self.robot_name]['spawn_z'])
+        additional_urdf_args += ' spawn_2x:=' + str(conf.robot_params[self.robot_name]['spawn_2x'])
+        additional_urdf_args += ' spawn_2y:=' + str(conf.robot_params[self.robot_name]['spawn_2y'])
+        additional_urdf_args += ' spawn_2z:=' + str(conf.robot_params[self.robot_name]['spawn_2z'])
+        launchFileNode(package='climbingrobot_description',launch_file='upload.launch', additional_args=additional_urdf_args)
+
+
         #launches robot state publisher
         startNode(package ='robot_state_publisher', executable='robot_state_publisher')
         #start rviz
         startNode(package='rviz', executable='rviz', args='-d ' + rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf.rviz')
-        #launch hw interface
+
+
+
+        #launch hw interface (we launch ouside)
         #launchFileNode(package='climbingrobot_hardware_interface', launch_file='alpine_low_level_bringup.launch')
+
+
+
+        print(colored("DONE", "red"))
 
     def startRealRobotPublisherSubscribers(self):
 
@@ -744,6 +775,17 @@ class ClimbingrobotController(BaseControllerFixed):
         #for rviz
 
         self.pub_joints = ros.Publisher("/joint_states", JointState, queue_size=1, tcp_nodelay=True)
+
+        #homing
+        #todo add rope offsets
+        self.homingProcedure = WinchStartupSequence()
+        self.homingProcedure.run_sequence()
+        # 8) set default position
+        self.homingProcedure.publish_command("right", rope_force=0, rope_velocity=0, rope_position=0.5)
+        self.homingProcedure.publish_command("left", rope_force=0, rope_velocity=0, rope_position=0.5)
+        # # 7) set position mode
+        self.homingProcedure.publish_mode("closed_loop_position")
+
 
     def _receive_rope_telemetry_l(self, msg):
         self.Fr_l_meas = msg.rope_force
@@ -800,13 +842,13 @@ class ClimbingrobotController(BaseControllerFixed):
         # Call the service
         try:
             resp = self.rope_control_mode_l(req)
-            ros.loginfo("Service response: ack = %s", resp.ack)
+            ros.loginfo("Service response: ack = %s", resp.success)
         except ros.ServiceException as e:
             ros.logerr("Service call failed: %s" % e)
             return False
         try:
             resp = self.rope_control_mode_r(req)
-            ros.loginfo("Service response: ack = %s", resp.ack)
+            ros.loginfo("Service response: ack = %s", resp.success)
         except ros.ServiceException as e:
             ros.logerr("Service call failed: %s" % e)
             return False
@@ -991,6 +1033,8 @@ def talker(p):
     p.startRealRobot()
     p.startRealRobotPublisherSubscribers()
 
+
+
     # jump params
     # jump starting position
     p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
@@ -1025,7 +1069,7 @@ def talker(p):
         else:
             p.print_message("waiting for target", decimate=1000)
             rate.sleep()
-
+    p.start_logging = 0
     while not ros.is_shutdown():
 
         # update the kinematics
@@ -1051,11 +1095,13 @@ def talker(p):
         except:
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
+        #todo add back the right one
+        #p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
-        p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+        #p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+
         p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),4)  # to avoid issues of dt 0.0009999
         if (p.time > p.start_logging):
             p.logData()
