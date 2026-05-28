@@ -209,7 +209,7 @@ class ClimbingrobotController(BaseControllerFixed):
     def initVars(self):
 
         self.n_joints = len(conf.robot_params[self.robot_name]['joint_names'])
-
+        self.rope_length_log = np.empty((2, conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.q = np.zeros(self.n_joints)
         self.qd = np.zeros(self.n_joints)
         self.tau = np.zeros(self.n_joints)
@@ -252,6 +252,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
         self.log_counter = 0
 
+        self.rope_left_length = 0.0
+        self.rope_right_length = 0.0
 
         self.qdd_des =  np.zeros(self.n_joints)
         self.base_accel = np.zeros(3)
@@ -323,6 +325,10 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.prop_force_x_log[self.log_counter] = self.prop_force_x
                 self.prop_thrusts_log[:, self.log_counter] = self.prop_thrusts
 
+                self.rope_length_log[:, self.log_counter] = np.array([
+                    self.rope_left_length,
+                    self.rope_right_length
+                ])
                 #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
 
             super().logData()
@@ -347,7 +353,17 @@ class ClimbingrobotController(BaseControllerFixed):
         #plot3D('basePos', 2,  ['X', 'Y', 'Z'], time_gazebo, actual_com, p.ref_time, p.ref_com)
         #plot3D('matlab states', 3, ['psi', 'l1', 'l2'], time_gazebo, p.simp_model_state_log, p.ref_time, np.vstack((p.ref_psi, p.ref_l_1, p.ref_l_2)) )
         plot3D('matlab states', 3, ['psi', 'l1', 'l2'], p.time_log, p.simp_model_state_log)
-
+        plot3D(
+            'winch rope lengths',
+            4,
+            ['left rope', 'right rope', 'unused'],
+            p.time_log,
+            np.vstack((
+                p.rope_length_log[0, :],
+                p.rope_length_log[1, :],
+                np.zeros_like(p.time_log)
+            ))
+        )
         # plot rope forces
         # plt.figure()
         # plt.subplot(2, 1, 1)
@@ -778,35 +794,37 @@ class ClimbingrobotController(BaseControllerFixed):
 
         #homing
         #todo add rope offsets
+        # homing
         self.homingProcedure = WinchStartupSequence()
         self.homingProcedure.run_sequence()
-        # 8) set default position
-        self.homingProcedure.publish_command("right", rope_force=0, rope_velocity=0, rope_position=0.5)
-        self.homingProcedure.publish_command("left", rope_force=0, rope_velocity=0, rope_position=0.5)
-        # # 7) set position mode
+
         self.homingProcedure.publish_mode("closed_loop_position")
 
+        self.homingProcedure.publish_command("right", rope_force=0, rope_velocity=0, rope_position=0.5)
+        self.homingProcedure.publish_command("left", rope_force=0, rope_velocity=0, rope_position=0.5)
 
     def _receive_rope_telemetry_l(self, msg):
         self.Fr_l_meas = msg.rope_force
+        self.rope_left_length = msg.rope_length
         self.l_1 = msg.rope_length
         self.l_1d = msg.rope_velocity
         self.brake_status_l = msg.brake_status
-        self.q[p.rope_index[1]] =  self.l_1  + self.hoist_distance/2 - self.anchor_distance_y/2
-        self.qd[p.rope_index[1]] = self.l_1d
+        self.q[self.rope_index[1]] = self.l_1 + self.hoist_distance / 2 - self.anchor_distance_y / 2
+        self.qd[self.rope_index[1]] = self.l_1d
 
     def _receive_rope_telemetry_r(self, msg):
         self.Fr_r_meas = msg.rope_force
-        self.l_2 = msg.rope_length
-        self.l_2d = msg.rope_velocity
+        self.rope_right_length = msg.rope_length
+        self.l_2 = -msg.rope_length
+        self.l_2d = -msg.rope_velocity
         self.brake_status_r = msg.brake_status
-        self.q[p.rope_index[0]] = self.l_2 + self.hoist_distance / 2 - self.anchor_distance_y / 2
-        self.qd[p.rope_index[0]] = self.l_2d
+        self.q[self.rope_index[0]] = self.l_2 + self.hoist_distance / 2 - self.anchor_distance_y / 2
+        self.qd[self.rope_index[0]] = self.l_2d
 
     def _receive_target(self, msg):
-        self.target = np.array([msg.x,msg.y,msg.z])
+        self.target = np.array([msg.x, msg.y, msg.z])
         self.targetReceived = True
-        print(colored("received target {self.target}", "red"))
+        print(colored(f"received target {self.target}", "red"))
 
     def _receive_alpine_telemetry(self, msg):
         #rope
@@ -1030,38 +1048,36 @@ class ClimbingrobotController(BaseControllerFixed):
 
 def talker(p):
     p.start()
-    p.startRealRobot()
-    p.startRealRobotPublisherSubscribers()
 
-
-
-    # jump params
-    # jump starting position
-    p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
-    # jump landing position
-    p.target = np.array([0.28, 4, -4])
-
-
+    # Init UNA SOLA VOLTA, prima di subscriber/homing
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
 
-    #loop frequency
-    rate = ros.Rate(1/conf.robot_params[p.robot_name]['dt'])
-    p.updateKinematicsDynamics()
+    p.startRealRobot()
+    p.startRealRobotPublisherSubscribers()
 
+    # jump params
+    p0 = np.array([0.28, 2.5, -6.10104])
+    p.target = np.array([0.28, 4, -4])
+
+    # loop frequency
+    rate = ros.Rate(1 / conf.robot_params[p.robot_name]['dt'])
+
+    ros.sleep(0.5)
+    p.updateKinematicsDynamics()
 
     p.startJump = 2.5
     p.stateMachine = 'idle'
-    p.jumpNumber  = 0
+    p.jumpNumber = 0
     p.numberOfJumps = 1
-    p.start_logging = np.inf
+    p.start_logging = 0
 
-    # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
+    # set initial desired joints for visualization/model
     p.q_des[:12] = p.computeJointVariables(p0)
-    p.setRopeControlMode('close_loop_position')
-    #the robot should go to the setpoint of the ropes
 
-    #  wait for a target
+    # NON richiamare position mode qui: lo fa già la homing procedure
+    # p.setRopeControlMode('close_loop_position')
+
     while True:
         if p.targetReceived:
             print(colored(f"---------------Ideal Target landing: {p.target}", "green"))
@@ -1069,63 +1085,37 @@ def talker(p):
         else:
             p.print_message("waiting for target", decimate=1000)
             rate.sleep()
-    p.start_logging = 0
+
     while not ros.is_shutdown():
 
-        # update the kinematics
         p.updateKinematicsDynamics()
 
-        #TODO uncomment this
+        # Per ora tienilo commentato se stai solo testando position 0.5
         # stop = p.stateMachineLoop()
         # if stop:
         #     break
 
-        # plot ropes as green arrows only when you not save bags because they are ugly
         if not p.SAVE_BAG:
-            p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)  # arope, already in gazebo
-            p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos-p.anchor_pos2), "green", scale=3.)  # arope, already in gazebo
+            p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)
+            p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos - p.anchor_pos2), "green", scale=3.)
 
-        # plot contact force on retractable leg
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=2.5)
 
-        #plot target position (whenever is available)
         try:
             p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3, alpha=1.)
             p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
         except:
             pass
+
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        #todo add back the right one
-        #p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
-        # send commands to gazebo
-        #p.send_des_jstate(p.q_des, p.qd_des, p.tau_ffwd)
+        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 4)
 
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),4)  # to avoid issues of dt 0.0009999
-        if (p.time > p.start_logging):
+        if p.time > p.start_logging:
             p.logData()
-        # wait for synconization of the control loop
+
         rate.sleep()
-
-    def printLandingInfo(self):
-        landing_location = self.base_pos - self.mat2Gazebo
-        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
-        print(colored(f" while from optim it should be  {self.targetPos}", "blue"))
-
-        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "blue"))
-        jump_length = np.linalg.norm(p0[:2] - self.targetPos[:2])
-        MSE = np.square(np.array(p.MPC_tracking_error)).mean()
-        RMSE = math.sqrt(MSE)
-        print(colored(
-            f" the relative landing error (norm per jump lenghth)  is {100 * np.linalg.norm(landing_location - self.targetPos) / jump_length}%",
-            "blue"))
-        print(colored(f" the energy consumption is  {energy}", "blue"))
-        print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
-        print(colored(f" the leg impulse  is  {self.Fleg}", "blue"))
-        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "blue"))
-        self.plotStuff()
-        return self.targetPos - landing_location
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
     fig = plt.figure()
