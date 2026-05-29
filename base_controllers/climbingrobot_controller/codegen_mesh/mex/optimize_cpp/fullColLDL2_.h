@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void fullColLDL2_(g_struct_T *obj, int32_T LD_offset, int32_T NColsRemain);
+void fullColLDL2_(f_struct_T *obj, int32_T LD_offset, int32_T NColsRemain);
 
 /* End of code generation (fullColLDL2_.h) */

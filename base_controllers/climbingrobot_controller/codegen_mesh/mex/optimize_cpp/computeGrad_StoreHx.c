@@ -19,7 +19,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void computeGrad_StoreHx(d_struct_T *obj, const emxArray_real_T *H,
+void computeGrad_StoreHx(c_struct_T *obj, const emxArray_real_T *H,
                          const emxArray_real_T *f, const emxArray_real_T *x)
 {
   ptrdiff_t incx_t;

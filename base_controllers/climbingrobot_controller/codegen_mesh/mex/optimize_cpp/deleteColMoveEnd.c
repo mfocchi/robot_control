@@ -18,7 +18,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void deleteColMoveEnd(f_struct_T *obj, int32_T idx)
+void deleteColMoveEnd(e_struct_T *obj, int32_T idx)
 {
   real_T c;
   real_T d;

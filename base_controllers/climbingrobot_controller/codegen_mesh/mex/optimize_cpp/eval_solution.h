@@ -22,12 +22,10 @@
 #include <string.h>
 
 /* Function Declarations */
-void eval_solution(const emxArray_real_T *x, const real_T p0[3],
-                   const real_T pf[3], real_T params_m,
-                   real_T params_num_params, const char_T params_int_method[3],
-                   real_T params_N_dyn, real_T params_int_steps,
-                   real_T params_b, const real_T params_p_a1[3],
-                   const real_T params_p_a2[3], real_T params_g,
-                   real_T params_T_th, c_struct_T *solution);
+void b_binary_expand_op(emxArray_real_T *in1, const emxArray_real_T *in2,
+                        const struct0_T *in3);
+
+void binary_expand_op(emxArray_real_T *in1, const emxArray_real_T *in3,
+                      const emxArray_real_T *in4);
 
 /* End of code generation (eval_solution.h) */

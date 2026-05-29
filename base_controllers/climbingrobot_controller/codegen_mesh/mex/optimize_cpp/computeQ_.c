@@ -20,7 +20,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void computeQ_(f_struct_T *obj, int32_T nrows)
+void computeQ_(e_struct_T *obj, int32_T nrows)
 {
   ptrdiff_t incx_t;
   ptrdiff_t incy_t;

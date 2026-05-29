@@ -30,10 +30,10 @@
 /* Function Definitions */
 boolean_T step(int32_T *STEP_TYPE, emxArray_real_T *Hessian,
                const emxArray_real_T *lb, const emxArray_real_T *ub,
-               h_struct_T *TrialState, struct_T *MeritFunction,
-               e_struct_T *memspace, i_struct_T *WorkingSet,
-               f_struct_T *QRManager, g_struct_T *CholManager,
-               d_struct_T *QPObjective, m_struct_T *qpoptions)
+               g_struct_T *TrialState, struct_T *MeritFunction,
+               d_struct_T *memspace, h_struct_T *WorkingSet,
+               e_struct_T *QRManager, f_struct_T *CholManager,
+               c_struct_T *QPObjective, l_struct_T *qpoptions)
 {
   ptrdiff_t b_incx_t;
   ptrdiff_t b_incy_t;
@@ -46,7 +46,7 @@ boolean_T step(int32_T *STEP_TYPE, emxArray_real_T *Hessian,
   ptrdiff_t n_t;
   emxArray_real_T *r;
   emxArray_real_T *r3;
-  m_struct_T b_qpoptions;
+  l_struct_T b_qpoptions;
   const real_T *lb_data;
   const real_T *ub_data;
   real_T alpha1;

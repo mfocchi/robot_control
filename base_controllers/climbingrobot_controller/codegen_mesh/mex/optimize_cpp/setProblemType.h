@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void setProblemType(i_struct_T *obj, int32_T PROBLEM_TYPE);
+void setProblemType(h_struct_T *obj, int32_T PROBLEM_TYPE);
 
 /* End of code generation (setProblemType.h) */

@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-real_T computeFval_ReuseHx(const d_struct_T *obj, emxArray_real_T *workspace,
+real_T computeFval_ReuseHx(const c_struct_T *obj, emxArray_real_T *workspace,
                            const emxArray_real_T *f, const emxArray_real_T *x);
 
 /* End of code generation (computeFval_ReuseHx.h) */

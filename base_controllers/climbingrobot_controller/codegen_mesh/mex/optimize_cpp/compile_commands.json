@@ -55,15 +55,9 @@
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",
-    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  wallSurfaceEval.c -o build/glnxa64/wallSurfaceEval.o",
-    "file": "wallSurfaceEval.c",
-    "output": "build/glnxa64/wallSurfaceEval.o"
-  },
-  {
-    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",
-    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  all.c -o build/glnxa64/all.o",
-    "file": "all.c",
-    "output": "build/glnxa64/all.o"
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  interp2.c -o build/glnxa64/interp2.o",
+    "file": "interp2.c",
+    "output": "build/glnxa64/interp2.o"
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",
@@ -121,9 +115,15 @@
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",
-    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  eval_solution.c -o build/glnxa64/eval_solution.o",
-    "file": "eval_solution.c",
-    "output": "build/glnxa64/eval_solution.o"
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  find.c -o build/glnxa64/find.o",
+    "file": "find.c",
+    "output": "build/glnxa64/find.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  constraints.c -o build/glnxa64/constraints.o",
+    "file": "constraints.c",
+    "output": "build/glnxa64/constraints.o"
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",
@@ -412,6 +412,12 @@
     "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  fullColLDL2_.c -o build/glnxa64/fullColLDL2_.o",
     "file": "fullColLDL2_.c",
     "output": "build/glnxa64/fullColLDL2_.o"
+  },
+  {
+    "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh\" -I \"./interface\" -I \"/usr/local/MATLAB/R2023a/extern/include\" -I \".\" -DHAVE_LAPACK_CONFIG_H -DLAPACK_COMPLEX_STRUCTURE -DMW_HAVE_LAPACK_DECLS -DMODEL=optimize_cpp_mex -msse2 -c  eval_solution.c -o build/glnxa64/eval_solution.o",
+    "file": "eval_solution.c",
+    "output": "build/glnxa64/eval_solution.o"
   },
   {
     "directory": "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/optimal_control_2ropes_mesh/codegen/mex/optimize_cpp",

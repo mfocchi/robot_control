@@ -31,6 +31,14 @@ emlrtContext emlrtContextGlobal = {
     NULL                                                  /* fSigMem */
 };
 
+emlrtMCInfo emlrtMCI = {
+    83,            /* lineNo */
+    8,             /* colNo */
+    "constraints", /* fName */
+    "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/"
+    "optimal_control_2ropes_mesh/constraints.m" /* pName */
+};
+
 emlrtMCInfo b_emlrtMCI = {
     37,                   /* lineNo */
     13,                   /* colNo */
@@ -38,6 +46,9 @@ emlrtMCInfo b_emlrtMCI = {
     "/home/mfocchi/Dropbox/RESEARCH/climbingrobotnotes/matlab/2ropes/"
     "optimal_control_2ropes_mesh/integrate_dynamics.m" /* pName */
 };
+
+const char_T cv[13] = {'w', 'r', 'o', 'n', 'g', ' ', 'o',
+                       's', 't', 'a', 'c', 'l', 'e'};
 
 const char_T cv1[15] = {'U', 'n', 'k', 'n', 'o', 'w', 'n', ' ',
                         'm', 'e', 't', 'h', 'o', 'd', '.'};

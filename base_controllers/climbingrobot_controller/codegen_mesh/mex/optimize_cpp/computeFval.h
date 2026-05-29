@@ -22,7 +22,7 @@
 #include <string.h>
 
 /* Function Declarations */
-real_T computeFval(const d_struct_T *obj, emxArray_real_T *workspace,
+real_T computeFval(const c_struct_T *obj, emxArray_real_T *workspace,
                    const emxArray_real_T *H, const emxArray_real_T *f,
                    const emxArray_real_T *x);
 

@@ -22,10 +22,10 @@
 #include <string.h>
 
 /* Function Declarations */
-void b_binary_expand_op(emxArray_real_T *in1, const emxArray_real_T *in2,
+void c_binary_expand_op(emxArray_real_T *in1, const emxArray_real_T *in2,
                         int32_T in3, int32_T in4, const emxArray_real_T *in5);
 
-void binary_expand_op(emxArray_real_T *in1, const emxArray_real_T *in2,
-                      int32_T in3, int32_T in4, const emxArray_real_T *in5);
+void d_binary_expand_op(emxArray_real_T *in1, const emxArray_real_T *in2,
+                        int32_T in3, int32_T in4, const emxArray_real_T *in5);
 
 /* End of code generation (cost.h) */

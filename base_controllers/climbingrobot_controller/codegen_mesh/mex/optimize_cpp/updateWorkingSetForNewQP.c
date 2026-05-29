@@ -20,7 +20,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void updateWorkingSetForNewQP(const emxArray_real_T *xk, i_struct_T *WorkingSet,
+void updateWorkingSetForNewQP(const emxArray_real_T *xk, h_struct_T *WorkingSet,
                               int32_T mIneq, int32_T mNonlinIneq,
                               const emxArray_real_T *cIneq, int32_T mLB,
                               const emxArray_real_T *lb, int32_T mUB,

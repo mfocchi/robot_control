@@ -24,9 +24,9 @@
 
 /* Function Declarations */
 void relaxed(const emxArray_real_T *Hessian, const emxArray_real_T *grad,
-             h_struct_T *TrialState, struct_T *MeritFunction,
-             e_struct_T *memspace, i_struct_T *WorkingSet,
-             f_struct_T *QRManager, g_struct_T *CholManager,
-             d_struct_T *QPObjective, m_struct_T *qpoptions);
+             g_struct_T *TrialState, struct_T *MeritFunction,
+             d_struct_T *memspace, h_struct_T *WorkingSet,
+             e_struct_T *QRManager, f_struct_T *CholManager,
+             c_struct_T *QPObjective, l_struct_T *qpoptions);
 
 /* End of code generation (relaxed.h) */
