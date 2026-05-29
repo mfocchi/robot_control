@@ -27,7 +27,7 @@ os.environ["XLA_FLAGS"] = os.environ.get("XLA_FLAGS", "") + " --xla_gpu_triton_g
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "True"
 
-model_path = 'models/VF_no_backup_4.pkl'
+model_path = 'models/VF_abs_test.pkl'
 load_parameters = False
 
 # ====================================
@@ -166,7 +166,7 @@ def normalize_states(states):
 # ====================================
 #            Load Dataset
 # ====================================
-data_path = 'observation_datasets/observations_dataset_no_backup_4.npy'
+data_path = 'observation_datasets/observations_dataset_abs_test.npy'
 data = np.load(data_path)
 print("Dataset loaded:", data.shape)
 input_dim = 30 # obst, obs_t+1, fallen, captured

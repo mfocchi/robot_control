@@ -199,6 +199,7 @@ class DatasetManager():
         print("Running batch simulations...")
 
         # for i in tqdm(range(n_episodes)):
+        n_obs_data = n_episodes
         for i in (range(n_episodes)):
             print(colored(f"Simulation {i}-----------------------", "blue"))
             # -------------------------------
@@ -216,24 +217,40 @@ class DatasetManager():
 
             obs, fallen, captured = self.run_single_simulation(actor_network=actor_network, noise_std=noise_std)
             print(colored(f"Fallen {fallen}, Captured {captured}", "green"))
-            # print('obs', obs)
-            all_obs.append(obs)
+            #print('obs', obs)
+            if fallen and len(obs) > 10:
+                n_obs_data += 1
+                obs_fall = obs[-10:]
+                obs_no_fall = obs[:-10]
 
-            # debug
-            # print(obs.shape)
+                #print('obs_fall', obs_fall)
+                #print('obs_no_fall', obs_no_fall)
+                all_obs.append(obs_fall)
+                all_obs.append(obs_no_fall)
+
+                max_len = max(max_len, len(obs_fall))
+                max_len = max(max_len, len(obs_no_fall))
+
+            else:
+                all_obs.append(obs)
+
+                # debug
+                # print(obs.shape)
+
+                max_len = max(max_len, len(obs))
+
             stats.append((fallen, captured, len(obs)))
-            max_len = max(max_len, len(obs))
 
         # Pad observation arrays to same length in case of early termination (com comverget to cop)
         obs_dim = all_obs[0].shape[1]
-        padded_obs = np.zeros((n_episodes, max_len, obs_dim), dtype=np.float32)
+        padded_obs = np.zeros((n_obs_data, max_len, obs_dim), dtype=np.float32)
 
         for i, episode in enumerate(all_obs):
             padded_obs[i, :len(episode), :] = episode
 
         stats = np.array(stats, dtype=int)
 
-        np.save(os.path.join(save_path, "observations_dataset_no_backup_7.npy"), padded_obs)
+        np.save(os.path.join(save_path, "observations_dataset_abs_test.npy"), padded_obs)
 
         print(f"Episodi completati: {n_episodes}")
         print(f"Caduti: {np.sum(stats[:, 0])}, CP raggiunto: {np.sum(stats[:, 1])}")
