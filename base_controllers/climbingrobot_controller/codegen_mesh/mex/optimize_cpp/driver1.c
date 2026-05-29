@@ -26,10 +26,10 @@
 
 /* Function Definitions */
 void b_driver(const emxArray_real_T *H, const emxArray_real_T *f,
-              h_struct_T *solution, e_struct_T *memspace,
-              i_struct_T *workingset, f_struct_T *qrmanager,
-              g_struct_T *cholmanager, d_struct_T *objective,
-              m_struct_T *options, int32_T runTimeOptions_MaxIterations)
+              g_struct_T *solution, d_struct_T *memspace,
+              h_struct_T *workingset, e_struct_T *qrmanager,
+              f_struct_T *cholmanager, c_struct_T *objective,
+              l_struct_T *options, int32_T runTimeOptions_MaxIterations)
 {
   ptrdiff_t incx_t;
   ptrdiff_t incy_t;

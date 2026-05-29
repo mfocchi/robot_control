@@ -207,33 +207,7 @@ void emxFreeStruct_struct3_T(struct3_T *pStruct)
   emxFree_real_T(&pStruct->time);
 }
 
-void emxFreeStruct_struct_T(c_struct_T *pStruct)
-{
-  emxFree_real_T(&pStruct->Fr_l);
-  emxFree_real_T(&pStruct->Fr_r);
-  emxFree_real_T(&pStruct->p);
-  emxFree_real_T(&pStruct->psi);
-  emxFree_real_T(&pStruct->l1);
-  emxFree_real_T(&pStruct->l2);
-  emxFree_real_T(&pStruct->psid);
-  emxFree_real_T(&pStruct->l1d);
-  emxFree_real_T(&pStruct->l2d);
-  emxFree_real_T(&pStruct->time);
-  emxFree_real_T(&pStruct->Fr_l_fine);
-  emxFree_real_T(&pStruct->Fr_r_fine);
-  emxFree_real_T(&pStruct->p_fine);
-  emxFree_real_T(&pStruct->psi_fine);
-  emxFree_real_T(&pStruct->l1_fine);
-  emxFree_real_T(&pStruct->l2_fine);
-  emxFree_real_T(&pStruct->psid_fine);
-  emxFree_real_T(&pStruct->l1d_fine);
-  emxFree_real_T(&pStruct->l2d_fine);
-  emxFree_real_T(&pStruct->time_fine);
-  emxFree_real_T(&pStruct->Ekin);
-  emxFree_real_T(&pStruct->instantaneous_power);
-}
-
-void emxFreeStruct_struct_T1(h_struct_T *pStruct)
+void emxFreeStruct_struct_T(g_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->xstarsqp);
   emxFree_real_T(&pStruct->xstarsqp_old);
@@ -255,7 +229,7 @@ void emxFreeStruct_struct_T1(h_struct_T *pStruct)
   emxFree_real_T(&pStruct->searchDir);
 }
 
-void emxFreeStruct_struct_T2(l_struct_T *pStruct)
+void emxFreeStruct_struct_T1(k_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->cIneq_1);
   emxFree_real_T(&pStruct->cIneq_2);
@@ -263,20 +237,20 @@ void emxFreeStruct_struct_T2(l_struct_T *pStruct)
   emxFree_boolean_T(&pStruct->hasUB);
 }
 
-void emxFreeStruct_struct_T3(d_struct_T *pStruct)
+void emxFreeStruct_struct_T2(c_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->grad);
   emxFree_real_T(&pStruct->Hx);
 }
 
-void emxFreeStruct_struct_T4(e_struct_T *pStruct)
+void emxFreeStruct_struct_T3(d_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->workspace_double);
   emxFree_int32_T(&pStruct->workspace_int);
   emxFree_int32_T(&pStruct->workspace_sort);
 }
 
-void emxFreeStruct_struct_T5(i_struct_T *pStruct)
+void emxFreeStruct_struct_T4(h_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->Aineq);
   emxFree_real_T(&pStruct->bineq);
@@ -293,7 +267,7 @@ void emxFreeStruct_struct_T5(i_struct_T *pStruct)
   emxFree_int32_T(&pStruct->Wlocalidx);
 }
 
-void emxFreeStruct_struct_T6(f_struct_T *pStruct)
+void emxFreeStruct_struct_T5(e_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->QR);
   emxFree_real_T(&pStruct->Q);
@@ -301,7 +275,7 @@ void emxFreeStruct_struct_T6(f_struct_T *pStruct)
   emxFree_real_T(&pStruct->tau);
 }
 
-void emxFreeStruct_struct_T7(g_struct_T *pStruct)
+void emxFreeStruct_struct_T6(f_struct_T *pStruct)
 {
   emxFree_real_T(&pStruct->FMat);
 }
@@ -401,33 +375,7 @@ void emxInitStruct_struct3_T(struct3_T *pStruct)
   emxInit_real_T(&pStruct->time, 2);
 }
 
-void emxInitStruct_struct_T(c_struct_T *pStruct)
-{
-  emxInit_real_T(&pStruct->Fr_l, 2);
-  emxInit_real_T(&pStruct->Fr_r, 2);
-  emxInit_real_T(&pStruct->p, 2);
-  emxInit_real_T(&pStruct->psi, 2);
-  emxInit_real_T(&pStruct->l1, 2);
-  emxInit_real_T(&pStruct->l2, 2);
-  emxInit_real_T(&pStruct->psid, 2);
-  emxInit_real_T(&pStruct->l1d, 2);
-  emxInit_real_T(&pStruct->l2d, 2);
-  emxInit_real_T(&pStruct->time, 2);
-  emxInit_real_T(&pStruct->Fr_l_fine, 2);
-  emxInit_real_T(&pStruct->Fr_r_fine, 2);
-  emxInit_real_T(&pStruct->p_fine, 2);
-  emxInit_real_T(&pStruct->psi_fine, 2);
-  emxInit_real_T(&pStruct->l1_fine, 2);
-  emxInit_real_T(&pStruct->l2_fine, 2);
-  emxInit_real_T(&pStruct->psid_fine, 2);
-  emxInit_real_T(&pStruct->l1d_fine, 2);
-  emxInit_real_T(&pStruct->l2d_fine, 2);
-  emxInit_real_T(&pStruct->time_fine, 2);
-  emxInit_real_T(&pStruct->Ekin, 2);
-  emxInit_real_T(&pStruct->instantaneous_power, 2);
-}
-
-void emxInitStruct_struct_T1(h_struct_T *pStruct)
+void emxInitStruct_struct_T(g_struct_T *pStruct)
 {
   emxInit_real_T(&pStruct->xstarsqp, 2);
   emxInit_real_T(&pStruct->xstarsqp_old, 2);
@@ -449,7 +397,7 @@ void emxInitStruct_struct_T1(h_struct_T *pStruct)
   emxInit_real_T(&pStruct->searchDir, 1);
 }
 
-void emxInitStruct_struct_T2(l_struct_T *pStruct)
+void emxInitStruct_struct_T1(k_struct_T *pStruct)
 {
   emxInit_real_T(&pStruct->cIneq_1, 1);
   emxInit_real_T(&pStruct->cIneq_2, 1);
@@ -457,20 +405,20 @@ void emxInitStruct_struct_T2(l_struct_T *pStruct)
   emxInit_boolean_T(&pStruct->hasUB, 1);
 }
 
-void emxInitStruct_struct_T3(d_struct_T *pStruct)
+void emxInitStruct_struct_T2(c_struct_T *pStruct)
 {
   emxInit_real_T(&pStruct->grad, 1);
   emxInit_real_T(&pStruct->Hx, 1);
 }
 
-void emxInitStruct_struct_T4(e_struct_T *pStruct)
+void emxInitStruct_struct_T3(d_struct_T *pStruct)
 {
   emxInit_real_T(&pStruct->workspace_double, 2);
   emxInit_int32_T(&pStruct->workspace_int, 1);
   emxInit_int32_T(&pStruct->workspace_sort, 1);
 }
 
-void emxInitStruct_struct_T5(i_struct_T *pStruct)
+void emxInitStruct_struct_T4(h_struct_T *pStruct)
 {
   emxInit_real_T(&pStruct->Aineq, 1);
   emxInit_real_T(&pStruct->bineq, 1);
@@ -488,7 +436,7 @@ void emxInitStruct_struct_T5(i_struct_T *pStruct)
   emxInit_int32_T(&pStruct->Wlocalidx, 1);
 }
 
-void emxInitStruct_struct_T6(f_struct_T *pStruct)
+void emxInitStruct_struct_T5(e_struct_T *pStruct)
 {
   emxInit_real_T(&pStruct->QR, 2);
   emxInit_real_T(&pStruct->Q, 2);
@@ -496,7 +444,7 @@ void emxInitStruct_struct_T6(f_struct_T *pStruct)
   emxInit_real_T(&pStruct->tau, 1);
 }
 
-void emxInitStruct_struct_T7(g_struct_T *pStruct)
+void emxInitStruct_struct_T6(f_struct_T *pStruct)
 {
   emxInit_real_T(&pStruct->FMat, 2);
 }

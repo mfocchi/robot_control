@@ -20,7 +20,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void factor(g_struct_T *obj, const emxArray_real_T *A, int32_T ndims,
+void factor(f_struct_T *obj, const emxArray_real_T *A, int32_T ndims,
             int32_T ldA)
 {
   ptrdiff_t incx_t;

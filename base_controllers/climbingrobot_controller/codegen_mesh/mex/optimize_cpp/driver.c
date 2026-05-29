@@ -29,12 +29,12 @@
 
 /* Function Definitions */
 void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb,
-            const emxArray_real_T *ub, h_struct_T *TrialState,
+            const emxArray_real_T *ub, g_struct_T *TrialState,
             struct_T *MeritFunction,
             const i_coder_internal_stickyStruct *FcnEvaluator,
-            l_struct_T *FiniteDifferences, e_struct_T *memspace,
-            i_struct_T *WorkingSet, f_struct_T *QRManager,
-            g_struct_T *CholManager, d_struct_T *QPObjective,
+            k_struct_T *FiniteDifferences, d_struct_T *memspace,
+            h_struct_T *WorkingSet, e_struct_T *QRManager,
+            f_struct_T *CholManager, c_struct_T *QPObjective,
             const emxArray_real_T *fscales_cineq_constraint)
 {
   static const char_T qpoptions_SolverName[7] = {'f', 'm', 'i', 'n',
@@ -45,8 +45,8 @@ void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb,
   ptrdiff_t m_t;
   ptrdiff_t n_t;
   b_struct_T Flags;
-  m_struct_T b_expl_temp;
-  m_struct_T expl_temp;
+  l_struct_T b_expl_temp;
+  l_struct_T expl_temp;
   real_T beta1;
   real_T constrViolationIneq;
   int32_T b_i;

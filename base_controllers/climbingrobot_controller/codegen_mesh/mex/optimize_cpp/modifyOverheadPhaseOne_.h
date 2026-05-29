@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void modifyOverheadPhaseOne_(i_struct_T *obj);
+void modifyOverheadPhaseOne_(h_struct_T *obj);
 
 /* End of code generation (modifyOverheadPhaseOne_.h) */

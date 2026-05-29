@@ -23,9 +23,9 @@
 
 /* Function Declarations */
 void iterate(const emxArray_real_T *H, const emxArray_real_T *f,
-             h_struct_T *solution, e_struct_T *memspace, i_struct_T *workingset,
-             f_struct_T *qrmanager, g_struct_T *cholmanager,
-             d_struct_T *objective, const char_T options_SolverName[7],
+             g_struct_T *solution, d_struct_T *memspace, h_struct_T *workingset,
+             e_struct_T *qrmanager, f_struct_T *cholmanager,
+             c_struct_T *objective, const char_T options_SolverName[7],
              real_T options_StepTolerance, real_T options_ObjectiveLimit,
              int32_T runTimeOptions_MaxIterations);
 

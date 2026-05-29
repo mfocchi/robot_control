@@ -18,7 +18,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void solve(const g_struct_T *obj, emxArray_real_T *rhs)
+void solve(const f_struct_T *obj, emxArray_real_T *rhs)
 {
   ptrdiff_t incx_t;
   ptrdiff_t lda_t;

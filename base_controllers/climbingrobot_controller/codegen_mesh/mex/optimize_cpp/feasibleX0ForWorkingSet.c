@@ -27,7 +27,7 @@
 /* Function Definitions */
 boolean_T feasibleX0ForWorkingSet(emxArray_real_T *workspace,
                                   emxArray_real_T *xCurrent,
-                                  i_struct_T *workingset, f_struct_T *qrmanager)
+                                  h_struct_T *workingset, e_struct_T *qrmanager)
 {
   ptrdiff_t incx_t;
   ptrdiff_t incy_t;

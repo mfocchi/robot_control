@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void deleteColMoveEnd(f_struct_T *obj, int32_T idx);
+void deleteColMoveEnd(e_struct_T *obj, int32_T idx);
 
 /* End of code generation (deleteColMoveEnd.h) */

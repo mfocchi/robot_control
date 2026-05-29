@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void saveState(h_struct_T *obj);
+void saveState(g_struct_T *obj);
 
 /* End of code generation (saveState.h) */

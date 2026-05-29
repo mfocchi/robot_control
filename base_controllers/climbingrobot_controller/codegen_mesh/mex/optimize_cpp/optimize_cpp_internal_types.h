@@ -51,15 +51,15 @@ typedef struct {
 } b_struct_T;
 #endif /* typedef_b_struct_T */
 
-#ifndef typedef_m_struct_T
-#define typedef_m_struct_T
+#ifndef typedef_l_struct_T
+#define typedef_l_struct_T
 typedef struct {
   char_T SolverName[7];
   int32_T MaxIterations;
   real_T StepTolerance;
   real_T ObjectiveLimit;
-} m_struct_T;
-#endif /* typedef_m_struct_T */
+} l_struct_T;
+#endif /* typedef_l_struct_T */
 
 #ifndef typedef_rtBoundsCheckInfo
 #define typedef_rtBoundsCheckInfo

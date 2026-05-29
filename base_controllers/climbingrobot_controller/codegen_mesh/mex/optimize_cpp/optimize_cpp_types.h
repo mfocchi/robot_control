@@ -157,54 +157,6 @@ typedef struct {
 } struct0_T;
 #endif /* typedef_struct0_T */
 
-#ifndef typedef_c_struct_T
-#define typedef_c_struct_T
-typedef struct {
-  real_T path_length;
-  real_T initial_error;
-  real_T final_error_real;
-  real_T Fleg[3];
-  emxArray_real_T *Fr_l;
-  emxArray_real_T *Fr_r;
-  emxArray_real_T *p;
-  emxArray_real_T *psi;
-  emxArray_real_T *l1;
-  emxArray_real_T *l2;
-  emxArray_real_T *psid;
-  emxArray_real_T *l1d;
-  emxArray_real_T *l2d;
-  emxArray_real_T *time;
-  emxArray_real_T *Fr_l_fine;
-  emxArray_real_T *Fr_r_fine;
-  emxArray_real_T *p_fine;
-  emxArray_real_T *psi_fine;
-  emxArray_real_T *l1_fine;
-  emxArray_real_T *l2_fine;
-  emxArray_real_T *psid_fine;
-  emxArray_real_T *l1d_fine;
-  emxArray_real_T *l2d_fine;
-  emxArray_real_T *time_fine;
-  real_T Tf;
-  real_T achieved_target[3];
-  real_T Etot;
-  emxArray_real_T *Ekin;
-  real_T Ekin0x;
-  real_T Ekin0y;
-  real_T Ekin0z;
-  real_T Ekin0;
-  real_T intEkin;
-  real_T U0;
-  real_T Uf;
-  real_T Ekinfx;
-  real_T Ekinfy;
-  real_T Ekinfz;
-  real_T Ekinf;
-  real_T consumed_energy;
-  emxArray_real_T *instantaneous_power;
-  real_T average_power;
-} c_struct_T;
-#endif /* typedef_c_struct_T */
-
 #ifndef struct_emxArray_int32_T
 #define struct_emxArray_int32_T
 struct emxArray_int32_T {
@@ -235,8 +187,8 @@ struct emxArray_boolean_T {
 typedef struct emxArray_boolean_T emxArray_boolean_T;
 #endif /* typedef_emxArray_boolean_T */
 
-#ifndef typedef_d_struct_T
-#define typedef_d_struct_T
+#ifndef typedef_c_struct_T
+#define typedef_c_struct_T
 typedef struct {
   emxArray_real_T *grad;
   emxArray_real_T *Hx;
@@ -250,20 +202,20 @@ typedef struct {
   int32_T prev_nvar;
   boolean_T prev_hasLinear;
   real_T gammaScalar;
+} c_struct_T;
+#endif /* typedef_c_struct_T */
+
+#ifndef typedef_d_struct_T
+#define typedef_d_struct_T
+typedef struct {
+  emxArray_real_T *workspace_double;
+  emxArray_int32_T *workspace_int;
+  emxArray_int32_T *workspace_sort;
 } d_struct_T;
 #endif /* typedef_d_struct_T */
 
 #ifndef typedef_e_struct_T
 #define typedef_e_struct_T
-typedef struct {
-  emxArray_real_T *workspace_double;
-  emxArray_int32_T *workspace_int;
-  emxArray_int32_T *workspace_sort;
-} e_struct_T;
-#endif /* typedef_e_struct_T */
-
-#ifndef typedef_f_struct_T
-#define typedef_f_struct_T
 typedef struct {
   int32_T ldq;
   emxArray_real_T *QR;
@@ -274,11 +226,11 @@ typedef struct {
   emxArray_real_T *tau;
   int32_T minRowCol;
   boolean_T usedPivoting;
-} f_struct_T;
-#endif /* typedef_f_struct_T */
+} e_struct_T;
+#endif /* typedef_e_struct_T */
 
-#ifndef typedef_g_struct_T
-#define typedef_g_struct_T
+#ifndef typedef_f_struct_T
+#define typedef_f_struct_T
 typedef struct {
   emxArray_real_T *FMat;
   int32_T ldm;
@@ -289,8 +241,8 @@ typedef struct {
   real_T regTol_;
   real_T workspace_;
   real_T workspace2_;
-} g_struct_T;
-#endif /* typedef_g_struct_T */
+} f_struct_T;
+#endif /* typedef_f_struct_T */
 
 #ifndef struct_emxArray_ptrdiff_t
 #define struct_emxArray_ptrdiff_t
@@ -307,8 +259,8 @@ struct emxArray_ptrdiff_t {
 typedef struct emxArray_ptrdiff_t emxArray_ptrdiff_t;
 #endif /* typedef_emxArray_ptrdiff_t */
 
-#ifndef typedef_h_struct_T
-#define typedef_h_struct_T
+#ifndef typedef_g_struct_T
+#define typedef_g_struct_T
 typedef struct {
   int32_T nVarMax;
   int32_T mNonlinIneq;
@@ -346,8 +298,8 @@ typedef struct {
   real_T maxConstr;
   int32_T iterations;
   emxArray_real_T *searchDir;
-} h_struct_T;
-#endif /* typedef_h_struct_T */
+} g_struct_T;
+#endif /* typedef_g_struct_T */
 
 #ifndef struct_emxArray_real_T_0
 #define struct_emxArray_real_T_0
@@ -360,8 +312,8 @@ struct emxArray_real_T_0 {
 typedef struct emxArray_real_T_0 emxArray_real_T_0;
 #endif /* typedef_emxArray_real_T_0 */
 
-#ifndef typedef_i_struct_T
-#define typedef_i_struct_T
+#ifndef typedef_h_struct_T
+#define typedef_h_struct_T
 typedef struct {
   int32_T mConstr;
   int32_T mConstrOrig;
@@ -399,39 +351,39 @@ typedef struct {
   int32_T nWConstr[5];
   int32_T probType;
   real_T SLACK0;
-} i_struct_T;
-#endif /* typedef_i_struct_T */
+} h_struct_T;
+#endif /* typedef_h_struct_T */
 
-#ifndef typedef_j_struct_T
-#define typedef_j_struct_T
+#ifndef typedef_i_struct_T
+#define typedef_i_struct_T
 typedef struct {
   real_T p0[3];
   real_T pf[3];
   real_T Fleg_max;
   real_T mu;
   param params;
-} j_struct_T;
-#endif /* typedef_j_struct_T */
+} i_struct_T;
+#endif /* typedef_i_struct_T */
 
 #ifndef typedef_anonymous_function
 #define typedef_anonymous_function
 typedef struct {
-  j_struct_T workspace;
+  i_struct_T workspace;
 } anonymous_function;
 #endif /* typedef_anonymous_function */
 
-#ifndef typedef_k_struct_T
-#define typedef_k_struct_T
+#ifndef typedef_j_struct_T
+#define typedef_j_struct_T
 typedef struct {
   real_T p0[3];
   param params;
-} k_struct_T;
-#endif /* typedef_k_struct_T */
+} j_struct_T;
+#endif /* typedef_j_struct_T */
 
 #ifndef typedef_b_anonymous_function
 #define typedef_b_anonymous_function
 typedef struct {
-  k_struct_T workspace;
+  j_struct_T workspace;
 } b_anonymous_function;
 #endif /* typedef_b_anonymous_function */
 
@@ -500,8 +452,8 @@ typedef struct {
 } i_coder_internal_stickyStruct;
 #endif /* typedef_i_coder_internal_stickyStruct */
 
-#ifndef typedef_l_struct_T
-#define typedef_l_struct_T
+#ifndef typedef_k_struct_T
+#define typedef_k_struct_T
 typedef struct {
   b_anonymous_function objfun;
   anonymous_function nonlin;
@@ -514,13 +466,13 @@ typedef struct {
   emxArray_boolean_T *hasLB;
   emxArray_boolean_T *hasUB;
   boolean_T hasBounds;
-} l_struct_T;
-#endif /* typedef_l_struct_T */
+} k_struct_T;
+#endif /* typedef_k_struct_T */
 
 #ifndef typedef_b_fmincon
 #define typedef_b_fmincon
 typedef struct {
-  l_struct_T FiniteDifferences;
+  k_struct_T FiniteDifferences;
   i_coder_internal_stickyStruct FcnEvaluator;
 } b_fmincon;
 #endif /* typedef_b_fmincon */

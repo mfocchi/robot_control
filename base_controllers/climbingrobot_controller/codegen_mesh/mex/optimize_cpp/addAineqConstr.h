@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void addAineqConstr(i_struct_T *obj, int32_T idx_local);
+void addAineqConstr(h_struct_T *obj, int32_T idx_local);
 
 /* End of code generation (addAineqConstr.h) */

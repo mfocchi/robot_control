@@ -24,12 +24,12 @@
 
 /* Function Declarations */
 void driver(emxArray_real_T *Hessian, const emxArray_real_T *lb,
-            const emxArray_real_T *ub, h_struct_T *TrialState,
+            const emxArray_real_T *ub, g_struct_T *TrialState,
             struct_T *MeritFunction,
             const i_coder_internal_stickyStruct *FcnEvaluator,
-            l_struct_T *FiniteDifferences, e_struct_T *memspace,
-            i_struct_T *WorkingSet, f_struct_T *QRManager,
-            g_struct_T *CholManager, d_struct_T *QPObjective,
+            k_struct_T *FiniteDifferences, d_struct_T *memspace,
+            h_struct_T *WorkingSet, e_struct_T *QRManager,
+            f_struct_T *CholManager, c_struct_T *QPObjective,
             const emxArray_real_T *fscales_cineq_constraint);
 
 /* End of code generation (driver.h) */

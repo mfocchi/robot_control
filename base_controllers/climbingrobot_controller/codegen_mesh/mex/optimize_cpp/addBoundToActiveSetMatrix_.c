@@ -16,7 +16,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void addBoundToActiveSetMatrix_(i_struct_T *obj, int32_T TYPE,
+void addBoundToActiveSetMatrix_(h_struct_T *obj, int32_T TYPE,
                                 int32_T idx_local)
 {
   int32_T colOffset;

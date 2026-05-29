@@ -28,9 +28,9 @@
 #include <string.h>
 
 /* Function Definitions */
-void compute_deltax(const emxArray_real_T *H, h_struct_T *solution,
-                    e_struct_T *memspace, const f_struct_T *qrmanager,
-                    g_struct_T *cholmanager, const d_struct_T *objective,
+void compute_deltax(const emxArray_real_T *H, g_struct_T *solution,
+                    d_struct_T *memspace, const e_struct_T *qrmanager,
+                    f_struct_T *cholmanager, const c_struct_T *objective,
                     boolean_T alwaysPositiveDef)
 {
   ptrdiff_t incx_t;

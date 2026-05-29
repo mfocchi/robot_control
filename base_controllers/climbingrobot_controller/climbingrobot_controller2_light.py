@@ -55,6 +55,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_passive_joints = np.array([3,4,5, 9,10,11])
         self.anchor_passive_joints = np.array([0,1, 6,7])
         self.OBSTACLE_AVOIDANCE = 'mesh' #'none', 'mesh'
+        self.MONODIMENSIONAL_PUSH_FORCE = False #IMPORTANT! it will converge only for small jumps eg p0=[0,2.5,-6] to pf=[0.0, 4, -4]
         self.use_gui = False
         self.PAPER = False
         self.SAMPLE_FOR_VALUE_FUNCTION = False
@@ -64,7 +65,10 @@ class ClimbingrobotController(BaseControllerFixed):
             sys.path.insert(0, './codegen_mpc')
 
         if self.OBSTACLE_AVOIDANCE=='mesh':
-            sys.path.insert(0, './codegen_mesh')
+            if self.MONODIMENSIONAL_PUSH_FORCE:
+                sys.path.insert(0, './codegen_mesh_normal')
+            else:
+                sys.path.insert(0, './codegen_mesh')
         else:
             sys.path.insert(0, './codegen')
 
@@ -139,7 +143,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.eng = matlab.engine.start_matlab()
 
         if self.OBSTACLE_AVOIDANCE=='mesh':
-            self.eng.addpath('./codegen_mesh', nargout=0)
+            if self.MONODIMENSIONAL_PUSH_FORCE:
+                self.eng.addpath('./codegen_mesh_normal', nargout=0)
+            else:
+                self.eng.addpath('./codegen_mesh', nargout=0)
         else:
             self.eng.addpath('./codegen', nargout=0)
 
@@ -611,9 +618,12 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def initOptim(self, p0, pf, Fleg_max = None, Fr_max = None, Fr_min = None):
         if Fleg_max is None:
-            self.Fleg_max = 150.
+            if self.MONODIMENSIONAL_PUSH_FORCE:
+                self.Fleg_max = 300.  # had to increase otherwise it does not converge
+            else:
+                self.Fleg_max = 190.
         if Fr_max is None:
-            self.Fr_max = 190.  # had to increas because of slopes  it used tp be 90
+            self.Fr_max = 90.  # had to increas because of slopes  it used tp be 90
         if Fr_min is None:
             self.Fr_min = 15.  # had to increas because of downward jumps it used tp be 0
         # down ward jumps
@@ -1260,29 +1270,25 @@ def talker(p):
             p.results = pd.DataFrame(columns=columns)
             p.jumpNumber = 0
     else:
-        #############hard coded
-        # jump params
-        # jump starting position
-        # p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
-        # p.numberOfJumps = 3
+        #############hard coded (same as tex.mex)
+        # p0 = np.array([0.0, 2.5, -6])  # unit test ,  there is singularity for px = 0!
+        # # p0 =  matlab.double([0.27753 , 2.51893, -6.09989]) # actual used p0 = np.array([0.28,  2.5, -6.10104])
+        # pf = np.array([0.0, 4, -4])
+        # p.numberOfJumps = 1
         # # jump landing position
-        # p.desired_target = [np.array([0.28, 4, -3.7]),
-        #                     np.array([0.28, 2.5, -6]),
-        #                     np.array([0.28, 3.6, -11])]
+        # p.desired_target = [np.array([0.0, 4, -4])]
         # p.terrainManager = TerrainManager( grid_size=100, wall_depth=1, max_ridge_depth=0.5, seed="default",Lz=-20, Ly=5, generate_terrain = True, terrain_type = 'rock')
-        # ######################
+        # # ######################
 
-        #############Json
+        #############Read Json
         data = p.readJsonFile(terrain="rock") # hemi, gaussian
         p0 = np.array(data["target_points"][0])
         p.desired_target = [np.array(t) for t in data["target_points"][1:]]
         p.numberOfJumps = len(p.desired_target)
-        p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"],
-                                          seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
+        p.terrainManager = TerrainManager(grid_size=data["terrain_info"]["grid_size"],wall_depth=data["terrain_info"]["wall_depth"], max_ridge_depth=data["terrain_info"]["max_ridge_depth"], seed=data["terrain_info"]["seed"], Lz=data["terrain_info"]["Lz"],Ly=data["terrain_info"]["Ly"], generate_terrain=True, terrain_type=data["terrain_info"]["terrain_type"] )
+        ##############
         p.mesh_x, p.mesh_y, p.mesh_z = p.terrainManager.get_mesh()
         p.jumpNumber = 0
-        ##############
-
 
     p.startupProcedure()
     p.initVars()

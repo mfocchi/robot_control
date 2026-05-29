@@ -22,6 +22,6 @@
 #include <string.h>
 
 /* Function Declarations */
-void solve(const g_struct_T *obj, emxArray_real_T *rhs);
+void solve(const f_struct_T *obj, emxArray_real_T *rhs);
 
 /* End of code generation (solve.h) */

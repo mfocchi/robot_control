@@ -19,7 +19,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void fullColLDL2_(g_struct_T *obj, int32_T LD_offset, int32_T NColsRemain)
+void fullColLDL2_(f_struct_T *obj, int32_T LD_offset, int32_T NColsRemain)
 {
   ptrdiff_t incx_t;
   ptrdiff_t n_t;

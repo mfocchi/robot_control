@@ -16,7 +16,7 @@
 #include <string.h>
 
 /* Function Definitions */
-void loadProblem(i_struct_T *obj, int32_T mIneq, int32_T mLB, int32_T mUB,
+void loadProblem(h_struct_T *obj, int32_T mIneq, int32_T mLB, int32_T mUB,
                  int32_T mFixed, int32_T mConstrMax)
 {
   int32_T i;
