@@ -272,7 +272,7 @@ robot_params['go1'] ={'dt': 0.002,
                       'kp_lin': np.array([800, 500., 900.]),  # x y z
                       'kd_lin': np.array([100, 100., 100.]),
                       'kp_ang': np.array([40., 40., 40.]),  # R P Y
-                      'kd_ang': np.array([1.51, 1.51, 1.51]),                      
+                      'kd_ang': np.array([1.51, 1.51, 1.51]),
                       # real robot gains
                       # stand alone joint pid
                       'kp_real': np.array([30., 30.,30.]*4),
@@ -600,7 +600,7 @@ robot_params['climbingrobot'] ={'dt': 0.001,
                        'ee_frame': 'foot',
                        'spawn_x' : 0.0,
                        'spawn_y' : 0.0,
-                       'spawn_z' : 20.0, 
+                       'spawn_z' : 20.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
 robot_params['climbingrobot_slider'] ={'dt': 0.001,
@@ -617,7 +617,7 @@ robot_params['climbingrobot_slider'] ={'dt': 0.001,
                        'spawn_z' : 20.0,
                        'buffer_size': 10000} # note the frames are all aligned with base for joints = 0
 
-robot_params['climbingrobot2'] ={'dt': 0.001,
+robot_params['climbingrobot2'] ={'dt': 0.01,
                        'kp': np.array([0 ,    0,    400,  40,    40,   40,
                                        0 ,    0,   400,  40,    40,   40,
                                        150, 130, 120]),
@@ -646,8 +646,22 @@ robot_params['climbingrobot2'] ={'dt': 0.001,
                        'spawn_2y': 5.0,
                        'spawn_2z': 20.0,
                        'wall_inclination': 0.0,
+                       # ALPINE real robot geometry / rope zeroing.
+                       # Same convention used by alpine_odometry.yaml and the real controller:
+                       #   L_abs = home_offset + rope_sign * L_raw
+                       #   L_raw_ref = rope_sign * (L_abs_ref - home_offset)
+                       'anchor_left_xyz': np.array([0.45, 0.0, 2.50]),
+                       'anchor_right_xyz': np.array([0.45, 0.65, 2.50]),
+                       'body_origin_from_left_attachment_xyz': np.array([0.0, 0.0, -0.55]),
+                       'right_attachment_from_left_body_xyz': np.array([0.0, -0.55, 0.0]),
+                       'left_home_offset_m': 0.0,
+                       'right_home_offset_m': 0.53,
+                       'left_rope_sign': 1.0,
+                       'right_rope_sign': -1.0,
+                       'left_rope_axis': '-x',
+                       'homing_test_delta_m': 0.5,
                        'real_robot': False,
-                       'buffer_size': 20000} # note the frames are all aligned with base for joints = 0
+                       'buffer_size': 30000} # note the frames are all aligned with base for joints = 0
 
 robot_params['climbingrobot2landing'] ={'dt': 0.001,
                        'kp': np.array([0 ,    0,    1200,  40,    40,   40,
@@ -716,5 +730,4 @@ robot_params['starbot'] ={'dt': 0.001,
 
 verbose = False
 plotting = True
-
 
