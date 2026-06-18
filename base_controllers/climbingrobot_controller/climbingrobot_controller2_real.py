@@ -168,6 +168,21 @@ class ClimbingrobotController(BaseControllerFixed):
         self.left_rope_axis = str(self.get_alpine_param('left_rope_axis', '-x'))
         self.homing_test_delta_m = float(self.get_alpine_param('homing_test_delta_m', 0.5))
 
+        # Pure RViz/Locosim startup home pose, kept identical to the old real
+        # controller.  These values are only used to upload robot_description and
+        # seed /joint_states at startup; the physical odometry geometry below is
+        # still used after homing for the offset calculation.
+        self.rviz_home_anchor_left_xyz = np.array(
+            self.get_alpine_param('rviz_home_anchor_left_xyz', [0.2, 0.0, 2.40]), dtype=float
+        )
+        self.rviz_home_anchor_right_xyz = np.array(
+            self.get_alpine_param('rviz_home_anchor_right_xyz', [0.2, 2.2, 2.40]), dtype=float
+        )
+        self.rviz_home_base_width = float(self.get_alpine_param('rviz_home_base_width', 0.4))
+        self.rviz_home_publish_s = float(self.get_alpine_param('rviz_home_publish_s', 0.5))
+        # Backward-compatible alias used by older local edits of this file.
+        self.rviz_homing_pose_publish_s = self.rviz_home_publish_s
+
         self.anchor_left_xyz = np.array(self.get_alpine_param('anchor_left_xyz', [0.45, 0.0, 2.50]), dtype=float)
         self.anchor_right_xyz = np.array(self.get_alpine_param('anchor_right_xyz', [0.45, 0.65, 2.50]), dtype=float)
         self.anchor_distance_y = float(self.anchor_right_xyz[1] - self.anchor_left_xyz[1])
@@ -180,16 +195,23 @@ class ClimbingrobotController(BaseControllerFixed):
             self.get_alpine_param('right_attachment_from_left_body_xyz', [0.0, -0.55, 0.0]), dtype=float
         )
 
+        # Physical span used after homing.  Do not overwrite base_width here:
+        # base_width is also used by the old Locosim/RViz startup visualization,
+        # and at power-on it must stay at the historical homing value set in
+        # startRealRobot().
         span = np.linalg.norm(self.right_attachment_from_left_body)
         if np.isfinite(span) and span > 1e-6:
-            self.base_width = span
-            self.hoist_distance = span
+            self.physical_hoist_distance = float(span)
+        else:
+            self.physical_hoist_distance = float(getattr(self, 'physical_hoist_distance', self.hoist_distance))
 
         print(colored(
             "ALPINE rope offsets: "
             f"left offset={self.left_home_offset_m:.3f} sign={self.left_rope_sign:+.1f}, "
             f"right offset={self.right_home_offset_m:.3f} sign={self.right_rope_sign:+.1f}, "
-            f"axis={self.left_rope_axis}, homing_delta={self.homing_test_delta_m:.3f}",
+            f"axis={self.left_rope_axis}, homing_delta={self.homing_test_delta_m:.3f}, "
+            f"rviz_home_L={self.rviz_home_anchor_left_xyz.tolist()}, "
+            f"rviz_home_R={self.rviz_home_anchor_right_xyz.tolist()}",
             "blue"
         ))
 
@@ -230,6 +252,38 @@ class ClimbingrobotController(BaseControllerFixed):
             rope_velocity=raw_vel,
             rope_position=raw_ref,
         )
+
+    def publish_initial_homing_pose_for_rviz(self, duration_s=None):
+        """Seed robot_state_publisher/RViz with the old startup home pose.
+
+        This runs before the winch homing sequence.  It does not affect odometry,
+        rope_zero, or any winch command; it only publishes the Locosim q_0 joint
+        state long enough for RViz to receive the robot and the arganelli in the
+        historical homing location.
+        """
+        if not hasattr(self, 'pub_joints'):
+            return
+
+        if duration_s is None:
+            duration_s = getattr(self, 'rviz_home_publish_s', 0.5)
+        duration_s = max(float(duration_s), 0.0)
+
+        msg = JointState()
+        msg.name = list(self.joint_names)
+        q_home = np.array(self.q_des_q0, dtype=float).copy()
+        self.q_des = q_home.copy()
+        msg.position = q_home.tolist()
+
+        rate = ros.Rate(50)
+        t_end = ros.Time.now() + ros.Duration(duration_s)
+        first = True
+        while first or (not ros.is_shutdown() and ros.Time.now() < t_end):
+            first = False
+            msg.header.stamp = ros.Time.now()
+            self.pub_joints.publish(msg)
+            if duration_s <= 0.0:
+                break
+            rate.sleep()
 
     def axis_vector_from_rot(self, R: np.ndarray, axis_name: str) -> np.ndarray:
         axis_name = str(axis_name).strip().lower()
@@ -284,22 +338,46 @@ class ClimbingrobotController(BaseControllerFixed):
         # rope gravity terms TO BE RECOMPUTED TODO
         # self.g #
 
-        # this is expressed in a workdframe with the origin attached to the base frame origin
-        self.anchor_pos = np.array(
-            [conf.robot_params[self.robot_name]['spawn_x'], conf.robot_params[self.robot_name]['spawn_y'],
-             conf.robot_params[self.robot_name]['spawn_z']])
-        self.anchor_pos2 = np.array(
-            [conf.robot_params[self.robot_name]['spawn_2x'], conf.robot_params[self.robot_name]['spawn_2y'],
-             conf.robot_params[self.robot_name]['spawn_2z']])
-        self.anchor_distance_y = conf.robot_params[self.robot_name]['spawn_2y'] - conf.robot_params[self.robot_name][
-            'spawn_y']
+        # Before homing is completed, keep the original Locosim/RViz model
+        # path exactly as it was: startup shows the old homing configuration.
+        # After homing/rope_zero, switch to the physical offset convention so the
+        # model/reference calculations use the measured post-home rope lengths.
+        if not getattr(self, 'rope_offsets_active', False):
+            self.anchor_pos = np.array(
+                [conf.robot_params[self.robot_name]['spawn_x'], conf.robot_params[self.robot_name]['spawn_y'],
+                 conf.robot_params[self.robot_name]['spawn_z']])
+            self.anchor_pos2 = np.array(
+                [conf.robot_params[self.robot_name]['spawn_2x'], conf.robot_params[self.robot_name]['spawn_2y'],
+                 conf.robot_params[self.robot_name]['spawn_2z']])
+            self.anchor_distance_y = conf.robot_params[self.robot_name]['spawn_2y'] - conf.robot_params[self.robot_name][
+                'spawn_y']
 
-        # Estimate body/base position with the same convention used by alpine_odometry_node.py.
-        # l_1 and l_2 are already physical absolute lengths because the rope
-        # telemetry callbacks apply home offsets and signs.
-        rope_dir_l = self.axis_vector_from_rot(self.w_R_rope, self.left_rope_axis)
-        x_rope_l_attach = self.anchor_pos + rope_dir_l * self.l_1
-        self.base_pos = x_rope_l_attach + self.w_R_b.dot(self.body_origin_from_left_attachment)
+            # Original Locosim estimate from rope IMU + home-relative rope length.
+            # Use the old visual base width even if physical body geometry is
+            # already loaded for the post-homing odometry calculation.
+            visual_base_width = float(getattr(self, 'rviz_home_base_width', self.base_width))
+            com_offset = self.w_R_b[2] * 0.0  # TODO
+            x_rope_l_attach = self.anchor_pos + self.w_R_rope[0] * self.l_1
+            self.base_pos = x_rope_l_attach + self.w_R_b[1] * (visual_base_width / 2) + com_offset
+
+            self.hoist_l_pos = self.base_pos + self.w_R_b.dot(np.array([0.0, -visual_base_width / 2, 0.0]))
+            self.hoist_r_pos = self.base_pos + self.w_R_b.dot(np.array([0.0, visual_base_width / 2, 0.0]))
+            self.hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
+        else:
+            # Physical post-homing estimate, aligned with alpine_odometry_node.py.
+            # l_1/l_2 are absolute physical lengths because callbacks now apply
+            # home offsets and signs.
+            self.anchor_pos = self.anchor_left_xyz.copy()
+            self.anchor_pos2 = self.anchor_right_xyz.copy()
+            self.anchor_distance_y = float(self.anchor_right_xyz[1] - self.anchor_left_xyz[1])
+
+            rope_dir_l = self.axis_vector_from_rot(self.w_R_rope, self.left_rope_axis)
+            x_rope_l_attach = self.anchor_pos + rope_dir_l * self.l_1
+            self.base_pos = x_rope_l_attach + self.w_R_b.dot(self.body_origin_from_left_attachment)
+
+            self.hoist_l_pos = x_rope_l_attach
+            self.hoist_r_pos = self.hoist_l_pos + self.w_R_b.dot(self.right_attachment_from_left_body)
+            self.hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
 
         # debug
         # self.base_pos = np.array([1.5, 2.5, 16])
@@ -307,10 +385,6 @@ class ClimbingrobotController(BaseControllerFixed):
         self.base_rpy = self.math_utils.rot2eul(self.w_R_b)
         # compute ee position  in the world frame
         self.x_ee = self.base_pos - self.w_R_b[0] * self.leg_length
-
-        self.hoist_l_pos = x_rope_l_attach
-        self.hoist_r_pos = self.hoist_l_pos + self.w_R_b.dot(self.right_attachment_from_left_body)
-        self.hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
 
         norm_l = np.linalg.norm(self.hoist_l_pos - self.anchor_pos)
         norm_r = np.linalg.norm(self.hoist_r_pos - self.anchor_pos2)
@@ -362,9 +436,19 @@ class ClimbingrobotController(BaseControllerFixed):
         self.l_1d = 0
         self.l_2d = 0
 
+        # Until the homing/rope_zero sequence is finished, keep the exact old
+        # Locosim/RViz convention.  Physical home offsets are activated only
+        # after homing, so at power-on the robot appears in the same homing pose
+        # as before this offset patch.
+        self.rope_offsets_active = False
+        self._alpine_homing_completed = False
+
         # ALPINE real-robot rope/odometry calibration.
-        self.base_width = 0.55
+        # Startup RViz uses the historical home visualization width; after
+        # homing, physical_hoist_distance is taken from the body geometry params.
+        self.base_width = 0.4
         self.hoist_distance = self.base_width
+        self.physical_hoist_distance = 0.55
         self.initRopeOffsets()
 
         self.g = np.zeros(self.n_joints)
@@ -400,6 +484,8 @@ class ClimbingrobotController(BaseControllerFixed):
 
         self.rope_left_length = 0.0
         self.rope_right_length = 0.0
+        self.rope_left_raw_length = 0.0
+        self.rope_right_raw_length = 0.0
 
         self.qdd_des = np.zeros(self.n_joints)
         self.base_accel = np.zeros(3)
@@ -880,6 +966,7 @@ class ClimbingrobotController(BaseControllerFixed):
             msg.rope_velocity = p.qd_des[p.rope_index[1]]
             self.pub_rope_command_l()
 
+
     # REAL ROBOT FUNCTIONS
     def startRealRobot(self):
         # os.system("killall rviz gzserver gzclient")
@@ -889,14 +976,30 @@ class ClimbingrobotController(BaseControllerFixed):
         self.leg_length = 0.45
         self.initRopeOffsets()
 
-        # Anchor positions are read from the same /alpine params used by odometry.
-        # This keeps RViz/model kinematics aligned with /odom.
-        conf.robot_params[self.robot_name]['spawn_x'] = float(self.anchor_left_xyz[0])
-        conf.robot_params[self.robot_name]['spawn_y'] = float(self.anchor_left_xyz[1])
-        conf.robot_params[self.robot_name]['spawn_z'] = float(self.anchor_left_xyz[2])
-        conf.robot_params[self.robot_name]['spawn_2x'] = float(self.anchor_right_xyz[0])
-        conf.robot_params[self.robot_name]['spawn_2y'] = float(self.anchor_right_xyz[1])
-        conf.robot_params[self.robot_name]['spawn_2z'] = float(self.anchor_right_xyz[2])
+        # IMPORTANT: keep the historical RViz/Locosim startup pose.
+        # These are the same anchor/arganello values used by the old script:
+        #   left  = [0.2, 0.0, 2.4]
+        #   right = [0.2, 2.2, 2.4]
+        # They are only for robot_description/RViz at script startup.
+        # The physical odometry anchors remain anchor_left_xyz/anchor_right_xyz
+        # and are used after homing for offset calculations.
+        self.base_width = float(self.rviz_home_base_width)
+        self.hoist_distance = self.base_width
+        rviz_left = np.array(self.rviz_home_anchor_left_xyz, dtype=float)
+        rviz_right = np.array(self.rviz_home_anchor_right_xyz, dtype=float)
+
+        conf.robot_params[self.robot_name]['spawn_x'] = float(rviz_left[0])
+        conf.robot_params[self.robot_name]['spawn_y'] = float(rviz_left[1])
+        conf.robot_params[self.robot_name]['spawn_z'] = float(rviz_left[2])
+        conf.robot_params[self.robot_name]['spawn_2x'] = float(rviz_right[0])
+        conf.robot_params[self.robot_name]['spawn_2y'] = float(rviz_right[1])
+        conf.robot_params[self.robot_name]['spawn_2z'] = float(rviz_right[2])
+
+        print(colored(
+            f"RViz startup home anchors: left={rviz_left.tolist()}, right={rviz_right.tolist()}, "
+            f"visual_base_width={self.base_width:.3f}",
+            "blue"
+        ))
 
         # loads robot_description
         additional_urdf_args = ' spawn_x:=' + str(conf.robot_params[self.robot_name]['spawn_x'])
@@ -967,10 +1070,33 @@ class ClimbingrobotController(BaseControllerFixed):
 
         self.pub_joints = ros.Publisher("/joint_states", JointState, queue_size=1, tcp_nodelay=True)
 
-        # homing
+        # Make RViz see the same home configuration immediately at script start,
+        # before the blocking winch homing sequence begins.
+        self.publish_initial_homing_pose_for_rviz(duration_s=self.rviz_home_publish_s)
+
+        # Homing.
+        # During this whole sequence rope_offsets_active stays False, so RViz uses
+        # the original home-relative Locosim convention and the robot appears at
+        # startup/homing exactly as before.
+        self.rope_offsets_active = False
+        self._alpine_homing_completed = False
         self.initRopeOffsets()
         self.homingProcedure = WinchStartupSequence()
         self.homingProcedure.run_sequence()
+
+        # From here onward rope_zero is done.  Activate the physical offset
+        # convention and use it for all position references.
+        self.rope_offsets_active = True
+        self._alpine_homing_completed = True
+        self.base_width = float(getattr(self, 'physical_hoist_distance', self.base_width))
+        self.hoist_distance = self.base_width
+
+        # Recompute the latest stored telemetry values in the physical convention
+        # immediately, instead of waiting for the next telemetry packet.
+        self.rope_left_length = self.rope_abs_length("left", self.rope_left_raw_length)
+        self.rope_right_length = self.rope_abs_length("right", self.rope_right_raw_length)
+        self.l_1 = self.rope_left_length
+        self.l_2 = self.rope_right_length
 
         self.homingProcedure.publish_mode("closed_loop_position")
         ros.sleep(0.05)
@@ -984,9 +1110,18 @@ class ClimbingrobotController(BaseControllerFixed):
     def _receive_rope_telemetry_l(self, msg):
         self.Fr_l_meas = msg.rope_force
         self.rope_left_raw_length = float(msg.rope_length)
-        self.rope_left_length = self.rope_abs_length("left", msg.rope_length)
-        self.l_1 = self.rope_left_length
-        self.l_1d = self.rope_abs_velocity("left", msg.rope_velocity)
+
+        if not getattr(self, 'rope_offsets_active', False):
+            # Old startup/homing convention: no physical home offset yet.
+            self.rope_left_length = float(msg.rope_length)
+            self.l_1 = self.rope_left_length
+            self.l_1d = float(msg.rope_velocity)
+        else:
+            # Post-homing convention: physical absolute length.
+            self.rope_left_length = self.rope_abs_length("left", msg.rope_length)
+            self.l_1 = self.rope_left_length
+            self.l_1d = self.rope_abs_velocity("left", msg.rope_velocity)
+
         self.brake_status_l = msg.brake_status
         self.q[self.rope_index[1]] = self.l_1 + self.hoist_distance / 2 - self.anchor_distance_y / 2
         self.qd[self.rope_index[1]] = self.l_1d
@@ -994,9 +1129,18 @@ class ClimbingrobotController(BaseControllerFixed):
     def _receive_rope_telemetry_r(self, msg):
         self.Fr_r_meas = msg.rope_force
         self.rope_right_raw_length = float(msg.rope_length)
-        self.rope_right_length = self.rope_abs_length("right", msg.rope_length)
-        self.l_2 = self.rope_right_length
-        self.l_2d = self.rope_abs_velocity("right", msg.rope_velocity)
+
+        if not getattr(self, 'rope_offsets_active', False):
+            # Old startup/homing convention: the right winch was already inverted.
+            self.rope_right_length = -float(msg.rope_length)
+            self.l_2 = self.rope_right_length
+            self.l_2d = -float(msg.rope_velocity)
+        else:
+            # Post-homing convention: physical absolute length.
+            self.rope_right_length = self.rope_abs_length("right", msg.rope_length)
+            self.l_2 = self.rope_right_length
+            self.l_2d = self.rope_abs_velocity("right", msg.rope_velocity)
+
         self.brake_status_r = msg.brake_status
         self.q[self.rope_index[0]] = self.l_2 + self.hoist_distance / 2 - self.anchor_distance_y / 2
         self.qd[self.rope_index[0]] = self.l_2d
@@ -1341,4 +1485,3 @@ if __name__ == '__main__':
             p.plotStuff()
             if p.SAVE_BAG:
                 p.recorder.stop_recording_srv()
-
