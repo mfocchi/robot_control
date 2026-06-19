@@ -97,7 +97,7 @@ class QuadrupedJumpController(QuadrupedController):
         if not self.real_robot:
             # if you spawn it starts to publish gt in wf rather than in lowerleg frame
             self.publish_contact_gt_in_wf = True
-            spawnModel('go1_description', 'jump_platform')
+            spawnModel(p.robot_name+'_description', 'jump_platform')
 
 
     def detectApex(self, threshold=-3):
@@ -420,6 +420,16 @@ class QuadrupedJumpController(QuadrupedController):
                             conf.robot_params[self.robot_name]['kd'],
                             conf.robot_params[self.robot_name]['ki'])
         p.resetRobot(basePoseDes=np.array([0, 0, conf.robot_params[self.robot_name]['spawn_z'],  0., 0., 0.]))
+
+        #test with aliengo doing downward jumps
+        # p.resetRobot(basePoseDes=np.array([0, 0, conf.robot_params[self.robot_name]['spawn_z']+0.1, 0., 0., 0.]))
+        # if not self.real_robot:
+        #     self.pause_physics_client()
+        #     for i in range(10):
+        #         self.setJumpPlatformPosition(
+        #             np.array([-0.16,0,0.1]), np.zeros(3))
+        #     self.unpause_physics_client()
+
         while self.time <= self.startTrust:
             self.updateKinematics()
             self.tau_ffwd, self.grForcesW_des = self.wbc.gravityCompensation(self.W_contacts, self.wJ, self.h_joints,   self.basePoseW, self.comPoseW)
@@ -453,7 +463,7 @@ class QuadrupedJumpController(QuadrupedController):
         eul_0 = p.basePoseW[3:].copy()
 
         # define jump action (relative)
-        p.jumpDeltaStep = np.array([0.4, 0.0, 0.])
+        p.jumpDeltaStep = np.array([0.4, 0.0, 0.0]) #downward jumps np.array([0.7, 0.0, -0.1])
         p.jumpDeltaOrient = np.array([0.0, 0., 0.0])
 
         if p.real_robot:
@@ -659,7 +669,7 @@ class QuadrupedJumpController(QuadrupedController):
 
 if __name__ == '__main__':
 
-    p = QuadrupedJumpController('go1')
+    p = QuadrupedJumpController('aliengo')
     world_name = 'fast.world'
 
     np.random.seed(0)  # create always the same random sequence
@@ -668,6 +678,7 @@ if __name__ == '__main__':
 
     try:
         # p.startController(world_name='slow.world')
+
         p.startController(world_name=world_name,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(p.use_gui),
@@ -697,6 +708,7 @@ if __name__ == '__main__':
             for p.test in range(100):
                 print(colored(f"STATISTICAL_ANALYSIS TEST:{p.test}", "blue"))
                 p.initVars()
+
                 #p.changeTrunkMass('base_link', 0.5) #changing trunk mass of 100%
                 p.changeJointDamping(2.)  # absolute damping
                 p.main_loop()

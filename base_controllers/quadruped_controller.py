@@ -1716,13 +1716,13 @@ if __name__ == '__main__':
     p = QuadrupedController('aliengo')
     world_name = 'fast.world'
     use_gui = False
-    p.state_estimation = 'imu' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
+    p.state_estimation = 'odometry' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
     rl_control = 'none' #'none', 'sensor_based' (Giulio), 'state_est_based' (Riccardo)
     # NOTE: in the RL controller, SE NN is used only if state estimation is not pronto
     rl_use_nn_se = p.state_estimation != 'pronto'
     use_joy = False
     generate_reference = False
-    p.SAVE_BAG = True  #
+    p.SAVE_BAG = False  #
 
     if rl_control == 'state_est_based':
         if p.real_robot and (p.state_estimation != 'pronto' and p.state_estimation != 'pronto'):
@@ -1752,7 +1752,6 @@ if __name__ == '__main__':
                         bag_name="saferl_" + format_date + ".bag", record_from_startup_=False)
 
             p.recorder.start_recording_srv()
-
         if use_joy:
             joy = JoyManager()
         p.startupProcedure()
@@ -1771,7 +1770,6 @@ if __name__ == '__main__':
         counter = 0
         #to reduce simulation frequency
         #p.setSimSpeed(dt_sim=0.001, max_update_rate=300, iters=1500)
-
         while not ros.is_shutdown():
             p.updateKinematics()
             if p.gracefulCollapseFlag:
@@ -1797,7 +1795,6 @@ if __name__ == '__main__':
                     ros.signal_shutdown("killed")
                     p.deregister_node()
                     break
-
             if p.state_estimation == 'pronto':
                 if np.all(p.pronto_contacts) and not p.controller_ready:
                     print(colored("ALL FEET ARE IN STANCE: It is possible to start RL controller","red"))
