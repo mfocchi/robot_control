@@ -75,7 +75,7 @@ class ClimbingrobotController(BaseControllerFixed):
             sys.path.insert(0, './codegen_mpc')
 
         if self.OBSTACLE_AVOIDANCE == 'mesh':
-            sys.path.insert(0, './codegen_mesh')
+            sys.path.insert(0, './codegen_mesh_normal')
             from base_controllers.components.terrain_manager import TerrainManager
             # generate terrain
             # Parameters (direct translation from MATLAB)
