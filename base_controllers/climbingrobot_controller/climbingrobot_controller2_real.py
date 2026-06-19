@@ -34,6 +34,7 @@ robotName = "climbingrobot2"
 # real robot msgs
 import std_msgs, geometry_msgs
 from climbingrobot_hardware_interface.msg import RopeCommand
+from climbingrobot_hardware_interface.msg import PropellerCommand
 from climbingrobot_hardware_interface.msg import RopeTelemetry
 from climbingrobot_hardware_interface.msg import AlpineBodyTelemetry
 # real robot services
@@ -42,6 +43,7 @@ from climbingrobot_hardware_interface.srv import RopeControlMode, RopeControlMod
 from base_controllers.utils.common_functions import startNode, checkRosMaster, launchFileNode
 from base_controllers.utils.math_tools import quaternion_matrix
 from base_controllers.utils.ros_publish import RosPub
+from orientation_controller import OrientationController
 from sensor_msgs.msg import JointState
 
 # Find the ROS package path
@@ -105,6 +107,22 @@ class ClimbingrobotController(BaseControllerFixed):
         msg = std_msgs.msg.String()
         msg.data = cmd
         self.pub_alpine_cmdraw.publish(msg)
+
+    def apply_propeller_command(self, prop_thrusts=[0.,0.,0.,0.]):
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[0],
+                               self.orientControl.b_propeller_axes[0] * prop_thrusts[0]/self.force_scale , "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[1],
+                               self.orientControl.b_propeller_axes[1] * prop_thrusts[1] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[2],
+                               self.orientControl.b_propeller_axes[2] * prop_thrusts[2] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[3],
+                               self.orientControl.b_propeller_axes[3] * prop_thrusts[3] / self.force_scale, "blue", scale=1.5)
+        msg =  PropellerCommand()
+        msg.propeller_thrust_0 = prop_thrusts[0]
+        msg.propeller_thrust_1 = prop_thrusts[1]
+        msg.propeller_thrust_2 = prop_thrusts[2]
+        msg.propeller_thrust_3 = prop_thrusts[3]
+        self.pub_propeller_command.publish(msg)
 
     def send_alpine_wrench(self, fx=0.0, fy=0.0, mz=0.0):
         msg = Wrench()
@@ -380,7 +398,7 @@ class ClimbingrobotController(BaseControllerFixed):
             self.hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
 
         # debug
-        # self.base_pos = np.array([1.5, 2.5, 16])
+        #self.base_pos = np.array([1.5, 2.5, 16])
 
         self.base_rpy = self.math_utils.rot2eul(self.w_R_b)
         # compute ee position  in the world frame
@@ -533,7 +551,10 @@ class ClimbingrobotController(BaseControllerFixed):
         self.prop_thrusts = [0] * 4
         self.prop_thrusts_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
-        # rviz
+        propeller_orient = np.array([0.25 * np.pi, 0.75 * np.pi, np.pi + 0.25 * np.pi, np.pi + 0.75 * np.pi])
+        self.orientControl = OrientationController(base_line_x = 0.1, base_line_y = 0.2, propeller_orient=propeller_orient)
+
+        #rviz
         from closed_loop_inverse_kinematics import ClosedLoopKinSolver
         self.solver = ClosedLoopKinSolver(robot_name=self.robot_name)
 
@@ -1027,16 +1048,16 @@ class ClimbingrobotController(BaseControllerFixed):
         self.ros_pub = RosPub(self.robot_name, only_visual=True, markers_time_to_live=0)
         self.broadcaster = tf.TransformBroadcaster()
 
-        # this is for the matlab optim
-        self.eng = matlab.engine.start_matlab()
-
-        if self.OBSTACLE_AVOIDANCE == 'mesh':
-            self.eng.addpath('./codegen_mesh', nargout=0)
-        else:
-            self.eng.addpath('./codegen', nargout=0)
-
-        if self.MPC_control:
-            self.eng.addpath('./codegen_mpc', nargout=0)
+        # this is for the matlab optim TODO uncomment
+        # self.eng = matlab.engine.start_matlab()
+        #
+        # if self.OBSTACLE_AVOIDANCE == 'mesh':
+        #     self.eng.addpath('./codegen_mesh', nargout=0)
+        # else:
+        #     self.eng.addpath('./codegen', nargout=0)
+        #
+        # if self.MPC_control:
+        #     self.eng.addpath('./codegen_mpc', nargout=0)
 
         if self.SAVE_BAG:
             self.recorder = RosbagControlledRecorder(record_from_startup_=False)
@@ -1061,10 +1082,13 @@ class ClimbingrobotController(BaseControllerFixed):
         self.sub_alpine_telemetry = ros.Subscriber("/alpine_body/telemetry", AlpineBodyTelemetry,
                                                    callback=self._receive_alpine_telemetry, queue_size=1,
                                                    tcp_nodelay=True)
-        self.pub_alpine_wrench = ros.Publisher("/alpine/dongle/wrench_cmd", Wrench, queue_size=1, tcp_nodelay=True)
-        self.pub_alpine_cmdraw = ros.Publisher("/alpine/dongle/cmd_raw", std_msgs.msg.String, queue_size=1,
+        self.pub_alpine_wrench = ros.Publisher("/alpine_body/wrench_cmd", Wrench, queue_size=1, tcp_nodelay=True)
+        self.pub_alpine_cmdraw = ros.Publisher("/alpine_body/cmd_raw", std_msgs.msg.String, queue_size=1,
                                                tcp_nodelay=True)
         self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand)  # TODO
+
+        # communication to alpine
+        self.pub_propeller_command = ros.Publisher("/alpine_body/propeller_command", PropellerCommand, queue_size=1, tcp_nodelay=True)
 
         # for rviz
 
@@ -1271,8 +1295,10 @@ class ClimbingrobotController(BaseControllerFixed):
             delta_t = p.time - p.end_thrusting
             if p.MPC_control:
                 # compute orientation control TODO
+                # p.prop_force_x, p.prop_force_y, p.prop_moment_z = computeOrientationControl()
                 deltaFr_l0, deltaFr_r0, p.prop_force_x = p.computeMPC(delta_t)
-                p.send_alpine_wrench(fx=p.prop_force_x, fy=0.0, mz=0.0)
+                #p.apply_propeller_command(p.prop_force_x, p.prop_force_y, p.prop_moment_z)
+                #p.send_alpine_wrench(fx=p.prop_force_x, fy=0.0, mz=0.0)
 
             else:
                 deltaFr_l0 = 0.
@@ -1317,9 +1343,18 @@ class ClimbingrobotController(BaseControllerFixed):
 
             if p.MPC_control:
                 deltaFr_l0, deltaFr_r0, p.prop_force_x = p.computeMPC(delta_t)
+                prop_forceW = p.n_bar * p.prop_force_x
                 # Real robot path: onboard ESP32 closes pitch/yaw loops from the body IMU.
                 # The ROS controller only sends a body wrench bias.
-                p.send_alpine_wrench(fx=p.prop_force_x, fy=0.0, mz=0.0)
+                # compute orientation control TODO
+                # compute thrust for orientation
+                # p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=np.array([0, 0, 0.7]),
+                #                                                          act_orient=p.base_rpy,
+                #                                                          w_omega_b=p.w_omega_b,
+                #                                                          Ko=conf.robot_params[p.robot_name]['Ko'],
+                #                                                          Do=conf.robot_params[p.robot_name]['Do'], w_additional_force=prop_forceW)
+                #p.apply_propeller_command(p.prop_thrusts)
+                #p.send_alpine_wrench(fx=p.prop_force_x, fy=0.0, mz=0.0)
             else:
                 deltaFr_l0 = 0.
                 deltaFr_r0 = 0.
@@ -1356,7 +1391,10 @@ class ClimbingrobotController(BaseControllerFixed):
 
         if (p.stateMachine == 'landing'):
             print(colored("Start landing", "blue"))
-            p.send_alpine_wrench(0.0, 0.0, 0.0)
+            p.prop_force = (-25.)  # push against the wall
+            #TODO
+            # p.apply_propeller_force(p.prop_force)
+            # p.send_alpine_wrench(0.0, 0.0, 0.0)
             landing_error = p.printLandingInfo()
             msg = std_msgs.msg.String()
             if np.linalg.norm(landing_error) < 0.5:
@@ -1380,7 +1418,9 @@ def talker(p):
     p.startRealRobotPublisherSubscribers()
 
     # jump params
-    p0 = np.array([0.28, 2.5, -6.10104])
+    # jump starting position
+    p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
+    # jump landing position
     p.target = np.array([0.28, 4, -4])
 
     # loop frequency
@@ -1388,6 +1428,7 @@ def talker(p):
 
     ros.sleep(0.5)
     p.updateKinematicsDynamics()
+
     p.enable_attitude_hold()
 
     p.startJump = 2.5
@@ -1412,19 +1453,31 @@ def talker(p):
 
     while not ros.is_shutdown():
 
+        # update the kinematics
         p.updateKinematicsDynamics()
+
+        # 15N max (todo convert in newton not % 0/1)
+        force = 0.1 * np.sin(2*np.pi*1.0*p.time)
+        p.prop_thrusts[0] = force
+        p.prop_thrusts[1] = force
+        p.prop_thrusts[2] = -force
+        p.prop_thrusts[3] = -force
+        p.apply_propeller_command(p.prop_thrusts)
 
         # Per ora tienilo commentato se stai solo testando position 0.5
         # stop = p.stateMachineLoop()
         # if stop:
         #     break
 
+        # plot ropes as green arrows only when you not save bags because they are ugly
         if not p.SAVE_BAG:
             p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)
             p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos - p.anchor_pos2), "green", scale=3.)
 
+        # plot contact force on retractable leg
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=2.5)
 
+        #plot target position (whenever is available)
         try:
             p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3, alpha=1.)
             p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
@@ -1432,17 +1485,36 @@ def talker(p):
             pass
 
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
+        #TODO
+        #p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]), 4)
-
-        if p.time > p.start_logging:
+        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),4)  # to avoid issues of dt 0.0009999
+        if (p.time > p.start_logging):
             p.logData()
-
+        # wait for synconization of the control loop
         rate.sleep()
 
+    def printLandingInfo(self):
+        landing_location = self.base_pos - self.mat2Gazebo
+        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
+        print(colored(f" while from optim it should be  {self.targetPos}", "blue"))
 
-def plot3D(name, figure_id, label, time_log, var, time_mat=None, var_mat=None):
+        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "blue"))
+        jump_length = np.linalg.norm(p0[:2] - self.targetPos[:2])
+        MSE = np.square(np.array(p.MPC_tracking_error)).mean()
+        RMSE = math.sqrt(MSE)
+        print(colored(
+            f" the relative landing error (norm per jump lenghth)  is {100 * np.linalg.norm(landing_location - self.targetPos) / jump_length}%",
+            "blue"))
+        print(colored(f" the energy consumption is  {energy}", "blue"))
+        print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
+        print(colored(f" the leg impulse  is  {self.Fleg}", "blue"))
+        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "blue"))
+        self.plotStuff()
+        return self.targetPos - landing_location
+
+def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
     fig = plt.figure()
     fig.suptitle(name, fontsize=20)
     plt.subplot(3, 1, 1)
