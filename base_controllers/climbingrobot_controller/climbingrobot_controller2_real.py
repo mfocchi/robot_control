@@ -554,6 +554,9 @@ class ClimbingrobotController(BaseControllerFixed):
         propeller_orient = np.array([0.25 * np.pi, 0.75 * np.pi, np.pi + 0.25 * np.pi, np.pi + 0.75 * np.pi])
         self.orientControl = OrientationController(base_line_x = 0.1, base_line_y = 0.2, propeller_orient=propeller_orient)
 
+        self.prop_force_y = 0.0
+        self.prop_force_y_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
         #rviz
         from closed_loop_inverse_kinematics import ClosedLoopKinSolver
         self.solver = ClosedLoopKinSolver(robot_name=self.robot_name)
@@ -575,6 +578,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
             self.prop_force_x_log[self.log_counter] = self.prop_force_x
             self.prop_thrusts_log[:, self.log_counter] = self.prop_thrusts
+            self.prop_force_y_log[self.log_counter] = self.prop_force_y
 
             self.rope_length_log[:, self.log_counter] = np.array([
                 self.rope_left_length,
@@ -616,6 +620,10 @@ class ClimbingrobotController(BaseControllerFixed):
                 np.zeros_like(p.time_log)
             ))
         )
+        plt.figure()
+        plt.title("lateral propeller command fy")
+        plt.plot(p.time_log, p.prop_force_y_log)
+        plt.grid()
         # plot rope forces
         # plt.figure()
         # plt.subplot(2, 1, 1)
@@ -1457,13 +1465,13 @@ def talker(p):
         p.updateKinematicsDynamics()
 
         # 15N max (todo convert in newton not % 0/1)
-        force = 0.1 * np.sin(2*np.pi*1.0*p.time)
-        p.prop_thrusts[0] = force
-        p.prop_thrusts[1] = force
-        p.prop_thrusts[2] = -force
-        p.prop_thrusts[3] = -force
-        p.apply_propeller_command(p.prop_thrusts)
+        amp_fy = 0.60
+        freq = 1.0  # Hz
+        fy = amp_fy * np.sin(2.0 * np.pi * freq * p.time)
 
+        p.send_alpine_wrench(fx=0.0, fy=fy, mz=0.0)
+
+        p.prop_force_y = fy
         # Per ora tienilo commentato se stai solo testando position 0.5
         # stop = p.stateMachineLoop()
         # if stop:
