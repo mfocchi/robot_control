@@ -205,6 +205,25 @@ class ClimbingrobotController(BaseControllerFixed):
         self.prejump_position_min_wait_s = float(self.get_alpine_param('prejump_position_min_wait_s', 0.5))
         self.prejump_settle_s = float(self.get_alpine_param('prejump_settle_s', 0.5))
         self.prejump_abort_on_timeout = bool(self.get_alpine_param('prejump_abort_on_timeout', True))
+
+        # Optional lateral sine test between the pre-jump position move and the jump.
+        # This is finite by design; otherwise the pipeline would never reach /alpine/jump.
+        self.prejump_lateral_sine_enabled = bool(
+            self.get_alpine_param('prejump_lateral_sine_enabled', True)
+        )
+        self.prejump_lateral_sine_amp_fy = float(
+            self.get_alpine_param('prejump_lateral_sine_amp_fy', 0.60)
+        )
+        self.prejump_lateral_sine_freq_hz = float(
+            self.get_alpine_param('prejump_lateral_sine_freq_hz', 1.0)
+        )
+        self.prejump_lateral_sine_duration_s = float(
+            self.get_alpine_param('prejump_lateral_sine_duration_s', 2.0)
+        )
+        self.prejump_lateral_sine_ramp_s = float(
+            self.get_alpine_param('prejump_lateral_sine_ramp_s', 0.25)
+        )
+
         self.rviz_use_measured_rope_joints = bool(self.get_alpine_param('rviz_use_measured_rope_joints', True))
         self.rviz_show_rope_length_text = bool(self.get_alpine_param('rviz_show_rope_length_text', True))
 
@@ -254,7 +273,11 @@ class ClimbingrobotController(BaseControllerFixed):
             f"rviz_home_R={self.rviz_home_anchor_right_xyz.tolist()}, "
             f"prejump_drop={self.prejump_drop_m:.3f}, "
             f"pipeline={self.pipeline_position_then_jump_enabled}, "
-            f"jump_mode={self.pipeline_jump_mode}, landing={self.pipeline_landing_enabled}",
+            f"jump_mode={self.pipeline_jump_mode}, landing={self.pipeline_landing_enabled}, "
+            f"lateral_sine={self.prejump_lateral_sine_enabled} "
+            f"amp={self.prejump_lateral_sine_amp_fy:.3f} "
+            f"freq={self.prejump_lateral_sine_freq_hz:.3f} "
+            f"duration={self.prejump_lateral_sine_duration_s:.3f}",
             "blue"
         ))
 
@@ -462,6 +485,76 @@ class ClimbingrobotController(BaseControllerFixed):
             return 'timeout'
 
         return 'running'
+
+    def start_prejump_lateral_sine(self):
+        """Start the finite lateral sine phase between position and jump."""
+        self.prejump_lateral_sine_start_time = self.scalar_time()
+        self.prejump_lateral_sine_print_counter = 0
+        self.stateMachine = 'prejump_lateral_sine'
+
+        msg = std_msgs.msg.String()
+        msg.data = 'prejump_lateral_sine_started'
+        self.pub_goal_status.publish(msg)
+
+        print(colored(
+            "PRE-JUMP LATERAL SINE started: "
+            f"amp_fy={float(getattr(self, 'prejump_lateral_sine_amp_fy', 0.60)):.3f}, "
+            f"freq={float(getattr(self, 'prejump_lateral_sine_freq_hz', 1.0)):.3f} Hz, "
+            f"duration={float(getattr(self, 'prejump_lateral_sine_duration_s', 2.0)):.3f} s",
+            "yellow"
+        ))
+
+    def monitor_prejump_lateral_sine(self):
+        """Run the lateral sine. Return 'done' or 'running'."""
+        duration = max(0.0, float(getattr(self, 'prejump_lateral_sine_duration_s', 2.0)))
+        elapsed = self.scalar_time() - float(getattr(self, 'prejump_lateral_sine_start_time', self.scalar_time()))
+
+        if duration <= 0.0 or elapsed >= duration:
+            self.send_alpine_wrench(0.0, 0.0, 0.0)
+            self.prop_force_y = 0.0
+            print(colored(
+                f"PRE-JUMP LATERAL SINE finished after {max(elapsed, 0.0):.2f} s",
+                "green"
+            ))
+            msg = std_msgs.msg.String()
+            msg.data = 'prejump_lateral_sine_done'
+            self.pub_goal_status.publish(msg)
+            return 'done'
+
+        amp = float(getattr(self, 'prejump_lateral_sine_amp_fy', 0.60))
+        freq = float(getattr(self, 'prejump_lateral_sine_freq_hz', 1.0))
+        ramp_s = max(0.0, float(getattr(self, 'prejump_lateral_sine_ramp_s', 0.25)))
+
+        # Smooth start/stop to avoid a sharp lateral wrench step before jump.
+        envelope = 1.0
+        if ramp_s > 1e-6:
+            envelope = min(1.0, max(0.0, elapsed / ramp_s), max(0.0, (duration - elapsed) / ramp_s))
+
+        fy = amp * envelope * np.sin(2.0 * np.pi * freq * elapsed)
+        self.send_alpine_wrench(fx=0.0, fy=fy, mz=0.0)
+        self.prop_force_y = fy
+
+        if np.mod(getattr(self, 'prejump_lateral_sine_print_counter', 0), 100) == 0:
+            print(colored(
+                "PRE-JUMP LATERAL SINE monitor: "
+                f"elapsed={elapsed:.2f}/{duration:.2f} s, fy={fy:.3f}",
+                "yellow"
+            ))
+        self.prejump_lateral_sine_print_counter = getattr(self, 'prejump_lateral_sine_print_counter', 0) + 1
+        return 'running'
+
+    def start_jump_after_prejump_sequence(self):
+        """After position and lateral sine, start the selected jump mode."""
+        if str(getattr(self, 'pipeline_jump_mode', 'manual')).lower() in ('manual', 'service', 'jump_service'):
+            ok = self.trigger_manual_jump_service_once()
+            msg = std_msgs.msg.String()
+            msg.data = 'manual_jump_started' if ok else 'manual_jump_error'
+            self.pub_goal_status.publish(msg)
+            self.stateMachine = 'manual_jump_started' if ok else 'position_error'
+            return not ok
+
+        self.arm_optimized_jump_after_position()
+        return False
 
     def trigger_manual_jump_service_once(self):
         """Call /alpine/jump once after the pre-jump position move."""
@@ -742,6 +835,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.prejump_position_start_time = 0.0
         self.prejump_position_command_sent = False
         self.prejump_position_print_counter = 0
+        self.prejump_lateral_sine_start_time = 0.0
+        self.prejump_lateral_sine_print_counter = 0
         self.jump_body_command_sent = False
         self.manual_jump_service_called = False
         self.last_jump_energy = float('nan')
@@ -1488,19 +1583,15 @@ class ClimbingrobotController(BaseControllerFixed):
         # New real-robot pipeline:
         #   1) position mode, command both ropes +prejump_drop_m absolute length
         #   2) wait until the measured effective lengths are reached
-        #   3) switch to optimized jump state machine
+        #   3) run a finite lateral sine on /alpine_body/wrench_cmd
+        #   4) start the selected jump path
         if p.stateMachine == 'positioning_before_jump':
             status = p.monitor_prejump_position_drop()
             if status == 'done':
-                if str(getattr(p, 'pipeline_jump_mode', 'manual')).lower() in ('manual', 'service', 'jump_service'):
-                    ok = p.trigger_manual_jump_service_once()
-                    msg = std_msgs.msg.String()
-                    msg.data = 'manual_jump_started' if ok else 'manual_jump_error'
-                    p.pub_goal_status.publish(msg)
-                    p.stateMachine = 'manual_jump_started' if ok else 'position_error'
-                    return not ok
+                if getattr(p, 'prejump_lateral_sine_enabled', True):
+                    p.start_prejump_lateral_sine()
                 else:
-                    p.arm_optimized_jump_after_position()
+                    return p.start_jump_after_prejump_sequence()
             elif status == 'timeout':
                 if getattr(p, 'prejump_abort_on_timeout', True):
                     p.publish_current_rope_position_hold()
@@ -1510,13 +1601,17 @@ class ClimbingrobotController(BaseControllerFixed):
                     p.stateMachine = 'position_error'
                     return True
                 else:
-                    if str(getattr(p, 'pipeline_jump_mode', 'manual')).lower() in ('manual', 'service', 'jump_service'):
-                        ok = p.trigger_manual_jump_service_once()
-                        p.stateMachine = 'manual_jump_started' if ok else 'position_error'
-                        return not ok
+                    print(colored("PRE-JUMP POSITION timeout -> continuing anyway", "red"))
+                    if getattr(p, 'prejump_lateral_sine_enabled', True):
+                        p.start_prejump_lateral_sine()
                     else:
-                        p.arm_optimized_jump_after_position()
-                        print(colored("PRE-JUMP POSITION timeout -> optimized jump anyway", "red"))
+                        return p.start_jump_after_prejump_sequence()
+            return False
+
+        if p.stateMachine == 'prejump_lateral_sine':
+            status = p.monitor_prejump_lateral_sine()
+            if status == 'done':
+                return p.start_jump_after_prejump_sequence()
             return False
 
         if p.stateMachine == 'manual_jump_started':
@@ -1808,8 +1903,8 @@ def talker(p):
         # update the kinematics
         p.updateKinematicsDynamics()
 
-        # Pipeline attiva: niente sinusoide laterale durante position/jump.
-        # Le wrench vengono mandate dagli stati dove servono.
+        # Default safe wrench.  The state machine overrides this only during
+        # the finite pre-jump lateral sine phase.
         p.send_alpine_wrench(fx=0.0, fy=0.0, mz=0.0)
         p.prop_force_y = 0.0
 
