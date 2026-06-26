@@ -19,6 +19,7 @@ import tf
 from base_controllers.base_controller_fixed import BaseControllerFixed
 from geometry_msgs.msg import Wrench, Point
 from gazebo_msgs.msg import ContactsState
+from std_srvs.srv import Trigger
 import scipy.io.matlab as mio
 import rospkg
 from base_controllers.utils.matlab_conversions import mat_vector2python, mat_matrix2python
@@ -45,6 +46,7 @@ from base_controllers.utils.math_tools import quaternion_matrix
 from base_controllers.utils.ros_publish import RosPub
 from orientation_controller import OrientationController
 from sensor_msgs.msg import JointState
+from visualization_msgs.msg import Marker
 
 # Find the ROS package path
 rospack = rospkg.RosPack()
@@ -186,6 +188,26 @@ class ClimbingrobotController(BaseControllerFixed):
         self.left_rope_axis = str(self.get_alpine_param('left_rope_axis', '-x'))
         self.homing_test_delta_m = float(self.get_alpine_param('homing_test_delta_m', 0.5))
 
+        # Pipeline reale: prima porta il robot giù in position mode, poi abilita il salto.
+        # Il valore positivo allunga entrambe le corde, quindi il corpo scende lungo la parete.
+        self.pipeline_position_then_jump_enabled = bool(
+            self.get_alpine_param('pipeline_position_then_jump_enabled', True)
+        )
+        # 'manual' calls /alpine/jump after the position move.
+        # 'optimized' enters the existing optimizer/stateMachineLoop path.
+        self.pipeline_jump_mode = str(self.get_alpine_param('pipeline_jump_mode', 'manual')).strip().lower()
+        # Touchdown detection is currently not implemented in this controller.
+        # Keep it disabled by default for the new pipeline unless explicitly requested.
+        self.pipeline_landing_enabled = bool(self.get_alpine_param('pipeline_landing_enabled', False))
+        self.prejump_drop_m = float(self.get_alpine_param('prejump_drop_m', 1.20))
+        self.prejump_position_tolerance_m = float(self.get_alpine_param('prejump_position_tolerance_m', 0.03))
+        self.prejump_position_timeout_s = float(self.get_alpine_param('prejump_position_timeout_s', 20.0))
+        self.prejump_position_min_wait_s = float(self.get_alpine_param('prejump_position_min_wait_s', 0.5))
+        self.prejump_settle_s = float(self.get_alpine_param('prejump_settle_s', 0.5))
+        self.prejump_abort_on_timeout = bool(self.get_alpine_param('prejump_abort_on_timeout', True))
+        self.rviz_use_measured_rope_joints = bool(self.get_alpine_param('rviz_use_measured_rope_joints', True))
+        self.rviz_show_rope_length_text = bool(self.get_alpine_param('rviz_show_rope_length_text', True))
+
         # Pure RViz/Locosim startup home pose, kept identical to the old real
         # controller.  These values are only used to upload robot_description and
         # seed /joint_states at startup; the physical odometry geometry below is
@@ -229,7 +251,10 @@ class ClimbingrobotController(BaseControllerFixed):
             f"right offset={self.right_home_offset_m:.3f} sign={self.right_rope_sign:+.1f}, "
             f"axis={self.left_rope_axis}, homing_delta={self.homing_test_delta_m:.3f}, "
             f"rviz_home_L={self.rviz_home_anchor_left_xyz.tolist()}, "
-            f"rviz_home_R={self.rviz_home_anchor_right_xyz.tolist()}",
+            f"rviz_home_R={self.rviz_home_anchor_right_xyz.tolist()}, "
+            f"prejump_drop={self.prejump_drop_m:.3f}, "
+            f"pipeline={self.pipeline_position_then_jump_enabled}, "
+            f"jump_mode={self.pipeline_jump_mode}, landing={self.pipeline_landing_enabled}",
             "blue"
         ))
 
@@ -256,6 +281,13 @@ class ClimbingrobotController(BaseControllerFixed):
     def rope_raw_reference_from_abs(self, side: str, abs_length_ref: float) -> float:
         return self.rope_sign(side) * (float(abs_length_ref) - self.rope_home_offset(side))
 
+    def scalar_time(self) -> float:
+        """Return controller time as a scalar even if legacy code stored it as a 1-element array."""
+        try:
+            return float(np.asarray(self.time).reshape(-1)[0])
+        except Exception:
+            return float(self.time)
+
     def publish_rope_position_abs(self, side: str, abs_length_ref: float, rope_force=0.0, rope_velocity=0.0):
         """Publish a physical absolute rope length reference.
 
@@ -270,6 +302,191 @@ class ClimbingrobotController(BaseControllerFixed):
             rope_velocity=raw_vel,
             rope_position=raw_ref,
         )
+
+    def publish_rope_torque_forces(self, left_force=0.0, right_force=0.0):
+        """Publish rope-force commands in torque mode.
+
+        The low-level winch nodes ignore NaN position/velocity fields, so this
+        message changes only rope_force while the controller is in torque mode.
+        """
+        if not hasattr(self, 'pub_rope_command_l') or not hasattr(self, 'pub_rope_command_r'):
+            return
+
+        now = ros.Time.now()
+        nan_value = float('nan')
+
+        left = RopeCommand()
+        left.header.stamp = now
+        left.rope_force = float(left_force)
+        left.rope_velocity = nan_value
+        left.rope_position = nan_value
+
+        right = RopeCommand()
+        right.header.stamp = now
+        right.rope_force = float(right_force)
+        right.rope_velocity = nan_value
+        right.rope_position = nan_value
+
+        self.pub_rope_command_l.publish(left)
+        self.pub_rope_command_r.publish(right)
+
+    def publish_current_rope_position_hold(self):
+        """Hold the currently measured absolute rope lengths in position mode."""
+        if not hasattr(self, 'homingProcedure'):
+            return
+        self.publish_rope_position_abs("left", self.rope_left_length)
+        self.publish_rope_position_abs("right", self.rope_right_length)
+
+    def publish_rope_length_topics_and_text(self):
+        """Publish actual absolute rope lengths for RViz and debugging."""
+        # Topics are useful even if RViz text markers are disabled.
+        if hasattr(self, 'pub_rope_left_abs_length'):
+            msg_l = std_msgs.msg.Float32()
+            msg_l.data = float(self.rope_left_length)
+            self.pub_rope_left_abs_length.publish(msg_l)
+
+        if hasattr(self, 'pub_rope_right_abs_length'):
+            msg_r = std_msgs.msg.Float32()
+            msg_r.data = float(self.rope_right_length)
+            self.pub_rope_right_abs_length.publish(msg_r)
+
+        if not getattr(self, 'rviz_show_rope_length_text', True):
+            return
+        if not hasattr(self, 'pub_rope_length_marker'):
+            return
+
+        now = ros.Time.now()
+
+        def finite_point(v, fallback):
+            vv = np.array(v, dtype=float)
+            if vv.shape != (3,) or not np.all(np.isfinite(vv)):
+                return np.array(fallback, dtype=float)
+            return vv
+
+        left_mid = 0.5 * (
+            finite_point(getattr(self, 'anchor_pos', np.zeros(3)), np.zeros(3)) +
+            finite_point(getattr(self, 'hoist_l_pos', np.zeros(3)), np.zeros(3))
+        )
+        right_mid = 0.5 * (
+            finite_point(getattr(self, 'anchor_pos2', np.zeros(3)), np.zeros(3)) +
+            finite_point(getattr(self, 'hoist_r_pos', np.zeros(3)), np.zeros(3))
+        )
+
+        def publish_text(marker_id, text, pos, r, g, b):
+            m = Marker()
+            m.header.stamp = now
+            m.header.frame_id = "world"
+            m.ns = "actual_rope_lengths"
+            m.id = int(marker_id)
+            m.type = Marker.TEXT_VIEW_FACING
+            m.action = Marker.ADD
+            m.pose.position.x = float(pos[0])
+            m.pose.position.y = float(pos[1])
+            m.pose.position.z = float(pos[2])
+            m.pose.orientation.w = 1.0
+            m.scale.z = 0.08
+            m.color.r = float(r)
+            m.color.g = float(g)
+            m.color.b = float(b)
+            m.color.a = 1.0
+            m.text = text
+            m.lifetime = ros.Duration(0.25)
+            self.pub_rope_length_marker.publish(m)
+
+        left_text = f"L actual: {self.rope_left_length:.3f} m"
+        right_text = f"R actual: {self.rope_right_length:.3f} m"
+        if getattr(self, 'rope_offsets_active', False):
+            left_text += f"\nraw: {self.rope_left_raw_length:.3f} m"
+            right_text += f"\nraw: {self.rope_right_raw_length:.3f} m"
+
+        publish_text(0, left_text, left_mid + np.array([0.0, -0.06, 0.08]), 0.0, 1.0, 0.0)
+        publish_text(1, right_text, right_mid + np.array([0.0, 0.06, 0.08]), 0.0, 1.0, 0.0)
+
+    def start_prejump_position_drop(self):
+        """Command the pre-jump descent in absolute rope-length convention."""
+        self.setRopeControlMode('closed_loop_position')
+        ros.sleep(0.05)
+
+        drop = max(0.0, float(getattr(self, 'prejump_drop_m', 1.20)))
+        self.prejump_left_ref_abs = float(self.rope_left_length) + drop
+        self.prejump_right_ref_abs = float(self.rope_right_length) + drop
+        self.prejump_position_start_time = self.scalar_time()
+        self.prejump_position_command_sent = True
+
+        self.publish_rope_position_abs("left", self.prejump_left_ref_abs)
+        self.publish_rope_position_abs("right", self.prejump_right_ref_abs)
+
+        print(colored(
+            "PRE-JUMP POSITION: "
+            f"drop={drop:.3f} m, "
+            f"left {self.rope_left_length:.3f}->{self.prejump_left_ref_abs:.3f} m, "
+            f"right {self.rope_right_length:.3f}->{self.prejump_right_ref_abs:.3f} m",
+            "yellow"
+        ))
+
+    def monitor_prejump_position_drop(self):
+        """Return 'done', 'running', or 'timeout' for the pre-jump position move."""
+        if not getattr(self, 'prejump_position_command_sent', False):
+            self.start_prejump_position_drop()
+            return 'running'
+
+        err_l = abs(float(self.prejump_left_ref_abs) - float(self.rope_left_length))
+        err_r = abs(float(self.prejump_right_ref_abs) - float(self.rope_right_length))
+        err = max(err_l, err_r)
+        elapsed = self.scalar_time() - float(self.prejump_position_start_time)
+
+        if not hasattr(self, 'prejump_position_print_counter'):
+            self.prejump_position_print_counter = 0
+        if np.mod(self.prejump_position_print_counter, 200) == 0:
+            print(colored(
+                "PRE-JUMP POSITION monitor: "
+                f"L={self.rope_left_length:.3f}/{self.prejump_left_ref_abs:.3f} "
+                f"R={self.rope_right_length:.3f}/{self.prejump_right_ref_abs:.3f} "
+                f"err={err:.3f} m elapsed={elapsed:.2f} s",
+                "yellow"
+            ))
+        self.prejump_position_print_counter += 1
+
+        if elapsed >= float(self.prejump_position_min_wait_s) and err <= float(self.prejump_position_tolerance_m):
+            print(colored(
+                f"PRE-JUMP POSITION reached: err={err:.3f} m, elapsed={elapsed:.2f} s",
+                "green"
+            ))
+            return 'done'
+
+        if elapsed >= float(self.prejump_position_timeout_s):
+            print(colored(
+                f"PRE-JUMP POSITION timeout: err={err:.3f} m, elapsed={elapsed:.2f} s",
+                "red"
+            ))
+            return 'timeout'
+
+        return 'running'
+
+    def trigger_manual_jump_service_once(self):
+        """Call /alpine/jump once after the pre-jump position move."""
+        if getattr(self, 'manual_jump_service_called', False):
+            return True
+        if not hasattr(self, 'manual_jump_service'):
+            print(colored("Manual jump service proxy not available", "red"))
+            return False
+
+        try:
+            resp = self.manual_jump_service()
+            self.manual_jump_service_called = bool(resp.success)
+            if resp.success:
+                print(colored(f"/alpine/jump started: {resp.message}", "green"))
+                return True
+            print(colored(f"/alpine/jump rejected: {resp.message}", "red"))
+            return False
+        except ros.ServiceException as e:
+            ros.logerr("/alpine/jump service call failed: %s" % e)
+            return False
+
+    def arm_optimized_jump_after_position(self):
+        self.startJump = self.scalar_time() + float(getattr(self, 'prejump_settle_s', 0.5))
+        self.stateMachine = 'idle'
+        print(colored(f"PRE-JUMP POSITION done -> optimized jump armed at t={self.startJump:.2f}", "green"))
 
     def publish_initial_homing_pose_for_rviz(self, duration_s=None):
         """Seed robot_state_publisher/RViz with the old startup home pose.
@@ -433,11 +650,24 @@ class ClimbingrobotController(BaseControllerFixed):
 
         # rviz
         self.q_des = self.solver.computeJointVariables(self.base_pos, self.w_R_b, self.q_des_q0, debug=False)
+
+        # Force the two prismatic rope joints to the measured effective lengths.
+        # This makes RViz show the actual current rope extension, not only the IK
+        # value reconstructed from the body pose.
+        if getattr(self, 'rviz_use_measured_rope_joints', True):
+            try:
+                self.q_des[self.rope_index[0]] = self.q[self.rope_index[0]]
+                self.q_des[self.rope_index[1]] = self.q[self.rope_index[1]]
+            except Exception:
+                pass
+
         msg = JointState()
         msg.name = self.joint_names
         msg.header.stamp = ros.Time.now()  # ros.Time.from_sec(self.time)
         msg.position = self.q_des
         self.pub_joints.publish(msg)
+
+        self.publish_rope_length_topics_and_text()
 
     def initVars(self):
 
@@ -468,6 +698,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.hoist_distance = self.base_width
         self.physical_hoist_distance = 0.55
         self.initRopeOffsets()
+        if getattr(self, 'pipeline_position_then_jump_enabled', False):
+            self.landing = bool(getattr(self, 'pipeline_landing_enabled', False))
 
         self.g = np.zeros(self.n_joints)
         self.x_ee = np.zeros(3)
@@ -504,6 +736,15 @@ class ClimbingrobotController(BaseControllerFixed):
         self.rope_right_length = 0.0
         self.rope_left_raw_length = 0.0
         self.rope_right_raw_length = 0.0
+
+        self.prejump_left_ref_abs = float('nan')
+        self.prejump_right_ref_abs = float('nan')
+        self.prejump_position_start_time = 0.0
+        self.prejump_position_command_sent = False
+        self.prejump_position_print_counter = 0
+        self.jump_body_command_sent = False
+        self.manual_jump_service_called = False
+        self.last_jump_energy = float('nan')
 
         self.qdd_des = np.zeros(self.n_joints)
         self.base_accel = np.zeros(3)
@@ -1093,7 +1334,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.pub_alpine_wrench = ros.Publisher("/alpine_body/wrench_cmd", Wrench, queue_size=1, tcp_nodelay=True)
         self.pub_alpine_cmdraw = ros.Publisher("/alpine_body/cmd_raw", std_msgs.msg.String, queue_size=1,
                                                tcp_nodelay=True)
-        self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand)  # TODO
+        self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand)  # optimized path
+        self.manual_jump_service = ros.ServiceProxy('/alpine/jump', Trigger)  # manual JumpNode path
 
         # communication to alpine
         self.pub_propeller_command = ros.Publisher("/alpine_body/propeller_command", PropellerCommand, queue_size=1, tcp_nodelay=True)
@@ -1101,6 +1343,9 @@ class ClimbingrobotController(BaseControllerFixed):
         # for rviz
 
         self.pub_joints = ros.Publisher("/joint_states", JointState, queue_size=1, tcp_nodelay=True)
+        self.pub_rope_length_marker = ros.Publisher("/alpine/actual_rope_lengths_marker", Marker, queue_size=10)
+        self.pub_rope_left_abs_length = ros.Publisher("/alpine/left_rope_abs_length_m", std_msgs.msg.Float32, queue_size=10)
+        self.pub_rope_right_abs_length = ros.Publisher("/alpine/right_rope_abs_length_m", std_msgs.msg.Float32, queue_size=10)
 
         # Make RViz see the same home configuration immediately at script start,
         # before the blocking winch homing sequence begins.
@@ -1133,11 +1378,19 @@ class ClimbingrobotController(BaseControllerFixed):
         self.homingProcedure.publish_mode("closed_loop_position")
         ros.sleep(0.05)
 
-        # Move to a physical absolute length after homing.
-        # Internally publish_rope_position_abs() sends raw winch references:
-        #   raw_ref = sign * (absolute_ref - home_offset)
-        self.publish_rope_position_abs("right", self.right_home_offset_m + self.homing_test_delta_m)
-        self.publish_rope_position_abs("left", self.left_home_offset_m + self.homing_test_delta_m)
+        # Enter position mode safely.  In the new pipeline we first hold the
+        # current measured absolute lengths; the 1.20 m pre-jump descent is
+        # commanded later by stateMachineLoop(), where it can be monitored.
+        # Legacy behavior can be restored by setting
+        # /alpine/pipeline_position_then_jump_enabled:=false.
+        if getattr(self, 'pipeline_position_then_jump_enabled', True):
+            self.publish_current_rope_position_hold()
+        else:
+            # Move to a physical absolute length after homing.
+            # Internally publish_rope_position_abs() sends raw winch references:
+            #   raw_ref = sign * (absolute_ref - home_offset)
+            self.publish_rope_position_abs("right", self.right_home_offset_m + self.homing_test_delta_m)
+            self.publish_rope_position_abs("left", self.left_home_offset_m + self.homing_test_delta_m)
 
     def _receive_rope_telemetry_l(self, msg):
         self.Fr_l_meas = msg.rope_force
@@ -1231,6 +1484,50 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def stateMachineLoop(self):
         terminateFlag = False
+
+        # New real-robot pipeline:
+        #   1) position mode, command both ropes +prejump_drop_m absolute length
+        #   2) wait until the measured effective lengths are reached
+        #   3) switch to optimized jump state machine
+        if p.stateMachine == 'positioning_before_jump':
+            status = p.monitor_prejump_position_drop()
+            if status == 'done':
+                if str(getattr(p, 'pipeline_jump_mode', 'manual')).lower() in ('manual', 'service', 'jump_service'):
+                    ok = p.trigger_manual_jump_service_once()
+                    msg = std_msgs.msg.String()
+                    msg.data = 'manual_jump_started' if ok else 'manual_jump_error'
+                    p.pub_goal_status.publish(msg)
+                    p.stateMachine = 'manual_jump_started' if ok else 'position_error'
+                    return not ok
+                else:
+                    p.arm_optimized_jump_after_position()
+            elif status == 'timeout':
+                if getattr(p, 'prejump_abort_on_timeout', True):
+                    p.publish_current_rope_position_hold()
+                    msg = std_msgs.msg.String()
+                    msg.data = 'position_timeout'
+                    p.pub_goal_status.publish(msg)
+                    p.stateMachine = 'position_error'
+                    return True
+                else:
+                    if str(getattr(p, 'pipeline_jump_mode', 'manual')).lower() in ('manual', 'service', 'jump_service'):
+                        ok = p.trigger_manual_jump_service_once()
+                        p.stateMachine = 'manual_jump_started' if ok else 'position_error'
+                        return not ok
+                    else:
+                        p.arm_optimized_jump_after_position()
+                        print(colored("PRE-JUMP POSITION timeout -> optimized jump anyway", "red"))
+            return False
+
+        if p.stateMachine == 'manual_jump_started':
+            # The low-level jump_node owns valves and local rope commands now.
+            # Keep this controller alive only for RViz/telemetry updates.
+            return False
+
+        if p.stateMachine == 'position_error':
+            p.send_alpine_wrench(0.0, 0.0, 0.0)
+            return True
+
         # jump state machine
         if (p.stateMachine == 'idle') and (p.time >= p.startJump):
             # first run optim and fill in jump variable
@@ -1255,6 +1552,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
             p.stateMachine = 'thrusting'
             p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
+            p.jump_body_command_sent = False
 
         if (p.stateMachine == 'thrusting'):
 
@@ -1266,26 +1564,33 @@ class ClimbingrobotController(BaseControllerFixed):
             # plot Fleg
             p.ros_pub.add_arrow(p.x_ee, np.linalg.norm(p.w_Fleg) * p.wall_normal / p.force_scale, "red", scale=2.5)
 
-            # apply leg inpulse for thust duration
-            try:
-                resp = p.alpine_command_service(req)
-                ros.loginfo("Service response: ack = %s", resp.ack)
-            except ros.ServiceException as e:
-                ros.logerr("Service call failed: %s" % e)
+            # Apply leg impulse once.  The low-level jump node owns the valve
+            # timeline after this service call; calling it every controller tick
+            # would restart the valve sequence repeatedly.
+            if not getattr(p, 'jump_body_command_sent', False):
+                try:
+                    resp = p.alpine_command_service(req)
+                    ros.loginfo("Service response: ack = %s", resp.ack)
+                    p.jump_body_command_sent = bool(resp.ack)
+                except ros.ServiceException as e:
+                    ros.logerr("Service call failed: %s" % e)
 
             # During piston thrust keep propeller bias at zero.
             p.send_alpine_wrench(0.0, 0.0, 0.0)
 
-            # start also applying forces to ropes
+            # Keep ropes neutral during the piston thrust.  The optimized rope
+            # force timeline is indexed from lift-off (delta_t=0), so it starts
+            # in the flying states below, after p.end_thrusting.
             delta_t = p.time - p.end_thrusting
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+            p.Fr_r = 0.0
+            p.Fr_l = 0.0
 
             # plot rope forces
             p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
             p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+            p.publish_rope_torque_forces(left_force=p.Fr_l, right_force=p.Fr_r)
 
             if (p.time > p.end_thrusting):
                 print(colored("Stop Trhusting", "blue"))
@@ -1322,6 +1627,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+            p.publish_rope_torque_forces(left_force=p.Fr_l, right_force=p.Fr_r)
             end_flying = p.startJump + p.jumps[p.jumpNumber]["Tf"]
 
             if (p.time >= end_flying):
@@ -1331,6 +1637,7 @@ class ClimbingrobotController(BaseControllerFixed):
                 # this will start again the position loop
                 p.resetRope()
                 energy = p.computeJumpEnergyConsumption()
+                p.last_jump_energy = energy
                 p.jumpNumber += 1
                 if (p.jumpNumber < p.numberOfJumps):
                     p.stateMachine = 'idle'
@@ -1396,6 +1703,7 @@ class ClimbingrobotController(BaseControllerFixed):
             p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
             p.tau_ffwd[p.rope_index[0]] = p.Fr_r
             p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+            p.publish_rope_torque_forces(left_force=p.Fr_l, right_force=p.Fr_r)
 
         if (p.stateMachine == 'landing'):
             print(colored("Start landing", "blue"))
@@ -1413,6 +1721,39 @@ class ClimbingrobotController(BaseControllerFixed):
 
             ####TODO
             pass
+
+    def printLandingInfo(self):
+        landing_location = self.base_pos - self.mat2Gazebo
+        target = getattr(self, 'targetPos', getattr(self, 'target', np.zeros(3)))
+        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
+        print(colored(f" while from optim it should be  {target}", "blue"))
+
+        landing_error = target - landing_location
+        print(colored(f" the landing error is  {np.linalg.norm(landing_error)}", "blue"))
+
+        try:
+            p0_ref = self.jumps[self.jumpNumber]["p0"]
+            jump_length = max(np.linalg.norm(p0_ref[:2] - target[:2]), 1e-9)
+        except Exception:
+            jump_length = 1.0
+
+        if len(getattr(self, 'MPC_tracking_error', [])) > 0:
+            MSE = np.square(np.array(self.MPC_tracking_error)).mean()
+            RMSE = math.sqrt(MSE)
+        else:
+            RMSE = float('nan')
+
+        print(colored(
+            f" the relative landing error (norm per jump length) is {100 * np.linalg.norm(landing_error) / jump_length}%",
+            "blue"
+        ))
+        print(colored(f" the energy consumption is  {getattr(self, 'last_jump_energy', float('nan'))}", "blue"))
+        print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
+        if hasattr(self, 'Fleg'):
+            print(colored(f" the leg impulse is  {self.Fleg}", "blue"))
+            print(colored(f" the norm of the leg impulse is  {np.linalg.norm(self.Fleg)}", "blue"))
+        self.plotStuff()
+        return landing_error
 
 
 def talker(p):
@@ -1440,7 +1781,10 @@ def talker(p):
     p.enable_attitude_hold()
 
     p.startJump = 2.5
-    p.stateMachine = 'idle'
+    if getattr(p, 'pipeline_position_then_jump_enabled', True):
+        p.stateMachine = 'positioning_before_jump'
+    else:
+        p.stateMachine = 'idle'
     p.jumpNumber = 0
     p.numberOfJumps = 1
     p.start_logging = 0
@@ -1464,18 +1808,14 @@ def talker(p):
         # update the kinematics
         p.updateKinematicsDynamics()
 
-        # 15N max (todo convert in newton not % 0/1)
-        amp_fy = 0.60
-        freq = 1.0  # Hz
-        fy = amp_fy * np.sin(2.0 * np.pi * freq * p.time)
+        # Pipeline attiva: niente sinusoide laterale durante position/jump.
+        # Le wrench vengono mandate dagli stati dove servono.
+        p.send_alpine_wrench(fx=0.0, fy=0.0, mz=0.0)
+        p.prop_force_y = 0.0
 
-        p.send_alpine_wrench(fx=0.0, fy=fy, mz=0.0)
-
-        p.prop_force_y = fy
-        # Per ora tienilo commentato se stai solo testando position 0.5
-        # stop = p.stateMachineLoop()
-        # if stop:
-        #     break
+        stop = p.stateMachineLoop()
+        if stop:
+            break
 
         # plot ropes as green arrows only when you not save bags because they are ugly
         if not p.SAVE_BAG:
@@ -1497,30 +1837,11 @@ def talker(p):
         #p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
-        p.time = np.round(p.time + np.array([conf.robot_params[p.robot_name]['dt']]),4)  # to avoid issues of dt 0.0009999
+        p.time = round(p.scalar_time() + conf.robot_params[p.robot_name]['dt'], 4)  # scalar; avoids 1-element-array comparisons
         if (p.time > p.start_logging):
             p.logData()
         # wait for synconization of the control loop
         rate.sleep()
-
-    def printLandingInfo(self):
-        landing_location = self.base_pos - self.mat2Gazebo
-        print(colored(f" real landing (in matlab convention) is: {landing_location}", "blue"))
-        print(colored(f" while from optim it should be  {self.targetPos}", "blue"))
-
-        print(colored(f" the landing error is  {np.linalg.norm(landing_location - self.targetPos)}", "blue"))
-        jump_length = np.linalg.norm(p0[:2] - self.targetPos[:2])
-        MSE = np.square(np.array(p.MPC_tracking_error)).mean()
-        RMSE = math.sqrt(MSE)
-        print(colored(
-            f" the relative landing error (norm per jump lenghth)  is {100 * np.linalg.norm(landing_location - self.targetPos) / jump_length}%",
-            "blue"))
-        print(colored(f" the energy consumption is  {energy}", "blue"))
-        print(colored(f" the rmse of MPC tracking error is  {RMSE}", "blue"))
-        print(colored(f" the leg impulse  is  {self.Fleg}", "blue"))
-        print(colored(f" the norm of the leg impulse  is  {np.linalg.norm(self.Fleg)}", "blue"))
-        self.plotStuff()
-        return self.targetPos - landing_location
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
     fig = plt.figure()
