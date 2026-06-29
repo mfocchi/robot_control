@@ -224,6 +224,16 @@ class ClimbingrobotController(BaseControllerFixed):
             self.get_alpine_param('prejump_lateral_sine_ramp_s', 0.25)
         )
 
+        # Extra safety dwell times around mode transitions.
+        # These keep the winches in position hold before switching ownership to
+        # jump.py, reducing rope-force discontinuities.
+        self.post_homing_position_hold_s = float(
+            self.get_alpine_param('post_homing_position_hold_s', 0.50)
+        )
+        self.prejump_position_settle_after_reached_s = float(
+            self.get_alpine_param('prejump_position_settle_after_reached_s', 0.50)
+        )
+
         self.rviz_use_measured_rope_joints = bool(self.get_alpine_param('rviz_use_measured_rope_joints', True))
         self.rviz_show_rope_length_text = bool(self.get_alpine_param('rviz_show_rope_length_text', True))
 
@@ -277,7 +287,9 @@ class ClimbingrobotController(BaseControllerFixed):
             f"lateral_sine={self.prejump_lateral_sine_enabled} "
             f"amp={self.prejump_lateral_sine_amp_fy:.3f} "
             f"freq={self.prejump_lateral_sine_freq_hz:.3f} "
-            f"duration={self.prejump_lateral_sine_duration_s:.3f}",
+            f"duration={self.prejump_lateral_sine_duration_s:.3f}, "
+            f"post_homing_hold={self.post_homing_position_hold_s:.3f}, "
+            f"position_settle={self.prejump_position_settle_after_reached_s:.3f}",
             "blue"
         ))
 
@@ -485,6 +497,76 @@ class ClimbingrobotController(BaseControllerFixed):
             return 'timeout'
 
         return 'running'
+
+    def publish_prejump_reference_hold(self):
+        """Keep the reached pre-jump rope references active in position mode."""
+        try:
+            left_ref = float(self.prejump_left_ref_abs)
+            right_ref = float(self.prejump_right_ref_abs)
+            if not np.isfinite(left_ref):
+                left_ref = float(self.rope_left_length)
+            if not np.isfinite(right_ref):
+                right_ref = float(self.rope_right_length)
+        except Exception:
+            left_ref = float(self.rope_left_length)
+            right_ref = float(self.rope_right_length)
+
+        self.publish_rope_position_abs("left", left_ref)
+        self.publish_rope_position_abs("right", right_ref)
+
+    def start_prejump_position_settle(self):
+        """Hold in position mode briefly after reaching the drop target."""
+        self.stateMachine = 'prejump_position_settle'
+        self.prejump_position_settle_start_time = self.scalar_time()
+        self.prejump_position_settle_print_counter = 0
+        self.publish_prejump_reference_hold()
+
+        msg = std_msgs.msg.String()
+        msg.data = 'prejump_position_settle_started'
+        self.pub_goal_status.publish(msg)
+
+        print(colored(
+            "PRE-JUMP POSITION SETTLE started: "
+            f"duration={float(getattr(self, 'prejump_position_settle_after_reached_s', 0.50)):.3f} s",
+            "yellow"
+        ))
+
+    def monitor_prejump_position_settle(self):
+        """Return 'done' or 'running' while holding the final position reference."""
+        duration = max(0.0, float(getattr(self, 'prejump_position_settle_after_reached_s', 0.50)))
+        elapsed = self.scalar_time() - float(getattr(self, 'prejump_position_settle_start_time', self.scalar_time()))
+
+        # Keep refreshing the final position reference at a low rate.  This avoids
+        # leaving a stale command if another node briefly touched /winch/*/command.
+        if np.mod(getattr(self, 'prejump_position_settle_print_counter', 0), 100) == 0:
+            self.publish_prejump_reference_hold()
+            print(colored(
+                "PRE-JUMP POSITION SETTLE monitor: "
+                f"elapsed={elapsed:.2f}/{duration:.2f} s, "
+                f"L={self.rope_left_length:.3f}, R={self.rope_right_length:.3f}",
+                "yellow"
+            ))
+        self.prejump_position_settle_print_counter = getattr(self, 'prejump_position_settle_print_counter', 0) + 1
+
+        if duration <= 0.0 or elapsed >= duration:
+            self.publish_prejump_reference_hold()
+            msg = std_msgs.msg.String()
+            msg.data = 'prejump_position_settle_done'
+            self.pub_goal_status.publish(msg)
+            print(colored(
+                f"PRE-JUMP POSITION SETTLE finished after {max(elapsed, 0.0):.2f} s",
+                "green"
+            ))
+            return 'done'
+
+        return 'running'
+
+    def continue_after_prejump_position_settle(self):
+        """Advance from the settle phase to sine or jump."""
+        if getattr(self, 'prejump_lateral_sine_enabled', True):
+            self.start_prejump_lateral_sine()
+            return False
+        return self.start_jump_after_prejump_sequence()
 
     def start_prejump_lateral_sine(self):
         """Start the finite lateral sine phase between position and jump."""
@@ -837,6 +919,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.prejump_position_print_counter = 0
         self.prejump_lateral_sine_start_time = 0.0
         self.prejump_lateral_sine_print_counter = 0
+        self.prejump_position_settle_start_time = 0.0
+        self.prejump_position_settle_print_counter = 0
         self.jump_body_command_sent = False
         self.manual_jump_service_called = False
         self.last_jump_energy = float('nan')
@@ -1480,6 +1564,13 @@ class ClimbingrobotController(BaseControllerFixed):
         # /alpine/pipeline_position_then_jump_enabled:=false.
         if getattr(self, 'pipeline_position_then_jump_enabled', True):
             self.publish_current_rope_position_hold()
+            hold_s = max(0.0, float(getattr(self, 'post_homing_position_hold_s', 0.50)))
+            if hold_s > 0.0:
+                print(colored(
+                    f"POST-HOMING POSITION HOLD: holding current rope lengths for {hold_s:.2f} s",
+                    "yellow"
+                ))
+                ros.sleep(hold_s)
         else:
             # Move to a physical absolute length after homing.
             # Internally publish_rope_position_abs() sends raw winch references:
@@ -1588,10 +1679,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if p.stateMachine == 'positioning_before_jump':
             status = p.monitor_prejump_position_drop()
             if status == 'done':
-                if getattr(p, 'prejump_lateral_sine_enabled', True):
-                    p.start_prejump_lateral_sine()
-                else:
-                    return p.start_jump_after_prejump_sequence()
+                p.start_prejump_position_settle()
             elif status == 'timeout':
                 if getattr(p, 'prejump_abort_on_timeout', True):
                     p.publish_current_rope_position_hold()
@@ -1602,10 +1690,13 @@ class ClimbingrobotController(BaseControllerFixed):
                     return True
                 else:
                     print(colored("PRE-JUMP POSITION timeout -> continuing anyway", "red"))
-                    if getattr(p, 'prejump_lateral_sine_enabled', True):
-                        p.start_prejump_lateral_sine()
-                    else:
-                        return p.start_jump_after_prejump_sequence()
+                    p.start_prejump_position_settle()
+            return False
+
+        if p.stateMachine == 'prejump_position_settle':
+            status = p.monitor_prejump_position_settle()
+            if status == 'done':
+                return p.continue_after_prejump_position_settle()
             return False
 
         if p.stateMachine == 'prejump_lateral_sine':
