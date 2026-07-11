@@ -32,13 +32,13 @@ from base_controllers.utils.common_functions import checkRosMaster
 import base_controllers.params as conf
 
 robotName = "climbingrobot2"
-# real robot msgs
+# Real-robot messages
 import std_msgs, geometry_msgs
 from climbingrobot_hardware_interface.msg import RopeCommand
 from climbingrobot_hardware_interface.msg import PropellerCommand
 from climbingrobot_hardware_interface.msg import RopeTelemetry
 from climbingrobot_hardware_interface.msg import AlpineBodyTelemetry
-# real robot services
+# Real-robot services
 from climbingrobot_hardware_interface.srv import AlpineBodyCommand, AlpineBodyCommandRequest
 from climbingrobot_hardware_interface.srv import RopeControlMode, RopeControlModeRequest
 from base_controllers.utils.common_functions import startNode, checkRosMaster, launchFileNode
@@ -46,7 +46,7 @@ from base_controllers.utils.math_tools import quaternion_matrix
 from base_controllers.utils.ros_publish import RosPub
 from orientation_controller import OrientationController
 from sensor_msgs.msg import JointState
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 
 # Find the ROS package path
 rospack = rospkg.RosPack()
@@ -83,7 +83,7 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.OBSTACLE_AVOIDANCE == 'mesh':
             sys.path.insert(0, './codegen_mesh_normal')
             from base_controllers.components.terrain_manager import TerrainManager
-            # generate terrain
+            # Generate terrain.
             # Parameters (direct translation from MATLAB)
             wall_depth = 1  # how
             grid_size = 100
@@ -149,7 +149,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.send_alpine_wrench(0.0, 0.0, 0.0)
 
     def getRobotMass(self):
-        total_robot_mass = 5.2  # todo hardcode this
+        # Current physical mass after the propeller/body modifications.
+        total_robot_mass = 10.0
         return total_robot_mass
 
     def get_alpine_param(self, name, default=None):
@@ -246,61 +247,24 @@ class ClimbingrobotController(BaseControllerFixed):
         )
 
 
-        # ─────────────────────────────────────────────────────────────
-        # HARD-CODED REAL PIPELINE M1
-        # Do not read these from alpine_low_level_bringup.launch.
-        # bringup = low level only.
-        # this controller = homing -> position drop -> /alpine/jump.
-        # ─────────────────────────────────────────────────────────────
+        # ---------------------------------------------------------------------
+        # Hard-coded real M1 pipeline.
+        #
+        # Keep these values local to the high-level controller. The low-level
+        # bringup starts sensors, winches, body serial and propeller firmware;
+        # this controller orchestrates homing -> position drop -> /alpine/jump.
+        # ---------------------------------------------------------------------
         self.pipeline_position_then_jump_enabled = True
         self.pipeline_jump_mode = 'manual'
         self.pipeline_landing_enabled = False
         self.landing = False
 
-        # Primo test alto livello prudente.
-        # Quando funziona: provare 1.00, poi 1.20.
+        # Pre-jump position drop. In raw-relative mode this value is added to
+        # both telemetry_node raw rope lengths.
         self.prejump_drop_m = 0.30
 
-        self.prejump_position_tolerance_m = 0.04
-        self.prejump_position_timeout_s = 15.0
-        self.prejump_position_min_wait_s = 1.0
-        self.prejump_position_settle_after_reached_s = 1.0
-        self.prejump_abort_on_timeout = True
-        self.post_homing_position_hold_s = 0.50
-
-        # Il controller alto livello NON deve toccare propeller/pitch/yaw.
-        # I propeller restano nello stato creato dal bringup/firmware.
-        self.propellers_enabled = False
-        self.highlevel_touch_propellers = False
-        self.highlevel_send_default_wrench_zero = False
-
-        # Niente spostamento laterale ora.
-        # Il blocco di calcolo fy resta nel codice ma non viene eseguito.
-        self.prejump_lateral_sine_enabled = False
-
-        # Dopo /alpine/jump il controller osserva qualche secondo e poi termina,
-        # così tornano i plot.
-        self.manual_jump_observation_s = 5.0
-        self.prejump_use_raw_relative = True
-
-
-
-        # ─────────────────────────────────────────────────────────────
-        # HARD-CODED REAL PIPELINE M1 SAFE
-        # bringup = low level only.
-        # climbingrobot_controller2_real.py = homing -> position test/drop -> jump.
-        # ─────────────────────────────────────────────────────────────
-        self.pipeline_position_then_jump_enabled = True
-        self.pipeline_jump_mode = 'manual'
-        self.pipeline_landing_enabled = False
-        self.landing = False
-
-        # Primo test sicuro: solo 5 cm per verificare i versi.
-        # Quando entrambi srotolano correttamente: mettere 0.80.
-        self.prejump_drop_m = 0.30
-
-        # Primo giro: NON chiamare il jump, verifica solo homing + position.
-        # Quando la discesa è corretta: mettere True.
+        # When True, the controller calls /alpine/jump after the position drop
+        # and settle phase. When False, it only holds the pre-jump position.
         self.pipeline_auto_jump_enabled = True
 
         self.prejump_position_tolerance_m = 0.04
@@ -310,18 +274,30 @@ class ClimbingrobotController(BaseControllerFixed):
         self.prejump_abort_on_timeout = True
         self.post_homing_position_hold_s = 0.5
 
-        # Il controller alto livello non deve toccare propeller/pitch/yaw.
+        # The high-level controller must not touch propellers, pitch or yaw.
+        # They remain in the state configured by bringup and firmware.
         self.propellers_enabled = False
         self.highlevel_touch_propellers = False
         self.highlevel_send_default_wrench_zero = False
 
-        # Niente laterale ora.
+        # No lateral sine for the current M1 pipeline.
         self.prejump_lateral_sine_enabled = False
+
+        # After /alpine/jump starts, keep this controller alive briefly for
+        # telemetry/RViz updates, then stop so plots are generated.
         self.manual_jump_observation_s = 5.0
+
+        # Current M1 convention: position commands and monitoring use raw
+        # telemetry_node rope_length coordinates directly.
         self.prejump_use_raw_relative = True
 
-
-        self.rviz_use_measured_rope_joints = bool(self.get_alpine_param('rviz_use_measured_rope_joints', True))
+        # Keep the RViz kinematic chain internally consistent with the pose
+        # reconstructed from the IMUs.  Overwriting only the two prismatic joints
+        # after inverse kinematics can pin/distort the RobotModel when telemetry
+        # conventions differ slightly from the URDF closed-chain convention.
+        self.rviz_use_measured_rope_joints = bool(
+            self.get_alpine_param('rviz_use_measured_rope_joints', False)
+        )
         self.rviz_show_rope_length_text = bool(self.get_alpine_param('rviz_show_rope_length_text', True))
 
         # Pure RViz/Locosim startup home pose, kept identical to the old real
@@ -472,6 +448,298 @@ class ClimbingrobotController(BaseControllerFixed):
             return
         self.publish_rope_position_abs("left", self.rope_left_length)
         self.publish_rope_position_abs("right", self.rope_right_length)
+
+
+    def rviz_live_point(self, v):
+        pt = Point()
+        pt.x = float(v[0])
+        pt.y = float(v[1])
+        pt.z = float(v[2])
+        return pt
+
+    def rviz_live_marker(self, marker_id, marker_type, ns):
+        m = Marker()
+        m.header.frame_id = "world"
+        m.header.stamp = ros.Time.now()
+        m.ns = ns
+        m.id = int(marker_id)
+        m.type = marker_type
+        m.action = Marker.ADD
+        m.lifetime = ros.Duration(0.15)
+        return m
+
+    def rviz_live_add_line(self, arr, marker_id, a, b, r, g, bl, width=0.02):
+        m = self.rviz_live_marker(marker_id, Marker.LINE_STRIP, "live_ropes")
+        m.scale.x = float(width)
+        m.color.r = float(r)
+        m.color.g = float(g)
+        m.color.b = float(bl)
+        m.color.a = 1.0
+        m.points = [self.rviz_live_point(a), self.rviz_live_point(b)]
+        arr.markers.append(m)
+
+    def rviz_live_add_sphere(self, arr, marker_id, pos, r, g, bl, scale=0.055):
+        m = self.rviz_live_marker(marker_id, Marker.SPHERE, "live_points")
+        m.pose.position = self.rviz_live_point(pos)
+        m.pose.orientation.w = 1.0
+        m.scale.x = float(scale)
+        m.scale.y = float(scale)
+        m.scale.z = float(scale)
+        m.color.r = float(r)
+        m.color.g = float(g)
+        m.color.b = float(bl)
+        m.color.a = 1.0
+        arr.markers.append(m)
+
+    def rviz_live_add_body(self, arr, marker_id, pos, q):
+        m = self.rviz_live_marker(marker_id, Marker.CUBE, "live_body")
+        m.pose.position = self.rviz_live_point(pos)
+        m.pose.orientation.x = float(q[0])
+        m.pose.orientation.y = float(q[1])
+        m.pose.orientation.z = float(q[2])
+        m.pose.orientation.w = float(q[3])
+        m.scale.x = 0.25
+        m.scale.y = 0.60
+        m.scale.z = 0.20
+        m.color.r = 0.1
+        m.color.g = 0.6
+        m.color.b = 1.0
+        m.color.a = 0.55
+        arr.markers.append(m)
+
+    def rviz_live_add_axis(self, arr, marker_id, start, vec, r, g, bl):
+        m = self.rviz_live_marker(marker_id, Marker.ARROW, "live_body_axes")
+        m.scale.x = 0.025
+        m.scale.y = 0.055
+        m.scale.z = 0.055
+        m.color.r = float(r)
+        m.color.g = float(g)
+        m.color.b = float(bl)
+        m.color.a = 1.0
+        m.points = [self.rviz_live_point(start), self.rviz_live_point(start + vec)]
+        arr.markers.append(m)
+
+    def rviz_live_add_text(self, arr, marker_id, pos, text):
+        m = self.rviz_live_marker(marker_id, Marker.TEXT_VIEW_FACING, "live_text")
+        m.pose.position = self.rviz_live_point(pos)
+        m.pose.orientation.w = 1.0
+        m.scale.z = 0.08
+        m.color.r = 1.0
+        m.color.g = 1.0
+        m.color.b = 1.0
+        m.color.a = 1.0
+        m.text = str(text)
+        arr.markers.append(m)
+
+    def rviz_live_init_zero_if_needed(self):
+        # RViz-only offset: like old set reference position logic.
+        # visual_length = visual_home + sign * (raw_now - raw_zero_after_homing)
+        if getattr(self, "rviz_live_zero_initialized", False):
+            return
+
+        if not getattr(self, "rope_offsets_active", False):
+            return
+
+        self.rviz_live_left_raw_zero = float(self.rope_left_raw_length)
+        self.rviz_live_right_raw_zero = float(self.rope_right_raw_length)
+
+        self.rviz_live_left_home_length_m = float(
+            self.get_alpine_param("rviz_live_left_home_length_m", 0.50)
+        )
+        self.rviz_live_right_home_length_m = float(
+            self.get_alpine_param("rviz_live_right_home_length_m", 0.50)
+        )
+
+        # These are RViz signs only. They do not affect winch commands.
+        self.rviz_live_left_delta_sign = float(
+            self.get_alpine_param("rviz_live_left_delta_sign", 1.0)
+        )
+        self.rviz_live_right_delta_sign = float(
+            self.get_alpine_param("rviz_live_right_delta_sign", 1.0)
+        )
+
+        self.rviz_live_wall_x = float(
+            self.get_alpine_param("rviz_live_wall_x", float(self.anchor_left_xyz[0]))
+        )
+
+        self.rviz_live_prev_left_attach = None
+        self.rviz_live_zero_initialized = True
+
+        print(colored(
+            "RVIZ LIVE zero: "
+            f"L_home={self.rviz_live_left_home_length_m:.3f}, "
+            f"L_raw0={self.rviz_live_left_raw_zero:.3f}, "
+            f"R_home={self.rviz_live_right_home_length_m:.3f}, "
+            f"R_raw0={self.rviz_live_right_raw_zero:.3f}, "
+            f"signs=({self.rviz_live_left_delta_sign:+.1f}, {self.rviz_live_right_delta_sign:+.1f})",
+            "cyan"
+        ))
+
+    def rviz_live_visual_lengths(self):
+        self.rviz_live_init_zero_if_needed()
+
+        if not getattr(self, "rviz_live_zero_initialized", False):
+            return None, None
+
+        L = self.rviz_live_left_home_length_m + self.rviz_live_left_delta_sign * (
+            float(self.rope_left_raw_length) - float(self.rviz_live_left_raw_zero)
+        )
+        R = self.rviz_live_right_home_length_m + self.rviz_live_right_delta_sign * (
+            float(self.rope_right_raw_length) - float(self.rviz_live_right_raw_zero)
+        )
+
+        return max(0.03, float(L)), max(0.03, float(R))
+
+    def rviz_live_quat_and_rot(self):
+        q = np.array(self.body_imu_orientation, dtype=float).reshape(4)
+        nq = np.linalg.norm(q)
+
+        if not np.isfinite(nq) or nq < 1e-9:
+            q = np.array([0.0, 0.0, 0.0, 1.0])
+        else:
+            q = q / nq
+
+        R = quaternion_matrix(q)[:3, :3]
+        return q, R
+
+    def rviz_live_solve_from_two_ropes_and_body_imu(self, L, R, R_body):
+        # Unknown point P = left rope attachment.
+        # Constraints:
+        #   |P - anchor_left| = L
+        #   |P + R_body * right_attachment_from_left_body - anchor_right| = R
+        #   P.x = wall_x
+        anchor_l = np.array(self.anchor_left_xyz, dtype=float)
+        anchor_r = np.array(self.anchor_right_xyz, dtype=float)
+
+        d_right = R_body.dot(np.array(self.right_attachment_from_left_body, dtype=float))
+
+        wall_x = float(getattr(self, "rviz_live_wall_x", anchor_l[0]))
+
+        c1_3 = anchor_l
+        c2_3 = anchor_r - d_right
+
+        dx1 = wall_x - c1_3[0]
+        dx2 = wall_x - c2_3[0]
+
+        r1 = math.sqrt(max(1e-8, float(L) * float(L) - dx1 * dx1))
+        r2 = math.sqrt(max(1e-8, float(R) * float(R) - dx2 * dx2))
+
+        c1 = np.array([c1_3[1], c1_3[2]], dtype=float)
+        c2 = np.array([c2_3[1], c2_3[2]], dtype=float)
+
+        v = c2 - c1
+        dist = float(np.linalg.norm(v))
+
+        if dist < 1e-9:
+            yz = np.array([c1[0], c1[1] - r1], dtype=float)
+        else:
+            u = v / dist
+            a = (r1 * r1 - r2 * r2 + dist * dist) / (2.0 * dist)
+            h_sq = r1 * r1 - a * a
+            mid = c1 + a * u
+
+            if h_sq <= 0.0:
+                yz = mid
+            else:
+                h = math.sqrt(h_sq)
+                perp = np.array([-u[1], u[0]], dtype=float)
+
+                cand1 = mid + h * perp
+                cand2 = mid - h * perp
+
+                P1 = np.array([wall_x, cand1[0], cand1[1]], dtype=float)
+                P2 = np.array([wall_x, cand2[0], cand2[1]], dtype=float)
+
+                prev = getattr(self, "rviz_live_prev_left_attach", None)
+                if prev is not None and np.all(np.isfinite(prev)):
+                    yz = cand1 if np.linalg.norm(P1 - prev) <= np.linalg.norm(P2 - prev) else cand2
+                else:
+                    # First time: choose the lower physical point.
+                    yz = cand1 if cand1[1] < cand2[1] else cand2
+
+        left_attach = np.array([wall_x, yz[0], yz[1]], dtype=float)
+        self.rviz_live_prev_left_attach = left_attach.copy()
+
+        right_attach = left_attach + d_right
+        body_pos = left_attach + R_body.dot(np.array(self.body_origin_from_left_attachment, dtype=float))
+
+        return left_attach, right_attach, body_pos
+
+    def publish_rviz_live_body_ropes_overlay(self):
+        """Publish a read-only visualization of the same pose used by the model.
+
+        Translation comes from the left-rope IMU direction and measured left-rope
+        length in updateKinematicsDynamics().  Body attitude comes from the body
+        IMU.  The right-rope measurement is used as a consistency diagnostic.
+
+        The previous implementation solved the body position from two rope
+        lengths plus body attitude and therefore ignored the rope IMU.  During a
+        jump the rope lengths may remain nearly constant while the rope direction
+        changes considerably, which made the RViz overlay look stationary.
+        """
+        if not hasattr(self, "pub_rviz_live_markers"):
+            return
+        if not getattr(self, "rope_offsets_active", False):
+            return
+
+        q, R_body = self.rviz_live_quat_and_rot()
+
+        body_pos = np.array(getattr(self, "base_pos", np.zeros(3)), dtype=float)
+        left_attach = np.array(getattr(self, "hoist_l_pos", np.zeros(3)), dtype=float)
+        right_attach = np.array(getattr(self, "hoist_r_pos", np.zeros(3)), dtype=float)
+        anchor_l = np.array(self.anchor_left_xyz, dtype=float)
+        anchor_r = np.array(self.anchor_right_xyz, dtype=float)
+
+        vectors = (body_pos, left_attach, right_attach, anchor_l, anchor_r)
+        if not all(v.shape == (3,) and np.all(np.isfinite(v)) for v in vectors):
+            return
+
+        try:
+            self.broadcaster.sendTransform(
+                tuple(body_pos.tolist()),
+                tuple(q.tolist()),
+                ros.Time.now(),
+                "alpine_body_live",
+                "world"
+            )
+        except Exception:
+            pass
+
+        arr = MarkerArray()
+
+        # Rope geometry generated from the same IMU-based pose used for IK.
+        self.rviz_live_add_line(arr, 0, anchor_l, left_attach, 0.0, 1.0, 0.0)
+        self.rviz_live_add_line(arr, 1, anchor_r, right_attach, 0.0, 1.0, 0.0)
+
+        self.rviz_live_add_sphere(arr, 10, anchor_l, 1.0, 1.0, 0.0, 0.05)
+        self.rviz_live_add_sphere(arr, 11, anchor_r, 1.0, 1.0, 0.0, 0.05)
+        self.rviz_live_add_sphere(arr, 12, left_attach, 0.0, 1.0, 0.0, 0.055)
+        self.rviz_live_add_sphere(arr, 13, right_attach, 0.0, 1.0, 0.0, 0.055)
+
+        self.rviz_live_add_body(arr, 20, body_pos, q)
+
+        axis_len = 0.25
+        self.rviz_live_add_axis(arr, 30, body_pos, R_body[:, 0] * axis_len, 1.0, 0.0, 0.0)
+        self.rviz_live_add_axis(arr, 31, body_pos, R_body[:, 1] * axis_len, 0.0, 1.0, 0.0)
+        self.rviz_live_add_axis(arr, 32, body_pos, R_body[:, 2] * axis_len, 0.0, 0.3, 1.0)
+
+        left_geom = float(np.linalg.norm(left_attach - anchor_l))
+        right_geom = float(np.linalg.norm(right_attach - anchor_r))
+        left_meas = float(self.rope_left_length)
+        right_meas = float(self.rope_right_length)
+
+        text = (
+            "RVIZ IMU pose\n"
+            f"p=({body_pos[0]:.2f}, {body_pos[1]:.2f}, {body_pos[2]:.2f})\n"
+            f"L meas/geom={left_meas:.3f}/{left_geom:.3f}\n"
+            f"R meas/geom={right_meas:.3f}/{right_geom:.3f} "
+            f"err={right_meas - right_geom:+.3f}\n"
+            f"RPY={self.body_imu_rpy[0]:.2f}, "
+            f"{self.body_imu_rpy[1]:.2f}, {self.body_imu_rpy[2]:.2f}"
+        )
+        self.rviz_live_add_text(arr, 40, body_pos + np.array([0.0, 0.0, 0.35]), text)
+
+        self.pub_rviz_live_markers.publish(arr)
 
     def publish_rope_length_topics_and_text(self):
         """Publish actual absolute rope lengths for RViz and debugging."""
@@ -828,7 +1096,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
         This runs before the winch homing sequence.  It does not affect odometry,
         rope_zero, or any winch command; it only publishes the Locosim q_0 joint
-        state long enough for RViz to receive the robot and the arganelli in the
+        state long enough for RViz to receive the robot and the winches in the
         historical homing location.
         """
         if not hasattr(self, 'pub_joints'):
@@ -899,11 +1167,28 @@ class ClimbingrobotController(BaseControllerFixed):
         return base_vel
 
     def updateKinematicsDynamics(self):
-        # get measured quantities
-        self.w_R_rope = (quaternion_matrix(self.rope_l_imu_orientation))[:3, :3]
+        # Get measured orientations and normalize the quaternions before
+        # converting them to rotation matrices.  Invalid/zero packets otherwise
+        # produce a frozen or non-finite pose in RViz.
+        q_rope = np.asarray(self.rope_l_imu_orientation, dtype=float).reshape(4)
+        q_body = np.asarray(self.body_imu_orientation, dtype=float).reshape(4)
 
-        self.w_R_b = quaternion_matrix(self.body_imu_orientation)[:3, :3]
-        self.w_omega_b = self.body_imu_angular_velocity  # TODO double check
+        n_rope = float(np.linalg.norm(q_rope))
+        n_body = float(np.linalg.norm(q_body))
+        if not np.isfinite(n_rope) or n_rope < 1e-9:
+            q_rope = np.array([0.0, 0.0, 0.0, 1.0])
+        else:
+            q_rope = q_rope / n_rope
+        if not np.isfinite(n_body) or n_body < 1e-9:
+            q_body = np.array([0.0, 0.0, 0.0, 1.0])
+        else:
+            q_body = q_body / n_body
+
+        self.rope_l_imu_orientation = q_rope
+        self.body_imu_orientation = q_body
+        self.w_R_rope = quaternion_matrix(q_rope)[:3, :3]
+        self.w_R_b = quaternion_matrix(q_body)[:3, :3]
+        self.w_omega_b = self.body_imu_angular_velocity
 
         # rope gravity terms TO BE RECOMPUTED TODO
         # self.g #
@@ -964,32 +1249,32 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mat2Gazebo = self.anchor_pos
         self.base_pos_mat = self.base_pos - self.mat2Gazebo
 
-        # compute missin state variable phi / psi_d
+        # Compute missing state variables phi / psi_dot.
         # the psi variable is the extrinsic pitch wrt the world Y axis obtained expanding w_R_rope with extrinsic formula = Rx Ry Rz
         self.psi = math.atan2(self.w_R_rope[0, 2],
                               np.sqrt(math.pow(self.w_R_rope[0, 0], 2) + math.pow(self.w_R_rope[0, 1], 2)))
-        # to get the derivative I need also the
+        # Compute the derivative.
         extr_roll = math.atan2(-self.w_R_rope[1, 2], self.w_R_rope[2, 2])
         self.psi_d = np.cos(extr_roll) * self.w_omega_b[1] - np.sin(extr_roll) * self.w_omega_b[2]
 
-        # now that we have also psid we can  estimate base velocity (in WF)
+        # Estimate base velocity in the world frame once psi_dot is available.
         self.base_vel = self.estimateRobotVelFromStates(self.l_1, self.l_2, self.psi, self.l_1d, self.l_2d, self.psi_d)
 
-        # use geometric intuition for psid
+        # Use geometric intuition for psi_dot.
         n_par = (self.anchor_pos - self.anchor_pos2) / np.linalg.norm(self.anchor_pos - self.anchor_pos2)
         rope2_axis = (self.base_pos - self.anchor_pos2) / np.linalg.norm(self.base_pos - self.anchor_pos2)
         self.n_bar = np.cross(n_par, rope2_axis) / np.linalg.norm(np.cross(n_par, rope2_axis))
 
-        # I should not publihsh base_link tf cause is a fixed based robot I just need to publish joints and comoute TFS with robot state publisher
+        # Do not publish base_link TF here; robot_state_publisher builds the TF tree from joint states.
         # self.broadcaster.sendTransform(self.base_pos, self.body_imu_orientation, ros.Time.now(), '/base_link', '/world')
 
-        # rviz
+        # RViz joint-state update.
         self.q_des = self.solver.computeJointVariables(self.base_pos, self.w_R_b, self.q_des_q0, debug=False)
 
-        # Force the two prismatic rope joints to the measured effective lengths.
-        # This makes RViz show the actual current rope extension, not only the IK
-        # value reconstructed from the body pose.
-        if getattr(self, 'rviz_use_measured_rope_joints', True):
+        # Optional legacy override.  It is disabled by default because the
+        # inverse-kinematics result must remain consistent as one complete closed
+        # chain for the RobotModel to follow the IMU-reconstructed body pose.
+        if getattr(self, 'rviz_use_measured_rope_joints', False):
             try:
                 self.q_des[self.rope_index[0]] = self.q[self.rope_index[0]]
                 self.q_des[self.rope_index[1]] = self.q[self.rope_index[1]]
@@ -999,10 +1284,13 @@ class ClimbingrobotController(BaseControllerFixed):
         msg = JointState()
         msg.name = self.joint_names
         msg.header.stamp = ros.Time.now()  # ros.Time.from_sec(self.time)
-        msg.position = self.q_des
+        msg.position = np.asarray(self.q_des, dtype=float).tolist()
         self.pub_joints.publish(msg)
 
         self.publish_rope_length_topics_and_text()
+
+        # Read-only live RViz overlay from rope telemetry offsets + IMU.
+        self.publish_rviz_live_body_ropes_overlay()
 
     def initVars(self):
 
@@ -1306,7 +1594,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def resetRope(self):
         print(colored(f"Start Position Mode", "red"))
-        # enable PD for rope and reset the PD reference to the new estension
+        # enable PD for rope and reset the PD reference to the new extension
         # sample the new elongation
         self.q_des[p.rope_index[0]] = np.copy(p.q[p.rope_index[0]])
         self.q_des[p.rope_index[1]] = np.copy(p.q[p.rope_index[1]])
@@ -1626,7 +1914,7 @@ class ClimbingrobotController(BaseControllerFixed):
         startNode(package='rviz', executable='rviz',
                   args='-d ' + rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf.rviz')
 
-        # launch hw interface (we launch ouside)
+        # The hardware interface is launched externally.
         # launchFileNode(package='climbingrobot_hardware_interface', launch_file='alpine_low_level_bringup.launch')
 
         print(colored("DONE", "red"))
@@ -1636,7 +1924,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.ros_pub = RosPub(self.robot_name, only_visual=True, markers_time_to_live=0)
         self.broadcaster = tf.TransformBroadcaster()
 
-        # this is for the matlab optim TODO uncomment
+        # MATLAB optimization setup. Enable only when using optimized jumps.
         # self.eng = matlab.engine.start_matlab()
         #
         # if self.OBSTACLE_AVOIDANCE == 'mesh':
@@ -1666,7 +1954,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.pub_goal_status = ros.Publisher("/planner/goal_status", std_msgs.msg.String, queue_size=1,
                                              tcp_nodelay=True)
 
-        # communication to alpine
+        # ALPINE body communication
         self.sub_alpine_telemetry = ros.Subscriber("/alpine_body/telemetry", AlpineBodyTelemetry,
                                                    callback=self._receive_alpine_telemetry, queue_size=1,
                                                    tcp_nodelay=True)
@@ -1676,15 +1964,26 @@ class ClimbingrobotController(BaseControllerFixed):
         self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand)  # optimized path
         self.manual_jump_service = ros.ServiceProxy('/alpine/jump', Trigger)  # manual JumpNode path
 
-        # communication to alpine
+        # ALPINE body communication
         self.pub_propeller_command = ros.Publisher("/alpine_body/propeller_command", PropellerCommand, queue_size=1, tcp_nodelay=True)
 
-        # for rviz
+        # RViz publishers
 
         self.pub_joints = ros.Publisher("/joint_states", JointState, queue_size=1, tcp_nodelay=True)
         self.pub_rope_length_marker = ros.Publisher("/alpine/actual_rope_lengths_marker", Marker, queue_size=10)
         self.pub_rope_left_abs_length = ros.Publisher("/alpine/left_rope_abs_length_m", std_msgs.msg.Float32, queue_size=10)
         self.pub_rope_right_abs_length = ros.Publisher("/alpine/right_rope_abs_length_m", std_msgs.msg.Float32, queue_size=10)
+
+        # RViz live overlay: visualization only.
+        # It reads rope telemetry + IMUs and publishes markers/TF.
+        # It does NOT publish winch commands, does NOT change modes,
+        # and does NOT call /alpine/jump.
+        self.pub_rviz_live_markers = ros.Publisher(
+            "/alpine_rviz_live/markers",
+            MarkerArray,
+            queue_size=1,
+            tcp_nodelay=True
+        )
 
         # Make RViz see the same home configuration immediately at script start,
         # before the blocking winch homing sequence begins.
@@ -1999,7 +2298,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
             if (p.time >= end_flying):
                 print(colored("Stop Flying", "blue"))
-                # reset the qdes
+                # Reset desired joint state.
                 # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
                 # this will start again the position loop
                 p.resetRope()
@@ -2126,14 +2425,14 @@ class ClimbingrobotController(BaseControllerFixed):
 def talker(p):
     p.start()
 
-    # Init UNA SOLA VOLTA, prima di subscriber/homing
+    # Initialize once, before subscribers and homing.
     p.initVars()
     p.q_des = np.copy(p.q_des_q0)
 
     p.startRealRobot()
     p.startRealRobotPublisherSubscribers()
 
-    # jump params
+    # Jump parameters.
     # jump starting position
     p0 = np.array([0.28, 2.5, -6.10104])  # there is singularity for px = 0!
     # jump landing position
@@ -2161,10 +2460,10 @@ def talker(p):
     p.numberOfJumps = 1
     p.start_logging = 0
 
-    # set initial desired joints for visualization/model
+    # Set initial desired joints for visualization/model.
     p.q_des[:12] = p.computeJointVariables(p0)
 
-    # NON richiamare position mode qui: lo fa già la homing procedure
+    # Do not call position mode here; the homing procedure already set it.
     # p.setRopeControlMode('close_loop_position')
 
     while True:
@@ -2189,7 +2488,7 @@ def talker(p):
         if stop:
             break
 
-        # plot ropes as green arrows only when you not save bags because they are ugly
+        # Plot rope arrows only when not recording bags.
         if not p.SAVE_BAG:
             p.ros_pub.add_arrow(p.anchor_pos, (p.hoist_l_pos - p.anchor_pos), "green", scale=3.)
             p.ros_pub.add_arrow(p.anchor_pos2, (p.hoist_r_pos - p.anchor_pos2), "green", scale=3.)
@@ -2197,7 +2496,7 @@ def talker(p):
         # plot contact force on retractable leg
         p.ros_pub.add_arrow(p.x_ee, p.contactForceW / p.force_scale, "blue", scale=2.5)
 
-        #plot target position (whenever is available)
+        # Plot the target position when available.
         try:
             p.ros_pub.add_marker(p.mat2Gazebo + p.jumps[p.jumpNumber]["targetPos"], color="red", radius=0.3, alpha=1.)
             p.ros_pub.add_marker(p.mat2Gazebo + p.targetPosIdeal, color="green", radius=0.5, alpha=0.5)
@@ -2212,7 +2511,7 @@ def talker(p):
         p.time = round(p.scalar_time() + conf.robot_params[p.robot_name]['dt'], 4)  # scalar; avoids 1-element-array comparisons
         if (p.time > p.start_logging):
             p.logData()
-        # wait for synconization of the control loop
+        # Wait for control-loop synchronization.
         rate.sleep()
 
 def plot3D(name, figure_id, label, time_log, var, time_mat = None, var_mat = None):
