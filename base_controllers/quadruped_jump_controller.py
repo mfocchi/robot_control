@@ -450,7 +450,7 @@ class QuadrupedJumpController(QuadrupedController):
 
     def main_loop(self):
         if p.real_robot:
-            p.startTrust = 15.  # the startup procedure should be shorter than this! otherwise the time is wrong
+            p.startTrust = 25.  # the startup procedure should be shorter than this! otherwise the time is wrong
             p.startupProcedure()
             p.updateKinematics()  # neeeded to call legodom to have an initial estimate of com position
         else:
@@ -664,26 +664,25 @@ class QuadrupedJumpController(QuadrupedController):
             # log variables
             p.rate.sleep()
             p.sync_check()
-
             p.time = np.round(p.time + p.dt, 4)
 
 if __name__ == '__main__':
 
-    p = QuadrupedJumpController('aliengo')
+    p = QuadrupedJumpController('go2')
     world_name = 'fast.world'
 
+    if p.robot_name == 'go2':
+        p.custom_locosim_launch_file = True
     np.random.seed(0)  # create always the same random sequence
     #for custom set_mass plugins
     os.environ["GAZEBO_PLUGIN_PATH"] = os.environ["LOCOSIM_DIR"] + '/robot_descriptions/gazebo_plugins/lib'
 
     try:
         # p.startController(world_name='slow.world')
-
         p.startController(world_name=world_name,
                           use_ground_truth_contacts=True,
                           additional_args=['gui:='+str(p.use_gui),
-                                           'go0_conf:='+p.go0_conf,
-                                           'rviz:='+str(not p.real_robot)])
+                                           'go0_conf:='+p.go0_conf])#,'rviz:='+str(not p.real_robot)])
         # initialize data stucture to use them with desired values
         p.des_robot = RobotWrapper.BuildFromURDF(
             os.environ.get('LOCOSIM_DIR') + "/robot_urdf/generated_urdf/" + p.robot_name + ".urdf",

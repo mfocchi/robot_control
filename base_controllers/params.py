@@ -353,21 +353,17 @@ robot_params['go2'] ={'dt': 0.002,
                       # 'kd': np.array([3., 3., 3.]*4),
                       # 'ki': np.array([0., 0., 0.]*4),
                       #Orbit
-                      'kp': np.array([60., 60., 60.] * 4),
-                      'kd': np.array([0.8, 0.8, 0.8] * 4),
+                      'kp': np.array([30., 30., 30.] * 4),
+                      'kd': np.array([1, 1, 1] * 4),
                       'ki': np.array([0., 0., 0.] * 4),
 
-                      #default config
-                      # 'kp_swing':  np.array([30., 30.,30]*4),
-                      # 'kd_swing':  np.array([.2, .2, .24]*4),
-                      # 'ki_swing':  np.array([2., 2., 2.]*4),
-                      #orbit
+                       #isaaclab
                       'kp_swing': np.array([30., 30., 30.] * 4),
-                      'kd_swing': np.array([0.4, 0.4, 0.4] * 4),
+                      'kd_swing': np.array([1., 1., 1.] * 4),
                       'ki_swing': np.array([0., 0., 0.] * 4),
 
-                      'kp_land': np.array([30., 30., 30.] * 4),
-                      'kd_land': np.array([0.8, 0.8, 0.8] * 4),
+                      'kp_land': np.array([20., 20., 20.] * 4),
+                      'kd_land': np.array([1, 1, 1] * 4),
                       'ki_land': np.array([0., 0., 0.] * 4),
 
                       # joint pid + wbc (optional)
@@ -382,14 +378,16 @@ robot_params['go2'] ={'dt': 0.002,
                       # real robot gains
                       # stand alone joint pid
                       'kp_real': np.array([30., 30.,30.]*4),
-                      'kd_real': np.array([.15, .1, .15]*4),
-                      'ki_real': np.array([2., 2., 2.]*4),
-                      'kp_real_swing':  np.array([15., 7.,4.6]*4),
-                      'kd_real_swing':  np.array([.2, .2, .24]*4),
-                      'ki_real_swing':  np.array([2., 2., 2.]*4),
-                      'kp_real_land': np.array([20., 10.,10]*4),
-                      'kd_real_land': np.array([.2, .2, .24]*4),
-                      'ki_real_land': np.array([2., 2., 2.]*4),
+                      'kd_real': np.array([1., 1., 1.]*4),
+                      'ki_real': np.array([0., 0., 0.]*4),
+
+                      'kp_real_swing':  np.array([30., 30, 30]*4),
+                      'kd_real_swing':  np.array([1, 1, 1]*4),
+                      'ki_real_swing':  np.array([0, 0, 0]*4),
+
+                      'kp_real_land': np.array([20., 20.,20.]*4),
+                      'kd_real_land': np.array([1, 1, 1]*4),
+                      'ki_real_land': np.array([0, 0, 0]*4),
                        # joint pid + wbc (optional)
                       'kp_wbc_real': np.array([20., 30., 40.]*4),
                       'kd_wbc_real': np.array([.3, .3, .3]*4),
@@ -407,19 +405,19 @@ robot_params['go2'] ={'dt': 0.002,
                       #default configuration
                       #'q_0':  np.array([0.2, 0.78, -1.7,  0.2, 0.78, -1.7, -0.2, 0.78, -1.7, -0.2, 0.78, -1.7]),
                       # q0 orbit
-                       'q_0':  np.array([0.1, 0.8, -1.6,#lf
-                                         0.1, 1.0, -1.6,#lh
-                                         -0.1, 0.8, -1.6,#rf
-                                         -0.1, 1.0, -1.6]),#rh
+                       'q_0':  np.array([0.1, 0.8, -1.5,#lf
+                                         0.1, 1.0, -1.5,#lh
+                                         -0.1, 0.8, -1.5,#rf
+                                         -0.1, 1.0, -1.5]),#rh
                       'q_retraction': np.array([0.23, 1.38, -2.46, 0.23, 1.68, -2.31, -0.23, 1.38, -2.46, -0.23, 1.68, -2.31]),
 
                       #default configuration
                       #'q_final': np.array([0.1, 0.9, -1.8, 0.1, 0.9, -1.8, -0.1, 0.9, -1.8, -0.1, 0.9, -1.8]),
                       #q final orbit
-                      'q_final': np.array([0.1, 0.8, -1.6,#lf
-                                         0.1, 1.0, -1.6,#lh
-                                         -0.1, 0.8, -1.6,#rf
-                                         -0.1, 1.0, -1.6]),#rh
+                      'q_final': np.array([0.1, 0.8, -1.5,#lf
+                                         0.1, 1.0, -1.5,#lh
+                                         -0.1, 0.8, -1.5,#rf
+                                         -0.1, 1.0, -1.5]),#rh
                       #Forward
                       'q_land_fwd':  np.array([0.1, 0.75, -1.8,  0.1, 0.75, -1.8, -0.1, 0.75, -1.8, -0.1, 0.75, -1.8]),
                       #backward
@@ -445,13 +443,13 @@ robot_params['go2'] ={'dt': 0.002,
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,
-                      'spawn_z': .27,
+                      'spawn_z': .42,
                       'spawn_R': 0.0,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
-                      'ip': "192.168.123.220",
+                      'ip': "192.168.123.161",
                       # use real robot or simulation
-                      'real_robot': False} # note the frames are all aligned with base for joints = 0
+                      'real_robot': True} # note the frames are all aligned with base for joints = 0
 
 robot_params['anymal_d'] ={'dt': 0.002,
                         'kp': np.array([200., 200., 200.]*4),
