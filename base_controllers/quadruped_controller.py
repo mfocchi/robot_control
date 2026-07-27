@@ -1712,8 +1712,9 @@ class QuadrupedController(BaseController):
             pass
 
 
+
 if __name__ == '__main__':
-    p = QuadrupedController('aliengo')
+    p = QuadrupedController('go2')
     world_name = 'fast.world'
     use_gui = False
     p.state_estimation = 'odometry' # 'odometry','imu', 'pronto', 'ground_truth' (only sim), 'mocap'
@@ -1723,6 +1724,9 @@ if __name__ == '__main__':
     use_joy = False
     generate_reference = False
     p.SAVE_BAG = False  #
+    if p.robot_name == 'go2':
+        p.custom_locosim_launch_file = True
+
 
     if rl_control == 'state_est_based':
         if p.real_robot and (p.state_estimation != 'pronto' and p.state_estimation != 'pronto'):
@@ -1854,7 +1858,7 @@ if __name__ == '__main__':
                                                                                 p.comPoseW)
                 p.send_command(p.q_des, p.qd_des, p.alphaCollapse*p.tau_ffwd, log_data_in_send_command=True)
 
-            #p.visualizeContacts()
+            p.visualizeContacts()
         
     except (ros.ROSInterruptException, ros.service.ServiceException):
         if p.SAVE_BAG:

@@ -353,17 +353,21 @@ robot_params['go2'] ={'dt': 0.002,
                       # 'kd': np.array([3., 3., 3.]*4),
                       # 'ki': np.array([0., 0., 0.]*4),
                       #Orbit
-                      'kp': np.array([30., 30., 30.] * 4),
-                      'kd': np.array([1, 1, 1] * 4),
+                      'kp': np.array([60., 60., 60.] * 4),
+                      'kd': np.array([0.8, 0.8, 0.8] * 4),
                       'ki': np.array([0., 0., 0.] * 4),
 
-                       #isaaclab
+                      #default config
+                      # 'kp_swing':  np.array([30., 30.,30]*4),
+                      # 'kd_swing':  np.array([.2, .2, .24]*4),
+                      # 'ki_swing':  np.array([2., 2., 2.]*4),
+                      #orbit
                       'kp_swing': np.array([30., 30., 30.] * 4),
-                      'kd_swing': np.array([1., 1., 1.] * 4),
+                      'kd_swing': np.array([0.4, 0.4, 0.4] * 4),
                       'ki_swing': np.array([0., 0., 0.] * 4),
 
-                      'kp_land': np.array([20., 20., 20.] * 4),
-                      'kd_land': np.array([1, 1, 1] * 4),
+                      'kp_land': np.array([30., 30., 30.] * 4),
+                      'kd_land': np.array([0.8, 0.8, 0.8] * 4),
                       'ki_land': np.array([0., 0., 0.] * 4),
 
                       # joint pid + wbc (optional)
@@ -443,13 +447,13 @@ robot_params['go2'] ={'dt': 0.002,
                       # simulation spawn [m] and [rad]
                       'spawn_x': 0.0,
                       'spawn_y': 0.0,
-                      'spawn_z': .42,
+                      'spawn_z': .32,
                       'spawn_R': 0.0,
                       'spawn_P': 0.0,
                       'spawn_Y': 0.0,
                       'ip': "192.168.123.161",
                       # use real robot or simulation
-                      'real_robot': True} # note the frames are all aligned with base for joints = 0
+                      'real_robot': False} # note the frames are all aligned with base for joints = 0
 
 robot_params['anymal_d'] ={'dt': 0.002,
                         'kp': np.array([200., 200., 200.]*4),
