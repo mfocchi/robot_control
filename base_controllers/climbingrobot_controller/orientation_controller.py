@@ -53,6 +53,11 @@ class OrientationController():
         B_Gamma_des = w_R_b.T.dot(W_Gamma_des)
         B_wrench_des = np.concatenate((B_Fdes, B_Gamma_des))
 
+        # IMPORTANT! we should nullify Fz, m_x, m_y that are underactuated directions in BF
+        B_wrench_des[2] = 0.
+        B_wrench_des[3] = 0.
+        B_wrench_des[4] = 0.
+
         return B_wrench_des, W_wrench_des
 
     def computeThrust(self, des_orient, act_orient, w_omega_b, Ko, Do, w_additional_force = None):
@@ -64,6 +69,10 @@ class OrientationController():
     def computeThrustIneq(self, des_orient, act_orient, w_omega_b, Ko, Do, w_additional_force=None):
         B_wrench_des, W_wrench_des = self.computeWrench(des_orient, act_orient, w_omega_b, Ko, Do, w_additional_force)
         # compute thrusts with QP enforcing signs on trhusters
+
+
+        #debug
+        #print("W_wrench_des", W_wrench_des)
 
         # 0.5 xT*G*x + gT*x
         # s.t. Cx<=d
