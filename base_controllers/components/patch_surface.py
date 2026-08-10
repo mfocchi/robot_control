@@ -18,7 +18,7 @@ class PatchSurface:
         N = len(points_t)
         self.points_t = points_t
         self.all_pc = np.vstack([p['position'] for p in points_t])
-        
+
         self.y_min, self.y_max = float(self.all_pc[:, 1].min()), float(self.all_pc[:, 1].max())
         self.z_min, self.z_max = float(self.all_pc[:, 2].min()), float(self.all_pc[:, 2].max())
         
@@ -466,16 +466,17 @@ class PatchSurface:
         
         
         if plot_patch:
-            fig = plt.figure(figsize=(10, 8))
+            fig = plt.figure(figsize=(10, 8), dpi=150)
             ax = fig.add_subplot(111, projection='3d')
             ax.scatter(X_grid, Y_grid, Z_grid, 
-                    c='skyblue', marker='o', alpha=0.6)
+                    c='blue', marker='o', alpha=0.85, s=20, depthshade=True)
 
-            ax.set_xlabel('Asse X')
-            ax.set_ylabel('Asse Y')
-            ax.set_zlabel('Asse Z')
-            ax.set_title(f'Punti of PatchID: {patch_id}')
-            ax.set_aspect('auto')     
+            ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+            ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+            ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+            ax.tick_params(axis='both', labelsize=15)
+            ax.view_init(elev=15, azim=-20)
+            plt.tight_layout()
             plt.show()
 
         return X_grid, Y_grid, Z_grid
@@ -532,20 +533,44 @@ class PatchSurface:
             print(f"[patch_surface] Final point_t: {point_t}")
 
         if plot_patch:
-            fig = plt.figure(figsize=(12, 8))
+            fig = plt.figure(figsize=(10, 8), dpi=150)
             ax = fig.add_subplot(111, projection='3d')
-            ax.plot_surface(X_grid, Y_grid, Z_grid, alpha=0.6, cmap='viridis')
-
+            
+            # Get costs from all points in patch for coloring
+            costs = np.array([p['cost'] for p in points_in_patch])
+            min_cost, max_cost = costs.min(), costs.max()
+            
+            # Normalize costs for colormap
+            if max_cost - min_cost > 0:
+                norm_costs = (costs - min_cost) / (max_cost - min_cost)
+            else:
+                norm_costs = np.zeros_like(costs)
+            
+            # Use RdYlGn_r colormap (red=high cost, green=low cost)
+            cmap = cm.get_cmap('RdYlGn_r')
+            point_colors = cmap(norm_costs)
+            
+            # Plot all points in patch with cost-based colors
+            P = np.vstack([p['position'] for p in points_in_patch])
+            ax.scatter(P[:, 0], P[:, 1], P[:, 2],
+                      s=20, alpha=1, c=point_colors, depthshade=True)
+            
+            # Highlight the selected surface point
             ax.scatter(closest_point[0], closest_point[1], closest_point[2],
-                    c='orange', s=100, marker='s', label='Surface Point')
+                      c='orange', s=150, marker='s', edgecolors='black', linewidths=2,
+                      label='Surface Point', zorder=10)
+            
+            # Highlight the nearest neighbor used for attributes
             ax.scatter(nearest_point['position'][0], nearest_point['position'][1], nearest_point['position'][2],
-                    c='blue', s=80, marker='o', label='Nearest Neighbor (for color/cost)')
+                      c='blue', s=120, marker='o', edgecolors='black', linewidths=2,
+                      label='Nearest Neighbor (for cost/color)', zorder=10)
 
-            ax.set_xlabel('X (depth from wall)')
-            ax.set_ylabel('Y (horizontal)')
-            ax.set_zlabel('Z (height)')
-            ax.set_title(f'Point_t in Surface - Patch {patch_id}')
-            ax.legend(fontsize=8)
+            ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+            ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+            ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+            ax.tick_params(axis='both', labelsize=15)
+            ax.legend(fontsize=12)
+            ax.view_init(elev=15, azim=-30)
             plt.tight_layout()
             plt.show()
 
@@ -795,15 +820,16 @@ class PatchSurface:
                 patch['size_patch'] = 20  # Increase size for target patches
     
     # ==== PLOTTING METHODS ====                 
-    def plot_patches(self):
+    def plot_patches(self, figsize=(10, 8), elev=15, azim=-30):
         alpha = 0.5
         print("[patch_surface] Plotting patches...")
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize, dpi=150)
         ax = fig.add_subplot(111, projection='3d')
-        ax.set_title('Patches 3D')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
+        # ax.set_title('Patches 3D', fontsize=20, pad=10)
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
         
         total_points = sum(len(patch.get('points_in_patch', [])) for patch in self.patches)
         num_patches = len(self.patches)
@@ -864,12 +890,15 @@ class PatchSurface:
             ax.set_ylim(mid_y - max_range, mid_y + max_range)
             ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
+        ax.view_init(elev=elev, azim=azim)
         plt.tight_layout()
         plt.show()
         return fig, ax
+
     def plot_patches_2(self, point_size=20, alpha=0.85, figsize=(10, 8), elev=15, azim=-30):
         print("[patch_surface] Plotting patches...")
         fig = plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=figsize, dpi=150)
         ax = fig.add_subplot(111, projection='3d')
 
         ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
@@ -939,16 +968,17 @@ class PatchSurface:
         plt.show()
         return fig, ax
 
-    def plot_patches_by_id(self, target_ids):
+    def plot_patches_by_id(self, target_ids, figsize=(10, 8), elev=15, azim=-30):
         if isinstance(target_ids, int):
             target_ids = [target_ids]
             
-        fig = plt.figure(figsize=(12, 10))
+        fig = plt.figure(figsize=figsize, dpi=150)
         ax = fig.add_subplot(111, projection='3d')
-        ax.set_title(f'Map Context - Highlighted Patches: {target_ids}')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
+        ax.set_title(f'Map Context - Highlighted Patches: {target_ids}', fontsize=20, pad=10)
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
 
         # Colors
         colore_evidenziato = 'purple'
@@ -1005,21 +1035,22 @@ class PatchSurface:
             ax.set_ylim(mid_y - max_range, mid_y + max_range)
             ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
-        # Optimization visualization
+        ax.view_init(elev=elev, azim=azim)
         plt.tight_layout()
         plt.show()
         return fig, ax
     
-    def plot_patches_points_target(self):
+    def plot_patches_points_target(self, figsize=(10, 8), elev=15, azim=-30):
         
         alpha = 0.5
         print("[patch_surface] Plotting patches...")
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize, dpi=150)
         ax = fig.add_subplot(111, projection='3d')
-        ax.set_title('Patches 3D')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
+        ax.set_title('Patches 3D - Target Points', fontsize=20, pad=10)
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
         
         total_points = sum(len(patch.get('points_in_patch', [])) for patch in self.patches)
         num_patches = len(self.patches)
@@ -1093,6 +1124,7 @@ class PatchSurface:
             ax.set_ylim(mid_y - max_range, mid_y + max_range)
             ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
+        ax.view_init(elev=elev, azim=azim)
         plt.tight_layout()
         plt.show()
         return fig, ax
@@ -1111,7 +1143,7 @@ class PatchSurface:
         plt.show()
         return fig, ax
     
-    def plot_patch(self, patch_id):
+    def plot_patch(self, patch_id, figsize=(10, 8), elev=15, azim=-30):
         if patch_id < 0 or patch_id >= len(self.patches):
             print(f"[patch_surface] Invalid patch_id {patch_id}. Must be between 0 and {len(self.patches)-1}.")
             return None
@@ -1127,12 +1159,13 @@ class PatchSurface:
         s = np.array([p['size_point'] for p in points_in_patch])
         color = patch.get('color_patch')
         
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize, dpi=150)
         ax = fig.add_subplot(111, projection='3d')
-        ax.set_title(f'Patch select: {patch_id} 3D')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
+        ax.set_title(f'Patch {patch_id} - Detail View', fontsize=20, pad=10)
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
         
         ax.scatter(P[:, 0], P[:, 1], P[:, 2], s=s, alpha=0.8, color=color)
         
@@ -1148,6 +1181,7 @@ class PatchSurface:
         ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
         ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
         
+        ax.view_init(elev=elev, azim=azim)
         plt.tight_layout()
         plt.show()
     
@@ -1169,8 +1203,8 @@ class PatchSurface:
         costs = np.array([p['cost'] for p in all_points_list])
         sizes = np.array([p['size_point'] for p in all_points_list])
 
-        # 3. Create plot (replica of PointCloudFilter subplot)
-        fig = plt.figure(figsize=(16, 8))
+        # 3. Create plot
+        fig = plt.figure(figsize=(16, 8), dpi=150)
         
         # Subplot 1: 3D point cloud colored by cost
         ax1 = fig.add_subplot(1, 2, 1, projection='3d')
@@ -1191,17 +1225,19 @@ class PatchSurface:
         ax1.set_ylim(mid_y - max_range, mid_y + max_range)
         ax1.set_zlim(mid_z - max_range, mid_z + max_range)
         
-        ax1.set_xlabel('X (m) - Height')
-        ax1.set_ylabel('Y (m)')
-        ax1.set_zlabel('Z (m)')
-        ax1.set_title('3D Map - Color based on Cost\n(Green=Low, Red=High)')
+        ax1.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax1.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax1.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax1.set_title('3D Cost Map\n(Green=Low, Red=High)', fontsize=20, pad=10)
+        ax1.tick_params(axis='both', labelsize=15)
         
         # Subplot 2: 2D top view (YZ Plane)
         ax2 = fig.add_subplot(1, 2, 2)
         scatter2 = ax2.scatter(y_coords, z_coords, c=colors, s=sizes*3, alpha=1.0) 
-        ax2.set_xlabel('Y (m)')
-        ax2.set_ylabel('Z (m)')
-        ax2.set_title('2D Cost Map View\n(YZ Projection)')
+        ax2.set_xlabel('Y (m)', fontsize=20, labelpad=10)
+        ax2.set_ylabel('Z (m)', fontsize=20, labelpad=10)
+        ax2.set_title('2D Cost Map (YZ Projection)', fontsize=20, pad=10)
+        ax2.tick_params(axis='both', labelsize=15)
         ax2.set_aspect('equal', adjustable='box')
         ax2.grid(True, alpha=0.3)
         
@@ -1217,8 +1253,6 @@ class PatchSurface:
         
         plt.show()
         
-        
-      
     def plot_population_density(self, all_sampled_ids):
         """
         Visualizza quali patch sono state scelte, colorandole in base alla FREQUENZA di selezione.
@@ -1239,12 +1273,13 @@ class PatchSurface:
 
         max_count = max(counts.values())
         
-        fig = plt.figure(figsize=(12, 10))
+        fig = plt.figure(figsize=(10, 8), dpi=150)
         ax = fig.add_subplot(111, projection='3d')
-        ax.set_title(f'Population Discrete Distribution')
-        ax.set_xlabel('X (Depth)')
-        ax.set_ylabel('Y (Width)')
-        ax.set_zlabel('Z (Height)')
+        ax.set_title('Population Discrete Distribution', fontsize=20, pad=10)
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
 
         # Use a colormap that goes from transparent/cold to hot/opaque
         # Example: 'plasma' or 'hot_r' or 'Reds'
@@ -1307,23 +1342,20 @@ class PatchSurface:
             ax.set_ylim(mid_y - max_range, mid_y + max_range)
             ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
-        # Add a "fake" colorbar to understand the scale (optional but useful)
+        # Add a colorbar
         m = cm.ScalarMappable(cmap=cmap)
         m.set_array([0, max_count])
-        plt.colorbar(m, ax=ax, label='Number of Selections (Frequency)')
+        cbar = plt.colorbar(m, ax=ax, shrink=0.5, aspect=10, pad=0.1)
+        cbar.set_label('Number of Selections', fontsize=15)
+        cbar.ax.tick_params(labelsize=12)
 
         plt.tight_layout()
         plt.show()
         
-    def plot_patches_2D_with_ids(self, figsize=(14, 10), show_ids=True, fontsize=8):
-        """
-        Visualize patches in 2D (YZ plane) with their IDs and colors based on average cost.
-        
-        Args:
-            figsize: tuple, figure size (width, height)
-            show_ids: bool, whether to display patch IDs
-            fontsize: int, font size for patch ID labels
-        """
+    def plot_patches_2D_with_ids(self, figsize=(14, 10), show_ids=True, fontsize=8, show_cost=False):
+        from matplotlib.patches import Rectangle
+        from matplotlib.collections import PatchCollection
+
         print("[patch_surface] Plotting 2D patches with IDs and cost coloring...")
         
         # Collect all patch costs for normalization
@@ -1343,80 +1375,57 @@ class PatchSurface:
         # Use colormap (red-yellow-green reversed: high cost = red, low cost = green)
         cmap = cm.get_cmap('RdYlGn_r')
         
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.set_title('2D Patch Map - Colored by Average Cost', fontsize=14, fontweight='bold')
-        ax.set_xlabel('Y (m) - Width', fontsize=12)
-        ax.set_ylabel('Z (m) - Height', fontsize=12)
+        fig, ax = plt.subplots(figsize=figsize, dpi=150)
+        ax.set_xlabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Z (m)', fontsize=20, labelpad=10)
+        ax.tick_params(axis='both', labelsize=15)
         ax.grid(True, alpha=0.3, linestyle='--')
         
-        # Calculate patch edges for rectangles
-        y_edges = self.y_min + np.arange(self.number_of_patches_width + 1) * self.patch_width
-        z_edges = self.z_min + np.arange(self.number_of_patches_height + 1) * self.patch_height
-        
-        # Plot each patch as a rectangle
-        for patch in self.patches:
-            patch_id = patch['id']
-            
-            # Calculate patch boundaries
-            i = patch_id // self.number_of_patches_height
-            j = patch_id % self.number_of_patches_height
-            
-            y_min = y_edges[i]
-            y_max = y_edges[i + 1]
-            z_min = z_edges[j]
-            z_max = z_edges[j + 1]
-            
-            # Get color based on normalized cost
-            color = cmap(norm_costs[patch_id])
-            
-            # Draw rectangle for patch
-            from matplotlib.patches import Rectangle
-            rect = Rectangle((y_min, z_min), 
-                            y_max - y_min, 
-                            z_max - z_min,
-                            facecolor=color[:3], 
-                            edgecolor='black', 
-                            linewidth=0.5,
-                            alpha=0.7)
-            ax.add_patch(rect)
-            
-            # Add patch ID text at centroid
+        # Build rectangles centered on each patch centroid
+        rectangles = []
+        rect_colors = []
+        text_data = []
+
+        for i, patch in enumerate(self.patches):
+            centroid = patch['centroid']
+            y_corner = centroid[1] - (self.patch_width / 2.0)
+            z_corner = centroid[2] - (self.patch_height / 2.0)
+
+            rect = Rectangle((y_corner, z_corner), self.patch_width, self.patch_height)
+            rectangles.append(rect)
+            rect_colors.append(norm_costs[i])
+
+            # Store text data to draw AFTER PatchCollection
             if show_ids:
-                centroid = patch.get('centroid')
-                if centroid is not None:
-                    y_center = centroid[1]
-                    z_center = centroid[2]
-                    
-                    # Choose text color based on background brightness
-                    brightness = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
-                    text_color = 'white' if brightness < 0.5 else 'black'
-                    
-                    ax.text(y_center, z_center, str(patch_id),
-                           ha='center', va='center',
-                           fontsize=fontsize, fontweight='bold',
-                           color=text_color)
+                label = str(patch['id'])
+                if show_cost and costs[i] is not None:
+                    label += f"\n{costs[i]:.2f}"
+                text_data.append((centroid[1], centroid[2], label))
+
+        # Add PatchCollection FIRST (so it renders behind text)
+        pc = PatchCollection(rectangles, cmap=cmap, alpha=0.7,
+                             edgecolor='black', linewidth=0.5)
+        pc.set_array(np.array(rect_colors))
+        pc.set_clim(0, 1)
+        ax.add_collection(pc)
+
+        # Draw text labels AFTER PatchCollection so they appear on top
+        for (ty, tz, label) in text_data:
+            ax.text(ty, tz, label,
+                    ha='center', va='center',
+                    fontsize=fontsize, fontweight='bold',
+                    color='black', zorder=10)
         
-        # Set axis limits
-        ax.set_xlim(self.y_min - 0.1, self.y_max + 0.1)
-        ax.set_ylim(self.z_min - 0.1, self.z_max + 0.1)
+        # Compute actual extent from all rectangle corners
+        y_center = (self.y_min + self.y_max) / 2.0
+        z_center = (self.z_min + self.z_max) / 2.0
+        y_span = self.y_max - self.y_min
+        z_span = self.z_max - self.z_min
+        margin = 0.05  # 5% margin on each side
+
+        ax.set_xlim(y_center - y_span / 2.0 * (1 + margin), y_center + y_span / 2.0 * (1 + margin))
+        ax.set_ylim(z_center - z_span / 2.0 * (1 + margin), z_center + z_span / 2.0 * (1 + margin))
         ax.set_aspect('equal', adjustable='box')
-        
-        # Add colorbar
-        sm = cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=min_cost, vmax=max_cost))
-        sm.set_array([])
-        cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label('Average Patch Cost', fontsize=11, fontweight='bold')
-        
-        # Add statistics text
-        stats_text = f'Total Patches: {len(self.patches)}\n'
-        stats_text += f'Cost Range: [{min_cost:.3f}, {max_cost:.3f}]\n'
-        stats_text += f'Mean Cost: {np.mean(costs):.3f}'
-        
-        ax.text(0.02, 0.98, stats_text,
-               transform=ax.transAxes,
-               fontsize=9,
-               verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
         plt.tight_layout()
         plt.show()
@@ -1426,7 +1435,7 @@ class PatchSurface:
         
         return fig, ax
     
-    def print_patch_cost_matrix(self, patch_id, grid_size=None, visualize=True):
+    def print_patch_cost_matrix(self, patch_id, grid_size=None, visualize=True, cost_threshold=0.01):
             if patch_id < 0 or patch_id >= len(self.patches):
                 print(f"[patch_surface] Errore: patch_id {patch_id} non valido.")
                 return
@@ -1441,9 +1450,8 @@ class PatchSurface:
             costs = np.array([p['cost'] for p in points_in_patch])
 
             if grid_size is None:
-                # Stima una dimensione quadrata basata sul numero di punti (es. 100 punti -> 10x10)
                 grid_size = int(np.sqrt(len(points_in_patch)))
-                if grid_size < 2: grid_size = 5 # Fallback minimo
+                if grid_size < 2: grid_size = 5
 
             y_grid = np.linspace(y_coords.min(), y_coords.max(), grid_size)
             z_grid = np.linspace(z_coords.min(), z_coords.max(), grid_size)
@@ -1466,18 +1474,41 @@ class PatchSurface:
             print(f"Min Cost: {np.min(costs):.4f} | Max Cost: {np.max(costs):.4f} | Avg: {np.mean(costs):.4f}")
 
             if visualize:
-                fig, ax = plt.subplots(figsize=(8, 6))
+                fig, ax = plt.subplots(figsize=(8, 6), dpi=150)
                 
                 extent = [y_coords.min(), y_coords.max(), z_coords.min(), z_coords.max()]
                 
-                im = ax.imshow(matrix_visual, extent=extent, cmap='RdYlGn_r', aspect='auto', interpolation='nearest')
-                plt.colorbar(im, label='Cost')
+                # Se la soglia non è specificata, usa il costo massimo globale di tutte le patch
+                if cost_threshold is None:
+                    all_costs = []
+                    for patch in self.patches:
+                        for p in patch.get('points_in_patch', []):
+                            all_costs.append(p['cost'])
+                    if all_costs:
+                        cost_threshold = np.max(np.abs(all_costs))
+                    else:
+                        cost_threshold = 1.0
                 
-                ax.set_title(f'Cost Heatmap - Patch {patch_id}')
-                ax.set_xlabel('Y (Width)')
-                ax.set_ylabel('Z (Height)')
+                # Imposta vmin e vmax fissi basati sulla soglia
+                # Così i colori sono significativi: valori vicini a 0 restano verdi
+                vmin = 0.0
+                vmax = max(cost_threshold, 1e-6)  # evita divisione per zero
+                
+                print(f"[patch_surface] Color scale: vmin={vmin:.4f}, vmax={vmax:.4f} (threshold={cost_threshold:.4f})")
+                print(f"[patch_surface] Actual data range: [{np.min(costs):.4f}, {np.max(costs):.4f}]")
+                
+                im = ax.imshow(matrix_visual, extent=extent, cmap='RdYlGn_r', aspect='auto', 
+                               interpolation='nearest', vmin=vmin, vmax=vmax)
+                # cbar = plt.colorbar(im, ax=ax)
+                # cbar.set_label('Cost', fontsize=15)
+                # cbar.ax.tick_params(labelsize=12)
+                
+                # ax.set_title(f'Cost Heatmap - Patch {patch_id}', fontsize=20, pad=10)
+                ax.set_xlabel('Y (m)', fontsize=20, labelpad=10)
+                ax.set_ylabel('Z (m)', fontsize=20, labelpad=10)
+                ax.tick_params(axis='both', labelsize=15)
                 ax.scatter(y_coords, z_coords, c='black', s=10, alpha=0.3, label='Real Points')
-                ax.legend()
+                ax.legend(fontsize=15, loc='best')
                 
                 plt.tight_layout()
                 plt.show()
@@ -1487,49 +1518,52 @@ class PatchSurface:
     def plot_cost_meshgrid(self, Cost_grid, Y_grid, Z_grid, plot_type='surface', show_colorbar=True):
         
         if plot_type in ['surface', 'both']:
-            fig = plt.figure(figsize=(12, 8))
+            fig = plt.figure(figsize=(10, 8), dpi=150)
             ax = fig.add_subplot(111, projection='3d')
             
-            # Surface plot with cost as height
             surf = ax.plot_surface(Y_grid, Z_grid, Cost_grid, 
                                 cmap='RdYlGn_r', 
                                 alpha=0.8,
                                 edgecolor='none')
             
-            ax.set_xlabel('Y (horizontal)')
-            ax.set_ylabel('Z (height)')
-            ax.set_zlabel('Cost')
-            ax.set_title('Cost Morphology - 3D Surface')
+            ax.set_xlabel('Y (m)', fontsize=20, labelpad=10)
+            ax.set_ylabel('Z (m)', fontsize=20, labelpad=10)
+            ax.set_zlabel('Cost', fontsize=20, labelpad=10)
+            # ax.set_title('Cost Morphology - 3D Surface', fontsize=20, pad=10)
+            ax.tick_params(axis='both', labelsize=15)
             
-            if show_colorbar:
-                fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5, label='Cost Value')
+            # if show_colorbar:
+            #     cbar = fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+            #     cbar.set_label('Cost Value', fontsize=15)
+            #     cbar.ax.tick_params(labelsize=12)
             
             plt.tight_layout()
             plt.show()
         
         if plot_type in ['contour', 'both']:
-            fig, ax = plt.subplots(figsize=(10, 8))
+            fig, ax = plt.subplots(figsize=(10, 8), dpi=150)
             
-            # Contour plot (top view)
             contour = ax.contourf(Y_grid, Z_grid, Cost_grid, 
                                 levels=20, 
                                 cmap='RdYlGn_r')
             
-            # Add contour lines
             contour_lines = ax.contour(Y_grid, Z_grid, Cost_grid, 
                                     levels=10, 
                                     colors='black', 
                                     linewidths=0.5,
                                     alpha=0.3)
             
-            ax.set_xlabel('Y (horizontal)')
-            ax.set_ylabel('Z (height)')
-            ax.set_title('Cost Morphology - Contour Map')
+            ax.set_xlabel('Y (m)', fontsize=20, labelpad=10)
+            ax.set_ylabel('Z (m)', fontsize=20, labelpad=10)
+            # ax.set_title('Cost Morphology - Contour Map', fontsize=20, pad=10)
+            ax.tick_params(axis='both', labelsize=15)
             ax.set_aspect('equal')
             
             if show_colorbar:
-                cbar = fig.colorbar(contour, ax=ax, label='Cost Value')
-                ax.clabel(contour_lines, inline=True, fontsize=8)
+                cbar = fig.colorbar(contour, ax=ax)
+                cbar.set_label('Cost Value', fontsize=15)
+                cbar.ax.tick_params(labelsize=12)
+                ax.clabel(contour_lines, inline=True, fontsize=12)
             
             plt.tight_layout()
             plt.show()
@@ -1543,8 +1577,7 @@ class PatchSurface:
         print(f" Std Dev: {np.nanstd(Cost_grid):.4f}")
         print("="*50 + "\n")
     
-    
-    def plot_map_with_cost_meshgrid_overlay(self, Cost_grid, Y_grid, Z_grid, x_offset=0.5, alpha_mesh=0.6, alpha_points=0.3):
+    def plot_map_with_cost_meshgrid_overlay(self, Cost_grid, Y_grid, Z_grid, x_offset=0.5, alpha_mesh=0.8, alpha_points=0.8, elev=15, azim=-30):
         """
         Plot the real terrain map with the cost meshgrid overlaid with an X offset.
         
@@ -1590,14 +1623,14 @@ class PatchSurface:
         X_terrain_grid = X_terrain_grid.reshape(Y_grid.shape)
         
         # Create the figure
-        fig = plt.figure(figsize=(16, 10))
+        fig = plt.figure(figsize=(16, 10), dpi=150)
         ax = fig.add_subplot(111, projection='3d')
         
         # Plot 1: Real terrain surface (semi-transparent)
         # Uses viridis colormap for depth visualization
         surf_terrain = ax.plot_surface(X_terrain_grid, Y_grid, Z_grid,
                                     cmap='viridis',
-                                    alpha=0.4,
+                                    alpha=0.8,
                                     edgecolor='none',
                                     label='Real Terrain')
         
@@ -1622,11 +1655,11 @@ class PatchSurface:
                                     label='Cost Meshgrid')
         
         # Formatting
-        ax.set_xlabel('X (m) - Depth', fontsize=12)
-        ax.set_ylabel('Y (m) - Width', fontsize=12)
-        ax.set_zlabel('Z (m) - Height', fontsize=12)
-        ax.set_title(f'Terrain Map with Cost Meshgrid Overlay\n(Cost mesh offset: +{x_offset}m in X)', 
-                    fontsize=14, fontweight='bold')
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        ax.set_title(f'Terrain + Cost Overlay (offset +{x_offset}m in X)', fontsize=20, pad=10)
+        ax.tick_params(axis='both', labelsize=15)
         
         # Equal axis scaling
         max_range = np.array([
@@ -1647,7 +1680,8 @@ class PatchSurface:
         m = cm.ScalarMappable(cmap=cm.RdYlGn_r)
         m.set_array(Cost_grid)
         cbar = plt.colorbar(m, ax=ax, shrink=0.5, aspect=10, pad=0.1)
-        cbar.set_label('Cost Value\n(Green=Low, Red=High)', fontsize=10)
+        cbar.set_label('Cost Value\n(Green=Low, Red=High)', fontsize=15)
+        cbar.ax.tick_params(labelsize=12)
         
         # --- INTERACTIVE LEGEND SECTION ---
         from matplotlib.patches import Patch
@@ -1655,14 +1689,14 @@ class PatchSurface:
         # Dizionario per mappare elementi della leggenda ai plot
         legend_map = {}
         
-        # Crea elementi della leggenda più descrittivi
+        # Interactive legend elements
         legend_elements = [
             Patch(facecolor='teal', alpha=0.4, edgecolor='black', linewidth=1, 
-                  label='[TERRAIN] Superficie Terreno Reale'),
+                  label='[TERRAIN] Real Terrain Surface'),
             Patch(facecolor='red', alpha=alpha_mesh, edgecolor='black', linewidth=1, 
-                  label=f'[COST] Griglia Costi (offset +{x_offset}m in X)'),
+                  label=f'[COST] Cost Grid (offset +{x_offset}m)'),
             Patch(facecolor='gray', alpha=alpha_points, 
-                  label='[POINTS] Nuvola di Punti')
+                  label='[POINTS] Point Cloud')
         ]
         
         # Mappa gli elementi ai plot effettivi
@@ -1670,11 +1704,11 @@ class PatchSurface:
         legend_map[legend_elements[1]] = surf_cost
         legend_map[legend_elements[2]] = scatter_points
         
-        # Crea la leggenda con picker abilitato
-        leg = ax.legend(handles=legend_elements, loc='upper left', fontsize=11, 
+        # Legend with picker enabled
+        leg = ax.legend(handles=legend_elements, loc='upper left', fontsize=15, 
                       framealpha=0.9, edgecolor='black', 
-                      title='Click per mostrare/nascondere',
-                      title_fontsize=10, fancybox=True, shadow=True)
+                      title='Click to toggle visibility',
+                      title_fontsize=13, fancybox=True, shadow=True)
         
         # Abilita il picking per tutti gli elementi della leggenda
         for legend_line, legend_text in zip(leg.get_patches(), leg.get_texts()):
@@ -1709,6 +1743,7 @@ class PatchSurface:
         # Add grid
         ax.grid(True, alpha=0.3)
         
+        ax.view_init(elev=elev, azim=azim)
         plt.tight_layout()
         plt.show()
         
@@ -1716,52 +1751,318 @@ class PatchSurface:
         print(f"  - Real terrain: X range [{all_x.min():.2f}, {all_x.max():.2f}] m")
         print(f"  - Cost mesh: X range [{(all_x.min()+x_offset):.2f}, {(all_x.max()+x_offset):.2f}] m")
         print(f"  - Cost range: [{np.nanmin(Cost_grid):.3f}, {np.nanmax(Cost_grid):.3f}]")
+
+    def plot_point_cloud_cost(self, point_size=20, alpha=0.85, figsize=(10, 8), elev=15, azim=-30):
+        """
+        Plot the 3D point cloud colored by cost values (RdYlGn_r colormap).
+        """
+        print("[patch_surface] Plotting point cloud with cost coloring...")
+
+        all_x, all_y, all_z = [], [], []
+        all_costs = []
+
+        for patch in self.patches:
+            pts = patch.get('points_in_patch') or patch.get('points') or []
+            if not pts:
+                continue
+            for p in pts:
+                pos = p['position']
+                all_x.append(pos[0])
+                all_y.append(pos[1])
+                all_z.append(pos[2])
+                all_costs.append(p.get('cost', 0.0))
+
+        all_x = np.array(all_x)
+        all_y = np.array(all_y)
+        all_z = np.array(all_z)
+        all_costs = np.array(all_costs)
+
+        fig = plt.figure(figsize=figsize, dpi=150)
+        ax = fig.add_subplot(111, projection='3d')
+
+        sc = ax.scatter(all_x, all_y, all_z,
+                        c=all_costs, cmap='RdYlGn_r',
+                        s=point_size, alpha=alpha, depthshade=True)
+
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        # ax.set_title('Point Cloud - Cost Map', fontsize=20, pad=10)
+        ax.tick_params(axis='both', labelsize=15)
+
+        # cbar = fig.colorbar(sc, ax=ax, shrink=0.5, aspect=10, pad=0.1)
+        # cbar.set_label('Cost Value\n(Green=Low, Red=High)', fontsize=15)
+        # cbar.ax.tick_params(labelsize=12)
+
+        # Equal axis scaling
+        if len(all_x) > 0:
+            max_range = np.array([
+                all_x.max() - all_x.min(),
+                all_y.max() - all_y.min(),
+                all_z.max() - all_z.min()
+            ]).max() / 2.0
+            mid_x = (all_x.max() + all_x.min()) * 0.5
+            mid_y = (all_y.max() + all_y.min()) * 0.5
+            mid_z = (all_z.max() + all_z.min()) * 0.5
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        ax.view_init(elev=elev, azim=azim)
+        plt.tight_layout()
+        plt.show()
+
+        print(f"[patch_surface] Point cloud cost plot complete!")
+        print(f"  - Points plotted: {len(all_x)}")
+        print(f"  - Cost range: [{np.nanmin(all_costs):.3f}, {np.nanmax(all_costs):.3f}]")
+        return fig, ax
+
+    def plot_mesh_cost(self, Cost_grid, Y_grid, Z_grid, alpha=0.8, elev=15, azim=-30):
+        """
+        Plot the terrain mesh surface colored by cost values (RdYlGn_r colormap).
         
+        Args:
+            Cost_grid: 2D array of cost values on the meshgrid
+            Y_grid: 2D meshgrid for Y coordinates
+            Z_grid: 2D meshgrid for Z coordinates
+            alpha: transparency of the mesh surface (0-1)
+        """
+        print("[patch_surface] Plotting terrain mesh with cost coloring...")
+
+        # Collect all points to interpolate X (depth) on the meshgrid
+        all_x, all_y, all_z = [], [], []
+        for patch in self.patches:
+            for point in patch.get('points_in_patch', []):
+                pos = point['position']
+                all_x.append(pos[0])
+                all_y.append(pos[1])
+                all_z.append(pos[2])
+
+        all_x = np.array(all_x)
+        all_y = np.array(all_y)
+        all_z = np.array(all_z)
+
+        from scipy.interpolate import griddata
+        points_yz = np.column_stack((all_y, all_z))
+        grid_points_yz = np.column_stack((Y_grid.ravel(), Z_grid.ravel()))
+
+        X_terrain_grid = griddata(points_yz, all_x, grid_points_yz, method='linear', fill_value=np.nan)
+        if np.any(np.isnan(X_terrain_grid)):
+            X_nearest = griddata(points_yz, all_x, grid_points_yz, method='nearest')
+            X_terrain_grid = np.where(np.isnan(X_terrain_grid), X_nearest, X_terrain_grid)
+        X_terrain_grid = X_terrain_grid.reshape(Y_grid.shape)
+
+        # Normalize costs for facecolors
+        cost_normalized = (Cost_grid - np.nanmin(Cost_grid)) / (np.nanmax(Cost_grid) - np.nanmin(Cost_grid))
+
+        fig = plt.figure(figsize=(10, 8), dpi=150)
+        ax = fig.add_subplot(111, projection='3d')
+
+        surf = ax.plot_surface(X_terrain_grid, Y_grid, Z_grid,
+                               facecolors=cm.RdYlGn_r(cost_normalized),
+                               alpha=alpha,
+                               edgecolor='black',
+                               linewidth=0.1)
+
+        ax.set_xlabel('X (m)', fontsize=20, labelpad=10)
+        ax.set_ylabel('Y (m)', fontsize=20, labelpad=10)
+        ax.set_zlabel('Z (m)', fontsize=20, labelpad=10)
+        # ax.set_title('Terrain Mesh - Cost Map', fontsize=20, pad=10)
+        ax.tick_params(axis='both', labelsize=15)
+
+        m = cm.ScalarMappable(cmap=cm.RdYlGn_r)
+        m.set_array(Cost_grid)
+        # cbar = fig.colorbar(m, ax=ax, shrink=0.5, aspect=10, pad=0.1)
+        # cbar.set_label('Cost Value\n(Green=Low, Red=High)', fontsize=15)
+        # cbar.ax.tick_params(labelsize=12)
+
+        # Equal axis scaling
+        if len(all_x) > 0:
+            max_range = np.array([
+                all_x.max() - all_x.min(),
+                all_y.max() - all_y.min(),
+                all_z.max() - all_z.min()
+            ]).max() / 2.0
+            mid_x = (all_x.max() + all_x.min()) * 0.5
+            mid_y = (all_y.max() + all_y.min()) * 0.5
+            mid_z = (all_z.max() + all_z.min()) * 0.5
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        ax.view_init(elev=elev, azim=azim)
+        plt.tight_layout()
+        plt.show()
+
+        print(f"[patch_surface] Mesh cost plot complete!")
+        print(f"  - Cost range: [{np.nanmin(Cost_grid):.3f}, {np.nanmax(Cost_grid):.3f}]")
+        return fig, ax
+
+
+    def visualize_full_cost_map_with_endpoints(self, p0, pf, elev=30, azim=45):
+        """
+        Visualizza la nuvola di punti in 3D e solo le etichette testuali 
+        con coordinate (Y, Z) nel grafico 2D, senza marker o frecce.
+        """
+        # 1. Raccolta dati
+        all_points_list = []
+        for patch in self.patches:
+            all_points_list.extend(patch.get('points_in_patch', []))
+
+        if not all_points_list:
+            print("[patch_surface] Nessun punto trovato nelle patch.")
+            return
+
+        x_coords = np.array([p['position'][0] for p in all_points_list])
+        y_coords = np.array([p['position'][1] for p in all_points_list])
+        z_coords = np.array([p['position'][2] for p in all_points_list])
+        
+        colors = np.array([p['color'] for p in all_points_list])
+        sizes = np.array([p['size_point'] for p in all_points_list])
+
+        p0_surf, pf_surf = p0, pf 
+
+        fig = plt.figure(figsize=(16, 8), dpi=150)
+
+        # --- Subplot 1: 3D con Point Cloud ---
+        ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+        # Ripristinata la nuvola di punti
+        ax1.scatter(x_coords, y_coords, z_coords, c=colors, s=sizes, alpha=0.6)
+        
+        ax1.view_init(elev=elev, azim=azim)
+        x_range = x_coords.max() - x_coords.min()
+        y_range = y_coords.max() - y_coords.min()
+        z_range = z_coords.max() - z_coords.min()
+        
+        max_range = np.array([x_range, y_range, z_range]).max() / 2.0
+        
+        mid_x = (x_coords.max() + x_coords.min()) * 0.5
+        mid_y = (y_coords.max() + y_coords.min()) * 0.5
+        mid_z = (z_coords.max() + z_coords.min()) * 0.5
+        
+        ax1.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax1.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax1.set_zlim(mid_z - max_range, mid_z + max_range)
+        # Solo etichette testuali in 3D (senza marker scatter)
+        ax1.scatter(p0_surf[0], p0_surf[1], p0_surf[2],
+            marker='v', color='green', s=200, zorder=30)
+
+        ax1.scatter(pf_surf[0], pf_surf[1], pf_surf[2],
+                    marker='x', color='red', s=200, linewidths=3, zorder=30)
+
+        # --- Testo ---
+        ax1.text(p0_surf[0], p0_surf[1], p0_surf[2], " P0",
+                fontsize=14, fontweight='bold', color='yellow', zorder=40)
+
+        ax1.text(pf_surf[0], pf_surf[1], pf_surf[2], " PF",
+                fontsize=14, fontweight='bold', color='red', zorder=40)
+
+        ax1.set_xlabel('X (m)')
+        ax1.set_ylabel('Y (m)')
+        ax1.set_zlabel('Z (m)')
+
+        # --- Subplot 2: 2D (YZ Plane) ---
+        ax2 = fig.add_subplot(1, 2, 2)
+        ax2.scatter(y_coords, z_coords, c=colors, s=sizes * 3, alpha=0.8)
+        
+        # 1. Definizione simboli (markers)
+        m0 = 'v' # Triangolo con punta in basso per P0 (testo SOPRA)
+        mf = 'x' # Croce rossa per PF
+
+        # 2. Definizione etichette testuali (senza coordinate per chiarezza)
+        txt0 = "P0"
+        txtf = "PF"
+
+        # 3. Posizionamento P0 (Triangolo verde, testo sopra)
+        ax2.scatter(p0_surf[1], p0_surf[2], marker=m0, 
+                    color='green', s=150, zorder=30, label='_nolegend_')
+        
+        ax2.annotate(txt0, 
+                     xy=(p0_surf[1], p0_surf[2]), # Punto target (il simbolo)
+                     xytext=(0, 10),              # Offset in pixel (0 orizz, 10 sopra)
+                     textcoords='offset points',   # Sistema di coordinate per offset
+                     ha='center',                  # Allineamento orizzontale: centro
+                     va='bottom',                  # Allineamento verticale: base del testo
+                     fontsize=14, fontweight='bold', color='green',
+                     bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=2))
+
+        # 4. Posizionamento PF (Croce rossa, testo sopra)
+        ax2.scatter(pf_surf[1], pf_surf[2], marker=mf, 
+                    color='red', s=150, linewidths=3, zorder=30, label='_nolegend_')
+        
+        ax2.annotate(txtf, 
+                     xy=(pf_surf[1], pf_surf[2]),  # Punto target
+                     xytext=(0, 10),               # Offset in pixel (10 sopra)
+                     textcoords='offset points',
+                     ha='center', va='bottom',
+                     fontsize=14, fontweight='bold', color='red',
+                     bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=2))
+
+        # Ripristino impostazioni grafiche esistenti
+        ax2.set_xlabel('Y (m)', fontsize=15)
+        ax2.set_ylabel('Z (m)', fontsize=15)
+        ax2.set_aspect('equal')
+        ax2.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.show()
+
+        return p0_surf, pf_surf
+
         
 def main():
-    print("[TEST] STARTING PATCH SURFACE TEST SUITE")
-    
-    print("[TEST] === SETUP: Loading Terrain and Filtering Point Cloud ===")
-    terrain  = TerrainManager(grid_size=100,wall_depth =10,max_ridge_depth=0.5, seed="default", Lz=-10, Ly=10, generate_terrain=True, terrain_type="custom_gaussians")
-    pc = terrain.point_cloud
-    pcs = PointCloudFilter(pc, h_min=1.0, h_max=4.0)    
-    pcs.print_map_pc()
-    # filter
-    # print("\n[TEST] Applying Exponential Height Cost Filter...")
-    # pcs.filter_height_profile(x0=1.5, scale=0.5, profile="exponential")
-    # print("\n[TEST] Applying Smoothing Filter...")
-    # kernel = [pcs.smoothing_kernel] 
-    # pcs.filter_process_points_pipeline(kernel, weight=0.5, plot=False)
-    print("\n[TEST] Filtered Map Statistics:")
-    pcs.print_map_pc()
+    print("=" * 70)
+    print(" PATCH SURFACE - COMPLETE TEST SUITE")
+    print("=" * 70)
 
-    # Create PatchSurface object
-    print("\n[TEST] === Creating Patch Surface ===")
-    patch_surface = PatchSurface(pcs.points_t, number_of_patches_width=10, number_of_patches_height=10)
+    # ------------------------------------------------------------------ #
+    #  SETUP: Load terrain, filter point cloud, build PatchSurface
+    # ------------------------------------------------------------------ #
+    print("\n[SETUP] Loading terrain and filtering point cloud ...")
+    terrain = TerrainManager(
+        grid_size=100, wall_depth=3, max_ridge_depth=0.5,
+        seed="default", Lz=-10, Ly=10,
+        generate_terrain=True, terrain_type="rock"
+    )
+    pc  = terrain.point_cloud
+    pcs = PointCloudFilter(pc, h_min=1.0, h_max=4.0)
+    pcs.print_map_pc()
     
-    patch_surface.random_color()
-    patch_surface.plot_patches()
-    patch_surface.plot_patches_2()
-    # Apply cost-based coloring
-    patch_surface.cost_color()
-    
-    # TEST 1: Get basic information
-    print("\n[TEST] === TEST 1: Getting Basic Patch Information ===")
+    print("\n[INIT] === First Derivative (Gradient) ===")
+    kernel = [pcs.sobel_y, pcs.sobel_z] 
+    pcs.filter_process_points_pipeline(kernel, weight=1, plot=False)
+    print("\n[INIT] === Second Derivative (Laplacian) ===")
+    kernel = [pcs.laplacian_kernel] 
+    pcs.filter_process_points_pipeline(kernel, weight=1, plot=False)
+
+    print("\n[SETUP] Creating PatchSurface (10x10) ...")
+    patch_surface = PatchSurface(
+        pcs.points_t,
+        number_of_patches_width=10,
+        number_of_patches_height=10
+    )
+
+    # ================================================================== #
+    #  SECTION A – DATA / LOGIC TESTS  (no plots)
+    # ================================================================== #
+    print("\n" + "=" * 70)
+    print(" SECTION A: DATA / LOGIC TESTS")
+    print("=" * 70)
+
+    # --- A1: Basic patch info ---
+    print("\n[A1] Basic Patch Information")
     num_patches = patch_surface.get_number_of_patches()
-    print(f"[TEST] Total number of patches: {num_patches}")
-    
     test_patch_id = 25
-    centroid = patch_surface.get_patch_centroid(test_patch_id)
-    print(f"[TEST] Centroid of patch {test_patch_id}: {centroid}")
-    
-    cost = patch_surface.get_patch_cost(test_patch_id)
-    print(f"[TEST] Cost of patch {test_patch_id}: {cost:.4f}")
-    
-    points_in_patch = patch_surface.get_points_in_patch(test_patch_id)
-    print(f"[TEST] Number of points in patch {test_patch_id}: {len(points_in_patch)}")
-    
-    # TEST 2: Test point membership in patch
-    print("\n[TEST] === TEST 2: Testing Point Membership ===")
+    centroid       = patch_surface.get_patch_centroid(test_patch_id)
+    cost           = patch_surface.get_patch_cost(test_patch_id)
+    pts_in_patch   = patch_surface.get_points_in_patch(test_patch_id)
+    print(f"  Total patches      : {num_patches}")
+    print(f"  Centroid (patch {test_patch_id}): {centroid}")
+    print(f"  Cost     (patch {test_patch_id}): {cost:.4f}")
+    print(f"  #Points  (patch {test_patch_id}): {len(pts_in_patch)}")
+
+    # --- A2: Point membership (3D) ---
+    print("\n[A2] Point Membership (3D)")
     test_point = {
         'position': np.array([5.0, 2.0, 0.0]),
         'color': np.array([0, 0, 0]),
@@ -1769,135 +2070,171 @@ def main():
         'size_point': 4.0,
         'cost': 0.5
     }
-    
     patch_id_from_point = patch_surface.get_patch_id_from_point(test_point)
-    print(f"[TEST] Test point belongs to patch: {patch_id_from_point}")
-    
-    # TEST 3: Test 2D point location
-    print("\n[TEST] === TEST 3: Testing 2D Point Location ===")
-    y_test = 2.5
-    z_test = -1.5
+    print(f"  Point {test_point['position']} -> patch {patch_id_from_point}")
+
+    # --- A3: Point membership (2D) ---
+    print("\n[A3] Point Membership (2D)")
+    y_test, z_test = 2.5, -1.5
     patch_id_2d = patch_surface.get_patch_id_from_point_2D(y_test, z_test)
-    print(f"[TEST] Point (y={y_test}, z={z_test}) belongs to patch: {patch_id_2d}")
-    
-    # TEST 4: Get point on surface
-    print("\n[TEST] === TEST 4: Getting Point on Surface ===")
+    print(f"  (y={y_test}, z={z_test}) -> patch {patch_id_2d}")
+
+    # --- A4: Point on surface ---
+    print("\n[A4] Point on Surface")
     if patch_id_2d is not None:
-        point_on_surface = patch_surface.get_point_t_in_surface(patch_id_2d, y_test, z_test, print_info=True, plot_patch=False)
-        if point_on_surface:
-            print(f"[TEST] Surface point found at: {point_on_surface['position']}")
-            print(f"[TEST] Point cost: {point_on_surface['cost']:.4f}")
-    
-    # TEST 5: Test absolute position conversion
-    print("\n[TEST] === TEST 5: Converting Local to Absolute Coordinates ===")
-    test_patch_id = 1
-    local_y = 0.5
-    local_z = 0.5
-    scale = 1.0
-    absolute_position = patch_surface.getAbsolutePoseOfPointInsidePatch(test_patch_id, local_y, local_z, scale=scale)
-    print(f"[TEST] Local coords ({local_y}, {local_z}) in patch {test_patch_id} -> Absolute: {absolute_position}")
-    
-    # TEST 6: Get cost at specific point
-    print("\n[TEST] === TEST 6: Getting Cost at Specific Point ===")
-    if absolute_position is not None:
-        abs_yz = absolute_position[1:]  # Extract Y and Z
-        cost_at_point = patch_surface.get_cost_in_point(test_patch_id, abs_yz)
-        print(f"[TEST] Cost at point {abs_yz}: {cost_at_point:.4f}")
-    
-    # TEST 7: Test normal vector calculation
-    print("\n[TEST] === TEST 7: Calculating Surface Normal Vector ===")
+        pt_surf = patch_surface.get_point_t_in_surface(
+            patch_id_2d, y_test, z_test, print_info=True, plot_patch=False)
+        if pt_surf:
+            print(f"  Surface point: {pt_surf['position']}, cost: {pt_surf['cost']:.4f}")
+
+    # --- A5: Local -> Absolute coordinate conversion ---
+    print("\n[A5] Local to Absolute Coordinates")
+    test_patch_id = 50
+    local_y, local_z, scale = 0.5, 0.5, 1.0
+    abs_pos = patch_surface.getAbsolutePoseOfPointInsidePatch(
+        test_patch_id, local_y, local_z, scale=scale)
+    print(f"  Local ({local_y},{local_z}) in patch {test_patch_id} -> Absolute: {abs_pos}")
+
+    # --- A6: Cost at a specific point ---
+    print("\n[A6] Cost at Specific Point")
+    if abs_pos is not None:
+        abs_yz = abs_pos[1:]
+        cost_at = patch_surface.get_cost_in_point(test_patch_id, abs_yz)
+        print(f"  Cost at {abs_yz}: {cost_at:.4f}")
+
+    # --- A7: Normal vector ---
+    print("\n[A7] Surface Normal Vector")
     if patch_id_from_point is not None:
-        normal_vector = patch_surface.normal_vector_of_point_in_patch(
+        nv = patch_surface.normal_vector_of_point_in_patch(
             patch_id_from_point, test_point, print_info=True, plot_normal_patch=False)
-        if normal_vector is not None:
-            print(f"[TEST] Normal vector: {normal_vector}")
-    
-    # TEST 8: Add new interpolated point
-    print("\n[TEST] === TEST 8: Adding New Interpolated Point ===")
-    new_y = 3.0
-    new_z = -2.0
-    patch_for_new_point = patch_surface.get_patch_id_from_point_2D(new_y, new_z)
-    if patch_for_new_point is not None:
-        print(f"[TEST] Adding new point at (y={new_y}, z={new_z}) to patch {patch_for_new_point}")
-        patch_surface.set_new_point_in_patch(patch_for_new_point, new_y, new_z, 
-                                            update_centroid=True, update_cost=True, 
-                                            plot=False, k_neighbors=5)
-    
-    # TEST 9: Test color marking for target points
-    print("\n[TEST] === TEST 9: Marking Target Points ===")
+        if nv is not None:
+            print(f"  Normal vector: {nv}")
+
+    # --- A8: Interpolated point insertion ---
+    print("\n[A8] Add New Interpolated Point")
+    new_y, new_z = 3.0, -2.0
+    pid_new = patch_surface.get_patch_id_from_point_2D(new_y, new_z)
+    if pid_new is not None:
+        print(f"  Adding (y={new_y}, z={new_z}) to patch {pid_new}")
+        patch_surface.set_new_point_in_patch(
+            pid_new, new_y, new_z,
+            update_centroid=True, update_cost=True,
+            plot=False, k_neighbors=5)
+
+    # --- A9: Trajectory endpoints projection ---
+    print("\n[A9] Trajectory Endpoints Projection")
+    P0 = np.array([0.0, 2.5, -1.5])
+    PF = np.array([0.0, 4.0, -0.5])
+    patch_p0 = patch_surface.get_patch_id_from_point_2D(P0[1], P0[2])
+    patch_pf = patch_surface.get_patch_id_from_point_2D(PF[1], PF[2])
+    print(f"  P0 {P0} -> patch {patch_p0}")
+    print(f"  PF {PF} -> patch {patch_pf}")
+    if patch_p0 is not None:
+        s0 = patch_surface.get_point_t_in_surface(
+            patch_p0, P0[1], P0[2], print_info=True, plot_patch=False)
+        if s0:
+            print(f"  P0 on surface: {s0['position']}")
+    if patch_pf is not None:
+        sf = patch_surface.get_point_t_in_surface(
+            patch_pf, PF[1], PF[2], print_info=True, plot_patch=False)
+        if sf:
+            print(f"  PF on surface: {sf['position']}")
+
+    # ================================================================== #
+    #  SECTION B – PLOT TESTS  (one per plot method)
+    # ================================================================== #
+    print("\n" + "=" * 70)
+    print(" SECTION B: PLOT TESTS  (every plot method)")
+    print("=" * 70)
+
+    # ---- B1: plot_patches (random color) ----
+    print("\n[B1] plot_patches — Random Color")
+    patch_surface.random_color()
+    patch_surface.plot_patches()
+
+    # ---- B2: plot_patches_2 (random color) ----
+    print("\n[B2] plot_patches_2 — Random Color")
+    patch_surface.plot_patches_2()
+
+    # ---- B3: plot_patches (cost color) ----
+    print("\n[B3] plot_patches — Cost Color")
+    patch_surface.cost_color()
+    patch_surface.plot_patches()
+
+    # ---- B5: plot_patch (single patch detail) ----
+    print(f"\n[B5] plot_patch — Patch {test_patch_id} Detail")
+    patch_surface.plot_patch(test_patch_id)
+
+    # ---- B6: plot_patches_by_id ----
+    print("\n[B6] plot_patches_by_id — Highlighted Patches")
+    patches_list = [1, 10, 50, 60, 4, 8, 28]
+    patch_surface.plot_patches_by_id(patches_list)
+
+    # ---- B7: plot_patches_points_target ----
+    print("\n[B7] plot_patches_points_target — Target Points")
     random_indices = np.random.choice(len(pcs.points_t), size=5, replace=False)
     target_points = [pcs.points_t[i] for i in random_indices]
-    print(f"[TEST] Selected {len(target_points)} random target points")
     patch_surface.color_targhet_points_jump(target_points)
-    
-    # TEST 10: Test color marking for target patches
-    print("\n[TEST] === TEST 10: Marking Target Patches ===")
-    random_patch_indices = np.random.choice(len(patch_surface.patches), size=3, replace=False)
-    target_patches = [patch_surface.patches[i] for i in random_patch_indices]
-    print(f"[TEST] Selected {len(target_patches)} random target patches: {[p['id'] for p in target_patches]}")
-    patch_surface.color_targhet_patches(target_patches)
-    
-    
-    # TEST 11: add gaussian cost to a patch
-    print("\n[TEST] === TEST 10b: Adding Gaussian Cost to a Patch ===")
+    patch_surface.plot_patches_points_target()
+
+    # ---- B8: plot_patches_target ----
+    print("\n[B8] plot_patches_target — Target Overlay")
+    patch_surface.plot_patches_target()
+
+    # ---- B9: plot_patches_2D_with_ids ----
+    print("\n[B9] plot_patches_2D_with_ids — 2D Map with IDs")
+    patch_surface.plot_patches_2D_with_ids(show_ids=True, fontsize=10)
+
+    # ---- B10: visualize_full_cost_map ----
+    print("\n[B10] visualize_full_cost_map — Full 3D + 2D Cost")
     patch_surface.gaussian_cost_all_patch()
-    patch_surface.visualize_full_cost_map()    
+    patch_surface.cost_color()
+    patch_surface.visualize_full_cost_map()
+
+    # ---- B11: print_patch_cost_matrix (with heatmap) ----
+    print("\n[B11] print_patch_cost_matrix — Patch 0 Heatmap")
     patch_surface.print_patch_cost_matrix(0, grid_size=10, visualize=True)
-    # # TEST 11: Visualize results
-    # print("\n[TEST] === TEST 11: Visualization ===")
-    # print("[TEST] Plotting all patches with cost coloring...")
-    # patch_surface.plot_patches()
-    
-    # print("[TEST] Plotting patches with target points highlighted...")
-    # patch_surface.plot_patches_points_target()
-    
-    # # Plot a specific patch
-    # print(f"[TEST] Plotting patch {test_patch_id} in detail...")
-    # patch_surface.plot_patch(test_patch_id)
-    
-    # # Plot mesh grid for a patch
-    # print(f"[TEST] Getting mesh grid for patch {test_patch_id}...")
-    # X_grid, Y_grid, Z_grid = patch_surface.get_mesh_grid_patch(test_patch_id, plot_patch=True)
-    
-    # # TEST 12: Advanced test - trajectory points
-    # print("\n[TEST] === TEST 12: Testing Trajectory Points ===")
-    # P0_INIT = np.array([0.0, 2.5, -1.5])
-    # PF_INIT = np.array([0.0, 4.0, -0.5])
-    
-    # print(f"[TEST] Start point P0: {P0_INIT}")
-    # print(f"[TEST] End point PF: {PF_INIT}")
-    
-    # # Find patches for trajectory endpoints
-    # patch_p0 = patch_surface.get_patch_id_from_point_2D(P0_INIT[1], P0_INIT[2])
-    # patch_pf = patch_surface.get_patch_id_from_point_2D(PF_INIT[1], PF_INIT[2])
-    
-    # print(f"[TEST] P0 is in patch: {patch_p0}")
-    # print(f"[TEST] PF is in patch: {patch_pf}")
-    
-    # if patch_p0 is not None:
-    #     p0_on_surface = patch_surface.get_point_t_in_surface(
-    #         patch_p0, P0_INIT[1], P0_INIT[2], print_info=True, plot_patch=False)
-    #     if p0_on_surface:
-    #         print(f"[TEST] P0 projected on surface: {p0_on_surface['position']}")
-    
-    # if patch_pf is not None:
-    #     pf_on_surface = patch_surface.get_point_t_in_surface(
-    #         patch_pf, PF_INIT[1], PF_INIT[2], print_info=True, plot_patch=False)
-    #     if pf_on_surface:
-    #         print(f"[patch_surface] PF projected on surface: {pf_on_surface['position']}")
-    
-    # # # TEST 13: Generate cost mesh grid
-    # # print("\n[TEST] === TEST 13: Generating Cost Mesh Grid ===")
-    # # cost_grid = patch_surface.get_cost_meshgrid(grid_size_y=100, grid_size_z=100, plot_mesh=False)
-    
-    # # TEST 14: print list of patches
-    # print("\n[TEST] === TEST 14: Plotting Specific Patches by ID ===")
-    # patches_list = [1 , 10 , 50 , 60 , 4 , 8 , 28]
-    # patch_surface.plot_patches_by_id(patches_list)
-    
-    # # TEST 15: Plot 2D patch map with IDs
-    # print("\n[TEST] === TEST 15: Plotting 2D Patch Map with IDs ===")
-    # patch_surface.plot_patches_2D_with_ids(figsize=(14, 10), show_ids=True, fontsize=10)
-    
+
+    # ---- B12: plot_population_density ----
+    print("\n[B12] plot_population_density — Selection Heatmap")
+    n_total = patch_surface.get_number_of_patches()
+    sampled_ids = np.random.choice(n_total, size=200, replace=True)
+    patch_surface.plot_population_density(sampled_ids)
+
+    # ---- B13: get_mesh_grid_patch (with plot) ----
+    print(f"\n[B13] get_mesh_grid_patch — Patch {test_patch_id} Mesh")
+    X_grid, Y_grid_patch, Z_grid_patch = patch_surface.get_mesh_grid_patch(
+        test_patch_id, plot_patch=True)
+
+    # ---- B14: plot_cost_meshgrid (surface) ----
+    print("\n[B14] plot_cost_meshgrid — 3D Surface")
+    Cost_grid, Y_grid, Z_grid = patch_surface.get_cost_meshgrid(grid_size=50)
+    patch_surface.plot_cost_meshgrid(Cost_grid, Y_grid, Z_grid, plot_type='surface')
+
+    # ---- B15: plot_cost_meshgrid (contour) ----
+    print("\n[B15] plot_cost_meshgrid — Contour Map")
+    patch_surface.plot_cost_meshgrid(Cost_grid, Y_grid, Z_grid, plot_type='contour')
+
+    # ---- B16: plot_map_with_cost_meshgrid_overlay ----
+    print("\n[B16] plot_map_with_cost_meshgrid_overlay — Terrain + Cost")
+    patch_surface.plot_map_with_cost_meshgrid_overlay(
+        Cost_grid, Y_grid, Z_grid, x_offset=0.5)
+
+    # ---- B17: plot_point_cloud_cost ----
+    print("\n[B17] plot_point_cloud_cost — Point Cloud with Cost")
+    patch_surface.plot_point_cloud_cost()
+
+    # ---- B18: plot_mesh_cost ----
+    print("\n[B18] plot_mesh_cost — Terrain Mesh with Cost")
+    patch_surface.plot_mesh_cost(Cost_grid, Y_grid, Z_grid)
+
+    # ---- B19: plot_patches_2D_with_ids (with cost) ----
+    print("\n[B19] plot_patches_2D_with_ids — 2D Map with IDs & Cost")
+    # ================================================================== #
+    print("\n" + "=" * 70)
+    print(" ALL TESTS COMPLETED")
+    print("=" * 70)
+
+
 if __name__ == "__main__":
     main()
