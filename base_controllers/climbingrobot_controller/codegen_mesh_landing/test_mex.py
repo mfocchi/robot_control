@@ -92,7 +92,7 @@ def initOptim(p0, pf, Ly, patch_side_z, patch_side_y,   mesh_x, mesh_y, mesh_z):
     params['w3']= 1000. # landing patch cost
     params['T_th'] =  0.05
     params['obstacle_avoidance'] = 'mesh'
-    params['jump_clearance'] = 1.0
+    params['jump_clearance'] = 1.5
     params['debug'] = False #enables print of cost
 
     # Interpolator (note: z must be increasing — here from -10 to 0)
@@ -159,7 +159,7 @@ def plotStuff():
     ax.set_zlim([min_z, max_z])
     # Alternative method using set_box_aspect for proportional scaling
     # ax.set_box_aspect([x_range, y_range, z_range])
-    ax.set_box_aspect([1, 1, 1])  # axis equal
+
     ax.grid(True)
     # Camera position equivalent
     ax.view_init(elev=20, azim=60)  # Adjust to approximate MATLAB CameraPosition
@@ -176,7 +176,13 @@ def plotStuff():
     ax.plot3D(ref_com[0, :], ref_com[1, :], ref_com[2, :], color='red', linewidth=2.5)
     # plot achieved target
     ax.scatter(achieved_target[0], achieved_target[1], achieved_target[2], color='red', s=300)  # s = size
+    ax.set_box_aspect([1, 1, 1])  # axis equal
 
+    plt.figure(figsize=(10, 8))
+    plt.plot(Fr_l.flatten(),color="red", label="Frope_l")
+    plt.plot(Fr_r.flatten(),color="blue", label="Frope_r")
+    plt.legend()
+    plt.grid()
     plt.show()
 
 
@@ -343,27 +349,27 @@ max_ridge_depth = 0.5
 seed = "default"
 
 #TERRAIN 1:Generate rock wall map
-# Lz = -10.  # Height of wall in meters
-# Ly = 10.  # Width (horizontal extent) of wall in meters
-# terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="rock")#keep default offset to -0.05
-# mesh_x, mesh_y, mesh_z = terrainManager.get_mesh()
-# ##jump params dor 20 x10
-# # p0 = np.array([0.28, 2.5, -6.10104])
-# # pf=  np.array([0.28, 2.8,-12])
+Lz = -20.  # Height of wall in meters
+Ly = 5.  # Width (horizontal extent) of wall in meters
+terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="rock")#keep default offset to -0.05
+mesh_x, mesh_y, mesh_z = terrainManager.get_mesh()
+##jump params dor 20 x10
+p0 = np.array([0.28, 2.5, -6.10104])
+pf=  np.array([0.28, 3.5,-16.3])
 # ##jump params dor 10 x10
 # p0 = np.array([0.28, 5, -4])
 # pf=  np.array([0.28, 8,-8])
 
 #TERRAIN 2
-Lz = -10.  # Height of wall in meters
-Ly = 10.  # Width (horizontal extent) of wall in meters
-terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
-mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
-#jump params
-# p0 = np.array([0.5, 4.306384528321335,-2.9831819570167184]) #unit test ,  there is singularity for px = 0!
-# pf=  np.array([0.5, 1.5,-7.5])
-p0 = np.array([0.0,2.5,-7.5])
-pf=  np.array([0.0,5.5,-3.5])
+# Lz = -10.  # Height of wall in meters
+# Ly = 10.  # Width (horizontal extent) of wall in meters
+# terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
+# mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
+# #jump params
+# # p0 = np.array([0.5, 4.306384528321335,-2.9831819570167184]) #unit test ,  there is singularity for px = 0!
+# # pf=  np.array([0.5, 1.5,-7.5])
+# p0 = np.array([0.0,2.5,-7.5])
+# pf=  np.array([0.0,5.5,-3.5])
 
 # p0 = np.array([-0.019, 3.058, -3.24]) #unit test ,  there is singularity for px = 0!
 # pf=  np.array([0.19, 0.5,-1.5])
@@ -377,14 +383,16 @@ print(f"[DEBUG] Any NaN in cost_x: {np.any(np.isnan(cost_x))}")
 print(f"[DEBUG] Any NaN in cost_y: {np.any(np.isnan(cost_y))}")
 print(f"[DEBUG] Any NaN in cost_z: {np.any(np.isnan(cost_z))}")
 
-Fleg_max = 250. #100 not converges with hemispheric
+Fleg_max = 150. #100 not converges with hemispheric
 Fr_max = 190.
 Fr_min = 15.
 mu = 0.8
-p0_adj, pf_adj, params = initOptim(p0, pf, Ly, patch_side_z=1., patch_side_y=1. , mesh_x=mesh_x,mesh_y=mesh_y, mesh_z=mesh_z)
+p0_adj, pf_adj, params = initOptim(p0, pf, Ly, patch_side_z=0.1, patch_side_y=0.1 , mesh_x=mesh_x,mesh_y=mesh_y, mesh_z=mesh_z)
 solution = eng.optimize_cpp_mex(matlab.double(p0_adj), matlab.double(pf_adj), Fleg_max, Fr_max, Fr_min, mu, params)
 ref_com  = mat_matrix2python(solution['p'])
 achieved_target = mat_matrix2python(solution['achieved_target'])
+Fr_l  = mat_matrix2python(solution['Fr_l'])
+Fr_r  = mat_matrix2python(solution['Fr_r'])
 
 print("p0 ", p0_adj)
 print("target (rought integration) ", ref_com[:,-1] )
@@ -397,7 +405,7 @@ print("consumed_energy", solution['consumed_energy'])
 status = status_map.get(solution['problem_solved'], "unknown status")
 print(f"problem converged?: {status}")
 
-if solution['problem_solved'] not in [0]:
+if solution['problem_solved'] not in [1]:
     violations = eval_constraints(solution['c'], solution['num_constr'], solution['constr_tolerance'], verbose=True)
 plotStuff()
 

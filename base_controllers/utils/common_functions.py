@@ -121,10 +121,18 @@ def startNode(package, executable, args=''):
     process = launch.launch(node)
 
 
-def loadXacro(package_name, model_name):
-    print(colored(f"Loading xacro for  {model_name} inside {package_name}", "blue"))
-    # first generate robot description
-    xacro_path = rospkg.RosPack().get_path(package_name) + '/robots/' + model_name + '.urdf.xacro'
+def loadXacro(package_name, model_name, param_name = None, xacro_model_custom_path=None):
+    if param_name is None:
+        param_name = '/'+model_name+'/robot_description'
+
+    if xacro_model_custom_path is None:
+        print(colored(f"Loading xacro for  {model_name} inside {package_name}", "blue"))
+        xacro_path = rospkg.RosPack().get_path(package_name) + '/robots/' + model_name + '.urdf.xacro'
+    else:
+        print(colored(f"Loading xacro  {xacro_model_custom_path}", "blue"))
+        xacro_path = rospkg.RosPack().get_path(package_name) + '/'+xacro_model_custom_path
+
+    # generate robot description
     if not os.path.isfile(xacro_path):
         print(colored(f"Xacro file {model_name}.urdf.xacro does not exist!", "red"))
     command_string = "rosrun xacro xacro "+xacro_path
@@ -135,12 +143,12 @@ def loadXacro(package_name, model_name):
         ros.logfatal('Failed to run xacro command with error: \n%s', process_error.output)
         sys.exit(1)
 
-    # put on param server
-    ros.set_param('/'+model_name, robot_description_param)
+    # set param robot_description on param server
+    ros.set_param(param_name, robot_description_param)
 
 def spawnModel(package_name, model_name='',  spawn_pos=np.array([0.,0.,0.]), spawn_orient = np.array([0.,0.,0.]) ):
     #loads the xacro of model in the parameter server
-    loadXacro(package_name, model_name)
+    loadXacro(package_name, model_name, param_name=model_name)
     print(colored(f"Spawning {model_name}", "blue"))
     package = 'gazebo_ros'
     executable = 'spawn_model'
@@ -161,7 +169,7 @@ def checkRosControllerRunning(controller = '', robot_name=''):
     else:
         return True
 
-def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), texture_path=None):
+def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), store_location_mesh="/tmp/", texture_path=None):
     try:
         import meshio
     except ImportError:
@@ -224,19 +232,19 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), texture_path=N
     # plt.show()
 
     # Always write STL (collision + fallback visual)
-    tmp_stl_path = "/tmp/runtime_mesh.stl"
+    stl_path = store_location_mesh+"runtime_mesh.stl"
     mesh = meshio.Mesh(points=points, cells=[("triangle", triangles)])
-    mesh.write(tmp_stl_path)
+    mesh.write(stl_path)
 
     # Optionally write textured DAE for RViz
     if texture_path is not None:
-        tmp_obj_path = "/tmp/runtime_mesh.obj"
-        write_textured_obj(points, triangles, tmp_obj_path, texture_path)
+        obj_path =  store_location_mesh+"runtime_mesh.obj"
+        write_textured_obj(points, triangles, obj_path, texture_path)
         # Use OBJ (textured) for VISUAL
-        visual_uri = f"file://{tmp_obj_path}"
+        visual_uri = f"file://{obj_path}"
         material_block = ""  # DO NOT override texture
     else:
-        visual_uri = f"file://{tmp_stl_path}"
+        visual_uri = f"file://{stl_path}"
         #use standard reddish material
         material_block = """
                 <material>
@@ -264,7 +272,7 @@ def spawnMesh(mesh_x, mesh_y, mesh_z, position=np.array([0,0,0]), texture_path=N
           <collision name="collision">
             <geometry>
               <mesh>
-                <uri>file://{tmp_stl_path}</uri>
+                <uri>file://{stl_path}</uri>
               </mesh>
             </geometry>
           </collision>
@@ -381,12 +389,12 @@ def getRobotModelFloating(robot_name="hyq"):
     ERROR_MSG = 'You should set the environment variable LOCOSIM_DIR"\n'
     path = os.environ.get('LOCOSIM_DIR', ERROR_MSG)
     if rosgraph.is_master_online():
-        try:
-            urdf = ros.get_param('/robot_description', None) or ros.get_param('/' + robot_name + '/robot_description', None)
-        except:
+        urdf = ros.get_param('/robot_description', None) or ros.get_param('/' + robot_name + '/robot_description', None)
+        if urdf == None:
             print('Failed to retrieve robot_description: issues in URDF generation for Pinocchio, did not succeed')
-            loadXacro(package_name=robot_name+"_description",model_name=robot_name)
-            #urdf = ros.get_param('/robot_description')
+            loadXacro(package_name=robot_name+"_description",model_name=robot_name, param_name='/' + robot_name +'/robot_description')
+            urdf = ros.get_param('/' + robot_name +'/robot_description')
+            print(urdf)
         print("URDF generated_commons")
         os.makedirs(path + "/robot_urdf/generated_urdf/", exist_ok=True)
         urdf_location = path + "/robot_urdf/generated_urdf/" + robot_name + ".urdf"
@@ -536,7 +544,28 @@ def getRobotModel(robot_name="hyq", generate_urdf = False, xacro_path = None, ad
         urdf      = path + "/robot_urdf/" + robot_name+ ".urdf"
         robot = RobotWrapper.BuildFromURDF(urdf, [path,srdf ])
     
-    return robot                    
+    return robot
+
+def getLinkState(model_name = None, link_name=None, debug=False):
+    from gazebo_msgs.srv import GetLinkState, GetLinkStateRequest
+    from tf.transformations import euler_from_quaternion
+    ros.wait_for_service('/gazebo/get_link_state')
+    get_link_state = ros.ServiceProxy('/gazebo/get_link_state', GetLinkState)
+
+    req = GetLinkStateRequest()
+    req.link_name = model_name+"::"+link_name  # IMPORTANT format
+    req.reference_frame = "world"  # or another link
+    resp = get_link_state(req)
+    pose = resp.link_state.pose
+    twist = resp.link_state.twist
+    if debug:
+        print("Position:", pose.position.x, pose.position.y, pose.position.z)
+        print("Orientation:", pose.orientation.x, pose.orientation.y,
+              pose.orientation.z, pose.orientation.w)
+    position = np.array([pose.position.x, pose.position.y, pose.position.z])
+    q = pose.orientation
+    rpy =  np.array(euler_from_quaternion([q.x, q.y, q.z, q.w]))
+    return position, rpy
 
 class SafeTFBroadcaster:
     ''' avoids the annoying TF_REPEATED issue when the message is published twice with the same timestamp '''

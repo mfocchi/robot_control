@@ -28,21 +28,20 @@ np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 10000, suppress
 from base_controllers.utils.common_functions import checkRosMaster
 import  base_controllers.params as conf
 robotName = "climbingrobot2"
-
 # real robot msgs
 import std_msgs, geometry_msgs
-from climbingrobot_description.msg import RopeCommand
-from climbingrobot_description.msg import PropellerCommand
-from climbingrobot_description.msg import RopeTelemetry
-from climbingrobot_description.msg import AlpineBodyTelemetry
+from climbingrobot_hardware_interface.msg import RopeCommand
+from climbingrobot_hardware_interface.msg import PropellerCommand
+from climbingrobot_hardware_interface.msg import RopeTelemetry
+from climbingrobot_hardware_interface.msg import AlpineBodyTelemetry
 # real robot services
-from climbingrobot_description.srv import AlpineBodyCommand, AlpineBodyCommandRequest
-from climbingrobot_description.srv import RopeControlMode, RopeControlModeRequest
-
-from base_controllers.utils.common_functions import startNode, checkRosMaster
+from climbingrobot_hardware_interface.srv import AlpineBodyCommand, AlpineBodyCommandRequest
+from climbingrobot_hardware_interface.srv import RopeControlMode, RopeControlModeRequest
+from base_controllers.utils.common_functions import startNode, checkRosMaster, launchFileNode
 from base_controllers.utils.math_tools import quaternion_matrix
-
 from base_controllers.utils.ros_publish import RosPub
+from orientation_controller import OrientationController
+from sensor_msgs.msg import JointState
 
 class ClimbingrobotController(BaseControllerFixed):
     def __init__(self, robot_name="ur5"):
@@ -50,8 +49,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.landing = True #do landing
         self.MPC_control = True
         self.PLOT_MPC = False
-        self.PROPELLERS = True
-        self.USE_PROPELLERS_FOR_LEG_REORIENT = False # true use propeller to reorient the leg
+
         self.SAVE_BAG = False # does not show rope vectors
         self.rope_index = np.array([2, 8]) #'wire_base_prismatic_r', 'wire_base_prismatic_l',
         self.leg_index = np.array([12, 13, 14])
@@ -89,39 +87,55 @@ class ClimbingrobotController(BaseControllerFixed):
         super().__init__(robot_name=robot_name)
         print("Initialized climbingrobot controller---------------------------------------------------------------")
 
-    def apply_propeller_moment(self, Mz):
-        # create force per to ropes plane
-        arm = np.linalg.norm(self.hoist_l_pos-self.base_pos)
-        force = self.w_R_b[:,0]*Mz/(2*arm)
-        self.ros_pub.add_arrow(self.hoist_l_pos, force/(10*self.force_scale), "green", scale=1.5)  #left should be positive
-        self.ros_pub.add_arrow(self.hoist_r_pos, -force/(10*self.force_scale), "green", scale=1.5) #right should be negative
-        wrench = Wrench()
-        wrench.force.x = 0.
-        wrench.force.y = 0.
-        wrench.force.z = 0.
-        wrench.torque.x = 0.
-        wrench.torque.y = 0.
-        wrench.torque.z = Mz
-        self.pub_prop_force.publish(wrench)
 
-    def apply_propeller_force(self, ext_force):
+    def apply_propeller_command(self, prop_thrusts=[0.,0.,0.,0.]):
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[0],
+                               self.orientControl.b_propeller_axes[0] * prop_thrusts[0]/self.force_scale , "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[1],
+                               self.orientControl.b_propeller_axes[1] * prop_thrusts[1] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[2],
+                               self.orientControl.b_propeller_axes[2] * prop_thrusts[2] / self.force_scale, "blue", scale=1.5)
+        self.ros_pub.add_arrow(self.base_pos + self.w_R_b @ self.orientControl.b_propeller_pos[3],
+                               self.orientControl.b_propeller_axes[3] * prop_thrusts[3] / self.force_scale, "blue", scale=1.5)
         msg =  PropellerCommand()
-        msg.propeller_force = ext_force
-        w_prop_force = self.w_R_b[0]*ext_force #TODO is along base_link axis, double check direction
-        self.pub_propeller_force.publish(msg)
-        self.ros_pub.add_arrow(self.base_pos, w_prop_force / self.force_scale, "blue", scale=1.5)
-
+        msg.propeller_thrust_0 = prop_thrusts[0]
+        msg.propeller_thrust_1 = prop_thrusts[1]
+        msg.propeller_thrust_2 = prop_thrusts[2]
+        msg.propeller_thrust_3 = prop_thrusts[3]
+        self.pub_propeller_command.publish(msg)
 
     def getRobotMass(self):
         total_robot_mass = 5.0 #todo hardcode this
         return total_robot_mass
+
+    def estimateRobotVelFromStates(self, l1, l2, psi, l1d, l2d, psid):
+        if l1 != 0 and l2 != 0:
+            # first estimate position
+            px = l1 * np.sin(psi) * np.sqrt(1 - (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) ** 2 / (4 * self.anchor_distance_y ** 2 * l1 ** 2))
+            py = (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) / (2 * self.anchor_distance_y)
+            pz = -l1 * np.cos(psi) * np.sqrt(1 - (self.anchor_distance_y ** 2 + l1 ** 2 - l2 ** 2) ** 2 / (4 * self.anchor_distance_y ** 2 * l1 ** 2))
+
+            #temp vars to simplify equation
+            px_l1 = px / l1
+            n_pz_l1 = -pz / l1
+            px_l1_sinpsi = px / l1 / math.sin(psi+0.00001) # to avoid division by zero
+            py2b = py * 2 * self.anchor_distance_y
+
+            pdx = l1d * px_l1 + l1 * n_pz_l1 * psid + (py2b * math.sin(psi) * (l1d * pow(self.anchor_distance_y, 2) - l1d * pow(l1, 2) + 2 * l2d * l1 * l2 - l1d * pow(l2, 2))) / (4 * pow(self.anchor_distance_y, 2) * pow(l1, 2) * px_l1_sinpsi)
+            pdy = (l1 * l1d - l2 * l2d) / self.anchor_distance_y
+            pdz = l1 * psid * px_l1 - l1d * n_pz_l1 - (py2b * math.cos(psi) * (l1d * pow(self.anchor_distance_y, 2) - l1d * pow(l1, 2) + 2 * l2d * l1 * l2 - l1d * pow(l2, 2))) / (4 * pow(self.anchor_distance_y, 2) * pow(l1, 2) * px_l1_sinpsi)
+            base_vel = np.array([pdx, pdy, pdz])
+        else:
+            base_vel = np.zeros(3)
+
+        return base_vel
 
     def updateKinematicsDynamics(self):
         # get measured quantities
         self.w_R_rope = (quaternion_matrix(self.rope_l_imu_orientation))[:3,:3]
 
         self.w_R_b = quaternion_matrix(self.body_imu_orientation)[:3, :3]
-        self.w_omega_b = self.body_imu_angular_velocity
+        self.w_omega_b = self.body_imu_angular_velocity #TODO double check
 
         #rope gravity terms TO BE RECOMPUTED TODO
         #self.g #
@@ -137,7 +151,13 @@ class ClimbingrobotController(BaseControllerFixed):
         leg_length = 0.3 #TODO
         x_rope_l_attach = self.anchor_pos + self.w_R_rope[0]*self.l_1
         self.base_pos = x_rope_l_attach + self.w_R_b[1] *(base_width/2) + com_offset
+
+        #debug
+        self.base_pos = np.array([1.5, 2.5, 16])
+
         self.base_rpy = self.math_utils.rot2eul(self.w_R_b)
+
+
 
         #compute ee position  in the world frame
         self.x_ee = self.base_pos - self.w_R_b[0] * leg_length
@@ -152,7 +172,8 @@ class ClimbingrobotController(BaseControllerFixed):
         # offset between hoists
         hoist_distance = np.linalg.norm(self.hoist_l_pos - self.hoist_r_pos)
 
-        #compute missin state variable phi psi_d
+        #compute missin state variable phi / psi_d
+        # old way (wrong)
         #self.psi = math.atan2(self.base_pos_mat[0], -self.base_pos_mat[2])
         # the psi variable is the extrinsic pitch wrt the world Y axis obtained expanding w_R_rope with extrinsic formula = Rx Ry Rz
         self.psi = math.atan2(self.w_R_rope[0,2], np.sqrt(math.pow(self.w_R_rope[0,0],2) + math.pow(self.w_R_rope[0,1],2)))
@@ -160,11 +181,27 @@ class ClimbingrobotController(BaseControllerFixed):
         extr_roll =  math.atan2(-self.w_R_rope[1,2], self.w_R_rope[2,2])
         self.psi_d = np.cos(extr_roll) * self.w_omega_b[1] -np.sin(extr_roll) * self.w_omega_b[2]
 
+        # now that we have also psid we can  estimate base velocity (in WF)
+        self.base_vel = self.estimateRobotVelFromStates(self.l_1, self.l_2, self.psi, self.l_1d, self.l_2d, self.psi_d)
+
+        # use geometric intuition for psid
+        n_par = (self.anchor_pos - self.anchor_pos2) / np.linalg.norm(self.anchor_pos - self.anchor_pos2)
+        rope2_axis = (self.base_pos - self.anchor_pos2) / np.linalg.norm(self.base_pos - self.anchor_pos2)
+        self.n_bar = np.cross(n_par, rope2_axis) / np.linalg.norm(np.cross(n_par, rope2_axis))
+
         # the mountain is always wrt to world
         mountain_pos = np.array([-self.mountain_thickness/2, conf.robot_params[self.robot_name]['spawn_y'], 0.0])
         self.broadcaster.sendTransform(mountain_pos, (0.0, 0.0, 0.0, 1.0), ros.Time.now(), '/wall', '/world')
 
         self.broadcaster.sendTransform(self.base_pos, self.body_imu_orientation, ros.Time.now(), '/base_link', '/world')
+
+        #rviz
+        self.q_des = self.solver.computeJointVariables(self.base_pos, self.w_R_b, self.q_des_q0, debug=False)
+        msg = JointState()
+        msg.name = self.joint_names
+        msg.header.stamp = ros.Time.from_sec(self.time)
+        msg.position = self.q_des
+        self.pub_joints.publish(msg)
 
     def initVars(self):
 
@@ -220,7 +257,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.Fr_r_fbk = 0
         self.Fr_l = 0
         self.Fr_r = 0
-        self.prop_force = 0
+        self.prop_force_x = 0
         self.touch_down_detected_l = False
         self.touch_down_detected_r = False
         self.optimal_control_traj_finished = False
@@ -242,7 +279,8 @@ class ClimbingrobotController(BaseControllerFixed):
         self.l_2d_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.psid_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
         self.base_vel_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
-        self.prop_force_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+        self.prop_force_x_log = np.empty((conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
         self.contactForceW_log = np.empty((3, conf.robot_params[self.robot_name]['buffer_size'])) * nan
 
         w_R_wall = self.math_utils.eul2Rot(np.array([0,-conf.robot_params[p.robot_name]['wall_inclination'],0]))
@@ -253,6 +291,16 @@ class ClimbingrobotController(BaseControllerFixed):
         self.mpc_index_ffwd = 0 # updated only when we stop recomputing mpc
 
         self.targetReceived = True # in sim just give hardcoded target
+
+        self.prop_thrusts = [0]*4
+        self.prop_thrusts_log = np.empty((4, conf.robot_params[self.robot_name]['buffer_size'])) * nan
+
+        propeller_orient = np.array([0.25 * np.pi, 0.75 * np.pi, np.pi + 0.25 * np.pi, np.pi + 0.75 * np.pi])
+        self.orientControl = OrientationController(base_line_x = 0.1, base_line_y = 0.2, propeller_orient=propeller_orient)
+
+        #rviz
+        from closed_loop_inverse_kinematics import ClosedLoopKinSolver
+        self.solver = ClosedLoopKinSolver(robot_name=self.robot_name)
 
     def logData(self):
             if (self.log_counter<conf.robot_params[self.robot_name]['buffer_size'] ):
@@ -268,8 +316,10 @@ class ClimbingrobotController(BaseControllerFixed):
                 self.l_2d_log[self.log_counter] =  self.l_2d
                 self.psid_log[self.log_counter] = self.psi_d
                 self.base_vel_log[:,self.log_counter] = self.w_base_vel
-                if self.PROPELLERS:
-                    self.prop_force_log[self.log_counter] = self.prop_force
+
+                self.prop_force_x_log[self.log_counter] = self.prop_force_x
+                self.prop_thrusts_log[:, self.log_counter] = self.prop_thrusts
+
                 #self.time_jump_log[self.log_counter] = self.time - self.end_thrusting
 
             super().logData()
@@ -306,6 +356,24 @@ class ClimbingrobotController(BaseControllerFixed):
         # plt.plot(p.ref_time, p.Fr_r0, color='red')
         # plt.plot(time_gazebo, p.Fr_r_log, color='blue')
         # plt.grid()
+
+        # plot propeller thrusts
+        plt.figure()
+        plt.ylabel("prop_thrusts")
+        plt.subplot(4, 1, 1)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[0,:], label="prop1", color='blue')
+        plt.subplot(4, 1, 2)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[1,:], label="prop2", color='blue')
+        plt.subplot(4, 1, 3)
+        plt.grid()
+        plt.plot(p.time_log, p.prop_thrusts_log[2,:], label="prop3", color='blue')
+        plt.subplot(4, 1, 4)
+        plt.plot(p.time_log, p.prop_thrusts_log[3,:], label="prop4", color='blue')
+        plt.legend()
+        plt.grid()
+        plotFrameLinear('position', time_log=p.time_log, Pose_log=p.base_rpy_log)
 
         #save data
         filename = f'test_gazebo_MPC_{p.MPC_control}.mat'
@@ -555,17 +623,12 @@ class ClimbingrobotController(BaseControllerFixed):
             actual_state = matlab.double([ self.psi, self.l_1, self.l_2, self.psi_d, self.l_1d, self.l_2d]).reshape(6,1)
 
             #perform optimization
-            if p.PROPELLERS:
-                x = mat_vector2python(self.eng.optimize_cpp_mpc_propellers_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
-                # extract optim vars
-                self.deltaFr_l = x[:self.mpc_N]
-                self.deltaFr_r = x[self.mpc_N:2*self.mpc_N]
-                self.propeller_force = x[2*self.mpc_N:3*self.mpc_N]
-            else:
-                x = mat_vector2python(self.eng.optimize_cpp_mpc_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0,self.Fr_max_mpc, self.mpc_N,self.optim_params_mpc))
-                 # extract optim vars
-                self.deltaFr_l = x[:self.mpc_N]
-                self.deltaFr_r = x[self.mpc_N:]
+            x = mat_vector2python(self.eng.optimize_cpp_mpc_propellers_mex(actual_state, actual_t, ref_com, Fr_l0, Fr_r0, self.Fr_max_mpc, self.mpc_N, self.optim_params_mpc))
+            # extract optim vars
+            self.deltaFr_l = x[:self.mpc_N]
+            self.deltaFr_r = x[self.mpc_N:2*self.mpc_N]
+            self.propeller_force = x[2*self.mpc_N:3*self.mpc_N]
+
 
             # store tracking error for RMSE computation
             tracking_error = self.ref_com[:, self.mpc_index] - (self.base_pos - p.anchor_pos)
@@ -634,16 +697,14 @@ class ClimbingrobotController(BaseControllerFixed):
         os.system("killall rviz gzserver gzclient")
         print(colored('------------------------------------------------ROBOT IS REAL!', 'blue'))
         checkRosMaster()
-        startNode(package ='rviz', executable='rviz', args = '-d ' + rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf.rviz')
-        # # run rviz
-        # package = 'rviz'
-        # executable = 'rviz'
-        # args = '-d ' + rospkg.RosPack().get_path('ur_description') + '/rviz/single_robot.rviz'
-        # node = roslaunch.core.Node(package, executable, args=args)
-        # launch = roslaunch.scriptapi.ROSLaunch()
-        # launch.start()
-        # process = launch.launch(node)
-
+        #loads robot_description
+        launchFileNode(package='climbingrobot_description',launch_file='upload.launch')
+        #launches robot state publisher
+        startNode(package ='robot_state_publisher', executable='robot_state_publisher')
+        #start rviz
+        startNode(package='rviz', executable='rviz', args='-d ' + rospkg.RosPack().get_path('climbingrobot_description') + '/rviz/conf.rviz')
+        #launch hw interface
+        #launchFileNode(package='climbingrobot_hardware_interface', launch_file='alpine_low_level_bringup.launch')
 
     def startRealRobotPublisherSubscribers(self):
 
@@ -662,12 +723,8 @@ class ClimbingrobotController(BaseControllerFixed):
         if self.MPC_control:
             self.eng.addpath('./codegen_mpc', nargout=0)
 
-        if self.PROPELLERS:
-            self.pub_prop_force = ros.Publisher("/base_force", Wrench, queue_size=1, tcp_nodelay=True)
         if self.SAVE_BAG:
             self.recorder = RosbagControlledRecorder(record_from_startup_=False)
-
-
 
         self.sub_rope_telemetry_l = ros.Subscriber("/winch/left/telemetry", RopeTelemetry,  callback=self._receive_rope_telemetry_l, queue_size=1,  tcp_nodelay=True)
         self.sub_rope_telemetry_r = ros.Subscriber("/winch/right/telemetry", RopeTelemetry, callback=self._receive_rope_telemetry_r, queue_size=1,  tcp_nodelay=True)
@@ -681,8 +738,12 @@ class ClimbingrobotController(BaseControllerFixed):
 
         #communication to alpine
         self.sub_alpine_telemetry = ros.Subscriber("/alpine_body/telemetry", AlpineBodyTelemetry, callback=self._receive_alpine_telemetry, queue_size=1, tcp_nodelay=True)
-        self.pub_propeller_force = ros.Publisher("/alpine_body/propeller_command", PropellerCommand,   queue_size=1,  tcp_nodelay=True)
-        self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand)
+        self.pub_propeller_command = ros.Publisher("/alpine_body/propeller_command", PropellerCommand,   queue_size=1,  tcp_nodelay=True)
+        self.alpine_command_service = ros.ServiceProxy('/alpine_body/command', AlpineBodyCommand) #TODO
+
+        #for rviz
+
+        self.pub_joints = ros.Publisher("/joint_states", JointState, queue_size=1, tcp_nodelay=True)
 
     def _receive_rope_telemetry_l(self, msg):
         self.Fr_l_meas = msg.rope_force
@@ -706,6 +767,7 @@ class ClimbingrobotController(BaseControllerFixed):
         print(colored("received target {self.target}", "red"))
 
     def _receive_alpine_telemetry(self, msg):
+        #rope
         self.rope_l_imu_orientation = np.array([
             msg.rope_imu_orientation.x,
             msg.rope_imu_orientation.y,
@@ -715,6 +777,7 @@ class ClimbingrobotController(BaseControllerFixed):
         self.rope_l_imu_angular_velocity = np.array([ msg.rope_imu_angular_velocity.x, msg.rope_imu_angular_velocity.y,msg.rope_imu_angular_velocity.z])
         self.rope_l_imu_rpy = np.array([msg.rope_imu_rpy.x, msg.rope_imu_rpy.y, msg.rope_imu_rpy.z])
         self.rope_l_imu_rpy_d = np.array([msg.rope_imu_rpy_d.x, msg.rope_imu_rpy_d.y, msg.rope_imu_rpy_d.z])
+        #body
         self.body_imu_orientation =  np.array([
                                         msg.body_imu_orientation.x,
                                         msg.body_imu_orientation.y,
@@ -733,7 +796,7 @@ class ClimbingrobotController(BaseControllerFixed):
 
     def setRopeControlMode(self, mode='idle'):
         req = RopeControlModeRequest()
-        req.mode = mode
+        req.message = mode
         # Call the service
         try:
             resp = self.rope_control_mode_l(req)
@@ -747,6 +810,181 @@ class ClimbingrobotController(BaseControllerFixed):
         except ros.ServiceException as e:
             ros.logerr("Service call failed: %s" % e)
             return False
+
+    def stateMachineLoop(self):
+        terminateFlag = False
+        # jump state machine
+        if (p.stateMachine == 'idle') and (p.time >= p.startJump):
+            # first run optim and fill in jump variable
+
+            p.initOptim(p.base_pos - p.mat2Gazebo, p.target)
+
+            # set the end of thrusting phase
+            p.end_thrusting = p.startJump + p.jumps[p.jumpNumber]["thrustDuration"]
+            p.start_logging = p.end_thrusting
+            p.stateMachine = 'thrusting'  # this phase only waits is not doing anything
+
+            if p.SAVE_BAG:
+                p.recorder.start_recording_srv()
+
+            print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to optimized target: ",
+                  p.jumps[p.jumpNumber]["targetPos"], " from actual p0 : ", p.base_pos - p.mat2Gazebo)
+            print(colored(f"Start trusting", "blue"))
+            p.tau_ffwd = np.zeros(p.n_joints)
+            p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
+            print(colored(f"Start Torque mode", "red"))
+            p.setRopeControlMode('close_loop_torque')
+
+            p.stateMachine = 'thrusting'
+            p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
+
+        if (p.stateMachine == 'thrusting'):
+
+            # service call to send thrust force and contact normal to ALPINE this will initiate the jump
+            # Fill the request
+            req = AlpineBodyCommandRequest()
+            req.leg_force = np.linalg.norm(p.w_Fleg)
+            req.contact_normal = geometry_msgs.msg.Vector3(x=p.wall_normal[0], y=p.wall_normal[1], z=p.wall_normal[2])
+            # plot Fleg
+            p.ros_pub.add_arrow(p.x_ee, np.linalg.norm(p.w_Fleg) * p.wall_normal / p.force_scale, "red", scale=2.5)
+
+            # apply leg inpulse for thust duration
+            try:
+                resp = p.alpine_command_service(req)
+                ros.loginfo("Service response: ack = %s", resp.ack)
+            except ros.ServiceException as e:
+                ros.logerr("Service call failed: %s" % e)
+
+            # start also applying forces to ropes
+            delta_t = p.time - p.end_thrusting
+            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
+            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
+
+            # plot rope forces
+            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
+            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
+            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
+            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+
+            if (p.time > p.end_thrusting):
+                print(colored("Stop Trhusting", "blue"))
+                p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
+                # retract leg for landing
+                if p.landing:
+                    p.stateMachine = 'flying_and_wait_for_touchdown'
+                else:
+                    p.stateMachine = 'flying'
+                print(colored("Start " + p.stateMachine, "blue"))
+
+        if (p.stateMachine == 'flying'):
+            # after the thrust we start MPC it will start from time 0.05 so the index should be 12
+            # applying forces to ropes
+            delta_t = p.time - p.end_thrusting
+            if p.MPC_control:
+                # compute orientation control TODO
+                # p.prop_force_x, p.prop_force_y, p.prop_moment_z = computeOrientationControl()
+                deltaFr_l0, deltaFr_r0, p.prop_force_x = p.computeMPC(delta_t)
+                p.apply_propeller_command(p.prop_force_x, p.prop_force_y, p.prop_moment_z)
+
+            else:
+                deltaFr_l0 = 0.
+                deltaFr_r0 = 0.
+
+            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] + deltaFr_l0
+            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
+
+            # plot rope forces
+            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
+            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
+
+            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
+            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+            end_flying = p.startJump + p.jumps[p.jumpNumber]["Tf"]
+
+            if (p.time >= end_flying):
+                print(colored("Stop Flying", "blue"))
+                # reset the qdes
+                # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
+                # this will start again the position loop
+                p.resetRope()
+                energy = p.computeJumpEnergyConsumption()
+                p.jumpNumber += 1
+                if (p.jumpNumber < p.numberOfJumps):
+                    p.stateMachine = 'idle'
+                    # reset for multiple jumps
+                    p.startJump = p.time
+                else:
+
+                    p.printLandingInfo()
+                    if p.SAVE_BAG:
+                        p.recorder.stop_recording_srv()
+                    terminateFlag = True
+
+            return terminateFlag
+        # this is the same as flying but with the lander
+        if (p.stateMachine == 'flying_and_wait_for_touchdown'):
+            # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
+            delta_t = p.time - p.end_thrusting
+
+            if p.MPC_control:
+                deltaFr_l0, deltaFr_r0, p.prop_force_x = p.computeMPC(delta_t)
+
+                # compute orientation control TODO
+                prop_forceW = p.n_bar * p.prop_force_x
+                # compute thrust for orientation
+                p.prop_thrusts, w_wrench = p.orientControl.computeThrust(des_orient=np.array([0, 0, 0.7]),
+                                                                         act_orient=p.base_rpy,
+                                                                         w_omega_b=p.w_omega_b,
+                                                                         Ko=conf.robot_params[p.robot_name]['Ko'],
+                                                                         Do=conf.robot_params[p.robot_name]['Do'], w_additional_force=prop_forceW)
+                p.apply_propeller_command(p.prop_thrusts)
+            else:
+                deltaFr_l0 = 0.
+                deltaFr_r0 = 0.
+
+            if not p.optimal_control_traj_finished:
+                if p.getIndex(delta_t) == -1:
+                    p.optimal_control_traj_finished = True
+                    print(colored("Trajectory finished, expecting delayed TD", "blue"))
+                    # start again pid gains and reset qdes
+                    p.resetRope()
+
+                else:
+                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] + deltaFr_l0
+                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
+
+                # check for early td and in case reset rope
+                if p.detectTouchDown():
+                    p.resetRope()
+                    print(colored("Early TD detected, Start landing", "blue"))
+                    p.stateMachine = 'landing'
+                    p.start_landing = p.time
+            else:  # you are checking for delayed TD you have already reset rope and restored PD
+                if p.detectTouchDown():
+                    print(colored("Start landing", "blue"))
+                    p.stateMachine = 'landing'
+                    p.start_landing = p.time
+
+            # plot rope forces
+            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
+            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
+            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
+            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
+
+        if (p.stateMachine == 'landing'):
+            print(colored("Start landing", "blue"))
+            p.prop_force = (-25.)  # push against the wall
+            p.apply_propeller_force(p.prop_force)
+            landing_error = p.printLandingInfo()
+            msg = std_msgs.msg.String()
+            if np.linalg.norm(landing_error) < 0.5:
+                msg.data = 'achieved'
+            else:
+                msg.data = 'error'
+            p.pub_goal_status(msg)
+
+            ####TODO
+            pass
 
 def talker(p):
     p.start()
@@ -776,8 +1014,9 @@ def talker(p):
 
     # set the rope base joint variables to initialize in p0 position, the leg ones are defined in params.yaml
     p.q_des[:12] = p.computeJointVariables(p0)
-
     p.setRopeControlMode('close_loop_position')
+    #the robot should go to the setpoint of the ropes
+
     #  wait for a target
     while True:
         if p.targetReceived:
@@ -791,170 +1030,11 @@ def talker(p):
 
         # update the kinematics
         p.updateKinematicsDynamics()
-        # jump state machine
-        if ( p.stateMachine == 'idle') and (p.time >= p.startJump):
-            # first run optim and fill in jump variable
 
-            p.initOptim(p.base_pos - p.mat2Gazebo, p.target)
-
-            #set the end of thrusting phase
-            p.end_thrusting = p.startJump +  p.jumps[p.jumpNumber]["thrustDuration"]
-            p.start_logging = p.end_thrusting
-            p.stateMachine = 'thrusting'  # this phase only waits is not doing anything
-
-            if p.SAVE_BAG:
-                p.recorder.start_recording_srv()
-
-            print("\033[34m" + "---------Starting jump  number ", p.jumpNumber, " to optimized target: ",
-                  p.jumps[p.jumpNumber]["targetPos"], " from actual p0 : ", p.base_pos - p.mat2Gazebo)
-            print(colored(f"Start trusting", "blue"))
-            p.tau_ffwd = np.zeros(p.n_joints)
-            p.tau_ffwd[p.rope_index] = p.g[p.rope_index]  # compensate gravitu in the virtual joint to go exactly there
-            print(colored(f"Start Torque mode", "red"))
-            p.setRopeControlMode('close_loop_torque')
-
-            p.stateMachine = 'thrusting'
-            p.w_Fleg = p.jumps[p.jumpNumber]["Fleg"]
-
-        if (p.stateMachine == 'thrusting'):
-
-            # send thrust force
-            # Fill the request
-            req = AlpineBodyCommandRequest()
-            req.leg_force = np.linalg.norm(p.w_Fleg)
-            req.contact_normal = geometry_msgs.msg.Vector3(x=p.wall_normal[0], y=p.wall_normal[1], z=p.wall_normal[2])
-            # apply leg inpulse for thust duration
-            try:
-                resp = p.alpine_command_service(req)
-                ros.loginfo("Service response: ack = %s", resp.ack)
-            except ros.ServiceException as e:
-                ros.logerr("Service call failed: %s" % e)
-
-            # plot Fleg
-            p.ros_pub.add_arrow(p.x_ee, np.linalg.norm(p.w_Fleg)*p.wall_normal / p.force_scale, "red", scale=2.5)
-
-            # start also applying forces to ropes
-            delta_t = p.time - p.end_thrusting
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]
-
-            # plot rope forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
-            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
-            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-
-            if (p.time > p.end_thrusting):
-                print(colored("Stop Trhusting", "blue"))
-                p.tau_ffwd[p.leg_index] = np.zeros(len(p.leg_index))
-                # retract leg for landing
-                if p.landing:
-                    p.stateMachine = 'flying_and_wait_for_touchdown'
-                else:
-                    p.stateMachine = 'flying'
-                print(colored("Start "+ p.stateMachine, "blue"))
-
-        if (p.stateMachine == 'flying'):
-            # after the thrust we start MPC it will start from time 0.05 so the index should be 12
-            # applying forces to ropes
-            delta_t = p.time - p.end_thrusting
-            if p.MPC_control:
-                deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
-                if p.PROPELLERS:
-                    p.apply_propeller_force(p.prop_force)
-
-            else:
-                deltaFr_l0 = 0.
-                deltaFr_r0 = 0.
-
-            p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)]+ deltaFr_l0
-            p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)]+ deltaFr_r0
-
-            #plot rope forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
-
-            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
-            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-            end_flying = p.startJump + p.jumps[p.jumpNumber]["Tf"]
-
-            if (p.time >= end_flying):
-                print(colored("Stop Flying", "blue"))
-                # reset the qdes
-                # we need to reset the rope PD because the Fr are finished and I would get the final value repeated  that is not the good thing to do
-                p.resetRope()
-                energy = p.computeJumpEnergyConsumption()
-                p.jumpNumber += 1
-                if (p.jumpNumber < p.numberOfJumps):
-                    p.stateMachine = 'idle'
-                    # reset for multiple jumps
-                    p.startJump = p.time
-                else:
-
-                    p.printLandingInfo()
-                    if p.SAVE_BAG:
-                        p.recorder.stop_recording_srv()
-                    break
-
-        # this is the same as flying but with the lander
-        if (p.stateMachine == 'flying_and_wait_for_touchdown'):
-            # applying forces to ropes, when time is finished just rset rope length (only once!) and wait for tf
-            delta_t = p.time - p.end_thrusting
-            if p.MPC_control:
-                deltaFr_l0, deltaFr_r0, p.prop_force = p.computeMPC(delta_t)
-                if p.PROPELLERS:
-                    #if p.ADD_NOISE:
-                        #prop_force += 0.1*np.sin(2*np.pi*3000/60)
-                    p.apply_propeller_force(p.prop_force)
-            else:
-                deltaFr_l0 = 0.
-                deltaFr_r0 = 0.
-
-            if not p.optimal_control_traj_finished:
-                if p.getIndex(delta_t) == -1:
-                    p.optimal_control_traj_finished = True
-                    print(colored("Trajectory finished, expecting delayed TD", "blue"))
-                    # start again pid gains and reset qdes
-                    p.resetRope()
-
-                else:
-                    p.Fr_l = p.jumps[p.jumpNumber]["Fr_l"][p.getIndex(delta_t)] +deltaFr_l0
-                    p.Fr_r = p.jumps[p.jumpNumber]["Fr_r"][p.getIndex(delta_t)] + deltaFr_r0
-
-
-                # check for early td and in case reset rope
-                if p.detectTouchDown():
-                    p.resetRope()
-                    print(colored("Early TD detected, Start landing", "blue"))
-                    p.stateMachine = 'landing'
-                    p.start_landing = p.time
-            else: # you are checking for delayed TD you have already reset rope and restored PD
-                if p.detectTouchDown():
-                    print(colored("Start landing", "blue"))
-                    p.stateMachine = 'landing'
-                    p.start_landing = p.time
-
-            # plot rope forces
-            p.ros_pub.add_arrow(p.hoist_l_pos, p.rope_direction * (p.Fr_l) / p.force_scale, "red", scale=2.5)
-            p.ros_pub.add_arrow(p.hoist_r_pos, p.rope_direction2 * (p.Fr_r) / p.force_scale, "red", scale=2.5)
-            p.tau_ffwd[p.rope_index[0]] = p.Fr_r
-            p.tau_ffwd[p.rope_index[1]] = p.Fr_l
-
-
-        if (p.stateMachine == 'landing'):
-                print(colored("Start landing", "blue"))
-                p.prop_force = (-25.)  # push against the wall
-                p.apply_propeller_force(p.prop_force)
-                landing_error = p.printLandingInfo()
-                msg = std_msgs.msg.String()
-                if np.linalg.norm(landing_error) < 0.5:
-                    msg.data = 'achieved'
-                else:
-                    msg.data = 'error'
-                p.pub_goal_status(msg)
-
-                ####TODO
-                pass
+        #TODO uncomment this
+        # stop = p.stateMachineLoop()
+        # if stop:
+        #     break
 
         # plot ropes as green arrows only when you not save bags because they are ugly
         if not p.SAVE_BAG:
@@ -971,7 +1051,7 @@ def talker(p):
         except:
             pass
         p.ros_pub.add_marker(p.x_ee, radius=0.05)
-        p.ros_pub.add_mesh(mesh_path="/tmp/runtime_mesh.stl", position=p.mat2Gazebo, color="red", alpha=1.0)
+        p.ros_pub.add_mesh(mesh_path=os.environ['LOCOSIM_DIR'] + '/robot_descriptions/climbingrobot_description/meshes/runtime_mesh.obj', position=p.mat2Gazebo, color=None, alpha=1.0)
         p.ros_pub.publishVisual(delete_markers=False)
 
         # send commands to gazebo
