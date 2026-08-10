@@ -1,0 +1,445 @@
+import os
+import sys
+import time
+import json
+import numpy as np
+import importlib
+from termcolor import colored
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+import matplotlib.pyplot as plt
+from algo_patch import CrossEntropyMethodMixed
+from base_controllers.components.terrain_manager import TerrainManager
+from BilevelOpt import BilevelOpt, close_matlab_engines
+from params_f import *
+from Plot_result import PlotResultCemMjumps
+from collections import Counter
+
+
+def _eval_with_timing(optimizer, inp, idx):
+    t0 = time.time()
+    result = optimizer.eval_pop(inp)
+    elapsed = time.time() - t0
+    return idx, result, elapsed
+
+def main():
+    
+    setting = {
+        "COMPUTATION_MODE": True, 
+        "PLOT_MODE": False,
+        "WARM_START_MODE": True,
+        "EARLY_STOP": True,
+        "VERBOSE": True
+    }
+    
+    if setting["COMPUTATION_MODE"]:
+        best_lock = threading.Lock()
+        global_best_points = []
+        global_best_traj = []
+        global_total_fitness = 0.0
+        
+        # Imposta il primissimo punto di partenza
+        current_p0 = WAYPOINTS[0]
+        
+        
+        for i in range(len(WAYPOINTS)-1):
+            current_pf = WAYPOINTS[i+1]
+            jump_idx = i + 1   # 1-based index for this jump
+            print(colored(f"\n{'#'*80}", "blue", attrs=['bold']))
+            print(colored(f"Starting optimization for jump {jump_idx}/{len(WAYPOINTS)-1}: {current_p0} -> {current_pf}", "blue", attrs=['bold']))
+            print(colored(f"{'#'*80}\n", "blue", attrs=['bold']))
+
+            # Create a dedicated result directory for this jump
+            jump_dir = os.path.join(result_dir, f"jump_{jump_idx}")
+            os.makedirs(jump_dir, exist_ok=True)
+
+            point_clouds, patches, cost_grid = initialize_terrain_data(current_p0, current_pf, warm_start_mode=setting["WARM_START_MODE"])
+            
+            optimizer = BilevelOpt(
+                terrain_manager, current_p0, current_pf,
+                fitness_weights=fitness_weights,
+                point_clouds=point_clouds,
+                patches=patches,
+                cost_grid=cost_grid,
+                verbose=setting["VERBOSE"]
+            )
+            
+            patch_pf = patches.get_patch_id_from_point_2D(current_pf[1], current_pf[2])
+            patch_p0 = patches.get_patch_id_from_point_2D(current_p0[1], current_p0[2])
+            
+            algo = CrossEntropyMethodMixed(cem_params, patch_p0, patch_pf)
+            
+            cost_hist = np.zeros(cem_params.cem_iters)      
+            best_jump_log_points = None
+            best_jump = None
+            best_trajectory = None
+            best_fitness = -np.inf  # Changed from np.inf to -np.inf for maximization
+            best_consumed_energy = None
+            best_landing_cost = None
+            best_achieved_target = None
+            best_all_converged = None
+            
+            start = time.time()
+                
+            # early stop:
+            no_improvement_counter = 0
+            min_delta = 1e-4
+            last_best_fitness = -np.inf  # Changed from np.inf to -np.inf
+            
+            # Timing logs
+            timing_log = {
+                "iterations": [],
+                "total_wall_time": None
+            }
+            
+            for k in range(cem_params.cem_iters):
+                # set time and paramters
+                iter_start = time.time()
+                fitness = [0.0] * cem_params.pop_size
+                all_log_points = [None] * cem_params.pop_size
+                all_log_traj = [None] * cem_params.pop_size
+                all_consumed_energy = [0.0] * cem_params.pop_size
+                all_landing_cost = [0.0] * cem_params.pop_size
+                all_n_jumps = [0] * cem_params.pop_size
+                all_achieved_target = [None] * cem_params.pop_size
+                n_workers = cem_params.n_threads
+                all_converged = [False] * cem_params.pop_size
+                all_converg_log = [None] * cem_params.pop_size
+                all_violations_log = [None] * cem_params.pop_size
+                individual_times = [0.0] * cem_params.pop_size
+                
+                
+                first_iteration = (k == 0)
+                algo.generate_population_discrete(first_iteration)
+                xd = algo.population_discrete   # shape: dim_discrete x pop_size
+                
+                inputs = [[xd[:, i].tolist()] for i in range(cem_params.pop_size)]
+                
+                # patch_ids_esplorati = xd[1:, :].flatten().astype(int)
+                # patches.plot_population_density(patch_ids_esplorati)
+                
+                # counter = Counter(xd[0])
+                # total = len(xd[0])
+                # for value in sorted(counter.keys()):
+                #     perc = counter[value] / total * 100
+                #     # print(f"Jump {value}: {perc:.2f}%")
+                
+                # ============================
+                # flag_thread == TRUE: multi-threaded evaluation
+                # ============================
+                if (flag_thread == True):
+                    
+                    print(colored(f"\n{'='*60}", "yellow"))
+                    print(colored(f"{n_workers} Thread evaluation with ThreadPoolExecutor, Iteration {k+1}/{cem_params.cem_iters}", "yellow", attrs=['bold']))
+                    print(colored(f"{'='*60}\n", "yellow"))
+                    
+                    
+                    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+                        future_to_index = {executor.submit(_eval_with_timing, optimizer, inputs[i], i): i 
+                                        for i in range(cem_params.pop_size)}
+                    
+                        for future in as_completed(future_to_index):
+                            idx, log_result, elapsed = future.result()
+                            individual_times[idx] = elapsed
+                            fitness[idx] = log_result['fitness']
+                            all_log_points[idx] = log_result['points']
+                            all_log_traj[idx] = log_result['traj']
+                            all_consumed_energy[idx] = log_result['consumed_energy']
+                            all_landing_cost[idx] = log_result['landing_cost']
+                            all_n_jumps[idx] = log_result['n_jumps']
+                            all_achieved_target[idx] = log_result['achieved_target']
+                            all_converged[idx] = log_result['all_converged']
+                            all_converg_log[idx] = log_result['convergence_log']
+                            all_violations_log[idx] = log_result['violations_log']                        
+                            
+                            with best_lock:
+                                if log_result['fitness'] > best_fitness:  # Changed from < to > for maximization
+                                    best_fitness = log_result['fitness']
+                                    best_consumed_energy = log_result['consumed_energy']
+                                    best_landing_cost = log_result['landing_cost']
+                                    best_jump_log_points = log_result['points']
+                                    best_trajectory = log_result['traj']
+                                    best_jump = log_result['n_jumps']
+                                    best_achieved_target = log_result['achieved_target']
+                                    best_all_converged = log_result['all_converged']
+                                    print(colored(f"[NEW BEST] Indiv {idx}: Fitness {best_fitness:.2f}", "green"))
+                            
+                            print(colored(f"complete individual {idx}, Iteration {k+1} ({elapsed:.2f}s)", "yellow"))
+                    
+                    print(colored(f"[ITERATION END] Best fitness: {best_fitness:.2f}", "green"))
+                # ============================
+                # flag_thread == FALSE: sequential evaluation
+                # ============================
+                else:
+                    print(colored(f"\n{'='*60}", "yellow"))
+                    print(colored("Sequential evaluation", "yellow", attrs=['bold']))
+                    print(colored(f"{'='*60}\n", "yellow"))
+                    
+                    for i, population_inputs in enumerate(inputs):
+                        ind_start = time.time()
+                        log_result = optimizer.eval_pop(population_inputs)
+                        ind_elapsed = time.time() - ind_start
+                        individual_times[i] = ind_elapsed                    
+                        print(colored(f"\n[COMPLETE] Individual {i}/{len(inputs)} of iteration {k+1} finished, fitness = {log_result['fitness']:.4f}, time = {ind_elapsed:.2f}s\n", "cyan", attrs=['bold']))
+                        
+                        fitness[i] = log_result['fitness']
+                        all_log_points[i] = log_result['points']
+                        all_log_traj[i] = log_result['traj']
+                        all_consumed_energy[i] = log_result['consumed_energy']
+                        all_landing_cost[i] = log_result['landing_cost']
+                        all_n_jumps[i] = log_result['n_jumps']
+                        all_achieved_target[i] = log_result['achieved_target']
+                        all_converged[i] = log_result['all_converged']
+                        all_converg_log[i] = log_result['convergence_log']
+                        all_violations_log[i] = log_result['violations_log']
+                        
+                        if log_result['fitness'] > best_fitness:  # Changed from < to > for maximization
+                            best_fitness = log_result['fitness']
+                            best_consumed_energy = log_result['consumed_energy']
+                            best_landing_cost = log_result['landing_cost']
+                            best_jump_log_points = log_result['points']
+                            best_trajectory = log_result['traj']
+                            best_jump = log_result['n_jumps']
+                            best_achieved_target = log_result['achieved_target']
+                            best_all_converged = log_result['all_converged']
+                            
+                            print(colored(f"[NEW BEST] Fitness: {best_fitness:.2f}","green", attrs=['bold']))
+            
+
+                
+                # Update distributions
+                algo.evaluate_population(fitness)
+                algo.update_distributions()
+                
+                cost_hist[k] = algo.log.best_value 
+                    
+                print ("finish iteration ", k+1)
+                iter_time = time.time() - iter_start
+                
+                # Store timing for this iteration
+                timing_log["iterations"].append({
+                    "iteration": k + 1,
+                    "iteration_time_s": round(iter_time, 4),
+                    "individual_times_s": [round(t, 4) for t in individual_times],
+                    "mean_individual_time_s": round(float(np.mean(individual_times)), 4),
+                })
+                
+                print(colored(f"\n{'='*60}", "cyan", attrs=['bold']))
+                print(colored(f"  Iteration {k+1} completed in {iter_time:.2f}s", "cyan", attrs=['bold']))
+                print(colored(f"  Best value this iteration: {algo.log.best_value:.4f}", "cyan", attrs=['bold']))
+                print(colored(f"{'='*60}\n", "cyan", attrs=['bold']))
+                
+                # if flag_thread == False:
+                #     optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
+                #     optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
+                    
+                # =======================
+                # SAVE PARTS INSIDE THE ITERATION LOOP
+                # =======================
+                
+                # 1. Save elites of current iteration and baste of until thi iteration
+                num_elites = cem_params.n_elites
+                sorted_indices = np.argsort(fitness)[::-1]  # Added [::-1] for descending sort
+                elite_indices = sorted_indices[:num_elites]
+                xd_elites = xd[1:, elite_indices]
+                elite_patch_ids = np.unique(xd_elites).astype(int).tolist()
+                # patches.plot_patches_by_id(elite_patch_ids)
+                
+                current_iteration_elites = []
+                
+                for idx in elite_indices:
+                    elite_sol = {
+                        'fitness': float(fitness[idx]),
+                        'n_jumps':   int(all_n_jumps[idx]),
+                        'consumed_energy': float(all_consumed_energy[idx]),
+                        'landing_cost': float(all_landing_cost[idx]),
+                        'points': [p.tolist() for p in all_log_points[idx]],
+                        'traj': [t.tolist() if t is not None else None for t in all_log_traj[idx]],
+                        'iteration': k + 1,
+                        'patch_ids': xd[1:, idx].tolist(),   
+                        'achieved_target': all_achieved_target[idx].tolist() if all_achieved_target[idx] is not None else None,                    
+                        'convergence_log': all_converg_log[idx],
+                        'violations_log': all_violations_log[idx]
+                    }
+                    current_iteration_elites.append(elite_sol)
+                
+                iteration_report = {
+                    "iteration": k + 1,
+                    "best_fitness_ever": float(best_fitness),
+                    "best_consumed_energy_ever": float(best_consumed_energy) if best_consumed_energy is not None else None,
+                    "best_landing_cost_ever": float(best_landing_cost) if best_landing_cost is not None else None,
+                    "best_trajectory_ever": [t.tolist() if t is not None else None for t in best_trajectory] if best_trajectory is not None else None,
+                    "best_achieved_target_ever": best_achieved_target.tolist() if best_achieved_target is not None else None,
+                    "best_fitness_this_iter": float(current_iteration_elites[0]['fitness']),
+                    "elites": current_iteration_elites
+                }
+                
+                subdir = "iteration_reports"
+                iteration_filename = f"iteration_{k+1:03d}_report.json"
+                save_dir = os.path.join(jump_dir, subdir)
+                os.makedirs(save_dir, exist_ok=True)
+                with open(os.path.join(save_dir, iteration_filename), "w") as f:
+                    json.dump(iteration_report, f, indent=2)
+                print(colored(f"[SAVE] Iteration saved to: {os.path.join(save_dir, iteration_filename)}", "cyan"))
+                
+                
+                # 2. save each step
+                all_steps_data = []
+                for idx_pop in range(cem_params.pop_size):
+                    current_traj = [t.tolist() if t is not None else None for t in all_log_traj[idx_pop]] if all_log_traj[idx_pop] is not None else None
+                    current_points = [p.tolist() for p in all_log_points[idx_pop]] if all_log_points[idx_pop] is not None else None
+
+                    step_info = {"i": idx_pop,
+                        "patch_ids": xd[1:, idx_pop].tolist(), 
+                        "n_jumps": int(all_n_jumps[idx_pop]),
+                        "converged": bool(all_converged[idx_pop]),
+                        "fitness": float(fitness[idx_pop]),
+                        "consumed_energy": float(all_consumed_energy[idx_pop]),
+                        "landing_cost": float(all_landing_cost[idx_pop]),
+                        "traj": current_traj,
+                        "points": current_points,
+                        "convergence_log": all_converg_log[idx_pop],
+                        "violations_log": all_violations_log[idx_pop]
+                    }
+                    all_steps_data.append(step_info)
+                
+                all_comb_report = {
+                    "iteration": k + 1,
+                    "steps": all_steps_data
+                }
+                all_comb_filename = f"all_comb_in_iter_{k+1}_report.json"
+                save_dir = os.path.join(jump_dir, subdir)
+                os.makedirs(save_dir, exist_ok=True)
+                
+                with open(os.path.join(save_dir, all_comb_filename), "w") as f:
+                    json.dump(all_comb_report, f, indent=2)
+                
+                print(colored(f"[SAVE] Full population report saved to: {all_comb_filename}", "blue"))
+                
+                
+                if setting["EARLY_STOP"]:
+                    # Early stopping check (now checking for improvement in maximization)
+                    if best_fitness - last_best_fitness > min_delta:  # Changed comparison direction
+                        no_improvement_counter = 0
+                        last_best_fitness = best_fitness
+                    else:
+                        no_improvement_counter += 1
+                    if no_improvement_counter >= patience:
+                        print(colored(f"[EARLY STOP] No improvement in the last {patience} iterations. Stopping optimization.", "red", attrs=['bold']))
+                        break
+                    
+            n_workers = cem_params.n_threads
+            with ThreadPoolExecutor(max_workers=n_workers) as executor:
+                executor.map(lambda x: close_matlab_engines(), range(n_workers))
+                
+            # Save wall-time
+            end = time.time()
+            wall_time = end - start
+
+            # Save timing report
+            timing_log["total_wall_time_s"] = round(wall_time, 4)                       #tempo totale
+            timing_log["total_iterations_completed"] = len(timing_log["iterations"])    #iterazioni completate
+            
+            
+            timing_filename = "timing_report.json"
+            timing_save_path = os.path.join(jump_dir, timing_filename)
+            with open(timing_save_path, "w") as f:
+                json.dump(timing_log, f, indent=2)
+            print(colored(f"[SAVE] Timing report saved to: {timing_save_path}", "blue"))
+
+            xd = algo.best_discrete
+            
+            # =======================
+            # FINAL SAVE 
+            # =======================
+            print(f"Best discrete solution: {xd}")        
+            iteration_history = []
+            for h in algo.history:
+                iter_data = {
+                    "iteration": h["iter"],
+                    "func_evals": h["func_evals"],
+                    "best_value": h["best_value"],
+                    "best_discrete": h["best_discrete"].tolist(),
+                    "probs": [p.tolist() for p in h["probs"]],
+                }
+                iteration_history.append(iter_data)
+                
+            history_filename = "cem_iteration_history.json"
+            history_save_path = os.path.join(jump_dir, history_filename)
+            with open(history_save_path, "w") as f:
+                json.dump({
+                    "metadata": {
+                        "timestamp": datetime.now().isoformat(),
+                        "total_iterations": len(iteration_history)
+                    },
+                    "iteration_history": iteration_history
+                }, f, indent=2)
+            print(colored(f"[SAVE] Iteration CEM history saved to: {history_save_path}", "blue"))
+            
+            # Plot best trajectory at the end
+            print(colored(f"\n{'='*70}", "green", attrs=['bold']))
+            print(colored(f"  OPTIMIZATION FINISHED!", "green", attrs=['bold']))
+            print(colored(f"  Best Fitness: {best_fitness:.4f}", "green", attrs=['bold']))
+            print(colored(f"  Total Time: {wall_time:.2f}s", "green", attrs=['bold']))
+            print(colored(f"{'='*70}\n", "green", attrs=['bold']))
+
+            # --- Save per-jump summary ---
+            jump_summary = {
+                "jump_index": jump_idx,
+                "p0": current_p0.tolist(),
+                "pf": current_pf.tolist(),
+                "best_fitness": float(best_fitness),
+                "best_consumed_energy": float(best_consumed_energy) if best_consumed_energy is not None else None,
+                "best_landing_cost": float(best_landing_cost) if best_landing_cost is not None else None,
+                "wall_time_s": round(wall_time, 4),
+                "best_achieved_target": best_achieved_target.tolist() if best_achieved_target is not None else None,
+                "best_points": [p.tolist() for p in best_jump_log_points] if best_jump_log_points is not None else None,
+                "best_trajectory": [t.tolist() if t is not None else None for t in best_trajectory] if best_trajectory is not None else None
+            }
+            with open(os.path.join(jump_dir, "jump_summary.json"), "w") as f:
+                json.dump(jump_summary, f, indent=2)
+            print(colored(f"[SAVE] Jump summary saved to: {os.path.join(jump_dir, 'jump_summary.json')}", "cyan"))
+
+            # --- Accumulate global results ---
+            if best_jump_log_points is not None:
+                global_best_points.extend(best_jump_log_points)
+            if best_trajectory is not None:
+                global_best_traj.extend(best_trajectory)
+            global_total_fitness += best_fitness
+
+            # --- Advance starting point for next jump ---
+            current_p0 = current_pf
+
+        # =======================
+        # GLOBAL MULTI-JUMP SUMMARY
+        # =======================
+        global_summary = {
+            "metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "n_jumps": len(WAYPOINTS) - 1,
+                "waypoints": [w.tolist() for w in WAYPOINTS]
+            },
+            "global_total_fitness": float(global_total_fitness),
+            "all_best_points": [p.tolist() for p in global_best_points] if global_best_points else [],
+            "per_jump_dirs": [f"jump_{j+1}" for j in range(len(WAYPOINTS) - 1)]
+        }
+        global_summary_path = os.path.join(result_dir, "global_summary.json")
+        with open(global_summary_path, "w") as f:
+            json.dump(global_summary, f, indent=2)
+        print(colored(f"[SAVE] Global multi-jump summary saved to: {global_summary_path}", "cyan"))
+
+        save_gazebo_info(global_best_points if global_best_points else None, terrain_manager)
+
+    if setting["PLOT_MODE"]:
+        if best_jump_log_points and best_trajectory:
+            optimizer.plot_point_traj(best_jump_log_points, best_trajectory)
+            optimizer.plot_mesh_traj(best_jump_log_points, best_trajectory,best_fitness)
+        else:
+            print(colored("[ERROR] Could not plot best trajectory. No solution found or tracking issue.", "red", attrs=['bold']))
+
+if __name__ == "__main__":
+    try:
+        main()
+    finally:
+        close_matlab_engines()

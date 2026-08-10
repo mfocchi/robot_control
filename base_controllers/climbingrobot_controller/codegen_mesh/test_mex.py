@@ -70,8 +70,17 @@ p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
 pf=  np.array([0.0, 4,-4])
 
 #TERRAIN 2
+<<<<<<< HEAD
 # mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.1)
 # # #jump params
+=======
+terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
+mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
+# mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.1)
+# #jump params
+p0 = np.array([0.0,2.5,-7.5])
+pf=  np.array([0.0,2.5,-15.5])
+>>>>>>> 915e06e (update: splite in two folder , the optimization script inside patch and without the optimization inside patch (opti patch))
 # p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
 # pf=  np.array([0.0, 4,-12])
 
@@ -109,6 +118,5 @@ ax.view_init(elev=20, azim=9)
 ax.scatter(p0_adj[0], p0_adj[1], p0_adj[2], color='blue', s=500)  # s = size
 ax.scatter(achieved_target[0], achieved_target[1], achieved_target[2], color='red', s=500)  # s = size
 ax.plot3D(ref_com[0,:], ref_com[1,:],ref_com[2,:],color='red', linewidth=2.5)
-
-eng.exit
+plt.show() 
 eng.quit()

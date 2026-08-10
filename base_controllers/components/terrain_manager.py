@@ -40,7 +40,7 @@ class TerrainManager:
                     self.max_ridge_depth, self.seed, x_offset=-0.5 #offset must be -0.5 othewise the robot starts behind the wall!
                 )
             if self.terrain_type=='hemisphere':
-                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 1.5, grid_size=self.grid_size, x_offset=0.01)
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_hemisferic_map(self.Lz, self.Ly, cz = self.Lz/2, cy = self.Ly/2, radius = 2.5, grid_size=self.grid_size, x_offset=0.01)
 
             if self.terrain_type == 'gaussian_bumps':
                 self.mesh_x, self.mesh_y, self.mesh_z = self.generate_gaussian_bumps_map(
@@ -97,7 +97,73 @@ class TerrainManager:
                     grid_size=self.grid_size,
                     x_offset=0.01
                 )
+            
+            if self.terrain_type == 'mixed_gaussians':
+                n_gauss = 15
+                centers = [
+                    (1.5, -1.5), (4.0, -3.0), (7.5, -2.0), (2.5, -5.0), (5.5, -4.5),
+                    (8.0, -6.5), (3.0, -7.5), (6.0, -8.5), (1.0, -9.0), (9.0, -1.0),
+                    (4.5, -6.0), (7.0, -5.0), (2.0, -3.5), (6.5, -2.5), (5.0, -7.0)
+                ]
+                amplitudes = [
+                    1.2,  -0.9,  -1.0,   1.5,  -1.1,
+                   -0.8,  -1.3,   1.0,  -0.7,  -1.2,
+                   -0.9,   1.3,  -1.0,  -0.6,  -1.1
+                ]
+                sigmas = [
+                    0.7, 0.6, 0.5, 0.8, 0.6,
+                    0.5, 0.7, 0.6, 0.5, 0.6,
+                    0.7, 0.8, 0.6, 0.5, 0.7
+                ]
                 
+                
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_mixed_gaussian_map(
+                    n_gaussians=n_gauss,
+                    centers=centers,
+                    amplitudes=amplitudes,
+                    sigmas=sigmas,
+                    grid_size=self.grid_size,
+                    x_offset=0.01
+                )
+            
+            if self.terrain_type == 'mixed_big_gaussians':
+                n_gauss = 22
+                centers = [
+                    # Zona superiore (Z vicino a 0)
+                    # (2.0,  -2.0),  (8.0,  -4.0),  (15.0, -3.0),  (22.0, -1.5),  (28.0, -5.0),
+                    (5.0,  -8.0),  (12.0, -6.0),  #(19.0, -7.0),  (25.0, -9.0),  (1.0,  -10.0),
+                    # Zona centrale (Z intermedia)
+                    (7.0,  -15.0), (14.0, -13.0), (21.0, -17.0), (27.0, -12.0), (3.0,  -18.0),
+                    (10.0, -20.0), (17.0, -22.0), (24.0, -19.0), (6.0,  -24.0), (29.0, -16.0),
+                    # Zona inferiore (Z vicino a -50)
+                    (4.0,  -28.0), (11.0, -31.0), (18.0, -27.0), (26.0, -33.0), (9.0,  -36.0),
+                    (16.0, -40.0), (23.0, -38.0), (2.0,  -43.0), (20.0, -45.0), (28.0, -48.0),
+                ]
+                amplitudes = [
+                    #  3.2,  -2.8,   3.5,  -2.6,   3.0,
+                    -3.3,   2.7,  #-3.1,   3.4,  -2.5,
+                     2.9,  -3.6,   3.2,  -3.0,   3.7,
+                    -2.8,   3.1,  -3.4,   2.6,  -3.2,
+                     3.5,  -2.9,   3.0,  -3.6,   2.8,
+                    -3.1,   3.4,  -2.7,   3.3,  -3.0,
+                ]
+                sigmas = [
+                    # 1.8, 2.0, 1.5, 2.2, 1.7,
+                    2.1, 1.6, #1.9, 2.3, 1.8,
+                    2.0, 1.7, 2.2, 1.5, 1.9,
+                    2.1, 1.8, 2.0, 1.6, 2.3,
+                    1.9, 2.2, 1.7, 2.0, 1.5,
+                    2.1, 1.8, 2.3, 1.6, 1.9,
+                ]
+
+                self.mesh_x, self.mesh_y, self.mesh_z = self.generate_mixed_gaussian_map(
+                    n_gaussians=n_gauss,
+                    centers=centers,
+                    amplitudes=amplitudes,
+                    sigmas=sigmas,
+                    grid_size=self.grid_size,
+                    x_offset=0.01
+                )
             # self.plot_terrain_map(self.mesh_x, self.mesh_y, self.mesh_z)
 
             # Convert to point cloud format and store
@@ -501,6 +567,97 @@ class TerrainManager:
         
         return X, Y, Z
         
+    def generate_mixed_gaussian_map(self, n_gaussians, centers, amplitudes, sigmas, grid_size=100, x_offset=0.0):
+        """
+        Generate a terrain map with both positive (bumps) and negative (valleys) Gaussian features.
+        Unlike generate_multi_gaussian_map, this method allows negative amplitudes so that
+        the resulting surface can go below zero.
+
+        Parameters:
+        -----------
+        n_gaussians : int
+            Number of Gaussian features to place.
+        centers : list of tuples
+            List of (cy, cz) center positions for each Gaussian.
+        amplitudes : list of float
+            Amplitude of each Gaussian. Positive values create bumps, negative values create valleys.
+        sigmas : list or scalar
+            Standard deviation(s) for each Gaussian. Can be:
+            - A single scalar (same isotropic sigma for all)
+            - A list of scalars (isotropic sigma per Gaussian)
+            - A list of (sigma_y, sigma_z) tuples (anisotropic)
+        grid_size : int
+            Resolution of the grid (default: 100).
+        x_offset : float
+            Constant offset added to the whole surface (default: 0.0, i.e. terrain centered at 0).
+
+        Returns:
+        --------
+        X : ndarray  (grid_size x grid_size) - height values (can be negative)
+        Y : ndarray  - Y coordinate meshgrid
+        Z : ndarray  - Z coordinate meshgrid
+        """
+        assert n_gaussians == len(centers), "Number of Gaussians must match number of centers"
+
+        # Handle amplitudes input
+        if np.isscalar(amplitudes):
+            amplitudes = [amplitudes] * n_gaussians
+        else:
+            assert len(amplitudes) == n_gaussians, "Number of amplitudes must match number of Gaussians"
+
+        # Handle sigmas input
+        if np.isscalar(sigmas):
+            sigmas = [(sigmas, sigmas)] * n_gaussians
+        elif isinstance(sigmas, list):
+            processed_sigmas = []
+            for sigma in sigmas:
+                if np.isscalar(sigma):
+                    processed_sigmas.append((sigma, sigma))
+                elif isinstance(sigma, (tuple, list)) and len(sigma) == 2:
+                    processed_sigmas.append(tuple(sigma))
+                else:
+                    raise ValueError("Each sigma must be a scalar or a tuple/list of 2 values (sigma_y, sigma_z)")
+            sigmas = processed_sigmas
+            assert len(sigmas) == n_gaussians, "Number of sigmas must match number of Gaussians"
+        else:
+            raise ValueError("sigmas must be a scalar, list of scalars, or list of tuples")
+
+        X = np.zeros((grid_size, grid_size))
+
+        # Create grid
+        z = np.linspace(self.Lz, 0, grid_size)
+        y = np.linspace(0, self.Ly, grid_size)
+        Z, Y = np.meshgrid(z, y)
+
+        # Add each Gaussian (amplitude can be positive or negative)
+        for i in range(n_gaussians):
+            cy, cz = centers[i]
+            amplitude = amplitudes[i]
+            sigma_y, sigma_z = sigmas[i]
+
+            gaussian = amplitude * np.exp(
+                -((Y - cy)**2 / (2 * sigma_y**2) + (Z - cz)**2 / (2 * sigma_z**2))
+            )
+            X += gaussian
+
+        # Add offset (can be 0 so the terrain is truly centered around zero)
+        X = X + x_offset
+
+        # Setup patches
+        self.patch_width = self.Ly / self.number_of_patches_width
+        self.patch_height = abs(self.Lz) / self.number_of_patches_height
+        patch_id = 0
+        for i in range(self.number_of_patches_width):
+            for j in range(self.number_of_patches_height):
+                self.patch_origins[patch_id] = np.array([
+                    self.patch_width * i,
+                    self.Lz + (self.patch_height * j)
+                ])
+                patch_id += 1
+
+        return X, Y, Z
+
+
     def convert_meshgrid_to_pc(self, X, Y, Z):
         x_position = X.flatten()
         y_position = Y.flatten()
