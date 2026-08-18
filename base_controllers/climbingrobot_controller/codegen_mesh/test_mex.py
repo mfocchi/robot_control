@@ -63,24 +63,19 @@ Ly = 5  # Width (horizontal extent) of wall in meters
 terrainManager = TerrainManager(generate_terrain=False)
 
 #TERRAIN 1
-mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=-0.5)
-###jump params
-p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
-#p0 =  matlab.double([0.27753 , 2.51893, -6.09989]) # actual used p0 = np.array([0.28,  2.5, -6.10104])
-pf=  np.array([0.0, 4,-4])
+# mesh_x, mesh_y, mesh_z  = terrainManager.generate_rock_wall_map(Lz, Ly, grid_size, wall_depth, max_ridge_depth, seed, x_offset=-0.5)
+# ###jump params
+# p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
+# #p0 =  matlab.double([0.27753 , 2.51893, -6.09989]) # actual used p0 = np.array([0.28,  2.5, -6.10104])
+# pf=  np.array([0.0, 4,-4])
 
 #TERRAIN 2
-<<<<<<< HEAD
-# mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.1)
-# # #jump params
-=======
 terrainManager   = TerrainManager(grid_size=grid_size,wall_depth =wall_depth,max_ridge_depth=max_ridge_depth, seed="default", Lz=Lz, Ly=Ly, generate_terrain=True, terrain_type="hemisphere")
 mesh_x, mesh_y, mesh_z  = terrainManager.get_mesh()
 # mesh_x, mesh_y, mesh_z  = terrainManager.generate_hemisferic_map(Lz, Ly, cz=Lz / 2, cy=Ly / 2, radius=1.5, grid_size=grid_size, x_offset = 0.1)
 # #jump params
 p0 = np.array([0.0,2.5,-7.5])
 pf=  np.array([0.0,2.5,-15.5])
->>>>>>> 915e06e (update: splite in two folder , the optimization script inside patch and without the optimization inside patch (opti patch))
 # p0 = np.array([0.0, 2.5, -6]) #unit test ,  there is singularity for px = 0!
 # pf=  np.array([0.0, 4,-12])
 

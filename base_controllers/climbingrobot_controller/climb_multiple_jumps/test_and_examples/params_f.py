@@ -50,11 +50,7 @@ filter_weights = np.array([0., 1., 1.0, 0.0, 0.0])
 # ================================================
 # Create inner_opt_params in the EXACT order MATLAB expects
 Fleg_max = 150.
-<<<<<<< HEAD:base_controllers/climbingrobot_controller/climb_multiple_jumps/new_mode/params_f.py
 Fr_max = 190.
-=======
-Fr_max = 60.
->>>>>>> 915e06e (update: splite in two folder , the optimization script inside patch and without the optimization inside patch (opti patch)):base_controllers/climbingrobot_controller/climb_multiple_jumps/test_and_examples/params_f.py
 Fr_min = 15.
 number_of_patches_width = 30
 number_of_patches_height = 50
@@ -80,11 +76,7 @@ inner_opt_params['w2'] = 0.  # hoist work
 inner_opt_params['w3'] = 1000.
 inner_opt_params['T_th'] = 0.05
 inner_opt_params['obstacle_avoidance'] = 'mesh'
-<<<<<<< HEAD:base_controllers/climbingrobot_controller/climb_multiple_jumps/new_mode/params_f.py
 inner_opt_params['jump_clearance'] = 1.5
-=======
-inner_opt_params['jump_clearance'] = 0.8
->>>>>>> 915e06e (update: splite in two folder , the optimization script inside patch and without the optimization inside patch (opti patch)):base_controllers/climbingrobot_controller/climb_multiple_jumps/test_and_examples/params_f.py
 inner_opt_params['mesh_x'] = None
 inner_opt_params['mesh_y'] = None
 inner_opt_params['mesh_z'] = None
