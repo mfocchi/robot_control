@@ -3,14 +3,14 @@
 name_folder="test_patches"
 
 NUM_RUNS=5
-export PARAMS_FILES="rock"
-TERRAIN_TYPE="gaussian"
+export PARAMS_FILES="params"
+TERRAIN_TYPE="hemisphere"
 PERC_MIN_PROB=0.8
 
 if [ "$TERRAIN_TYPE" == "rock" ]; then
     START_POINT="[ 0.28, 2.5, -6.10104 ]" 
     GOAL_POINT="[ 0.28, 3.5, -16.3 ]"
-elif [ "$TERRAIN_TYPE" == "gaussian" ]; then
+elif [ "$TERRAIN_TYPE" == "gaussian_bumps" ]; then
     START_POINT="[ 0.5, 6.55, -18.49 ]" 
     GOAL_POINT="[ 0.5, 2.47, -6.3 ]"
 elif [ "$TERRAIN_TYPE" == "hemisphere" ]; then

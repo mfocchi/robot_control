@@ -56,9 +56,9 @@ class ParabolicOptimizer:
         # fitness about "duplicate" jumps inside xd
         used_patches = [int(xd[1 + i]) for i in range(n_jumps)]
         
-        # DOPPIONE PISELLONE CHECK
+        # DOUBLE JUMP DETECTED
         if len(used_patches) != len(set(used_patches)):
-            print("DOPPIONE PISELLONE!")
+            print("DOUBLE JUMP DETECTED!")
             all_converged = False
             fitness_score = -self.fitness_weights[0]  # Negative for maximization
             
