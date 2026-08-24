@@ -164,12 +164,12 @@ class BilevelOpt:
 
         total_jump = n_jumps + 1  # Including final jump with +1
         
-        # DOPPIONE PISELLONE CHECK
+        # DOUBLE CHECK
         # fitness about "duplicate" jumps inside xd
         used_patches = [(xd[1 + i]) for i in range(n_jumps)]
         if len(used_patches) != len(set(used_patches)):
             if self.verbose:
-                print("DOPPIONE PISELLONE!")
+                print("DOUBLE JUMP DETECTED!")
             all_converged = False
             fitness_score = -self.fitness_weights[0]**2  # Negative for maximization
             

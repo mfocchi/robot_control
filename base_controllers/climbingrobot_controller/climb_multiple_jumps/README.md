@@ -15,7 +15,7 @@ The inner optimization is executed through MATLAB/C++ MEX, while the high-level 
 
 ## Available Implementations
 
-The repository contains two main folders corresponding to two versions of the multi-jump planner:
+The repository contains **two main folders** corresponding to two versions of the multi-jump planner:
 
 - `opti_patch/`: uses **landing-point optimization inside each selected patch**. The outer CEM selects the landing patch, while the inner optimization is allowed to search inside that patch for a better landing point. In this way, the optimizer is not forced to land exactly at the patch center and can select a point according to dynamic feasibility and terrain cost.
 
@@ -50,8 +50,8 @@ For the version with landing-point optimization inside each patch, move to `opti
 
 ```bash
 cd opti_patch
-chmod +x auto_test_R_dif_patch.sh
-./auto_test_R_dif_patch.sh
+chmod +x auto_test_dif_patch.sh
+./auto_test_dif_patch.sh
 ```
 
 The script can run repeated experiments on different terrain types. The available selections are:
@@ -65,18 +65,18 @@ For example, the following commands select the Gaussian terrain and start the ex
 ```bash
 cd opti_patch
 sed -i 's/^TERRAIN_TYPE=.*/TERRAIN_TYPE="gaussian"/' auto_test_R_dif_patch.sh
-chmod +x auto_test_R_dif_patch.sh
-./auto_test_R_dif_patch.sh
+chmod +x auto_test_dif_patch.sh
+./auto_test_dif_patch.sh
 ```
 
-To run the rocky terrain instead:
+To run the rock terrain instead:
 
 ```bash
-sed -i 's/^TERRAIN_TYPE=.*/TERRAIN_TYPE="rock"/' auto_test_R_dif_patch.sh
-./auto_test_R_dif_patch.sh
+sed -i 's/^TERRAIN_TYPE=.*/TERRAIN_TYPE="rock"/' auto_test_dif_patch.sh
+./auto_test_dif_patch.sh
 ```
 
-The main parameters that can be changed directly inside `auto_test_R_dif_patch.sh` are:
+The main parameters that can be changed directly inside `auto_test_dif_patch.sh` are:
 
 ```bash
 NUM_RUNS=5
@@ -117,10 +117,16 @@ The two folders share the same main multi-jump architecture. The most relevant f
 
 ## Output
 
-Each experiment is saved inside the `result/` directory of the selected implementation. When `auto_test_R_dif_patch.sh` is used, the output directory includes the patch dimensions, run number, and terrain type, for example:
+Each experiment is saved inside the `result/` directory of the selected implementation. When `auto_test_dif_patch.sh` is used, the output directory includes the patch dimensions, run number, and terrain type, for example:
 
 ```text
 result/test_patches_W10_H10_run1_rock/
 ```
 
 The main generated files include the processed terrain and patches, simulation parameters, iteration reports, CEM history, timing information, and `info_for_gazebo.json`, which contains the optimized target points and terrain information required by the Gazebo simulation.
+
+## Some Notes:
+
+1. The folder `/old_test_and_examples` contains all the legacy code and prototypes used during development.
+These files are kept as a reference, backup, and documentation of previous functions and simple examples.
+The current implementation is located in `/no_opti_inside_patch` and `/opti/patch`.

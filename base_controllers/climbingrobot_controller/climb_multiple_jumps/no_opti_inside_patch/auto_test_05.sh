@@ -3,7 +3,7 @@
 name_folder="test_05"
 
 NUM_RUNS=5
-export PARAMS_FILES="rock"
+export PARAMS_FILES="params"
 TERRAIN_TYPE="rock" #gaussian_bumps | hemisphere | rock
 PERC_MIN_PROB=0.8
 
