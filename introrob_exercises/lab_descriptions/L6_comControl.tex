@@ -166,12 +166,12 @@ where $e_o \in \Rnum^3$ is the orientation error.
 Map the desired wrench into torques (with quasi-static assumption):
 
 \begin{equation}
-\tau^d = -J_{cj}^T(J_b^T)^{\dagger} W^d
+\tau^d = -J_{cj}^T(J_{cb}^T)^{\dagger} W^d
 \end{equation}
 
 where:
 \begin{equation}
-J_b^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
+J_{cb}^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
 			[x_{f_1} - x_b]_{\times} & \dots & [x_{f_c} - x_b]_{\times}}
 \label{eq:newton-euler}
 \end{equation}
@@ -222,7 +222,7 @@ Which changes are necessary?
 
 \begin{equation}
 J_{com}^T = \mat{I_{3\times3} & \dots & I_{3\times3} \\
-	[x_{f_1} - x_{b,com}]_{\times} & \dots & [x_{f_c} - x_{com}]_{\times}}
+	[x_{f_1} - x_{com}]_{\times} & \dots & [x_{f_c} - x_{com}]_{\times}}
 \end{equation}
 
 Note that now  the gravity compensation simplifies to $W_g = \mat{ mg \\ 0_{3 \times 1} }$
