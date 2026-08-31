@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('TkAgg')
 import os
 import sys
 import time
