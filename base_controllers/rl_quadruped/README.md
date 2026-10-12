@@ -1,9 +1,16 @@
-# RL quadruped controller (Aliengo + Isaac Lab velocity policy)
+# RL quadruped controller (Isaac Lab velocity policy on a locosim quadruped)
 
-Runs the single-network velocity policy trained in
-`safe_rl/tasks/manager_based/velocity` (gym id `Rl-Velocity-Aliengo`) on the Aliengo, in Gazebo or on
-hardware, behind a state machine that handles calibration, standing up, walking, standing down and
-emergency collapse.
+Runs a single-network velocity policy in Gazebo or on hardware, behind a state machine that handles
+calibration, standing up, walking, standing down and emergency collapse.
+
+The robot is selected with `--robot` from the `ROBOTS` table in `rl_controller_config.py`:
+
+| `--robot` | policy (`safe_rl/tasks/manager_based/velocity`) |
+|---|---|
+| `aliengo` | `Rl-Velocity-Aliengo` (walking), `Safe-Rl-Aliengo` (safe stop) |
+| `go2` | `Rl-Velocity-Go2` (walking), `Safe-Rl-Go2` (safe stop) |
+
+Measured numbers below refer to the Aliengo unless stated otherwise.
 
 Two actors from that project are deployed together: the walking policy, and the zero-command
 [safe stop](#safe-stop-a-second-policy-not-a-collapse) trained in the same environment to hold
@@ -23,10 +30,15 @@ Everything this controller owns lives in one directory,
 | `training_model.py` | reads a URDF as physics bodies and compares it against the deployed robot |
 | `run_rl_controller.sh` | launcher that applies real-time priority and optional core pinning |
 | `README.md` | this document |
-| `policies/aliengo_velocity.json` | the deployment contract, shared by **both** networks below: obs layout, `q_default`, gains, rate, and the `onnx_variants` map that names them |
-| `policies/aliengo_velocity_normal.onnx` | the walking policy (copied from `safe_rl/normal.onnx`) |
-| `policies/aliengo_velocity_safe.onnx` | the zero-command safe-stop policy (copied from `safe_rl/safe.onnx`) |
-| `policies/aliengo_velocity_model.urdf` | the robot model the policy was trained on, vendored from `safe_rl` so the contract is checkable |
+| `run_sim.py` | drives the real controller through a scripted command sequence in Gazebo and prints the gait |
+| `gait_report.py` | turns a `run_sim.py` recording into the same report Isaac's `eval_gait.py` prints |
+| `policies/<name>_velocity.json` | the deployment contract, shared by **every** network it lists: obs layout, `q_default`, gains, rate, `trained_for`, and the `onnx_variants` map that names them |
+| `policies/<name>_velocity_normal.onnx` | the walking policy (copied from `safe_rl/normal.onnx`) |
+| `policies/<name>_velocity_safe.onnx` | the zero-command safe-stop policy (copied from `safe_rl/safe.onnx`) |
+| `policies/<name>_velocity_model.urdf` | the robot model the policy was trained on, vendored from `safe_rl` so the contract is checkable. Optional — without it the model check is skipped rather than failed |
+
+`<name>` is the robot name unless `--policy` or the config's `policy_name` says otherwise. Shipped:
+`aliengo_velocity*` and `go2_velocity*`.
 
 It depends on the framework but adds nothing to it: `BaseController`, `IMU_utils`, `PidManager`,
 `getRobotModelFloating` and the `ros_impedance_controller` messages are imported from their usual
@@ -49,20 +61,22 @@ Inside the container (`lab_locosim`, or `dock-other` for a second shell):
 ```bash
 cd $LOCOSIM_DIR/robot_control/base_controllers/rl_quadruped
 
-python3 rl_quadruped_controller.py                    # Gazebo, keyboard
-python3 rl_quadruped_controller.py --input joy        # Gazebo, Xbox pad
-python3 rl_quadruped_controller.py --gui              # Gazebo with the GUI
-python3 rl_quadruped_controller.py --real --input joy # real robot
+python3 rl_quadruped_controller.py                     # Gazebo, keyboard, aliengo
+python3 rl_quadruped_controller.py --robot go2         # another configured robot
+python3 rl_quadruped_controller.py --input joy         # Gazebo, Xbox pad
+python3 rl_quadruped_controller.py --gui               # Gazebo with the GUI
+python3 rl_quadruped_controller.py --real --input joy  # real robot
 ```
 
 ### Command-line arguments
 
 | Argument | Default | Effect |
 |---|---|---|
-| `--robot NAME` | `aliengo` | Robot to run. Needs an entry in `ROBOTS` of `rl_controller_config.py`; an unknown robot, an unknown config key, or a missing required field is refused rather than run on silent defaults. |
+| `--robot NAME` | `aliengo` | Robot to run. The choices come from `ROBOTS` in `rl_controller_config.py`, so an unknown robot is refused by `argparse` with the list of known ones; an unknown config key or a missing required field is likewise refused rather than run on silent defaults. See [Adding a robot](#adding-a-robot). |
 | `--policy NAME` | robot name | Policy basename under `policies/`, without the `_velocity` suffix — `--policy aliengo` loads `aliengo_velocity.json`, and every ONNX file its `onnx_variants` names. Use it to A/B two exported policy sets. |
 | `--input {keyboard,joy,none}` | `keyboard` | Operator input. `keyboard` needs a real tty, so start it from `lab_locosim`/`dock-other`, not from a pipe. `joy` restarts the ROS `joy_node` and reads `/joy`. `none` accepts no input — the machine waits in `FOLD` until something posts events programmatically. |
 | `--real` | off | Run on hardware. Pings the robot's IP first and exits if it does not answer; folds in the `real` sub-dict of the robot config (slower motions, softer collapse, tighter command limits); enables joint-limit clipping and real-time tuning; subscribes to the split hardware IMU topics instead of Gazebo's single one; and skips the simulation spawn fix. |
+| `--network-interface NAME` | config `network_interface` | The NIC the robot is wired to, for a hardware interface that binds a socket to one — the Go2's does. Checked for existence before the launch runs and refused with the list of real interfaces if it is not there, because binding to a NIC that does not exist does not fail: the hardware interface comes up and waits for a lowstate for ever. Ignored without `--real`. |
 | `--world NAME` | config `world_name` (`rl_flat.world`) | Gazebo world, resolved inside `ros_impedance_controller/worlds/`. Ignored with `--real`. Note that Gazebo **does not complain** about a world file that is not there: it silently starts its own default world instead, with a 1 mm contact surface layer and gravity 9.80. If you point this at a name that does not exist you will get a working simulation of a slightly different planet. |
 | `--rviz` / `--no-rviz` | config `use_rviz` (**on**) | Start rviz with the simulator. On by default: it is the intended way to look at the robot, and it renders from the published TF and markers rather than driving the physics window. `--no-rviz` takes one process out of contention, for timing work or a loaded real-robot control PC. See [rviz and TF](#rviz-and-the-world-transform) — the controller has to publish `world -> base_link` itself. |
 | `--gui` | off | Show the Gazebo GUI. Off by default because the GUI competes with the control loop for the machine; rviz is off either way. |
@@ -106,6 +120,59 @@ taskset -p $(pgrep -f rl_quadruped_controller)
 
 The locosim container already runs `--privileged`, which is what makes `SCHED_FIFO` available;
 without it the controller warns and continues at normal priority.
+
+## Adding a robot
+
+The controller itself is robot-agnostic. A new robot needs:
+
+1. **An entry in `ROBOTS`** (`rl_controller_config.py`). Required: `joint_names`, `ee_frames`,
+   `q_fold`, `body_mass`, the five gains and the three safety limits (see
+   [Per-robot gains and safety limits](#per-robot-gains-and-safety-limits)). Usually also `ip`,
+   `foot_radius`, `training_body_map` and `spawn_posture_name`. Unknown keys are rejected.
+2. **A policy trio** at `policies/<robot>_velocity{.json,_normal.onnx,_safe.onnx}`, optionally with
+   `_velocity_model.urdf` for the [training-model check](#the-model-the-policy-was-trained-on). Set
+   the contract's `trained_for` to the robot the networks were trained on; the controller warns at
+   start-up if it does not match `--robot`.
+3. **The description packages**: `<robot>_description` (URDF, SRDF, controller yaml, `go0` script)
+   and, for `--real`, `<robot>_hardware_interface`, publishing `/<robot>/joint_states`,
+   `/<robot>/imu` and `/<robot>/trunk_imu`. If the driver binds to a named NIC, set
+   `network_interface` (see [Real-robot notes](#real-robot-notes)). The launch is the generic
+   `ros_impedance_controller_floating.launch`.
+
+### Start-up posture
+
+The spawn height is corrected before the launch for the posture the description's `go0` node
+applies at t=0. Locosim has two kinds of `go0`:
+
+| kind | reads | used by |
+|---|---|---|
+| `srdf` | the SRDF `home` group state, ignoring `go0_conf` | `aliengo_description` |
+| `yaml` | `<go0_conf>` from `config/ros_impedance_controller.yaml` | `go2_description` |
+
+The kind is detected from the script itself (`spawn_posture_source` overrides it) and printed at
+start-up. `spawn_posture_name` picks the posture; with a `yaml` go0 it is also passed to the launch
+as `go0_conf`. Both robots start in the same sprawled posture `(0.8, 1.7, -2.0)`, named differently:
+
+| | `spawn_posture_name` | spawn height |
+|---|---|---|
+| Aliengo | `home` | 0.1102 m |
+| Go2 | `standDown` | 0.0761 m |
+
+The Go2 yaml's own `home` is already a standing posture, so it is not used. A wrong posture source
+buries the feet in the floor and Gazebo throws the robot, so start-up also prints the height the
+other candidate would have given.
+
+Keep `q_fold` clear of the joint limits: a joint held against its hard stop makes the robot buzz.
+The Go2 folds at `_legs(0.2, 1.6, -2.40)` (knee limit −2.7227).
+
+### Checking it
+
+```bash
+python3 run_sim.py --robot go2 --record go2.npz   # scripted command sequence, headless
+python3 gait_report.py go2.npz                    # gait report, normalised by that robot's weight
+```
+
+`run_sim.py` stores the robot name in the recording, so `gait_report.py` uses the right body weight.
 
 ## Operator controls
 
@@ -1046,12 +1113,23 @@ Verified end to end: `world -> base_link` resolves, and `world -> lf_foot` chain
 
 ## Real-robot notes
 
-`--real` pings the robot before doing anything, folds in the `real` sub-dict of the config, switches
-to the split hardware IMU topics, clips commands to the joint limits, and turns on the real-time
-tuning. The loop rate is the same 500 Hz as in simulation. See
+`--real` checks the network interface, pings the robot, folds in the `real` sub-dict of the config,
+switches to the split hardware IMU topics, clips commands to the joint limits, and turns on the
+real-time tuning. The loop rate is the same 500 Hz as in simulation. See
 [Real-time behaviour and memory](#real-time-behaviour-and-memory) for what the loop does and does not
 do, and [Real-time priority and core isolation](#real-time-priority-and-core-isolation) for the
 launcher.
+
+### The network interface (Go2)
+
+The Go2 driver (unitree_sdk2 DDS) binds to a **named network interface**. `network_interface` in the
+robot config sets it, and `--network-interface` overrides it. It depends on the control PC, so
+change it when you move machines. A wrong name does not raise an error in the driver (it waits for a
+lowstate forever), so the controller checks it against `/sys/class/net` before launching.
+
+The defaults in the driver (`enxa0cec83543c1`) and in `ros_impedance_controller_go2.launch`
+(`enp0s31f6`) belong to other machines, which is why the value is passed explicitly. Robots that do
+not need it (the Aliengo uses UDP to an address) leave it at `None`.
 
 **Before the first hardware run:**
 
@@ -1105,38 +1183,69 @@ real-time scheduling, and the simulation-only spawn-height correction.
 ```python
 ROBOTS = {
     "aliengo": {
-        "joint_names": [...], "ee_frames": [...], "ip": "192.168.123.220",
-        "q_fold": _legs(0.1, 1.6, -2.40),
-        "real": {
-            "stand_up_duration": 3.0,   # slower on hardware
-            "max_lin_vel_cmd": 0.3,     # start conservative
-        },
+        # description
+        "joint_names": _joint_names(), "ee_frames": _ee_frames(),
+        "ip": "192.168.123.220", "body_mass": 24.937, "foot_radius": 0.0265,
+        "training_body_map": _unitree_body_map(),
+        # start-up
+        "spawn_posture_name": "home",
+        "q_fold": _legs(0.2, 1.4, -2.70),
+        # gains
+        "kp_fold":  _gains(60., 60., 60.),   "kd_fold":  _gains(0.5, 0.5, 0.5),
+        "kp_stand": _gains(100., 100., 100.), "kd_stand": _gains(1.0, 1.0, 1.0),
+        "kd_damping": _gains(1.0, 1.0, 1.0),
+        # safety envelope
+        "max_roll_pitch": 1.5, "safe_max_roll_pitch": 1.5, "max_joint_vel": 50.0,
     },
 }
 ```
+
+Both robots use the same key set; the name helpers spell out locosim's `lf/lh/rf/rh` +
+`haa/hfe/kfe` convention once.
+
+### Per-robot gains and safety limits
+
+`kp_fold`, `kd_fold`, `kp_stand`, `kd_stand`, `kd_damping`, `max_roll_pitch`,
+`safe_max_roll_pitch` and `max_joint_vel` have no defaults: they depend on the robot's mass,
+inertia and speed, so each robot must set them.
+
+`_scaled_gains(mass_ratio, length_ratio)` gives a starting point from an already tuned robot (kp
+scales with `mass × length`, kd keeps the damping ratio). Aliengo → Go2 gives 0.516 on kp, and the
+resulting `kp_stand` of 50 gives the same standing sag as the Aliengo at 100:
+
+| | `kp_stand` | sag |
+|---|---|---|
+| Aliengo | 100 | 36.4 mm |
+| Go2 | 50 | 39.4 mm |
+
+The Go2 keeps `kd = 1.0` rather than the scaled value, since lower damping chatters on hardware.
 
 Key groups, all documented inline in the file:
 
 | Group | Keys |
 |---|---|
-| Robot description | `joint_names`, `ee_frames`, `ip`, `q_fold`, `spawn_x/y/z/R/P/Y` |
+| Robot description | `joint_names`, `ee_frames`, `ip`, `network_interface`, `q_fold`, `body_mass`, `spawn_x/y/z/R/P/Y` |
 | Loop rate | `control_dt` (0.002 s = **500 Hz**, decimation 10) |
-| Gains | `kp_fold`, `kd_fold`, `kp_stand`, `kd_stand`, `kp_rl`, `kd_rl`, `kd_damping` |
+| Gains (**per robot, required**) | `kp_fold`, `kd_fold`, `kp_stand`, `kd_stand`, `kd_damping` — and `kp_rl` / `kd_rl`, which are **not** per robot: they belong to the network, and `None` there means "take the policy's" |
 | Timing | `settle_duration`, `init_fold_duration`, `calibration_duration`, `stand_up_duration`, `stand_down_duration`, `damping_ramp_duration`, `damping_settle_duration` |
 | Standstill | `auto_safe_stop_after`, `auto_safe_stop_deadband` |
 | Disturbances (sim) | `push_force`, `push_duration`, `push_force_step`, `push_vertical`, `push_burst_count`, `push_burst_interval`, `push_body` |
 | Postures | `q_stand`, `stand_up_via_fold` |
 | Calibration | `calib_stable_window`, `calib_gyro_threshold`, `calib_joint_vel_threshold`, `calib_wait_timeout`, `calib_max_bias`, `calib_max_spread`, `calib_max_residual`, `skip_calibration` |
-| Safety | `max_roll_pitch`, `safe_max_roll_pitch`, `max_joint_vel`, `clip_to_joint_limits` |
+| Safety (**per robot, required**) | `max_roll_pitch`, `safe_max_roll_pitch`, `max_joint_vel` — and `clip_to_joint_limits`, which is resolved from `--real` |
 | Operator input | `max_lin_vel_cmd`, `max_ang_vel_cmd`, `key_lin_step`, `key_ang_step`, `key_speed_presets`, `joy_dead_zone` |
 | Telemetry | `publish_telemetry`, `telemetry_rate`, `stats_rate`, `topic_namespace`, `publish_estimated_velocity`, `estimate_base_velocity`, `measure_inference_timing` |
 | Real-time | `realtime`, `sched_fifo_priority`, `pin_cpu`, `pin_cpu_index`, `gc_managed`, `gc_gen0_threshold`, `gc_gen1_threshold`, `memory_growth_warn_mb`, `memory_check_rate` |
 | Policy | `policy_name`, `safe_policy_variant` |
 | Training model | `training_model_check`, `training_model_tol`, `training_body_map` |
-| Simulation start-up | `fix_spawn_height`, `spawn_clearance`, `foot_radius`, `world_name`, `use_rviz`, `rviz_conf` |
+| Simulation start-up | `fix_spawn_height`, `spawn_posture_source`, `spawn_posture_name`, `spawn_clearance`, `foot_radius`, `world_name`, `use_rviz`, `rviz_conf` |
 
 `kp_rl` / `kd_rl` / `q_stand` default to `None`, meaning "take it from the policy's json". Overriding
 `kd_rl` in particular is a deliberate departure from training — 0.5 is soft on purpose.
+
+`push_force` and `push_force_step` also default to `None`, meaning "derive from `body_mass`": a
+training-strength push is `body_mass * 1.0 m/s / push_duration` (125 N on the Aliengo, 75 N on the
+Go2).
 
 There are two low-level gain sets on purpose. `kp_fold` / `kd_fold` is used for the initial hold,
 the `FOLD` move and the folded hold, where the feet are loaded and being dragged across the ground;
@@ -1150,10 +1259,13 @@ The robot used to ring for the first few seconds. The cause was in the launch, n
 
 * `spawn_model` places the base at `params.py['spawn_z']` — 0.37 m for the Aliengo, a height sized
   for the `q_0` standing posture;
-* but the robot is put into the SRDF `home` group state by the description's `go0` script, which is
-  a sprawled pose (`haa = ±0.8`) whose feet are only **0.084 m** below the base;
-* and `go0` **ignores the `go0_conf` argument the launch hands it** — it reads `argv[1]` as a sleep
-  time and then always applies `home`, so `go0_conf:=standDown` never did anything.
+* but the robot is put into the SRDF `home` group state by `aliengo_description`'s `go0` script,
+  which is a sprawled pose (`haa = ±0.8`) whose feet are only **0.084 m** below the base;
+* and that `go0` **ignores the `go0_conf` argument the launch hands it** — it reads `argv[1]` as a
+  sleep time and then always applies `home`, so `go0_conf:=standDown` never did anything.
+
+(`go2_description` ships a different `go0` that honours `go0_conf`; see
+[Start-up posture](#start-up-posture).)
 
 Net effect: a **0.257 m free fall** onto the ground on every start, followed by the controller
 stiffly holding a posture the robot cannot hold statically. That also made the accelerometer bias
@@ -1161,9 +1273,11 @@ unobservable, because calibration was averaging over a bouncing robot.
 
 Three fixes, all in this controller:
 
-1. `fix_spawn_height` reads the SRDF `home` posture, computes the matching base height with
-   Pinocchio, and corrects `spawn_z` *before* the launch runs — no drop at all. Set it to `False` to
-   use the stock spawn.
+1. `fix_spawn_height` reads the posture `go0` will apply — from the SRDF or the controller yaml,
+   whichever that description's `go0` uses — computes the matching base height with Pinocchio, and corrects
+   `spawn_z` *before* the launch runs, so there is no drop at all. It also generates the
+   description's URDF if no earlier run has left one behind, since the model has to be loaded before
+   there is a master to load it from. Set it to `False` to use the stock spawn.
 2. The joint target is claimed as soon as the first joint state arrives, still at the launch's own
    soft gains. Until something commands it, the low-level controller drives towards the `home`
    posture in its yaml — which has the hips 0.8 rad away from where the model was spawned — so it
