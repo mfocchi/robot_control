@@ -21,6 +21,8 @@ import threading
 
 import numpy as np
 
+from base_controllers.rl_quadruped.rl_controller_config import known_robots
+
 # (name, velocity command, seconds, policy variant)
 PHASES = [("settle",  (0.0, 0.0, 0.0), 2.0, "normal"),
           ("fwd0.3",  (0.3, 0.0, 0.0), 8.0, "normal"),
@@ -89,7 +91,7 @@ def run_gazebo(args):
     log = {k: [] for k in RECORD_KEYS}
     phase = [""]
 
-    # Foot contact comes from the bumper sensors in the aliengo description.  The controller does
+    # Foot contact comes from the bumper sensors in the robot's description.  The controller does
     # not subscribe to them (nothing in its loop uses contact), so the harness does.
     from gazebo_msgs.msg import ContactsState
     grf = np.zeros(4)
@@ -179,7 +181,9 @@ def run_gazebo(args):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--robot", default="aliengo")
+    parser.add_argument("--robot", default="aliengo", choices=known_robots(),
+                        help="robot to run; add an entry to ROBOTS in rl_controller_config.py to "
+                             "offer another one here")
     parser.add_argument("--rviz", action="store_true", help="start rviz with the simulator")
     parser.add_argument("--gui", action="store_true", help="show the gazebo gui")
     parser.add_argument("--record", default=None, metavar="FILE.npz", help="save the run")
@@ -194,7 +198,8 @@ def main(argv=None):
         return 1
     summarise(log, f"gazebo - {args.robot}")
     if args.record:
-        np.savez(args.record, **log)
+        # Store the robot name so gait_report.py can normalise by the right body weight.
+        np.savez(args.record, robot=np.array(args.robot), **log)
         print(f" saved {len(log['sim'])} ticks to {args.record}")
     return 0
 

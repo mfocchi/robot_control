@@ -18,9 +18,25 @@ import os
 
 import numpy as np
 
+from base_controllers.rl_quadruped.rl_controller_config import get_config, known_robots
+
 CONTACT_THRESHOLD = 2.0          # N, the training env's ContactSensorCfg.force_threshold
 FOOT_ORDER = ["FL", "RL", "FR", "RR"]      # the policy's leg order
-BODY_WEIGHT = 24.94 * 9.81       # N, aliengo
+GRAVITY = 9.81                   # m/s^2
+
+
+def _body_weight(path, data, robot):
+    """Body weight in newtons and name of the robot a recording came from.
+
+    Taken from ``--robot`` if given, otherwise from the name ``run_sim.py`` stored in the file.
+    """
+    if robot is None and "robot" in data:
+        robot = str(data["robot"])
+    if robot is None:
+        raise SystemExit(
+            f"{path} does not say which robot it came from. Pass --robot, one of "
+            f"{known_robots()}.")
+    return get_config(robot)["body_mass"] * GRAVITY, robot
 
 
 def _quantiles(values):
@@ -44,8 +60,9 @@ def _episodes(loaded, time):
     return air, stance
 
 
-def report(path, phase=None, label=None):
+def report(path, phase=None, label=None, robot=None):
     data = np.load(os.path.expanduser(path), allow_pickle=True)
+    body_weight, robot = _body_weight(path, data, robot)
     mask = np.ones(len(data["sim"]), dtype=bool)
     if phase is not None:
         mask &= data["phase"] == phase
@@ -64,8 +81,8 @@ def report(path, phase=None, label=None):
     loaded = grf > CONTACT_THRESHOLD
 
     print("\n" + "=" * 78)
-    print(f"GAIT REPORT  --  {label or os.path.basename(path)}"
-          + (f"   phase '{phase}'" if phase else ""))
+    print(f"GAIT REPORT  --  {label or os.path.basename(path)}   {robot} "
+          f"({body_weight / GRAVITY:.2f} kg)" + (f"   phase '{phase}'" if phase else ""))
     print("=" * 78)
 
     air_all, stance_all, per_foot_air = [], [], []
@@ -116,7 +133,7 @@ def report(path, phase=None, label=None):
     for foot in range(grf.shape[1]):
         rising = np.flatnonzero((~loaded[:-1, foot]) & loaded[1:, foot]) + 1
         for start in rising:
-            touchdown.append(grf[start:start + 20, foot].max() / BODY_WEIGHT)
+            touchdown.append(grf[start:start + 20, foot].max() / body_weight)
     print("\n-- peak foot force at touchdown (body weights)")
     print(f"   {_quantiles(touchdown)}")
 
@@ -147,9 +164,11 @@ def main():
     parser.add_argument("recordings", nargs="+", help="npz files written by run_sim.py --record")
     parser.add_argument("--phase", default="fwd0.3",
                         help="phase to measure; the default matches eval_gait's pinned command")
+    parser.add_argument("--robot", default=None, choices=known_robots(),
+                        help="robot the recording came from (default: the one stored in the file)")
     args = parser.parse_args()
     for path in args.recordings:
-        report(path, phase=args.phase)
+        report(path, phase=args.phase, robot=args.robot)
 
 
 if __name__ == "__main__":
