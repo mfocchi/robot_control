@@ -419,9 +419,8 @@ ROBOTS = {
         # aliengo_description's go0 always applies the SRDF 'home': (0.8, 1.7, -2.0), feet on the
         # ground.
         "spawn_posture_name": "home",
-        # Knee at -2.40 rather than the -2.70 of params.py's q_fold: the joint limit is -2.775, so
-        # -2.70 leaves only 0.075 rad of margin and the knees end up parked against the stop,
-        # carrying about 7.5 Nm to stay there.  -2.40 leaves 0.375 rad and rests quietly.
+        # Knee limit is -2.775, so -2.70 leaves only 0.075 rad of margin; this is the posture
+        # validated on the real robot.  If the knees buzz against the stop, try -2.40.
         "q_fold": _legs(0.2, 1.4, -2.70),
 
         # --- gains ---------------------------------------------------------------------------
@@ -459,6 +458,8 @@ ROBOTS = {
         # NIC of the current control PC (192.168.123.222/24).  The driver and launch file defaults
         # point at other machines, so it is set explicitly here.
         "network_interface": "enp11s0",
+        # Mass of go2_description, i.e. of the robot Gazebo simulates.  The Isaac training asset
+        # is 16.087 kg; this one is used because it sizes pushes and forces in Gazebo.
         "body_mass": 15.098,
         "foot_radius": 0.02,     # go2_description/urdfs/const.xacro
         "training_body_map": _unitree_body_map(),
