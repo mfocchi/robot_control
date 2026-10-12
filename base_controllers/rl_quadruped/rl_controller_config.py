@@ -40,12 +40,58 @@ verbose = False
 robot_params = {}
 
 
+# Locosim's quadruped descriptions share one naming convention (lf/lh/rf/rh legs, haa/hfe/kfe
+# joints), so the helpers below spell it out once.  A robot that names things differently writes its
+# own lists in ROBOTS.
+_LEGS = ("lf", "lh", "rf", "rh")
+
+
 def _legs(haa, hfe, kfe):
     """A symmetric four-leg posture, mirrored on the right side, in ``joint_names`` order."""
     return np.array([haa, hfe, kfe,      # lf
                      haa, hfe, kfe,      # lh
                      -haa, hfe, kfe,     # rf
                      -haa, hfe, kfe])    # rh
+
+
+def _gains(haa, hfe, kfe):
+    """A per-joint gain array, the same triple on each of the four legs."""
+    return np.array([haa, hfe, kfe] * 4)
+
+
+def _scaled_gains(mass_ratio, length_ratio):
+    """(kp, kd) ratios to scale a tuned robot's gains into a starting point for another robot.
+
+    kp holds a posture against gravity, so it scales as ``mass * leg length``; kd keeps the damping
+    ratio against the leg inertia (``mass * length^2``), so it scales as ``sqrt(kp * inertia)``.
+    Aliengo -> Go2 gives 0.516 and 0.476.  The result still has to be checked on the robot.
+    """
+    kp_ratio = mass_ratio * length_ratio
+    kd_ratio = float(np.sqrt(kp_ratio * mass_ratio * length_ratio ** 2))
+    return kp_ratio, kd_ratio
+
+
+def _joint_names():
+    """The twelve joint names, in the leg order the policies were trained in."""
+    return [f"{leg}_{joint}_joint" for leg in _LEGS for joint in ("haa", "hfe", "kfe")]
+
+
+def _ee_frames():
+    """The foot frames, in the same leg order as :func:`_joint_names`."""
+    return [f"{leg}_foot" for leg in _LEGS]
+
+
+def _unitree_body_map():
+    """Gazebo body name -> the same body in a Unitree training URDF (shared by Aliengo, Go1, Go2).
+
+    Gazebo calls the floating base 'base_link' where the URDF calls it 'trunk', and the legs are
+    lf/lh/rf/rh + hip/upperleg/lowerleg against FL/RL/FR/RR + hip/thigh/calf.
+    """
+    return dict(
+        {"base_link": "trunk"},
+        **{f"{a}_{s}": f"{b}_{t}"
+           for a, b in zip(_LEGS, ("FL", "RL", "FR", "RR"))
+           for s, t in (("hip", "hip"), ("upperleg", "thigh"), ("lowerleg", "calf"))})
 
 
 DEFAULTS = {
@@ -55,6 +101,10 @@ DEFAULTS = {
     "joint_names": None,     # required
     "ee_frames": None,       # required, in the same leg order as joint_names
     "ip": None,              # pinged before a --real run
+    # NIC of the control PC the robot is wired to, passed to the hardware interface for drivers that
+    # bind to a named interface (unitree_sdk2 DDS on the Go2).  None keeps the driver's default.
+    # Depends on the machine, not the robot; --network-interface overrides it.
+    "network_interface": None,
     "real_robot": False,     # set from the command line, not here
     "spawn_x": 0.0,
     "spawn_y": 0.0,
@@ -66,6 +116,9 @@ DEFAULTS = {
     # joint well clear of its limit: a knee parked against the hard stop is held there by the motor,
     # which shows up as a strained, buzzing robot rather than a resting one.
     "q_fold": None,          # required
+    # Total mass in kg from the description.  Used to size the default push and by gait_report.py
+    # to normalise foot forces; not used by the control loop.
+    "body_mass": None,       # required
     # Present only because BaseController's own initVars would size its log arrays from it.  This
     # controller overrides initVars and logs over ROS topics instead, so nothing here allocates.
     "buffer_size": 1,
@@ -81,24 +134,27 @@ DEFAULTS = {
     "dt": 0.002,             # kept equal to control_dt for BaseController compatibility
 
     # =============================================================================================
-    # gains
+    # gains - per robot, and required
     # =============================================================================================
+    # Gains depend on the robot's mass and inertia, so there are no defaults: each robot must set
+    # its own.  _scaled_gains() gives a starting point from an already tuned robot.
+    #
     # Repositioning the legs on the ground during INIT: softer and better damped than the stand-up
     # set, because the feet are loaded and being dragged, and stiff position control there is what
     # makes the robot judder.
-    "kp_fold": np.array([60., 60., 60.] * 4),
-    "kd_fold": np.array([0.5, 0.5, 0.5] * 4),
+    "kp_fold": None,         # required
+    "kd_fold": None,         # required
     # Lifting and holding the body.
-    "kp_stand": np.array([100., 100., 100.] * 4),
-    "kd_stand": np.array([1.0, 1.0, 1.0] * 4),
+    "kp_stand": None,        # required
+    "kd_stand": None,        # required
+    # Emergency collapse: kp is zero, so joint torque is -kd*qd and the robot sinks under its own
+    # weight with the energy bled off instead of dropping.
+    "kd_damping": None,      # required
     # While the policy drives.  None takes the values the policy was trained with, read from the
     # policy's json (Isaac DelayedPDActuatorCfg: stiffness 25, damping 0.5).  Overriding these is a
     # deliberate departure from training - the soft damping is what the policy expects.
     "kp_rl": None,
     "kd_rl": None,
-    # Emergency collapse: kp is zero, so joint torque is -kd*qd and the robot sinks under its own
-    # weight with the energy bled off instead of dropping.
-    "kd_damping": np.array([1., 1., 1.] * 4),
 
     # =============================================================================================
     # motion timing, seconds
@@ -150,13 +206,12 @@ DEFAULTS = {
     # =============================================================================================
     # safety envelope while standing or walking
     # =============================================================================================
-    "max_roll_pitch": 1.5,          # rad, beyond this the robot is on its way over -> DAMPING
-    # The same limit during the safe stop, where it has to be wider: that policy is trained on
-    # resets of +-0.25 rad and on pushes, so it is meant to be handed attitudes the walking policy
-    # never sees.  Tripping the walking limit there would answer a request for a recovery with a
-    # collapse.
-    "safe_max_roll_pitch": 1.5,
-    "max_joint_vel": 50.0,          # rad/s -> DAMPING
+    # Per robot and required, like the gains.
+    "max_roll_pitch": None,         # rad, beyond this the robot is on its way over -> DAMPING
+    # The same limit during the safe stop.  Keep it at least as wide: that policy is trained on
+    # larger reset attitudes and pushes than the walking one.
+    "safe_max_roll_pitch": None,    # required
+    "max_joint_vel": None,          # rad/s -> DAMPING; required
     "clip_to_joint_limits": None,   # None: on for the real robot, off in simulation
 
     # =============================================================================================
@@ -166,13 +221,12 @@ DEFAULTS = {
     # change the magnitude live.  Applied as a wrench through /gazebo/apply_body_wrench, off the
     # control thread, so a push never costs the loop a service round-trip.
     #
-    # The default is chosen to match what the policy was trained against.  Training perturbs the
-    # robot with mdp.push_by_setting_velocity over +-1.0 m/s in x and y, which on a 24.94 kg robot
-    # is an impulse of about 24.9 N s; over push_duration that is 125 N.  So the default push is a
-    # training-strength push, and turning it up is testing beyond what the policy has seen.
-    "push_force": 125.0,            # N
+    # None gives a training-strength push for the robot's mass: training uses
+    # mdp.push_by_setting_velocity over +-PUSH_TRAINING_VELOCITY, i.e. mass * velocity / push_duration
+    # (125 N on the Aliengo, 75 N on the Go2).  A larger force tests beyond what the policy has seen.
+    "push_force": None,             # N; None = body_mass * PUSH_TRAINING_VELOCITY / push_duration
     "push_duration": 0.2,           # s the wrench is held
-    "push_force_step": 25.0,        # N per press of -/+
+    "push_force_step": None,        # N per press of -/+; None = a fifth of push_force
     "push_vertical": False,         # include a random z component; training only ever pushed in xy
     "push_burst_count": 5,          # pushes fired by 'P'
     "push_burst_interval": (1.0, 3.0),   # s, uniform gap between them
@@ -251,11 +305,17 @@ DEFAULTS = {
     # =============================================================================================
     # simulation start-up
     # =============================================================================================
-    # Correct spawn_z before the launch runs.  The description's go0 script spawns the robot in the
-    # sprawled SRDF 'home' posture (and ignores the go0_conf argument it is given), so a spawn height
-    # meant for a standing posture drops the robot a quarter of a metre onto the ground and it rings
-    # for seconds afterwards.
+    # Correct spawn_z before the launch runs, so the robot neither drops onto the ground nor starts
+    # with its feet in it.  The height is computed for the posture the description's go0 applies.
     "fix_spawn_height": True,
+    # Where go0 reads its start-up posture from:
+    #   'srdf'  the SRDF 'home' group state, ignoring go0_conf (aliengo_description)
+    #   'yaml'  '<go0_conf>' from config/ros_impedance_controller.yaml (go2_description)
+    # None detects it from the description's go0 script; set it only to override the detection.
+    "spawn_posture_source": None,       # None = detect | 'srdf' | 'yaml'
+    # Posture go0 applies at t=0.  With a yaml go0 it is passed to the launch as go0_conf; with an
+    # SRDF go0 only 'home' is possible.  Pick a posture with the feet on the ground.
+    "spawn_posture_name": "home",
     "spawn_clearance": 0.002,   # m of air left under the feet
     # Radius of the foot collision sphere; the foot frame sits at its centre, so the base has to
     # start this much higher than the pure kinematic foot-to-base distance.
@@ -339,27 +399,43 @@ DEFAULTS = {
 }
 
 
+# Besides an entry here, each robot needs a <robot>_description package, a policy trio under
+# policies/ (<policy_name>_velocity{.json,_normal.onnx,_safe.onnx}) and, for --real, a
+# <robot>_hardware_interface package.  See "Adding a robot" in the README.
 ROBOTS = {
+    # =============================================================================================
+    # Aliengo - 24.94 kg, 0.25 m links
+    # =============================================================================================
     "aliengo": {
-        "joint_names": ["lf_haa_joint", "lf_hfe_joint", "lf_kfe_joint",
-                        "lh_haa_joint", "lh_hfe_joint", "lh_kfe_joint",
-                        "rf_haa_joint", "rf_hfe_joint", "rf_kfe_joint",
-                        "rh_haa_joint", "rh_hfe_joint", "rh_kfe_joint"],
-        "ee_frames": ["lf_foot", "lh_foot", "rf_foot", "rh_foot"],
+        # --- description ---------------------------------------------------------------------
+        "joint_names": _joint_names(),
+        "ee_frames": _ee_frames(),
         "ip": "192.168.123.220",
-        # Gazebo body name -> the link of the same body in the training URDF.  Gazebo calls the
-        # spawned floating base 'base_link' where the URDF calls it 'trunk', and the two projects
-        # name legs differently (lf/lh/rf/rh + haa/hfe/kfe against FL/RL/FR/RR + hip/thigh/calf).
-        "training_body_map": dict(
-            {"base_link": "trunk"},
-            **{f"{a}_{s}": f"{b}_{t}"
-               for a, b in (("lf", "FL"), ("lh", "RL"), ("rf", "FR"), ("rh", "RR"))
-               for s, t in (("hip", "hip"), ("upperleg", "thigh"), ("lowerleg", "calf"))}),
+        "body_mass": 24.937,
+        "foot_radius": 0.0265,
+        "training_body_map": _unitree_body_map(),
+
+        # --- start-up ------------------------------------------------------------------------
+        # aliengo_description's go0 always applies the SRDF 'home': (0.8, 1.7, -2.0), feet on the
+        # ground.
+        "spawn_posture_name": "home",
         # Knee at -2.40 rather than the -2.70 of params.py's q_fold: the joint limit is -2.775, so
         # -2.70 leaves only 0.075 rad of margin and the knees end up parked against the stop,
         # carrying about 7.5 Nm to stay there.  -2.40 leaves 0.375 rad and rests quietly.
         "q_fold": _legs(0.2, 1.4, -2.70),
-        "foot_radius": 0.0265,
+
+        # --- gains ---------------------------------------------------------------------------
+        "kp_fold": _gains(60., 60., 60.),
+        "kd_fold": _gains(0.5, 0.5, 0.5),
+        "kp_stand": _gains(100., 100., 100.),
+        "kd_stand": _gains(1.0, 1.0, 1.0),
+        "kd_damping": _gains(1.0, 1.0, 1.0),
+
+        # --- safety envelope -----------------------------------------------------------------
+        "max_roll_pitch": 1.5,
+        "safe_max_roll_pitch": 1.5,
+        # ~3x the fastest joint measured while walking (16.3 rad/s).
+        "max_joint_vel": 50.0,
 
         # No 'real' overrides: the control parameters are identical in simulation and on the
         # robot.  The policy was trained against a model of this machine, so if a gain or a duration
@@ -369,10 +445,62 @@ ROBOTS = {
         # clipping and the real-time tuning, both resolved from --real in the controller, and the
         # simulation-only spawn-height correction.
     },
+
+    # =============================================================================================
+    # Go2 - 15.10 kg, 0.213 m links
+    # =============================================================================================
+    # Note: go2_description/urdfs/const.xacro has joint friction at 0.0, while training samples it
+    # from (0, 0.5) Nm.  A frictionless robot over-rotates on yaw commands in Gazebo.
+    "go2": {
+        # --- description ---------------------------------------------------------------------
+        "joint_names": _joint_names(),
+        "ee_frames": _ee_frames(),
+        "ip": "192.168.123.161",
+        # NIC of the current control PC (192.168.123.222/24).  The driver and launch file defaults
+        # point at other machines, so it is set explicitly here.
+        "network_interface": "enp11s0",
+        "body_mass": 15.098,
+        "foot_radius": 0.02,     # go2_description/urdfs/const.xacro
+        "training_body_map": _unitree_body_map(),
+
+        # --- start-up ------------------------------------------------------------------------
+        # go2_description's go0 honours go0_conf.  'standDown' is the same sprawled posture as the
+        # Aliengo's 'home', (0.8, 1.7, -2.0); the yaml's own 'home' is already standing.
+        "spawn_posture_name": "standDown",
+        # Knee limit is -2.7227; -2.40 keeps the knees off the hard stop.
+        "q_fold": _legs(0.2, 1.6, -2.40),
+
+        # --- gains ---------------------------------------------------------------------------
+        # kp from the Aliengo's via _scaled_gains (~0.5x), which gives the same standing sag
+        # (~39 mm against the Aliengo's 36 mm).  kd is not scaled down: on hardware an under-damped
+        # joint chatters, so it keeps the 1.0 the robot has been run with.
+        "kp_fold": _gains(30., 30., 30.),
+        "kd_fold": _gains(1.0, 1.0, 1.0),
+        "kp_stand": _gains(50., 50., 50.),
+        "kd_stand": _gains(1.0, 1.0, 1.0),
+        "kd_damping": _gains(1.0, 1.0, 1.0),
+
+        # --- safety envelope -----------------------------------------------------------------
+        "max_roll_pitch": 1.5,
+        "safe_max_roll_pitch": 1.5,
+        # ~3x the fastest joint measured while walking (20.3 rad/s).
+        "max_joint_vel": 60.0,
+    },
 }
 
 
-REQUIRED = ("joint_names", "ee_frames", "q_fold")
+# Fields every robot must set itself; gains and safety limits have no sensible shared default.
+REQUIRED = ("joint_names", "ee_frames", "q_fold", "body_mass",
+            "kp_fold", "kd_fold", "kp_stand", "kd_stand", "kd_damping",
+            "max_roll_pitch", "safe_max_roll_pitch", "max_joint_vel")
+
+# Range of the x/y velocity kick applied by mdp.push_by_setting_velocity in training.
+PUSH_TRAINING_VELOCITY = 1.0   # m/s
+
+
+def known_robots():
+    """Names of the configured robots."""
+    return sorted(ROBOTS)
 
 
 def get_config(robot_name, real_robot=False):
@@ -404,6 +532,12 @@ def get_config(robot_name, real_robot=False):
     missing = [key for key in REQUIRED if cfg.get(key) is None]
     if missing:
         raise KeyError(f"RL controller config for '{robot_name}' is missing: {missing}")
+
+    # Default push: the same velocity change as in training, whatever the robot's mass.
+    if cfg["push_force"] is None:
+        cfg["push_force"] = cfg["body_mass"] * PUSH_TRAINING_VELOCITY / cfg["push_duration"]
+    if cfg["push_force_step"] is None:
+        cfg["push_force_step"] = cfg["push_force"] / 5.0
 
     # BaseController resolves everything through conf.robot_params[robot_name]; handing it this
     # dictionary is what keeps params.py out of the picture entirely.
