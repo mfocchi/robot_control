@@ -326,6 +326,9 @@ class VelocityPolicy:
             self.cfg = json.load(f)
 
         self.robot_name = robot_name
+        # Robot the networks were trained on (None for older contracts); the controller warns
+        # when it differs from the robot being run.
+        self.trained_for = self.cfg.get("trained_for")
         self.policy_dir = policy_dir
         self.dt = float(dt)
         self.obs_dim = int(self.cfg["obs_dim"])

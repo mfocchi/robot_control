@@ -63,6 +63,7 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 import argparse
 import gc
 import queue
+import subprocess
 import sys
 import threading
 import time as wall_time
@@ -82,7 +83,7 @@ from tf.transformations import euler_from_quaternion
 
 import base_controllers.rl_quadruped.rl_controller_config as conf
 from base_controllers.base_controller import BaseController
-from base_controllers.rl_quadruped.rl_controller_config import get_config
+from base_controllers.rl_quadruped.rl_controller_config import get_config, known_robots
 from base_controllers.utils.common_functions import getRobotModelFloating
 from base_controllers.components.imu_utils import IMU_utils
 from base_controllers.rl_quadruped.velocity_policy import VelocityPolicy
@@ -118,6 +119,12 @@ POLICY_STATES = (State.RL, State.SAFE_STOP)
 not a start: the observation history has to survive it."""
 
 
+# Thresholds for _checkActuation.
+_ACTUATION_TORQUE_MIN = 2.0      # Nm of commanded torque before the comparison means anything
+_ACTUATION_MEASURED_MIN = 0.5    # Nm below which the motors are producing nothing
+_ACTUATION_SPEED_MIN = 0.05      # rad/s below which a joint counts as stationary
+_ACTUATION_SETTLE = 1.0          # s the command must have been loaded before judging
+
 _ZERO_COMMAND = np.zeros(3)
 """The command the safe stop feeds its policy.  Module-level so the hot path allocates nothing."""
 
@@ -141,7 +148,7 @@ class RlQuadrupedController(BaseController):
     def __init__(self, robot_name="aliengo", input_device="keyboard", policy_name=None,
                  real_robot=False, realtime=None, telemetry=None, pin_cpu=None,
                  skip_calibration=None, use_rviz=None, estimate_velocity=None,
-                 inference_timing=None):
+                 inference_timing=None, network_interface=None):
         # Resolve the configuration *before* the base class runs: rl_controller_config is handed in
         # as external_conf, which makes BaseController read this module's robot_params instead of
         # params.py.  From here on params.py plays no part in this controller.
@@ -213,7 +220,12 @@ class RlQuadrupedController(BaseController):
                                  else bool(skip_calibration))
         self.use_rviz = self.cfg["use_rviz"] if use_rviz is None else bool(use_rviz)
         self.publish_tf = self.cfg["publish_tf"]
+        self.network_interface = (self.cfg["network_interface"] if network_interface is None
+                                  else network_interface)
         self._zero_cmd_since = None
+        self._posture_source = None    # cached by _go0PostureSource
+        self._actuation_reported = False
+        self._actuation_loaded_since = None
 
     # ---------------------------------------------------------------------------------------------
     # setup
@@ -227,9 +239,31 @@ class RlQuadrupedController(BaseController):
             print(colored(f"Cannot ping {ip}: bring up the local network with that gateway", "red"))
         return response
 
+    def _checkNetworkInterface(self):
+        """Exit if the NIC the hardware interface binds to does not exist on this machine.
+
+        A driver bound to a missing interface does not fail: it just waits for a lowstate forever,
+        which looks the same as a robot that is switched off.
+        """
+        name = self.network_interface
+        if not name:
+            return
+        if os.path.isdir(os.path.join("/sys/class/net", name)):
+            print(colored(f"Hardware interface will bind to '{name}'", "green"))
+            return
+        try:
+            present = sorted(entry for entry in os.listdir("/sys/class/net")
+                             if not entry.startswith(("veth", "br-", "docker", "lo")))
+        except OSError:
+            present = []
+        sys.exit(f"Network interface '{name}' does not exist on this machine. Interfaces here: "
+                 f"{present}. Set 'network_interface' for '{self.robot_name}' in "
+                 f"rl_controller_config.py, or pass --network-interface.")
+
     def startController(self, world_name=None, additional_args=None):
         if self.real_robot:
             self.use_ground_truth_contacts = False
+            self._checkNetworkInterface()
             if self.check_faulty_ping(conf.robot_params[self.robot_name]['ip']):
                 sys.exit("Cannot reach the robot")
         else:
@@ -243,8 +277,13 @@ class RlQuadrupedController(BaseController):
         args = ["rviz:=" + ("true" if self.use_rviz else "false")]
         if self.use_rviz and self.cfg["rviz_conf"] is not None:
             args.append("rviz_conf:=" + str(self.cfg["rviz_conf"]))
+        # Start in the posture the spawn height was computed for (only a yaml go0 honours this).
+        if not self.real_robot and self._go0PostureSource() == "yaml":
+            args.append("go0_conf:=" + str(self.cfg["spawn_posture_name"]))
         if self.real_robot:
             args.append("task_period:=0.002")
+            if self.network_interface:
+                args.append("network_interface:=" + str(self.network_interface))
         if additional_args:
             args.extend(additional_args)
 
@@ -285,6 +324,7 @@ class RlQuadrupedController(BaseController):
                       f"({os.path.basename(self.policy.networks[self.safe_variant].model_path)}) "
                       f"with the command held at zero", "yellow"))
         self._warnIfSafeVariantIsACopy()
+        self._warnIfPolicyIsForAnotherRobot()
 
         if self.cfg["kp_rl"] is None:
             self.cfg["kp_rl"] = np.full(self.robot.na, self.policy.kp)
@@ -360,6 +400,16 @@ class RlQuadrupedController(BaseController):
             f"instead of covering them. Export the recovery task over "
             f"{os.path.basename(self.policy.networks[self.safe_variant].model_path)} to restore "
             f"it.", "red", attrs=["bold"]))
+
+    def _warnIfPolicyIsForAnotherRobot(self):
+        """Warn when the policy contract says it was trained for a different robot."""
+        trained_for = self.policy.trained_for
+        if trained_for is None or trained_for == self.robot_name:
+            return
+        print(colored(
+            f"WARNING: {self.policy_name}_velocity.json was trained for '{trained_for}', but "
+            f"this is a '{self.robot_name}'. Expect a poor gait and do not run it on hardware.",
+            "red", attrs=["bold"]))
 
     def _initCommandMessage(self):
         """Preallocate the /command message and the clipping bounds.
@@ -541,14 +591,52 @@ class RlQuadrupedController(BaseController):
                   for frame in conf.robot_params[self.robot_name]['ee_frames']]
         return -float(np.mean(feet_z))
 
-    def _srdfHomePosture(self):
-        """The joint posture the launch actually starts the robot in, or None if unreadable.
+    def _go0PostureSource(self):
+        """Which kind of ``go0`` script the description ships: ``'srdf'`` or ``'yaml'``.
 
-        ``spawn_model`` places the base at ``spawn_z`` while the description's ``go0`` script
-        independently applies the SRDF ``home`` group state - and ignores the ``go0_conf`` argument
-        the launch hands it.  So ``home`` is what the robot is really in at t=0, whatever the
-        controller asked for, and it is the posture the spawn height has to match.
+        ``aliengo_description``'s applies the SRDF ``home`` and ignores ``go0_conf``;
+        ``go2_description``'s reads ``<go0_conf>`` from the controller yaml.  The script is found
+        with ``roslib.packages.find_node`` (the lookup roslaunch uses, so install spaces work too)
+        and comments are stripped before matching.  ``spawn_posture_source`` overrides the result.
         """
+        if self._posture_source is not None:
+            return self._posture_source
+        configured = self.cfg["spawn_posture_source"]
+        if configured is not None:
+            self._posture_source = configured
+            return configured
+        source, why = "srdf", "no go0 found; assuming the SRDF-reading kind"
+        try:
+            import roslib.packages
+            package = f"{self.robot_name}_description"
+            # In a devel space the first candidate is catkin's wrapper, which matches neither
+            # marker, so try them all; the source tree is the last resort.
+            candidates = list(roslib.packages.find_node(package, "go0"))
+            candidates.append(os.path.join(rospkg.RosPack().get_path(package), "scripts", "go0"))
+            why = f"none of {len(candidates)} go0 candidates read the SRDF or the yaml"
+            for candidate in candidates:
+                try:
+                    with open(candidate) as handle:
+                        code = "".join(line for line in handle
+                                       if not line.lstrip().startswith("#"))
+                except OSError:
+                    continue
+                if "group_state_map" in code:
+                    source = "srdf"
+                    why = "its go0 applies the SRDF group state and ignores go0_conf"
+                    break
+                if "ros_impedance_controller/" in code:
+                    source = "yaml"
+                    why = "its go0 reads the controller yaml and honours go0_conf"
+                    break
+        except (OSError, ImportError, rospkg.ResourceNotFound) as exc:
+            why = f"could not read its go0 ({exc}); assuming the SRDF-reading kind"
+        print(colored(f"Start-up posture comes from the {source}: {why}", "cyan"))
+        self._posture_source = source
+        return source
+
+    def _srdfPosture(self, name):
+        """The named SRDF ``group_state`` as a joint -> value map, or None."""
         import xml.etree.ElementTree as ElementTree
         try:
             package = rospkg.RosPack().get_path(f"{self.robot_name}_description")
@@ -556,18 +644,77 @@ class RlQuadrupedController(BaseController):
             root = ElementTree.parse(path).getroot()
             values = {}
             for state in root.iter("group_state"):
-                if state.get("name") != "home":
+                if state.get("name") != name:
                     continue
                 for joint in state.iter("joint"):
                     values[joint.get("name")] = float(joint.get("value"))
-            if not values:
-                return None
-            # Reorder into the locosim joint order this controller works in.
-            return np.array([values[name] for name in self.joint_names], dtype=np.float64)
-        except (KeyError, ValueError, TypeError, OSError,
+            return values or None
+        except (ValueError, TypeError, OSError,
                 ElementTree.ParseError, rospkg.ResourceNotFound) as exc:
-            print(colored(f"Could not read the SRDF home posture ({exc})", "yellow"))
+            print(colored(f"Could not read the SRDF '{name}' posture ({exc})", "yellow"))
             return None
+
+    def _yamlPosture(self, name):
+        """The named posture from the description's ros_impedance_controller yaml, or None.
+
+        Read from disk because this runs before the launch loads it onto the parameter server.
+        """
+        import yaml
+        try:
+            package = rospkg.RosPack().get_path(f"{self.robot_name}_description")
+            path = os.path.join(package, "config", "ros_impedance_controller.yaml")
+            with open(path) as handle:
+                values = yaml.safe_load(handle)["ros_impedance_controller"].get(name)
+            return {joint: float(value) for joint, value in values.items()} if values else None
+        except (AttributeError, ValueError, TypeError, KeyError, OSError,
+                yaml.YAMLError, rospkg.ResourceNotFound) as exc:
+            print(colored(f"Could not read the yaml '{name}' posture ({exc})", "yellow"))
+            return None
+
+    def _startupPostures(self, name):
+        """The SRDF and yaml versions of posture ``name``, in joint order (None if unavailable).
+
+        Only one of them is what go0 applies (see :meth:`_go0PostureSource`); the other is kept so
+        start-up can report it when the two differ.
+        """
+        out = {}
+        for source, read in (("srdf", self._srdfPosture), ("yaml", self._yamlPosture)):
+            values = read(name)
+            try:
+                out[source] = (None if values is None else
+                               np.array([values[joint] for joint in self.joint_names],
+                                        dtype=np.float64))
+            except KeyError as exc:
+                print(colored(f"The {source} '{name}' posture does not cover {exc}", "yellow"))
+                out[source] = None
+        return out
+
+    def _ensureGeneratedUrdf(self):
+        """Make sure ``robot_urdf/generated_urdf/<robot>.urdf`` exists, generating it if needed.
+
+        :meth:`_fixSpawnHeight` runs before the launch, so ``getRobotModelFloating`` has no
+        ``/robot_description`` to read and falls back to this file - which does not exist on the
+        first run of a new robot.  Returns the path, or None if it cannot be produced.
+        """
+        root = os.environ.get("LOCOSIM_DIR")
+        if not root:
+            print(colored("LOCOSIM_DIR is not set, so the URDF cannot be generated", "yellow"))
+            return None
+        urdf = os.path.join(root, "robot_urdf", "generated_urdf", f"{self.robot_name}.urdf")
+        if os.path.isfile(urdf):
+            return urdf
+        try:
+            xacro = os.path.join(rospkg.RosPack().get_path(f"{self.robot_name}_description"),
+                                 "robots", f"{self.robot_name}.urdf.xacro")
+            os.makedirs(os.path.dirname(urdf), exist_ok=True)
+            subprocess.check_output(["rosrun", "xacro", "xacro", xacro, "-o", urdf],
+                                    stderr=subprocess.STDOUT)
+        except (rospkg.ResourceNotFound, subprocess.CalledProcessError, OSError) as exc:
+            print(colored(f"Could not generate {os.path.basename(urdf)} from "
+                          f"{self.robot_name}_description ({exc})", "yellow"))
+            return None
+        print(colored(f"Generated {urdf} from the description's xacro", "cyan"))
+        return urdf
 
     def _fixSpawnHeight(self):
         """Correct ``spawn_z`` before the launch runs, so the robot does not drop on start-up.
@@ -582,19 +729,38 @@ class RlQuadrupedController(BaseController):
         before :meth:`startSimulator`, which is why the kinematic model is loaded standalone here
         rather than reused from :meth:`loadModelAndPublishers`.
         """
-        posture = self._srdfHomePosture()
-        if posture is None:
+        source = self._go0PostureSource()
+        name = self.cfg["spawn_posture_name"]
+        # An SRDF go0 always applies 'home', whatever is asked for.
+        if source == "srdf" and name != "home":
+            print(colored(f"spawn_posture_name is '{name}', but this description's go0 always "
+                          f"applies the SRDF 'home'; using 'home'.", "yellow"))
+            name = "home"
+        postures = self._startupPostures(name)
+        posture = postures[source]
+        if posture is None or self._ensureGeneratedUrdf() is None:
             print(colored("Leaving spawn_z alone; the robot may drop on start-up", "yellow"))
             return
         robot = getRobotModelFloating(self.robot_name)
-        height = (self._standHeight(posture, robot=robot) + self.cfg["foot_radius"]
-                  + self.cfg["spawn_clearance"])
+
+        def spawn_height(q):
+            return (self._standHeight(q, robot=robot) + self.cfg["foot_radius"]
+                    + self.cfg["spawn_clearance"])
+
+        height = spawn_height(posture)
         previous = conf.robot_params[self.robot_name]['spawn_z']
         conf.robot_params[self.robot_name]['spawn_z'] = height
         self.base_offset[2] = height
         print(colored(f"Spawn height corrected: {previous:.3f} -> {height:.4f} m, removing a "
-                      f"{previous - height:.3f} m drop onto the ground "
-                      f"(spawn posture haa/hfe/kfe = {np.round(posture[:3], 2)})", "cyan"))
+                      f"{previous - height:.3f} m drop onto the ground (the "
+                      f"{source} '{name}' posture, haa/hfe/kfe = "
+                      f"{np.round(posture[:3], 2)})", "cyan"))
+        # Report the other candidate too, to make a wrong go0 detection easy to spot.
+        other = "yaml" if source == "srdf" else "srdf"
+        if postures[other] is not None and not np.allclose(postures[other], posture):
+            print(colored(f"  (the {other} '{name}' posture would have given "
+                          f"{spawn_height(postures[other]):.4f} m; if the robot leaves the ground "
+                          f"at t=0, the go0 detection picked the wrong one)", "cyan"))
 
     def _waitForSensors(self, timeout=40.0):
         """Block until joint states and both IMU signals are flowing.
@@ -1386,6 +1552,49 @@ class RlQuadrupedController(BaseController):
         if self._checkSafety():
             self.transition(State.DAMPING)
 
+    def _checkActuation(self):
+        """Report once, on hardware, whether the motors produce the torque that is commanded.
+
+        Compares ``tau_fb`` (computed by ros_impedance_controller) with ``tau`` (``tau_est`` from
+        the motors) after the command has been non-trivial for a while, to tell a communication or
+        driver fault apart from gains that are too low.
+        """
+        if self._actuation_reported or not self.real_robot:
+            return
+        commanded = float(np.max(np.abs(self.tau_fb)))
+        if commanded < _ACTUATION_TORQUE_MIN:
+            self._actuation_loaded_since = None
+            return
+        if self._actuation_loaded_since is None:
+            self._actuation_loaded_since = self.time
+            return
+        if self.time - self._actuation_loaded_since < _ACTUATION_SETTLE:
+            return
+
+        self._actuation_reported = True
+        measured = float(np.max(np.abs(self.tau)))
+        speed = float(np.max(np.abs(self.qd)))
+        print(colored(f"Actuation check: commanded |tau| up to {commanded:.2f} Nm, motors report "
+                      f"up to {measured:.2f} Nm, fastest joint {speed:.3f} rad/s", "cyan"))
+
+        if float(np.max(np.abs(self.q))) < 1e-6:
+            print(colored(
+                "  -> Every joint position is exactly zero: no LowState is arriving from the "
+                "robot. Check the DDS link.", "red", attrs=["bold"]))
+        elif measured < _ACTUATION_MEASURED_MIN:
+            print(colored(
+                "  -> The motors report no torque while several Nm are commanded: the robot is "
+                "not executing the low-level commands. Check the hardware interface and the "
+                "robot.", "red", attrs=["bold"]))
+        elif speed < _ACTUATION_SPEED_MIN:
+            print(colored(
+                "  -> The motors produce torque but nothing moves: the gains are too low for "
+                "the real robot's friction. Raise kp_fold / kp_stand in rl_controller_config.py.",
+                "yellow", attrs=["bold"]))
+        else:
+            print(colored("  -> Commanded and measured torque are both live and the joints are "
+                          "moving; actuation is working.", "green"))
+
     def _commandIsZero(self):
         """True while the *operator* command is inside the dead band.
 
@@ -1553,6 +1762,7 @@ class RlQuadrupedController(BaseController):
 
             self.send_des_jstate(self.q_des, self.qd_des, self.tau_ffwd,
                                  clip_commands=self.clip_to_joint_limits)
+            self._checkActuation()
             self.publishTelemetry()
 
             self.compute_dt = wall_time.monotonic() - tick_start
@@ -1858,14 +2068,20 @@ class RlQuadrupedController(BaseController):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--robot", default="aliengo",
-                        help="robot name; needs an entry in ROBOTS of rl_controller_config.py")
+    parser.add_argument("--robot", default="aliengo", choices=known_robots(),
+                        help="robot to run; add an entry to ROBOTS in rl_controller_config.py to "
+                             "offer another one here")
     parser.add_argument("--policy", default=None,
                         help="policy basename under rl_quadruped/policies "
                              "(default: the robot name)")
     parser.add_argument("--input", default="keyboard", choices=["keyboard", "joy", "none"],
                         help="operator input device")
     parser.add_argument("--real", action="store_true", help="run on the real robot")
+    parser.add_argument("--network-interface", dest="network_interface", default=None,
+                        metavar="NAME",
+                        help="network interface the robot is wired to, for a hardware interface "
+                             "that binds a socket to one (the Go2's does); default from the "
+                             "config's network_interface")
     parser.add_argument("--skip-calibration", dest="skip_calibration", action="store_true",
                         default=None,
                         help="do not measure the accelerometer bias; it stays zero and therefore "
@@ -1925,7 +2141,8 @@ if __name__ == "__main__":
                               skip_calibration=args.skip_calibration,
                               use_rviz=args.use_rviz,
                               estimate_velocity=args.estimate_velocity,
-                              inference_timing=args.inference_timing)
+                              inference_timing=args.inference_timing,
+                              network_interface=args.network_interface)
     recorder = None
     try:
         p.startController(world_name=args.world,
